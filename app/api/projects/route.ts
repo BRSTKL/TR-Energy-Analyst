@@ -1,0 +1,162 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
+
+export async function GET() {
+  try {
+    const projects = await prisma.project.findMany({
+      include: {
+        pricingProfiles: true,
+        plants: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            capacityMw: true,
+            _count: {
+              select: {
+                records: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    const enriched = projects.map((p) => {
+      const totalCapacityMw = p.plants.reduce(
+        (sum, plant) => sum + plant.capacityMw,
+        0
+      );
+      const totalRecords = p.plants.reduce(
+        (sum, plant) => sum + plant._count.records,
+        0
+      );
+      const plantTypes = Array.from(new Set(p.plants.map((pl) => pl.type)));
+
+      return {
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+        plantCount: p.plants.length,
+        totalCapacityMw: Number(totalCapacityMw.toFixed(1)),
+        totalRecords,
+        plantTypes,
+        pricingProfile: p.pricingProfiles?.[0] || null,
+        plants: p.plants.map((pl) => ({
+          id: pl.id,
+          name: pl.name,
+          type: pl.type,
+          capacityMw: pl.capacityMw,
+          recordCount: pl._count.records,
+        })),
+      };
+    });
+
+    return NextResponse.json({
+      success: true,
+      projects: enriched,
+    });
+  } catch (error) {
+    console.error("Projects GET error:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Projeler listelenirken bir hata oluştu.",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { name, description, plants } = body;
+
+    if (!name || typeof name !== "string" || name.trim().length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Proje adı zorunludur.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Santral tanımları: ad zorunlu ve proje içinde benzersiz, tür RES/HES/GES, kurulu güç > 0
+    const plantList: Array<{ name: string; type: string; capacityMw: number }> = [];
+    if (plants !== undefined) {
+      if (!Array.isArray(plants)) {
+        return NextResponse.json({ success: false, error: "Santral listesi geçersiz." }, { status: 400 });
+      }
+      const seen = new Set<string>();
+      for (const [i, pl] of plants.entries()) {
+        const plantName = typeof pl?.name === "string" ? pl.name.trim() : "";
+        const type = typeof pl?.type === "string" ? pl.type.toUpperCase() : "";
+        const capacityMw = Number(pl?.capacityMw);
+        const key = plantName.toLocaleLowerCase("tr-TR");
+        const error = !plantName
+          ? "santral adı zorunlu"
+          : seen.has(key)
+            ? `"${plantName}" adı birden fazla santralde kullanılıyor`
+            : !["RES", "HES", "GES"].includes(type)
+              ? "tür RES, HES veya GES olmalı"
+              : !Number.isFinite(capacityMw) || capacityMw <= 0
+                ? "kurulu güç 0'dan büyük olmalı"
+                : null;
+        if (error) {
+          return NextResponse.json({ success: false, error: `${i + 1}. santral: ${error}.` }, { status: 400 });
+        }
+        seen.add(key);
+        plantList.push({ name: plantName, type, capacityMw });
+      }
+    }
+
+    const created = await prisma.project.create({
+      data: {
+        name: name.trim(),
+        description: description?.trim() || null,
+        pricingProfiles: {
+          create: {
+            name: "EPİAŞ Standart Profil",
+            positiveSurplusCoef: 0.94,
+            positiveOtherCoef: 0.97,
+            negativeDeficitCoef: 1.06,
+            negativeOtherCoef: 1.03,
+          },
+        },
+        plants: plantList.length > 0 ? { create: plantList } : undefined,
+      },
+      include: {
+        plants: true,
+        pricingProfiles: true,
+      },
+    });
+
+    return NextResponse.json(
+      {
+        success: true,
+        project: created,
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    console.error("Projects POST error:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Yeni proje oluşturulurken bir hata oluştu.",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 }
+    );
+  }
+}

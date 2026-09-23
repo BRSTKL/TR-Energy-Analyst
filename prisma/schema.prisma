@@ -1,0 +1,84 @@
+// Prisma Schema for TR-Energy Analyst
+// Geliştirme aşamasında SQLite, üretim / ileriki aşamada PostgreSQL için yapılandırılabilir.
+// SQLite enum desteklemediği için type ve systemDirection alanları String olarak tanımlanmıştır.
+// PostgreSQL'e geçiş için:
+// 1. provider = "postgresql" olarak güncelleyin.
+// 2. .env içindeki DATABASE_URL'i PostgreSQL bağlantı adresine çekin.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id              String                    @id @default(cuid())
+  name            String
+  description     String?
+  plants          PowerPlant[]
+  pricingProfiles ImbalancePricingProfile[]
+  importTemplate  String?                   // Son onaylanan kolon eşleştirmesi (JSON: santral id → PlantImportMapping)
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+}
+
+model PowerPlant {
+  id          String             @id @default(cuid())
+  name        String
+  type        String             // "RES" | "HES" | "GES"
+  capacityMw  Float
+  projectId   String?
+  project     Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  records     GenerationRecord[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+}
+
+model MarketData {
+  id              String             @id @default(cuid())
+  timestamp       DateTime           @unique
+  ptf             Float              // Piyasa Takas Fiyatı (TL/MWh)
+  smf             Float              // Sistem Marjinal Fiyatı (TL/MWh)
+  systemDirection String             // "SURPLUS" | "DEFICIT" | "BALANCED"
+  gipPrice        Float?             // Gün İçi Piyasası Ağırlıklı Ortalama Fiyatı (TL/MWh, opsiyonel)
+  source          String             @default("LEGACY") // "EPIAS" | "FILE" | "SEED" | "LEGACY" (kaynağı doğrulanmamış eski kayıt)
+  records         GenerationRecord[]
+  createdAt       DateTime           @default(now())
+}
+
+model GenerationRecord {
+  id                String       @id @default(cuid())
+  plantId           String
+  plant             PowerPlant   @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  marketDataId      String?
+  marketData        MarketData?  @relation(fields: [marketDataId], references: [id])
+  timestamp         DateTime
+  forecastMwh       Float        // Gün Öncesi Üretim Tahmini (KGÖP)
+  actualMwh         Float        // Gerçekleşen Üretim
+  imbalanceMwh      Float        // Dengesizlik Miktarı (actual - forecast)
+  imbalanceCostTl   Float        // Dengesizlik Maliyeti
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([plantId, timestamp])
+}
+
+model ImbalancePricingProfile {
+  id                  String   @id @default(cuid())
+  projectId           String
+  project             Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name                String   @default("EPİAŞ Standart Profil")
+  /// REGULATORY: katsayılar saatin tarihine göre mevzuattan seçilir; CUSTOM: aşağıdaki katsayılar her tarihe uygulanır
+  mode                String   @default("REGULATORY")
+  positiveSurplusCoef Float    @default(0.94)
+  positiveOtherCoef   Float    @default(0.97)
+  negativeDeficitCoef Float    @default(1.06)
+  negativeOtherCoef   Float    @default(1.03)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([projectId])
+}
