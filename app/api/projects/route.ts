@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { plantNameKey, validatePlantInput } from "@/lib/plants/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -99,24 +100,12 @@ export async function POST(request: Request) {
       }
       const seen = new Set<string>();
       for (const [i, pl] of plants.entries()) {
-        const plantName = typeof pl?.name === "string" ? pl.name.trim() : "";
-        const type = typeof pl?.type === "string" ? pl.type.toUpperCase() : "";
-        const capacityMw = Number(pl?.capacityMw);
-        const key = plantName.toLocaleLowerCase("tr-TR");
-        const error = !plantName
-          ? "santral adı zorunlu"
-          : seen.has(key)
-            ? `"${plantName}" adı birden fazla santralde kullanılıyor`
-            : !["RES", "HES", "GES"].includes(type)
-              ? "tür RES, HES veya GES olmalı"
-              : !Number.isFinite(capacityMw) || capacityMw <= 0
-                ? "kurulu güç 0'dan büyük olmalı"
-                : null;
-        if (error) {
-          return NextResponse.json({ success: false, error: `${i + 1}. santral: ${error}.` }, { status: 400 });
+        const result = validatePlantInput(pl, seen);
+        if (!result.ok) {
+          return NextResponse.json({ success: false, error: `${i + 1}. santral: ${result.error}.` }, { status: 400 });
         }
-        seen.add(key);
-        plantList.push({ name: plantName, type, capacityMw });
+        seen.add(plantNameKey(result.value.name));
+        plantList.push(result.value);
       }
     }
 

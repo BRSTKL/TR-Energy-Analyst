@@ -301,7 +301,11 @@ export default function ImportPage() {
           </h1>
           <p className="mt-1 text-sm text-slate-600">
             Dosyayı seçin, her santral için hangi sayfa ve kolonların kullanılacağını eşleştirin. Siz
-            kaydedene kadar hiçbir veri yazılmaz.
+            kaydedene kadar hiçbir veri yazılmaz. Santral eklemek veya düzeltmek için{" "}
+            <Link href={`/projects/${projectId}/plants`} className="font-medium text-indigo-600 hover:underline">
+              santral listesine
+            </Link>{" "}
+            gidin.
           </p>
         </div>
       </header>

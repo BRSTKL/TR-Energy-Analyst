@@ -596,6 +596,15 @@ export default function ProjectsPage() {
                       </Link>
                     </Button>
 
+                    <Button
+                      asChild
+                      variant="ghost"
+                      size="sm"
+                      className="w-full text-xs text-slate-600 hover:text-slate-900 border border-slate-200"
+                    >
+                      <Link href={`/projects/${project.id}/plants`}>Santralleri Düzenle</Link>
+                    </Button>
+
                     <PricingProfileDialog
                       projectId={project.id}
                       initialProfile={project.pricingProfile}
