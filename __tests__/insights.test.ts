@@ -5,7 +5,8 @@ import {
   comparePlantProfitability,
   PlantInfo,
 } from "@/lib/strategy/insights";
-import { HourlyResult } from "@/lib/calculations/types";
+import { DEFAULT_IMBALANCE_PROFILE, HourlyResult, SystemDirection } from "@/lib/calculations/types";
+import { processHourlyRecord } from "@/lib/calculations/engine";
 
 describe("Kural Tabanlı Strateji ve İçgörü Motoru Birim Testleri", () => {
   // Test için zengin saatlik veri seti üreticisi
@@ -143,66 +144,111 @@ describe("Kural Tabanlı Strateji ve İçgörü Motoru Birim Testleri", () => {
       expect(analysis.totalAnalyzedHours).toBe(0);
       expect(analysis.topNHours).toBe(0);
       expect(analysis.topHours).toEqual([]);
-      expect(analysis.dominantDirection).toBeUndefined();
+      expect(analysis.directionDistribution.dominantDirection).toBe("BALANCED");
     });
   });
 
   describe("2. generateMitigationSuggestions", () => {
-    it("tespit edilen örüntülere ve RES santral tipine göre doğru kural tabanlı aksiyonlar üretmelidir", () => {
-      const records = createMockHourlyRecords();
-      const analysis = findHighestCostHours(records, 3);
-
-      const resPlant: PlantInfo = {
-        plantId: "res-1",
-        plantName: "Karaburun RES",
-        plantType: "RES",
-        capacityMw: 50,
+    // 2025 saatleri (sabit %3 rejimi) motorla üretilir; böylece simülasyonlar gerçek hesapla tutarlıdır.
+    const hr = (
+      day: number,
+      hour: number,
+      forecastMwh: number,
+      actualMwh: number,
+      ptf: number,
+      smf: number,
+      systemDirection: SystemDirection,
+      gipPrice: number | null = null
+    ): HourlyResult => {
+      const timestamp = `2025-06-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:00:00Z`;
+      return {
+        ...processHourlyRecord(
+          { timestamp, forecastMwh, actualMwh },
+          { timestamp, ptf, smf, systemDirection },
+          DEFAULT_IMBALANCE_PROFILE
+        ),
+        gipPrice,
       };
+    };
 
-      const suggestions = generateMitigationSuggestions(resPlant, analysis);
+    // İki gün × 24 saat. Öğle (12-16) saatlerinde enerji açığı, yüksek PTF ve 10 MWh fazla tahmin;
+    // diğer saatlerde düşük fiyat ve küçük, iki yönlü hatalar. GİP fiyatı PTF'ye eşit.
+    const concentratedDeficit = (): HourlyResult[] => {
+      const rows: HourlyResult[] = [];
+      for (const day of [1, 2]) {
+        for (let h = 0; h < 24; h++) {
+          if (h >= 12 && h < 17) rows.push(hr(day, h, 40, 30, 4000, 4500, "DEFICIT", 4000));
+          else rows.push(hr(day, h, 20, h % 2 === 0 ? 21 : 19, 1500, 1500, "BALANCED", 1500));
+        }
+      }
+      return rows;
+    };
 
-      expect(suggestions.length).toBeGreaterThanOrEqual(3);
-      expect(suggestions.length).toBeLessThanOrEqual(5);
+    const res: PlantInfo = { plantId: "res-1", plantName: "Karaburun RES", plantType: "RES", capacityMw: 50 };
+    const hes: PlantInfo = { plantId: "hes-1", plantName: "Fırat HES", plantType: "HES", capacityMw: 100 };
+    const suggest = (plant: PlantInfo, rows: HourlyResult[]) =>
+      generateMitigationSuggestions(plant, findHighestCostHours(rows, 20), rows, DEFAULT_IMBALANCE_PROFILE);
 
-      // Kural 1: Öğle saatleri yoğunlaşması tetiklenmeli
-      const timingSuggestion = suggestions.find((s) => s.category === "INTRADAY");
-      expect(timingSuggestion).toBeDefined();
-      expect(timingSuggestion?.triggerRule).toContain("Öğle");
+    it("Maliyet yoğunlaşmasını tüm saatler üzerinden tespit eder ve etkileri simülasyonla hesaplar", () => {
+      const suggestions = suggest(res, concentratedDeficit());
 
-      // Kural 2: Enerji açığı kuralı tetiklenmeli
-      const deficitSuggestion = suggestions.find((s) => s.category === "MARKET_TIMING");
-      expect(deficitSuggestion).toBeDefined();
-      expect(deficitSuggestion?.triggerRule).toContain("enerji açığında");
+      const timing = suggestions.find((s) => s.id === "suggestion-intraday-timing");
+      expect(timing?.triggerRule).toContain("Öğle");
+      // GİP = PTF ve açık saatlerinde negatif fiyat MAX(PTF,SMF)×1,03 = 4635:
+      // 10 saat × 10 MWh × %25 × (4635 − 4000) = 15.875 ₺
+      expect(timing?.impact?.savingTl).toBeCloseTo(15875, 0);
+      expect(timing?.recommended).toBe(true);
 
-      // Kural 3: Sistematik aşırı tahmin (Over-forecasting) kalibrasyonu tetiklenmeli
-      const biasSuggestion = suggestions.find(
-        (s) => s.id === "suggestion-bias-overforecast"
-      );
-      expect(biasSuggestion).toBeDefined();
+      const deficit = suggestions.find((s) => s.id === "suggestion-deficit-protection");
+      expect(deficit?.impact?.savingTl).toBeGreaterThan(0);
 
-      // Kural 4: RES teknolojisine özel meteoroloji kuralı tetiklenmeli
-      const resSuggestion = suggestions.find((s) => s.id === "suggestion-tech-res");
-      expect(resSuggestion).toBeDefined();
-      expect(resSuggestion?.triggerRule).toContain("RES");
+      const bias = suggestions.find((s) => s.id === "suggestion-bias-overforecast");
+      expect(bias).toBeDefined();
+      expect(bias?.impact?.method).toContain("çarpıldı");
+
+      const tech = suggestions.find((s) => s.id === "suggestion-tech-res");
+      expect(tech?.impact).toBeNull();
+      expect(tech?.recommended).toBeNull();
+      expect(tech?.expectedImpact).toContain("etki tahmini yok");
+
+      // Hiçbir etki metni sabit bir yüzde vaadi içermez; hepsi simülasyondan veya "tahmin yok"tan gelir
+      for (const s of suggestions) {
+        expect(s.expectedImpact).toMatch(/Geçmiş veride|etki tahmini yok/);
+      }
     });
 
-    it("HES santrali için rezervuar ve debi optimizasyonu önerisi üretmelidir", () => {
-      const records = createMockHourlyRecords();
-      const analysis = findHighestCostHours(records, 3);
+    it("Maliyet saatlere eşit dağılmışsa zaman dilimi kuralı tetiklenmez", () => {
+      const rows: HourlyResult[] = [];
+      for (let h = 0; h < 24; h++) rows.push(hr(1, h, 20, 25, 2000, 2000, "BALANCED"));
+      const suggestions = suggest(res, rows);
+      expect(suggestions.find((s) => s.id === "suggestion-intraday-timing")).toBeUndefined();
+    });
 
-      const hesPlant: PlantInfo = {
-        plantId: "hes-1",
-        plantName: "Fırat HES",
-        plantType: "HES",
-        capacityMw: 100,
-      };
+    it("Geçmiş veride maliyeti artıran öneri 'önerilmez' işaretlenir ve sona alınır", () => {
+      // Tüm saatler enerji açığında ama santral eksik tahmin ediyor (fazla üretim).
+      // Pahalı saatlerde tahmini %5 düşürmek fazla üretimi büyütür → maliyet artar.
+      const rows: HourlyResult[] = [];
+      for (let h = 0; h < 24; h++) rows.push(hr(1, h, 30, 40, h >= 18 ? 5000 : 2000, 5500, "DEFICIT"));
+      const suggestions = suggest(res, rows);
 
-      const suggestions = generateMitigationSuggestions(hesPlant, analysis);
-      const hesSuggestion = suggestions.find((s) => s.id === "suggestion-tech-hes");
+      const deficit = suggestions.find((s) => s.id === "suggestion-deficit-protection");
+      expect(deficit?.impact?.savingTl).toBeLessThan(0);
+      expect(deficit?.recommended).toBe(false);
+      expect(deficit?.priority).toBe("LOW");
+      expect(deficit?.expectedImpact).toContain("önerilmez");
+      expect(suggestions[suggestions.length - 1].id).toBe("suggestion-deficit-protection");
+    });
 
-      expect(hesSuggestion).toBeDefined();
+    it("GİP verisi yoksa GİP'e dayalı önerinin etkisi hesaplanmaz", () => {
+      const rows = concentratedDeficit().map((r) => ({ ...r, gipPrice: null }));
+      const timing = suggest(res, rows).find((s) => s.id === "suggestion-intraday-timing");
+      expect(timing?.impact).toBeNull();
+    });
+
+    it("HES santrali için rezervuar önerisi üretir ve etki vaadinde bulunmaz", () => {
+      const hesSuggestion = suggest(hes, concentratedDeficit()).find((s) => s.id === "suggestion-tech-hes");
       expect(hesSuggestion?.title).toContain("HES Rezervuar/Debi Yönetimi");
-      expect(hesSuggestion?.expectedImpact).toContain("YAL");
+      expect(hesSuggestion?.impact).toBeNull();
     });
   });
 

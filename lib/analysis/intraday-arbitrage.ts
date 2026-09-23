@@ -12,6 +12,13 @@
  * gecikmesi ve kapı kapanış süresi (gate closure) kısıtları bu potansiyeli tam olarak
  * yakalamayı güçleştirir — sayılar "kesin kazanç" değil "araştırılmaya değer optimizasyon potansiyeli"
  * olarak değerlendirilmelidir.
+ *
+ * İKİ FARKLI ÖLÇÜ (karıştırılmamalı):
+ * - Teorik tavan (totalMissedOpportunityTl): yalnızca GİP'in avantajlı olduğu saatlerin toplamı. Hangi saatte
+ *   GİP'in avantajlı olacağını ve nihai dengesizliği önceden bilmeyi varsayar (mükemmel öngörü).
+ * - Net etki (netIfAlwaysClosedTl): her saatin dengesizliği GİP AOF'tan kapatılsaydı, avantajlı ve dezavantajlı
+ *   saatlerin toplamı. Fiyat öngörüsü gerektirmez; senaryo analizinin temelidir (intradayClosingScenario).
+ * Her iki ölçü de dengesizlik maliyetinden pay ister; planlama iyileştirmesi ve DSG netleştirmesiyle TOPLANAMAZ.
  */
 
 import { HourlyResult, SystemDirection } from "@/lib/calculations/types";
@@ -77,7 +84,16 @@ export interface ArbitrageOverview {
   negativeHoursCount: number;
   totalHoursWithGip: number;
   gipCoveragePercent: number;
+  /** Net etki / GİP verili saatlerdeki toplam |dengesizlik| (₺/MWh) */
   avgOpportunityPerMwh: number;
+  /** Her saat kapatılsaydı: avantajlı saatler − dezavantajlı saatler (TL) */
+  netIfAlwaysClosedTl: number;
+  /** GİP verili saatlerdeki toplam dengesizlik maliyeti (TL) — tavan ve net etkinin kıyas tabanı */
+  imbalanceCostWithGipTl: number;
+  /** Teorik tavanın dengesizlik maliyetine oranı (%) */
+  ceilingShareOfCostPercent: number;
+  /** Net etkinin dengesizlik maliyetine oranı (%) */
+  netShareOfCostPercent: number;
   monthlyAggregates: ArbitrageAggregate[];
   topHours: TopArbitrageHour[];
   hourlyProfile24: HourlyProfilePoint[];
@@ -346,6 +362,10 @@ export function evaluateIntradayArbitrage(
       totalHoursWithGip: 0,
       gipCoveragePercent: 0,
       avgOpportunityPerMwh: 0,
+      netIfAlwaysClosedTl: 0,
+      imbalanceCostWithGipTl: 0,
+      ceilingShareOfCostPercent: 0,
+      netShareOfCostPercent: 0,
       monthlyAggregates: [],
       topHours: [],
       hourlyProfile24: [],
@@ -369,6 +389,10 @@ export function evaluateIntradayArbitrage(
       totalHoursWithGip: 0,
       gipCoveragePercent: 0,
       avgOpportunityPerMwh: 0,
+      netIfAlwaysClosedTl: 0,
+      imbalanceCostWithGipTl: 0,
+      ceilingShareOfCostPercent: 0,
+      netShareOfCostPercent: 0,
       monthlyAggregates: [],
       topHours: [],
       hourlyProfile24: [],
@@ -383,9 +407,14 @@ export function evaluateIntradayArbitrage(
   const totalCorrect = monthlyAggregates.reduce((s, m) => s + m.correctDecisionsTl, 0);
   const totalPosHours = monthlyAggregates.reduce((s, m) => s + m.positiveHoursCount, 0);
   const totalNegHours = monthlyAggregates.reduce((s, m) => s + m.negativeHoursCount, 0);
-  const totalMwh = monthlyAggregates.reduce((s, m) => s + m.totalImbalanceMwh, 0);
+  // Net etki ve oranlar yalnızca GİP verili saatler üzerinden (kapsama dışı saatler kıyası bozmasın)
+  const gipImbalanceMwh = hoursWithGip.reduce((s, h) => s + Math.abs(h.imbalanceMwh), 0);
+  const imbalanceCostWithGip = hoursWithGip.reduce((s, h) => s + h.imbalanceCost, 0);
+  const netAll = totalMissed - totalCorrect;
 
-  const avgOppPerMwh = totalMwh > 0 ? totalMissed / totalMwh : 0;
+  const avgOppPerMwh = gipImbalanceMwh > 0 ? netAll / gipImbalanceMwh : 0;
+  const shareOfCost = (v: number) =>
+    imbalanceCostWithGip > 0 ? Number(((v / imbalanceCostWithGip) * 100).toFixed(1)) : 0;
   const coverage = (hoursWithGip.length / hourlyResults.length) * 100;
 
   // 24-Saatlik Profil (00:00 - 23:00)
@@ -496,9 +525,39 @@ export function evaluateIntradayArbitrage(
     totalHoursWithGip: hoursWithGip.length,
     gipCoveragePercent: Number(coverage.toFixed(1)),
     avgOpportunityPerMwh: Number(avgOppPerMwh.toFixed(2)),
+    netIfAlwaysClosedTl: Number(netAll.toFixed(2)),
+    imbalanceCostWithGipTl: Number(imbalanceCostWithGip.toFixed(2)),
+    ceilingShareOfCostPercent: shareOfCost(totalMissed),
+    netShareOfCostPercent: shareOfCost(netAll),
     monthlyAggregates,
     topHours,
     hourlyProfile24,
     dailyAggregates,
+  };
+}
+
+/**
+ * intradayClosingScenario(overview, sharePercent)
+ *
+ * "Tahmin hatasının %X'i gün içinde görülüp GİP AOF'tan kapatılsaydı" senaryosu.
+ * Varsayım: her saatte dengesizliğin aynı payı kapatılır — GİP'in o saatte avantajlı olup olmadığı önceden
+ * bilinmez, bu yüzden dezavantajlı saatler de dahildir. Kapatılan pay ile kazanç doğrusal olduğundan
+ * sonuç = pay × netIfAlwaysClosedTl.
+ * Gerçekte gün içinde en iyi görülen saatler en kolay kapatılanlardır; ayrıca likidite ve AOF'tan sapma
+ * (slippage) dikkate alınmaz.
+ */
+export function intradayClosingScenario(
+  overview: Pick<ArbitrageOverview, "netIfAlwaysClosedTl" | "imbalanceCostWithGipTl">,
+  sharePercent: number
+): { sharePercent: number; gainTl: number; shareOfCostPercent: number } {
+  const share = Math.min(100, Math.max(0, sharePercent)) / 100;
+  const gainTl = Number((share * overview.netIfAlwaysClosedTl).toFixed(2));
+  return {
+    sharePercent: share * 100,
+    gainTl,
+    shareOfCostPercent:
+      overview.imbalanceCostWithGipTl > 0
+        ? Number(((gainTl / overview.imbalanceCostWithGipTl) * 100).toFixed(1))
+        : 0,
   };
 }

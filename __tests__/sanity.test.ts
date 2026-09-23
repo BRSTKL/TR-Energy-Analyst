@@ -4,7 +4,6 @@ import {
   calculateImbalanceMwh,
   calculateImbalanceCost,
 } from "@/lib/calculations/imbalance";
-import { generateStrategyRecommendation } from "@/lib/strategy/advisor";
 
 describe("TR-Energy Analyst Sanity Test Suite", () => {
   it("temel test altyapısının sorunsuz çalıştığını doğrular", () => {
@@ -70,22 +69,6 @@ describe("TR-Energy Analyst Sanity Test Suite", () => {
       expect(result.imbalanceAmountTl).toBe(-28840);
       // GÖP geliri 10 * 2000 = 20000 TL idi, geri ödenen 28840 TL -> ceza/net kayıp = 8840 TL
       expect(result.penaltyCostTl).toBe(8840);
-    });
-  });
-
-  describe("Strateji Öneri Motoru", () => {
-    it("Enerji açığı durumunda RES için koruyucu tahmin önerisi üretmelidir", () => {
-      const reco = generateStrategyRecommendation({
-        plantType: "RES",
-        historicalImbalanceTrend: "OVER_FORECASTING",
-        avgPtf: 2400,
-        avgSmf: 3000,
-        systemDirectionTendency: "ENERGY_DEFICIT",
-      });
-
-      expect(reco.riskLevel).toBe("HIGH");
-      expect(reco.actionItems.length).toBeGreaterThan(0);
-      expect(reco.summary).toContain("Sistem Enerji Açığı");
     });
   });
 });

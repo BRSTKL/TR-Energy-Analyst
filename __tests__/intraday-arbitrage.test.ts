@@ -4,7 +4,9 @@ import {
   aggregateArbitrageOpportunity,
   rankTopArbitrageHours,
   evaluateIntradayArbitrage,
+  intradayClosingScenario,
 } from "@/lib/analysis/intraday-arbitrage";
+import { processHourlyRecord } from "@/lib/calculations/engine";
 import { HourlyResult } from "@/lib/calculations/types";
 
 describe("Gün İçi Piyasası (GİP) Arbitraj Analiz Motoru Birim Testleri", () => {
@@ -287,6 +289,48 @@ describe("Gün İçi Piyasası (GİP) Arbitraj Analiz Motoru Birim Testleri", ()
       expect(overview.totalMissedOpportunityTl).toBe(0);
       expect(overview.monthlyAggregates).toHaveLength(0);
       expect(overview.topHours).toHaveLength(0);
+    });
+  });
+
+  describe("5. Net etki, tavan ve kapatma senaryosu", () => {
+    // Elle hesaplanabilir iki saat (2025, sabit %3 rejimi):
+    // Saat A: +10 MWh fazla, PTF 2000 SMF 2000 → pozitif fiyat 1940; GİP 2100 → fırsat (2100−1940)×10 = +1600
+    //         maliyet = 10 × (2000 − 1940) = 600
+    // Saat B: −10 MWh açık, PTF 2000 SMF 2000 → negatif fiyat 2060; GİP 2200 → fırsat (2060−2200)×10 = −1400
+    //         maliyet = 10 × (2060 − 2000) = 600
+    const mk = (h: number, forecast: number, actual: number, gip: number | null) => ({
+      ...processHourlyRecord(
+        { timestamp: `2025-03-01T${String(h).padStart(2, "0")}:00:00Z`, forecastMwh: forecast, actualMwh: actual },
+        { timestamp: `2025-03-01T${String(h).padStart(2, "0")}:00:00Z`, ptf: 2000, smf: 2000, systemDirection: "BALANCED" },
+        { mode: "REGULATORY", positiveSurplusCoef: 0.94, positiveOtherCoef: 0.97, negativeDeficitCoef: 1.06, negativeOtherCoef: 1.03 }
+      ),
+      gipPrice: gip,
+    });
+
+    it("Tavanı, dezavantajlı saatleri ve net etkiyi elle hesaplanan değerlerle üretir", () => {
+      const o = evaluateIntradayArbitrage([mk(10, 40, 50, 2100), mk(11, 50, 40, 2200)] as HourlyResult[]);
+      expect(o.totalMissedOpportunityTl).toBeCloseTo(1600, 6);
+      expect(o.totalCorrectDecisionsTl).toBeCloseTo(1400, 6);
+      expect(o.netIfAlwaysClosedTl).toBeCloseTo(200, 6);
+      expect(o.imbalanceCostWithGipTl).toBeCloseTo(1200, 6);
+      expect(o.ceilingShareOfCostPercent).toBeCloseTo(133.3, 1);
+      expect(o.netShareOfCostPercent).toBeCloseTo(16.7, 1);
+      // Net etki / toplam |dengesizlik| = 200 / 20
+      expect(o.avgOpportunityPerMwh).toBeCloseTo(10, 6);
+    });
+
+    it("GİP verisi olmayan saatler oranların paydasına girmez", () => {
+      const o = evaluateIntradayArbitrage([mk(10, 40, 50, 2100), mk(12, 40, 60, null)] as HourlyResult[]);
+      expect(o.imbalanceCostWithGipTl).toBeCloseTo(600, 6);
+      expect(o.avgOpportunityPerMwh).toBeCloseTo(160, 6);
+    });
+
+    it("Kapatma senaryosu kapatılan payla doğrusal ölçeklenir ve payı 0–100 aralığında sınırlar", () => {
+      const base = { netIfAlwaysClosedTl: 200, imbalanceCostWithGipTl: 1200 };
+      expect(intradayClosingScenario(base, 25)).toEqual({ sharePercent: 25, gainTl: 50, shareOfCostPercent: 4.2 });
+      expect(intradayClosingScenario(base, 150).gainTl).toBe(200);
+      expect(intradayClosingScenario(base, -5).gainTl).toBe(0);
+      expect(intradayClosingScenario({ netIfAlwaysClosedTl: -300, imbalanceCostWithGipTl: 1200 }, 50).gainTl).toBe(-150);
     });
   });
 });

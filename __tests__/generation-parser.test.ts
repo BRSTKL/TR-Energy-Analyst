@@ -165,7 +165,7 @@ describe("Santral Üretim Verisi Ayrıştırıcı (Generation Parser) Testleri",
       sheet.addRow(["2025-05-10", "10:00", 35.5, 32.0, "Ege RES"]);
       sheet.addRow(["2025-05-10", "11:00", 40.0, 44.5, "Ege RES"]);
 
-      const buffer = (await workbook.xlsx.writeBuffer()) as Buffer;
+      const buffer = (await workbook.xlsx.writeBuffer()) as unknown as Buffer;
       const result = await parseGenerationFile(buffer, "uretim.xlsx");
 
       expect(result.validRowsCount).toBe(2);
@@ -184,7 +184,7 @@ describe("Santral Üretim Verisi Ayrıştırıcı (Generation Parser) Testleri",
         sheet.addRow([new Date(Date.UTC(2025, 0, 1)), 1, f + 1, a + 1]);
       }
 
-      const buffer = (await workbook.xlsx.writeBuffer()) as Buffer;
+      const buffer = (await workbook.xlsx.writeBuffer()) as unknown as Buffer;
       const result = await parseGenerationFile(buffer, "portfoy.xlsx");
 
       expect(result.validRowsCount).toBe(4);
@@ -207,7 +207,7 @@ describe("Santral Üretim Verisi Ayrıştırıcı (Generation Parser) Testleri",
       sheet.addRow([d2, { formula: "B3" }, 1, 1]);
       sheet.addRow([d2, 2, 1, 1]);
 
-      const buffer = (await workbook.xlsx.writeBuffer()) as Buffer;
+      const buffer = (await workbook.xlsx.writeBuffer()) as unknown as Buffer;
       const result = await parseGenerationFile(buffer, "formul.xlsx");
 
       expect(result.rows.map((r) => r.timestamp.toISOString())).toEqual([

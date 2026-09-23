@@ -8,11 +8,14 @@
  */
 
 import {
+  DEFAULT_IMBALANCE_PROFILE,
   HourlyResult,
+  ImbalancePricingProfile,
   MonthlyAggregate,
   SystemDirection,
   YearlyAggregate,
 } from "../calculations/types";
+import { intradayImpact, multiplierImpact, percentile, SimulatedImpact } from "./impact-simulation";
 
 export type TimeOfDayInterval = "NIGHT" | "MORNING" | "AFTERNOON" | "EVENING";
 
@@ -75,7 +78,12 @@ export interface MitigationSuggestion {
   triggerRule: string;
   description: string;
   actionItems: string[];
+  /** Simülasyon sonucundan üretilen özet metin */
   expectedImpact: string;
+  /** Önerilen aksiyonun geçmiş veride simülasyonu; simüle edilemiyorsa null */
+  impact: SimulatedImpact | null;
+  /** true: geçmişte tasarruf sağlardı, false: maliyeti artırırdı, null: bilinmiyor */
+  recommended: boolean | null;
 }
 
 export interface PlantComparisonResult {
@@ -332,170 +340,244 @@ export function findHighestCostHours(
   };
 }
 
+/** Maliyetin ve saatlerin bir anahtara göre dağılımı (tüm saatler üzerinden) */
+function costConcentration<K extends string>(hourly: HourlyResult[], keyOf: (h: HourlyResult) => K) {
+  const totalCost = hourly.reduce((s, h) => s + h.imbalanceCost, 0);
+  const groups = new Map<K, { cost: number; hours: number }>();
+  for (const h of hourly) {
+    const k = keyOf(h);
+    const g = groups.get(k) ?? { cost: 0, hours: 0 };
+    g.cost += h.imbalanceCost;
+    g.hours += 1;
+    groups.set(k, g);
+  }
+  return Array.from(groups.entries()).map(([key, g]) => ({
+    key,
+    costShare: totalCost > 0 ? g.cost / totalCost : 0,
+    hourShare: hourly.length > 0 ? g.hours / hourly.length : 0,
+  }));
+}
+
+const pct = (v: number) => `%${(v * 100).toLocaleString("tr-TR", { maximumFractionDigits: 0 })}`;
+const tl = (v: number) => `${Math.abs(Math.round(v)).toLocaleString("tr-TR")} ₺`;
+
+/** Simülasyon sonucunu öneri kartındaki "Beklenen Etki" metnine çevirir */
+function describeImpact(impact: SimulatedImpact | null): string {
+  if (!impact) return "Veriyle simüle edilemedi; etki tahmini yok.";
+  if (impact.savingTl > 0) {
+    return `Geçmiş veride ${tl(impact.savingTl)} tasarruf (dengesizlik maliyetinin %${impact.percentOfCost.toLocaleString("tr-TR")} payı).`;
+  }
+  if (impact.savingTl < 0) return `Geçmiş veride maliyeti ${tl(impact.savingTl)} artırırdı; önerilmez.`;
+  return "Geçmiş veride maliyeti değiştirmezdi.";
+}
+
 /**
- * 2. generateMitigationSuggestions(plant, analysisResult)
+ * 2. generateMitigationSuggestions(plant, analysisResult, hourly, profile)
  *
- * Teknoloji tipine (RES/HES/GES) ve bulunan örüntülere göre
- * kural tabanlı 3-5 somut aksiyon önerisi üretir.
+ * Kural tabanlı öneriler üretir. Kurallar, en pahalı 20 saate değil TÜM saatlerdeki maliyet dağılımına bakar
+ * (20 saatlik örnekte bir zaman dilimi yalnızca şans eseri %30'u kolayca geçer).
+ *
+ * Her önerinin etkisi, önerilen aksiyon geçmiş veriye uygulanıp motor yeniden çalıştırılarak ölçülür
+ * (impact-simulation.ts). Geçmişte maliyeti artıran öneriler "önerilmez" olarak işaretlenir ve sona alınır;
+ * simüle edilemeyen öneriler etki tahmini taşımaz.
  */
 export function generateMitigationSuggestions(
   plant: PlantInfo,
-  analysisResult: HighestCostHoursAnalysis
+  analysisResult: HighestCostHoursAnalysis,
+  hourly: HourlyResult[],
+  profile: ImbalancePricingProfile = DEFAULT_IMBALANCE_PROFILE
 ): MitigationSuggestion[] {
   const suggestions: MitigationSuggestion[] = [];
-  const {
-    dominantInterval,
-    directionDistribution,
-    systematicBias,
-    errorRateRatio,
-    topNMeanErrorRate,
-    overallMeanErrorRate,
-  } = analysisResult;
-
-  // KURAL 1: Zaman Aralığı Yoğunlaşması Kuralı
-  if (dominantInterval.percentage >= 30) {
+  const add = (s: Omit<MitigationSuggestion, "expectedImpact" | "recommended">) => {
+    const recommended = s.impact ? s.impact.savingTl > 0 : null;
     suggestions.push({
+      ...s,
+      priority: recommended === false ? "LOW" : s.priority,
+      expectedImpact: describeImpact(s.impact),
+      recommended,
+    });
+  };
+
+  // KURAL 1: Maliyetin bir zaman diliminde yoğunlaşması → o dilimde GİP pozisyon güncellemesi
+  const intervalOf = (h: HourlyResult) => getTimeOfDayInterval(new Date(h.timestamp).getUTCHours());
+  const concentrated = costConcentration(hourly, (h) => intervalOf(h).interval)
+    .filter((c) => c.costShare >= 0.3 && c.hourShare > 0 && c.costShare / c.hourShare >= 1.25)
+    .sort((a, b) => b.costShare / b.hourShare - a.costShare / a.hourShare)[0];
+  if (concentrated) {
+    const label = getTimeOfDayInterval(
+      { NIGHT: 0, MORNING: 6, AFTERNOON: 12, EVENING: 17 }[concentrated.key]
+    ).label;
+    add({
       id: "suggestion-intraday-timing",
-      title: `${dominantInterval.label} Diliminde Gün İçi Piyasası (GİP) Pozisyon Güncellemesi`,
+      title: `${label} Diliminde Gün İçi Piyasası (GİP) Pozisyon Güncellemesi`,
       category: "INTRADAY",
       priority: "HIGH",
-      triggerRule: `En yüksek maliyetli saatlerin %${dominantInterval.percentage.toFixed(0)}'i ${dominantInterval.label} diliminde yoğunlaşıyor.`,
-      description: `Maliyet kayıplarının belirgin bir zaman aralığında kümelenmesi, gün öncesi tahminlerin (KGÖP) bu saatlerde sapma yaptığını gösterir. Bu saatler yaklaşırken Gün İçi Piyasasında (GİP) aktif karşı pozisyon alınmalıdır.`,
+      triggerRule: `Dengesizlik maliyetinin ${pct(concentrated.costShare)} payı ${label} diliminde; bu dilim saatlerin yalnızca ${pct(concentrated.hourShare)} payını oluşturuyor.`,
+      description:
+        "Maliyetin belirli bir zaman diliminde yoğunlaşması, gün öncesi tahminin (KGÖP) bu saatlerde daha fazla saptığını gösterir. Bu saatlere yaklaşırken güncel üretim tahminiyle GİP'te pozisyon güncellenmelidir.",
       actionItems: [
-        `${dominantInterval.label} başlangıcından 2-3 saat önce güncel üretim gerçekleşmelerini kontrol edin.`,
-        "GİP üzerinde kapı kapanış saatine kadar ters yönlü alım/satım kontratları ile pozisyonu sıfırlayın.",
-        "Bu saat dilimi için KGÖP tahmin güvenilirlik katsayısını dinamik olarak güncelleyin.",
+        "Dilim başlamadan 2-3 saat önce güncel üretim tahminini ve gerçekleşmeleri kontrol edin.",
+        "Beklenen sapmayı kapı kapanışına kadar GİP'te ters yönlü işlemle kapatın.",
       ],
-      expectedImpact: `${dominantInterval.label} dilimindeki dengesizlik maliyetlerinde %25 - %40 oranında düşüş.`,
+      impact: intradayImpact(hourly, (h) => intervalOf(h).interval === concentrated.key, label),
     });
   }
 
-  // KURAL 2: Sistem Yönü Yoğunlaşması Kuralı
-  if (directionDistribution.DEFICIT.percentage >= 45) {
-    suggestions.push({
+  // KURAL 2: Maliyetin sistem yönünde yoğunlaşması
+  const byDirection = costConcentration(hourly, (h) => h.systemDirection);
+  const deficit = byDirection.find((d) => d.key === "DEFICIT");
+  const surplus = byDirection.find((d) => d.key === "SURPLUS");
+
+  if (deficit && deficit.costShare >= 0.5) {
+    const ptfP75 = percentile(
+      hourly.map((h) => h.ptf),
+      0.75
+    );
+    add({
       id: "suggestion-deficit-protection",
-      title: "Sistem Enerji Açığı Yönündeyken Muhafazakar Tahmin Marjı",
+      title: "Yüksek Fiyatlı Saatlerde Muhafazakâr KGÖP",
       category: "MARKET_TIMING",
       priority: "HIGH",
-      triggerRule: `Kritik saatlerin %${directionDistribution.DEFICIT.percentage.toFixed(0)}'si sistemin enerji açığında olduğu (SMF > PTF) dönemlerde gerçekleşti.`,
-      description: `Sistem enerji açığındayken negatif dengesizlik (eksik üretim) birim cezası Max(PTF, SMF) * (1 + k) üzerinden çok ağır fiyatlandırılır. Bu zamanlarda eksik kalmamak esastır.`,
+      triggerRule: `Dengesizlik maliyetinin ${pct(deficit.costShare)} payı sistemin enerji açığında olduğu saatlerde oluştu (saatlerin ${pct(deficit.hourShare)} payı).`,
+      description:
+        "Enerji açığında eksik üretim MAX(PTF, SMF) × (1 + k) üzerinden, fazla üretim ise MIN(PTF, SMF) × (1 − l) üzerinden uzlaşır. Açık saatlerinde eksik kalmanın maliyeti fazla kalmanınkinden yüksek olduğundan, pahalı saatlerde teklifi biraz düşük tutmak bu asimetriden yararlanabilir.",
       actionItems: [
-        "Piyasa Takas Fiyatının (PTF) yüksek beklendiği saatlerde KGÖP teklifini %5 aşağı yönlü revize ederek güvenlik payı bırakın.",
-        "Sistemin enerji açığı verme ihtimali yüksek saatlerde (sabah ve akşam pikleri) pozitif dengesizlik tarafında kalmayı hedefleyin.",
+        "PTF'nin üst çeyrekte beklendiği saatlerde KGÖP'ü %5 düşük bildirmeyi değerlendirin.",
+        "Bilinçli düşük bildirim KÜPST ve piyasa gözetimi kuralları açısından ayrıca değerlendirilmelidir.",
       ],
-      expectedImpact: "Ceza katsayılı Max(PTF, SMF) borçlanmalarının önlenmesi.",
+      impact: multiplierImpact(
+        hourly,
+        (h) => h.ptf >= ptfP75,
+        0.95,
+        profile,
+        `PTF'nin üst çeyrekte olduğu saatlerde (≥ ${Math.round(ptfP75).toLocaleString("tr-TR")} ₺/MWh) tahmin %5 düşürüldü.`,
+        "Gerçekleşen PTF kullanıldı; teklif anında PTF bilinmez, fiyat tahmini gerektirir."
+      ),
     });
-  } else if (directionDistribution.SURPLUS.percentage >= 45) {
-    suggestions.push({
+  } else if (surplus && surplus.costShare >= 0.5) {
+    add({
       id: "suggestion-surplus-optimization",
-      title: "Enerji Fazlası Saatlerinde İskontolu Satıştan Kaçınma Stratejisi",
+      title: "Enerji Fazlası Saatlerinde Fazla Üretimi GİP'te Satma",
       category: "MARKET_TIMING",
       priority: "MEDIUM",
-      triggerRule: `Kritik saatlerin %${directionDistribution.SURPLUS.percentage.toFixed(0)}'si sistemin enerji fazlasında olduğu (SMF < PTF) dönemlerde gerçekleşti.`,
-      description: `Sistem enerji fazlasındayken sisteme verilen fazla enerji Min(PTF, SMF) * (1 - k) üzerinden iskontolu alınır. Fazla enerjiyi dengesizliğe bırakmak gelir kaybı yaratır.`,
+      triggerRule: `Dengesizlik maliyetinin ${pct(surplus.costShare)} payı sistemin enerji fazlasında olduğu saatlerde oluştu (saatlerin ${pct(surplus.hourShare)} payı).`,
+      description:
+        "Enerji fazlasında sisteme verilen fazla üretim MIN(PTF, SMF) × (1 − l) üzerinden, yani iskontolu uzlaşır. Öngörülen fazla üretimi GİP'te satmak bu iskontodan kaçınmayı sağlar.",
       actionItems: [
-        "Fazla üretim öngörüldüğünde enerjiyi GÖP veya GİP üzerinde doğrudan PTF/fiyat eşleşmesiyle satın.",
-        "Dengeleme Güç Piyasası üzerinden düşük fiyattan uzlaştırılacak hacmi minimumda tutun.",
+        "Fazla üretim öngörüldüğünde enerjiyi kapı kapanışından önce GİP'te satın.",
+        "Enerji fazlası beklenen saatlerde güncel tahmini daha sık yenileyin.",
       ],
-      expectedImpact:
-        "Üretilen enerjinin tam piyasa takas fiyatından nakde dönüştürülmesi.",
+      impact: intradayImpact(hourly, (h) => h.systemDirection === "SURPLUS" && h.imbalanceMwh > 0, "Sistemin enerji fazlasında olduğu ve santralin fazla ürettiği"),
     });
   }
 
-  // KURAL 3: Sistematik Yanlılık (Bias) Kuralı
-  if (systematicBias === "OVER_FORECASTING") {
-    suggestions.push({
-      id: "suggestion-bias-overforecast",
-      title: "Tahmin Modelinde Aşırı Tahmin (Over-Forecasting) Kalibrasyonu",
+  // KURAL 3: Tüm dönem boyunca tek yönlü (sistematik) sapma → tahmini tek katsayıyla kalibre etme
+  const totalActual = hourly.reduce((s, h) => s + h.actualMwh, 0);
+  const totalForecast = hourly.reduce((s, h) => s + h.forecastMwh, 0);
+  const netError = totalActual - totalForecast;
+  const absError = hourly.reduce((s, h) => s + Math.abs(h.actualMwh - h.forecastMwh), 0);
+  const systematicShare = absError > 0 ? Math.abs(netError) / absError : 0;
+  const netErrorRatio = totalActual > 0 ? Math.abs(netError) / totalActual : 0;
+  if (totalForecast > 0 && systematicShare >= 0.15 && netErrorRatio >= 0.03) {
+    const over = netError < 0;
+    const factor = totalActual / totalForecast;
+    add({
+      id: over ? "suggestion-bias-overforecast" : "suggestion-bias-underforecast",
+      title: over ? "Aşırı Tahmin (Over-Forecasting) Kalibrasyonu" : "Eksik Tahmin (Under-Forecasting) Kalibrasyonu",
       category: "CALIBRATION",
       priority: "HIGH",
-      triggerRule: `En yüksek maliyetli saatlerin çoğunluğunda santral taahhüt ettiğinden daha az üretim yaptı (Aşırı Tahmin).`,
-      description: `Tahmin modeli santralin fiili üretim kapasitesini düzenli olarak olduğundan yüksek tahmin etmektedir. Model parametrelerinin veya hava tahmin katsayılarının aşağı yönlü kalibre edilmesi gerekir.`,
+      triggerRule: `Toplam tahmin gerçekleşenden ${pct(netErrorRatio)} ${over ? "fazla" : "eksik"}; hataların ${pct(systematicShare)} payı tek yönlü.`,
+      description: over
+        ? "Tahmin modeli santral üretimini düzenli olarak olduğundan yüksek öngörüyor; model parametreleri aşağı yönlü kalibre edilmelidir."
+        : "Tahmin modeli santral üretimini düzenli olarak olduğundan düşük öngörüyor; üretimin bir kısmı GÖP yerine iskontolu dengesizlik fiyatından uzlaşıyor.",
       actionItems: [
-        "Makine öğrenmesi / regresyon modellerinde son 30 günlük sapma eğilimine göre bias düzeltme katsayısı uygulayın.",
-        "Santral türbin/panel degradasyonunu ve kirlilik katsayılarını güncelleyin.",
+        "Tahmin modeline son dönem sapmasına göre güncellenen bir yanlılık düzeltmesi ekleyin.",
+        "Düzeltmeyi ileriye dönük uygulamadan önce geçmiş verinin ayrı bir döneminde test edin.",
       ],
-      expectedImpact: "Sistematik negatif dengesizlik cezalarında anında %30 iyileşme.",
-    });
-  } else if (systematicBias === "UNDER_FORECASTING") {
-    suggestions.push({
-      id: "suggestion-bias-underforecast",
-      title: "Eksik Tahmin Sapması ve GÖP Gelir Hacminin Artırılması",
-      category: "CALIBRATION",
-      priority: "MEDIUM",
-      triggerRule: `Santral yüksek maliyetli saatlerde düzenli olarak taahhüdünün üzerinde üretim yaptı (Eksik Tahmin).`,
-      description: `Model santral potansiyelini ihtiyatlı tahmin ederek enerjinin GÖP yerine daha düşük marjla dengesizlik mekanizmasında satılmasına yol açmaktadır.`,
-      actionItems: [
-        "Tahmin tabanını yukarı çekerek GÖP satış hacmini maksimize edin.",
-        "Rüzgar/güneş potansiyelini tam kapasite değerlendiren dinamik eşik değerleri kullanın.",
-      ],
-      expectedImpact: "GÖP üzerinden ek satış geliri ve minimum dengesizlik iskontosu.",
+      impact: multiplierImpact(
+        hourly,
+        () => true,
+        factor,
+        profile,
+        `Tüm saatlerde tahmin ${factor.toLocaleString("tr-TR", { maximumFractionDigits: 3 })} ile çarpıldı (Σ gerçekleşen / Σ tahmin).`,
+        "Katsayı aynı dönemin verisinden hesaplandı; gelecekteki etki bunun altında kalabilir."
+      ),
     });
   }
 
-  // KURAL 4: Teknoloji Tipine Özel Kural (RES / HES / GES)
+  // KURAL 4: Teknolojiye özel öneriler (veriyle simüle edilemez)
   if (plant.plantType === "RES") {
-    suggestions.push({
+    add({
       id: "suggestion-tech-res",
-      title: "RES Meteoroloji İstasyonu ve Mikro-Klima Model Güncelleme Sıklığı",
+      title: "RES Tahmininde Güncelleme Sıklığı ve Saha Verisi",
       category: "TECHNOLOGY_SPECIFIC",
-      priority: "HIGH",
-      triggerRule: `Santral RES (Rüzgar) tipindedir; rüzgar hızı üretim üzerinde kübik (v³) etkiye sahiptir.`,
-      description: `Rüzgar santrallerinde ani esinti veya rüzgar durması 1 saat içinde kurulu gücün %40'ı kadar sapma yaratabilir. Sayısal hava tahmin (NWP) modelleri sık güncellenmelidir.`,
+      priority: "MEDIUM",
+      triggerRule: "Santral RES tipinde; rüzgâr hızındaki küçük değişimler üretimi orantısız etkiler (güç eğrisi yaklaşık v³).",
+      description:
+        "Rüzgâr tahmininde hata, tahmin ufku kısaldıkça belirgin biçimde azalır. Gün içi güncellemeler GİP pozisyonlarının dayanağıdır.",
       actionItems: [
-        "Türbin anemometre verilerini tahmin algoritmasına gerçek zamanlı (SCADA) telemetri ile besleyin.",
-        "6 saatlik genel hava tahminleri yerine saatlik yenilenen yüksek çözünürlüklü rüzgar modellerine geçin.",
+        "Türbin SCADA verilerini (rüzgâr hızı, kullanılabilirlik) tahmin modeline gerçek zamanlı besleyin.",
+        "Gün içinde saatlik yenilenen tahminlere geçin.",
       ],
-      expectedImpact: "Rüzgar tahmin hatalarında %20 - %35 azalma.",
+      impact: null,
     });
   } else if (plant.plantType === "HES") {
-    suggestions.push({
+    add({
       id: "suggestion-tech-hes",
-      title: "HES Rezervuar/Debi Yönetimi ve DGP YAL/YAT Arbitrajı",
+      title: "HES Rezervuar/Debi Yönetimi ile Portföy Dengeleme",
       category: "TECHNOLOGY_SPECIFIC",
-      priority: "HIGH",
-      triggerRule: `Santral HES (Hidroelektrik) tipindedir; depolama ve hızlı yük alma/atma esnekliğine sahiptir.`,
-      description: `HES santralleri portföy için doğal bir tampon (buffer) mekanizmasıdır. Dengesizlik cezası ödemek yerine su rezervuarı kontrol edilerek sistem açığında YAL (Yük Alma) teklifi verilebilir.`,
+      priority: "MEDIUM",
+      triggerRule: "Santral HES tipinde; barajlı santraller üretimi saatler arasında kaydırabilir.",
+      description:
+        "Barajlı HES'ler portföydeki diğer santrallerin sapmalarını dengelemek için kullanılabilir. Nehir tipi santrallerde bu esneklik sınırlıdır.",
       actionItems: [
-        "SMF'nin yüksek seyrettiği saatlerde türbinleri devreye sokarak yüksek fiyattan sisteme elektrik verin.",
-        "DGP piyasasında saatlik bazda aktif YAL teklifleri vererek ek kazanç sağlayın.",
+        "Portföydeki RES/GES sapmalarını gün içinde HES üretimini ayarlayarak dengeleyin.",
+        "Dengeleme birimi olarak kayıtlıysanız SMF'nin yüksek olduğu saatlerde YAL teklifi vermeyi değerlendirin.",
       ],
-      expectedImpact: "Sıfır dengesizlik cezası ve pozitif YAL arbitraj karları.",
+      impact: null,
     });
   } else if (plant.plantType === "GES") {
-    suggestions.push({
+    add({
       id: "suggestion-tech-ges",
-      title: "GES Bulutlanma Takibi (Nowcasting) ve Geçiş Saati Optimizasyonu",
+      title: "GES Bulutluluk Takibi (Nowcasting)",
       category: "TECHNOLOGY_SPECIFIC",
       priority: "MEDIUM",
-      triggerRule: `Santral GES (Güneş) tipindedir; bulutluluk ve açısal radyasyon geçiş saatlerinde sapma yaratır.`,
-      description: `Güneş santrallerinde en büyük dengesizlikler sabah 07-09 ve akşamüstü 16-18 saatlerinde güneş açısının değiştiği geçiş pencerelerinde gerçekleşir.`,
+      triggerRule: "Santral GES tipinde; bulutluluk değişimleri kısa sürede büyük sapma yaratır.",
+      description:
+        "Güneş üretiminde gün öncesi tahminin en zayıf olduğu durumlar parçalı bulutlu günlerdir; kısa vadeli uydu tabanlı tahminler bu sapmayı azaltır.",
       actionItems: [
-        "Uydu ve yer tabanlı radyasyon nowcasting modellerini devreye alın.",
-        "Sabah ilk ışık ve akşam batım saatlerinde KGÖP bildirimlerini konservatif tutun.",
+        "Uydu ve yer ölçümüne dayalı kısa vadeli (nowcasting) radyasyon tahminlerini kullanın.",
+        "Parçalı bulutlu günlerde GİP pozisyonlarını daha sık güncelleyin.",
       ],
-      expectedImpact: "Öngörülemeyen bulut örtüsü kaynaklı cezaların minimize edilmesi.",
+      impact: null,
     });
   }
 
-  // KURAL 5: Hata Çarpanı Sıçraması (Error Rate Spike)
-  if (errorRateRatio >= 1.5 && suggestions.length < 5) {
-    suggestions.push({
+  // KURAL 5: Maliyetin uç saatlerde yoğunlaşması (bu kural bilinçli olarak en pahalı saatlere bakar)
+  const { errorRateRatio, topNMeanErrorRate, overallMeanErrorRate, topNHours, percentageOfTotalCost } =
+    analysisResult;
+  if (errorRateRatio >= 1.5) {
+    add({
       id: "suggestion-error-spike",
-      title: "Uç Nokta (Outlier) Tahmin Hatalarına Karşı Güvenilirlik Filtresi",
+      title: "Uç Sapmalar İçin Uyarı Mekanizması",
       category: "CALIBRATION",
       priority: "MEDIUM",
-      triggerRule: `Top saatlerdeki ortalama tahmin hatası (%${(topNMeanErrorRate * 100).toFixed(0)}), genel ortalamanın (%${(overallMeanErrorRate * 100).toFixed(0)}) ${errorRateRatio.toFixed(1)} katıdır.`,
-      description: `Maliyetlerin büyük kısmı birkaç aşırı sapmalı saatte gerçekleşmektedir. Tahmin modellerine aşırı uç noktaları yumuşatan tolerans bantları eklenmelidir.`,
+      triggerRule: `En pahalı ${topNHours} saat maliyetin %${percentageOfTotalCost.toLocaleString("tr-TR")} payını oluşturuyor; bu saatlerdeki ortalama hata (%${(topNMeanErrorRate * 100).toFixed(0)}) genel ortalamanın (%${(overallMeanErrorRate * 100).toFixed(0)}) ${errorRateRatio.toFixed(1)} katı.`,
+      description:
+        "Maliyetin önemli bir kısmı az sayıda aşırı sapmalı saatte oluşuyor. Bu saatleri önceden fark etmek için tahmin belirsizliği izlenmelidir.",
       actionItems: [
-        "Tahmin motoruna güven aralığı (%90 confidence interval) filtresi ekleyin.",
-        "Tarihsel volatilite eşiği aşıldığında alarm mekanizması çalıştırın.",
+        "Tahmin modeline güven aralığı ekleyin; aralık genişlediğinde GİP'te erken pozisyon alın.",
+        "Tahmin ile gerçekleşen arasındaki fark eşik değeri aştığında alarm üretin.",
       ],
-      expectedImpact: "Tek seferlik büyük maliyet şoklarının engellenmesi.",
+      impact: null,
     });
   }
 
-  return suggestions.slice(0, 5);
+  // Sıralama: geçmişte tasarruf sağlayanlar (büyükten küçüğe) → etkisi bilinmeyenler → önerilmeyenler
+  const rank = (s: MitigationSuggestion) => (s.recommended === true ? 0 : s.recommended === null ? 1 : 2);
+  return suggestions
+    .sort((a, b) => rank(a) - rank(b) || (b.impact?.savingTl ?? 0) - (a.impact?.savingTl ?? 0))
+    .slice(0, 5);
 }
 
 /**
@@ -600,7 +682,7 @@ export function comparePlantProfitability(
           2
         )} ₺/MWh (gelirin %${imbalanceCostRatio.toFixed(
           1
-        )}'i) seviyesinde kalmıştır. Yüksek tahmin doğruluğu ve düşük ceza oranıyla portföy yönetim hizmeti için son derece cazip ve düşük riskli bir profildir.`;
+)} payı) seviyesinde kalmıştır. Yüksek tahmin doğruluğu ve düşük ceza oranıyla portföy yönetim hizmeti için son derece cazip ve düşük riskli bir profildir.`;
       } else if (assessment === "GOOD") {
         rationale = `${plant.plantName} (${plantType}), ${unitRevenue.toFixed(
           2
@@ -608,16 +690,13 @@ export function comparePlantProfitability(
           2
         )} ₺/MWh dengesizlik maliyeti ile dengeli bir performans sunmaktadır. Dengesizlik maliyetinin toplam gelire oranı (%${imbalanceCostRatio.toFixed(
           1
-        )}) makul düzeydedir; GİP optimizasyonuyla karlılık marjı (%${(
-          (netUnitMargin / unitRevenue) *
-          100
-        ).toFixed(1)}) daha da artırılabilir.`;
+        )}) makul düzeydedir; dengesizlik sonrası net birim marj ${netUnitMargin.toFixed(2)} ₺/MWh.`;
       } else if (assessment === "MODERATE") {
         rationale = `${plant.plantName} (${plantType}), ${unitImbalanceCost.toFixed(
           2
         )} ₺/MWh seviyesindeki dengesizlik maliyetiyle birim gelirin %${imbalanceCostRatio.toFixed(
           1
-        )}'ini kaybetmektedir. Benzer teknolojiye sahip santrallere kıyasla operasyonel risk orta seviyededir; portföye alınmadan önce tahmin modelleri kalibre edilmelidir.`;
+)} payını kaybetmektedir. Benzer teknolojiye sahip santrallere kıyasla operasyonel risk orta seviyededir; portföye alınmadan önce tahmin modelleri kalibre edilmelidir.`;
       } else {
         rationale = `${plant.plantName} (${plantType}), yüksek tahmin sapmaları ve ${unitImbalanceCost.toFixed(
           2

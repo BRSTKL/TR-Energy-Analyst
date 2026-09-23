@@ -120,7 +120,8 @@ describe("Edge Cases & Hata Dayanıklılığı Testleri", () => {
       const emptyAnalysis = findHighestCostHours([]);
       const suggestions = generateMitigationSuggestions(
         { plantId: "p1", plantName: "Test Plant", plantType: "RES", capacityMw: 50 },
-        emptyAnalysis
+        emptyAnalysis,
+        []
       );
       expect(Array.isArray(suggestions)).toBe(true);
     });

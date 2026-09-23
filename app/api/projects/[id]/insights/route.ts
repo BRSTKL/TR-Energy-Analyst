@@ -99,6 +99,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
           ptf: record.marketData.ptf,
           smf: record.marketData.smf,
           systemDirection: record.marketData.systemDirection as SystemDirection,
+          gipPrice: record.marketData.gipPrice,
         };
 
         const result = processHourlyRecord(
@@ -138,7 +139,9 @@ export async function GET(_request: Request, { params }: { params: { id: string 
           plantType: plant.type,
           capacityMw: plant.capacityMw,
         },
-        costAnalysis
+        costAnalysis,
+        plantHourly,
+        projectProfile
       );
 
       return {

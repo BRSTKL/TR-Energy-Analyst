@@ -47,7 +47,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Calendar,
-  CheckCircle2,
   Clock,
   Eye,
   FileSpreadsheet,
@@ -77,6 +76,7 @@ import {
   ArbitrageAggregate,
   TopArbitrageHour,
   HourlyProfilePoint,
+  intradayClosingScenario,
 } from "@/lib/analysis/intraday-arbitrage";
 import { SystemDirection } from "@/lib/calculations/types";
 import { EpiasSyncDialog } from "@/components/epias-sync-dialog";
@@ -211,6 +211,8 @@ export default function PlanningEfficiencyPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedScope, setSelectedScope] = useState<string>("portfolio");
   const [activeSectionTab, setActiveSectionTab] = useState<"efficiency" | "arbitrage">("efficiency");
+  // GİP kapatma senaryosu: tahmin hatasının gün içinde görülüp GİP'te kapatıldığı varsayılan payı (%)
+  const [closingSharePercent, setClosingSharePercent] = useState(25);
   const [divergenceMode, setDivergenceMode] = useState<"hourly" | "monthly">("hourly");
 
   // 24s Drill-Down Modal State
@@ -360,7 +362,7 @@ export default function PlanningEfficiencyPage() {
     ];
   }, [currentView]);
 
-  // GİP Aylık Kaçırılan Fırsat ve Doğru Kararlar Grafiği
+  // GİP Aylık Net Etki (her saat kapatılsaydı) ve Teorik Tavan Grafiği
   const monthlyArbitrageChartData = useMemo(() => {
     if (!currentView?.arbitrage?.monthlyAggregates) return [];
     return currentView.arbitrage.monthlyAggregates.map((m) => {
@@ -370,8 +372,8 @@ export default function PlanningEfficiencyPage() {
         period: m.period,
         ay: monthName.substring(0, 3),
         tamAy: monthName,
-        kacirilanFirsatTl: m.missedOpportunityTl,
-        dogruKararlarTl: m.correctDecisionsTl,
+        netEtkiTl: m.netArbitrageTl,
+        tavanTl: m.missedOpportunityTl,
         gipOrt: m.avgGipPrice,
         dengesizlikOrt: m.avgImbalancePrice,
         kapananSaat: m.positiveHoursCount,
@@ -1391,11 +1393,11 @@ export default function PlanningEfficiencyPage() {
                   GİP (Gün İçi Piyasası) Verisi Bulunmuyor
                 </h3>
                 <p className="mx-auto mt-2 max-w-xl text-sm leading-relaxed text-slate-600">
-                  GİP verisi yüklenirse bu analiz aktifleşir. Projenize EPİAŞ Gün İçi Piyasası Ağırlıklı Ortalama Fiyatı (GİP AOF) sütununu içeren piyasa verisi eklediğinizde; dengesizlik pozisyonlarınızı GİP üzerinden kapama fırsatları, saatlik arbitraj spreadleri ve kaçırılan gelir potansiyeli otomatik olarak burada hesaplanacaktır.
+                  GİP verisi yüklenirse bu analiz aktifleşir. Projenize EPİAŞ Gün İçi Piyasası Ağırlıklı Ortalama Fiyatı (GİP AOF) sütununu içeren piyasa verisi eklediğinizde; dengesizlik pozisyonlarınızı GİP üzerinden kapama fırsatları, saatlik arbitraj spreadleri ve GİP&apos;te kapatma senaryoları otomatik olarak burada hesaplanacaktır.
                 </p>
                 <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                   <Button asChild size="sm" className="gap-2 bg-amber-600 text-white hover:bg-amber-700">
-                    <Link href={`/projects/${projectId}/data`}>
+                    <Link href={`/projects/${projectId}/results`}>
                       <FileSpreadsheet className="h-4 w-4" />
                       Piyasa Verisi Yükle / Eşleştir
                     </Link>
@@ -1405,133 +1407,141 @@ export default function PlanningEfficiencyPage() {
             ) : (
               <>
                 {/* 1. KPI KARTLARI */}
-                <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  {/* KPI 1: Toplam Kaçırılan Fırsat (TL) */}
-                  <Card className="border-slate-200 shadow-sm transition-shadow hover:shadow-md">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                        Toplam Kaçırılan Fırsat
-                      </CardTitle>
-                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
-                        <TrendingUp className="h-4 w-4" />
-                      </span>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-baseline gap-2">
-                        <div className="text-2xl font-bold tracking-tight text-emerald-600 sm:text-3xl">
-                          {currentView.arbitrage.totalMissedOpportunityTl.toLocaleString("tr-TR")} ₺
-                        </div>
-                      </div>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Pozitif GİP arbitraj potansiyeli toplamı
-                      </p>
-                      <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-xs text-slate-600">
-                        <span>Karlı Saatler:</span>
-                        <span className="font-semibold text-emerald-700">
-                          {currentView.arbitrage.positiveHoursCount.toLocaleString("tr-TR")} saat
-                        </span>
-                      </div>
-                    </CardContent>
-                  </Card>
+                {(() => {
+                  const arb = currentView.arbitrage;
+                  const scenario = intradayClosingScenario(arb, closingSharePercent);
+                  const tl = (v: number) => `${v < 0 ? "−" : ""}${Math.abs(Math.round(v)).toLocaleString("tr-TR")} ₺`;
+                  return (
+                    <>
+                      <section className="grid gap-4 lg:grid-cols-3">
+                        {/* KPI 1: Senaryo (ana gösterim) */}
+                        <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50/60 to-white shadow-sm lg:col-span-2">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-xs font-medium uppercase tracking-wider text-emerald-800">
+                              Senaryo: tahmin hatasının %{closingSharePercent} payı gün içinde GİP&apos;te kapatılsaydı
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="flex flex-wrap items-baseline gap-3">
+                              <div
+                                className={`text-3xl font-bold tracking-tight ${
+                                  scenario.gainTl < 0 ? "text-rose-600" : "text-emerald-600"
+                                }`}
+                              >
+                                {tl(scenario.gainTl)}
+                              </div>
+                              <span className="text-sm text-slate-600">
+                                dengesizlik maliyetinin %{scenario.shareOfCostPercent.toLocaleString("tr-TR")} payı
+                              </span>
+                            </div>
+                            <div className="mt-4 flex items-center gap-3">
+                              <span className="text-xs text-slate-500">%0</span>
+                              <input
+                                type="range"
+                                min={0}
+                                max={100}
+                                step={5}
+                                value={closingSharePercent}
+                                onChange={(e) => setClosingSharePercent(Number(e.target.value))}
+                                className="flex-1 accent-emerald-600"
+                                aria-label="GİP'te kapatılan hata payı"
+                              />
+                              <span className="text-xs text-slate-500">%100</span>
+                            </div>
+                            <p className="mt-3 text-xs leading-relaxed text-slate-600">
+                              Her saatte dengesizliğin aynı payının GİP ağırlıklı ortalama fiyatından kapatıldığı varsayılır.
+                              GİP&apos;in hangi saatte avantajlı olacağı önceden bilinmediği için dezavantajlı saatler de
+                              hesaba girer. Likidite ve AOF&apos;tan sapma dikkate alınmaz.
+                            </p>
+                          </CardContent>
+                        </Card>
 
-                  {/* KPI 2: Doğru Verilen Kararlar (TL) */}
-                  <Card className="border-slate-200 shadow-sm transition-shadow hover:shadow-md">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                        Doğru Verilen Kararlar
-                      </CardTitle>
-                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700">
-                        <CheckCircle2 className="h-4 w-4" />
-                      </span>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-baseline gap-2">
-                        <div className="text-2xl font-bold tracking-tight text-indigo-600 sm:text-3xl">
-                          {currentView.arbitrage.totalCorrectDecisionsTl.toLocaleString("tr-TR")} ₺
-                        </div>
-                      </div>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Dengesizlikte kalmanın GİP&apos;ten avantajlı olduğu saatler
-                      </p>
-                      <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-xs text-slate-600">
-                        <span>Korunan Saatler:</span>
-                        <span className="font-semibold text-indigo-700">
-                          {currentView.arbitrage.negativeHoursCount.toLocaleString("tr-TR")} saat
-                        </span>
-                      </div>
-                    </CardContent>
-                  </Card>
+                        {/* KPI 2: Teorik tavan (referans) */}
+                        <Card className="border-slate-200 shadow-sm">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                              Teorik tavan (mükemmel öngörü)
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="text-2xl font-bold tracking-tight text-slate-700">
+                              {tl(arb.totalMissedOpportunityTl)}
+                            </div>
+                            <p className="mt-1 text-xs text-slate-500">
+                              Yalnızca GİP&apos;in avantajlı olduğu {arb.positiveHoursCount.toLocaleString("tr-TR")} saat
+                              seçilip nihai dengesizlik tam bilinseydi. Maliyetin %
+                              {arb.ceilingShareOfCostPercent.toLocaleString("tr-TR")} payı. Gerçekte ulaşılamaz; referans
+                              içindir.
+                            </p>
+                          </CardContent>
+                        </Card>
+                      </section>
 
-                  {/* KPI 3: Fırsat Yakalanabilir Saatler */}
-                  <Card className="border-slate-200 shadow-sm transition-shadow hover:shadow-md">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                        Fırsat Yakalanabilir Saatler
-                      </CardTitle>
-                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
-                        <Clock className="h-4 w-4" />
-                      </span>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-baseline gap-2">
-                        <div className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                          %{((currentView.arbitrage.positiveHoursCount / (currentView.arbitrage.totalHoursWithGip || 1)) * 100).toFixed(1)}
-                        </div>
-                      </div>
-                      <p className="mt-1 text-xs text-slate-500">
-                        GİP&apos;te pozisyon kapatmanın avantaj sağladığı zaman oranı
-                      </p>
-                      <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-xs text-slate-600">
-                        <span>Toplam GİP Kaydı:</span>
-                        <span className="font-semibold text-slate-800">
-                          {currentView.arbitrage.totalHoursWithGip.toLocaleString("tr-TR")} saat
-                        </span>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      <section className="grid gap-4 sm:grid-cols-3">
+                        <Card className="border-slate-200 shadow-sm">
+                          <CardContent className="p-4">
+                            <div className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                              Her saat kapatılsaydı (net)
+                            </div>
+                            <div className="mt-1 text-xl font-bold text-slate-900">{tl(arb.netIfAlwaysClosedTl)}</div>
+                            <p className="mt-1 text-xs text-slate-500">
+                              Avantajlı saatler − GİP&apos;in pahalı olduğu saatler (%100 senaryosu)
+                            </p>
+                          </CardContent>
+                        </Card>
+                        <Card className="border-slate-200 shadow-sm">
+                          <CardContent className="p-4">
+                            <div className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                              GİP&apos;in dezavantajlı olduğu saatler
+                            </div>
+                            <div className="mt-1 text-xl font-bold text-slate-900">
+                              {arb.negativeHoursCount.toLocaleString("tr-TR")} saat
+                            </div>
+                            <p className="mt-1 text-xs text-slate-500">
+                              Bu saatlerde GİP&apos;te kapatmak {tl(arb.totalCorrectDecisionsTl)} kayıp yazardı
+                            </p>
+                          </CardContent>
+                        </Card>
+                        <Card className="border-slate-200 shadow-sm">
+                          <CardContent className="p-4">
+                            <div className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                              Net fiyat avantajı
+                            </div>
+                            <div className="mt-1 text-xl font-bold text-slate-900">
+                              {arb.avgOpportunityPerMwh.toLocaleString("tr-TR")} ₺/MWh
+                            </div>
+                            <p className="mt-1 text-xs text-slate-500">
+                              Kapatılan her MWh dengesizlik için ortalama · GİP kapsamı %{arb.gipCoveragePercent}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      </section>
 
-                  {/* KPI 4: Ortalama Fiyat Avantajı */}
-                  <Card className="border-slate-200 shadow-sm transition-shadow hover:shadow-md">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                        Ortalama Fiyat Avantajı
-                      </CardTitle>
-                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
-                        <Sparkles className="h-4 w-4" />
-                      </span>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-baseline gap-2">
-                        <div className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                          {currentView.arbitrage.avgOpportunityPerMwh.toFixed(2)} ₺
-                        </div>
-                        <span className="text-xs font-semibold text-slate-500">/ MWh</span>
-                      </div>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Dengesizlik MWh başına ortalama yakalanabilir marj
-                      </p>
-                      <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-xs text-slate-600">
-                        <span>GİP Veri Kapsamı:</span>
-                        <span className="font-semibold text-sky-700">
-                          %{currentView.arbitrage.gipCoveragePercent}
+                      <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-xs text-amber-900">
+                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                        <span>
+                          Bu rakamlar, planlama iyileştirmesi ve DSG netleştirmesiyle <strong>aynı dengesizlik
+                          maliyetinden</strong> pay ister; birbirine eklenemez. Portföy görünümünde her santralin
+                          dengesizliği ayrı kapatılmış sayılır; DSG içinde yalnızca netleşmiş pozisyon kapatılacağı için
+                          gerçek etki daha düşüktür.
                         </span>
                       </div>
-                    </CardContent>
-                  </Card>
-                </section>
+                    </>
+                  );
+                })()}
 
                 {/* 2. GRAFİKLER BÖLÜMÜ (AYLIK TREND & FİYAT AYRIŞMASI) */}
                 <section className="grid gap-6 lg:grid-cols-2">
-                  {/* Grafik 1: Aylık Kaçırılan Fırsat Trendi */}
+                  {/* Grafik 1: Aylık net etki ve teorik tavan */}
                   <Card className="border-slate-200 shadow-sm">
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
                         <div>
                           <CardTitle className="text-base font-bold text-slate-900">
-                            Aylık Kaçırılan Fırsat Trendi (TL)
+                            Aylık GİP Etkisi (TL)
                           </CardTitle>
                           <CardDescription className="text-xs text-slate-500">
-                            GİP yerine EPİAŞ dengesizlik uzlaştırmasında kalınması nedeniyle kaçırılan potansiyel kazanç
+                            Sütun: her saat GİP&apos;te kapatılsaydı net etki · Çizgi: teorik tavan (yalnızca avantajlı saatler)
                           </CardDescription>
                         </div>
                       </div>
@@ -1551,22 +1561,22 @@ export default function PlanningEfficiencyPage() {
                             <Tooltip
                               formatter={(value: any, name?: any) => [
                                 `${Number(value).toLocaleString("tr-TR")} ₺`,
-                                name === "kacirilanFirsatTl" ? "Kaçırılan Fırsat" : "Doğru Kararlar",
+                                name,
                               ]}
                               labelFormatter={(label) => `${label} Ayı Arbitraj Özeti`}
                             />
                             <Legend verticalAlign="top" height={36} />
                             <Bar
-                              dataKey="kacirilanFirsatTl"
-                              name="Kaçırılan Fırsat (TL)"
+                              dataKey="netEtkiTl"
+                              name="Net etki (TL)"
                               fill="#059669"
                               radius={[4, 4, 0, 0]}
                               isAnimationActive={false}
                             />
                             <Line
                               type="monotone"
-                              dataKey="dogruKararlarTl"
-                              name="Doğru Kararlar (TL)"
+                              dataKey="tavanTl"
+                              name="Teorik tavan (TL)"
                               stroke="#6366f1"
                               strokeWidth={2}
                               dot={{ r: 3 }}
@@ -1709,7 +1719,7 @@ export default function PlanningEfficiencyPage() {
                           <TableHead className="text-right text-xs">GİP Fiyatı</TableHead>
                           <TableHead className="text-right text-xs">Fark (Makas)</TableHead>
                           <TableHead className="text-right text-xs font-bold text-emerald-800">
-                            Kaçırılan Fırsat (TL)
+                            Tavan katkısı (TL)
                           </TableHead>
                         </TableRow>
                       </TableHeader>

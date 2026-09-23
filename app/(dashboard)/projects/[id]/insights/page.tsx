@@ -602,8 +602,8 @@ export default function ProjectInsightsPage() {
                 2. Kural Tabanlı Aksiyon ve Risk Azaltma Önerileri
               </h2>
               <p className="text-xs text-slate-500">
-                Tespit edilen operasyonel örüntülere ve santral teknolojisine göre
-                üretilen somut adımlar.
+                Tüm saatlerdeki maliyet dağılımına göre tetiklenir. Etkiler, önerilen aksiyon geçmiş veriye
+                uygulanıp yeniden hesaplanarak bulunur; bunlar aynı maliyetten pay ister ve toplanamaz.
               </p>
             </div>
           </div>
@@ -620,10 +620,12 @@ export default function ProjectInsightsPage() {
                       className={`text-2xs rounded-full px-2 py-0.5 font-semibold ${
                         sug.priority === "HIGH"
                           ? "border border-rose-200 bg-rose-100 text-rose-700"
-                          : "border border-amber-200 bg-amber-100 text-amber-800"
+                          : sug.priority === "MEDIUM"
+                            ? "border border-amber-200 bg-amber-100 text-amber-800"
+                            : "border border-slate-200 bg-slate-100 text-slate-600"
                       }`}
                     >
-                      {sug.priority === "HIGH" ? "Yüksek Öncelik" : "Orta Öncelik"}
+                      {{ HIGH: "Yüksek Öncelik", MEDIUM: "Orta Öncelik", LOW: "Düşük Öncelik" }[sug.priority]}
                     </span>
                     <span className="text-2xs font-medium uppercase tracking-wider text-slate-400">
                       {sug.category}
@@ -654,8 +656,23 @@ export default function ProjectInsightsPage() {
                       ))}
                     </ul>
                   </div>
-                  <div className="mt-2 rounded-md border border-emerald-100 bg-emerald-50/80 p-2.5 text-xs text-emerald-900">
-                    <strong>Beklenen Etki:</strong> {sug.expectedImpact}
+                  <div
+                    className={`mt-2 space-y-1 rounded-md border p-2.5 text-xs ${
+                      sug.recommended === true
+                        ? "border-emerald-100 bg-emerald-50/80 text-emerald-900"
+                        : sug.recommended === false
+                          ? "border-rose-100 bg-rose-50/80 text-rose-900"
+                          : "border-slate-200 bg-slate-50 text-slate-700"
+                    }`}
+                  >
+                    <div>
+                      <strong>Simülasyon:</strong> {sug.expectedImpact}
+                    </div>
+                    {sug.impact && (
+                      <div className="opacity-80">
+                        {sug.impact.method} {sug.impact.caveat}
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

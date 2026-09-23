@@ -1212,13 +1212,18 @@ export async function exportToPptx(
     });
   }
 
-  // Öncelik sıralaması: HIGH -> MEDIUM -> LOW
+  // Sıralama: geçmiş veride tasarruf sağlayanlar (büyükten küçüğe) → etkisi bilinmeyenler (önceliğe göre).
+  // Geçmişte maliyeti artıran öneriler sunuma alınmaz.
   const priorityOrder = { HIGH: 1, MEDIUM: 2, LOW: 3 };
-  allSuggestions.sort(
-    (a, b) => (priorityOrder[a.priority] || 4) - (priorityOrder[b.priority] || 4)
-  );
-
-  const topSuggestions = allSuggestions.slice(0, 3);
+  const topSuggestions = allSuggestions
+    .filter((s) => s.recommended !== false)
+    .sort(
+      (a, b) =>
+        (a.recommended === true ? 0 : 1) - (b.recommended === true ? 0 : 1) ||
+        (b.impact?.savingTl ?? 0) - (a.impact?.savingTl ?? 0) ||
+        (priorityOrder[a.priority] || 4) - (priorityOrder[b.priority] || 4)
+    )
+    .slice(0, 3);
 
   if (topSuggestions.length === 0) {
     slide5.addText("Mevcut veri seti için kritik bir strateji uyarısı bulunmamaktadır.", {
@@ -1285,7 +1290,7 @@ export async function exportToPptx(
         line: { type: "none" },
         rectRadius: 0.05,
       });
-      slide5.addText(`ÖNCELİK: ${sugg.priority}`, {
+      slide5.addText(`ÖNCELİK: ${{ HIGH: "YÜKSEK", MEDIUM: "ORTA", LOW: "DÜŞÜK" }[sugg.priority]}`, {
         x: 10.4,
         y: cardY + 0.12,
         w: 1.9,
@@ -1320,8 +1325,14 @@ export async function exportToPptx(
         [
           { text: "Aksiyonlar: ", options: { bold: true, color: colors.textPrimary } },
           { text: `${actionBullets}   `, options: { color: colors.textPrimary } },
-          { text: "| Beklenen Tasarruf: ", options: { bold: true, color: colors.success } },
-          { text: sugg.expectedImpact, options: { bold: true, color: colors.success } },
+          {
+            text: "| Simülasyon: ",
+            options: { bold: true, color: sugg.impact ? colors.success : colors.textSecondary },
+          },
+          {
+            text: sugg.expectedImpact,
+            options: { bold: true, color: sugg.impact ? colors.success : colors.textSecondary },
+          },
         ],
         {
           x: 1.1,

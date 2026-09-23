@@ -108,6 +108,7 @@ export async function GET(
           ptf: record.marketData.ptf,
           smf: record.marketData.smf,
           systemDirection: record.marketData.systemDirection as SystemDirection,
+          gipPrice: record.marketData.gipPrice,
         };
 
         const result = processHourlyRecord(
@@ -149,7 +150,9 @@ export async function GET(
           plantType: plant.type,
           capacityMw: plant.capacityMw,
         },
-        costAnalysis
+        costAnalysis,
+        plantHourly,
+        projectProfile
       );
 
       return {

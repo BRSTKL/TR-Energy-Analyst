@@ -100,7 +100,7 @@ describe("Agregasyon Motoru Birim Testleri", () => {
       expect(feb).toBeDefined();
       expect(feb?.totalActualMwh).toBe(50);
       expect(feb?.unitRevenue).toBe(2200);
-      expect(feb?.imbalanceCost).toBeUndefined(); // doğru alan adı totalImbalanceCost
+      expect(feb && "imbalanceCost" in feb).toBe(false); // doğru alan adı totalImbalanceCost
       expect(feb?.totalImbalanceCost).toBe(0);
       expect(feb?.unitImbalanceCost).toBe(0);
     });
