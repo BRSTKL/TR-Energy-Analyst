@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { backupDatabase } from "@/lib/db-backup";
 import { PlantImportMapping } from "@/lib/import/column-mapping";
 import { writePlantImports } from "@/lib/import/persist";
 import { ImportRequestError, evaluateMappings, readImportRequest, serializeResults } from "@/lib/import/request";
@@ -64,6 +65,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
       );
     }
 
+    // İçe aktarma aynı saatlerdeki eski kayıtları siler: önce yedek
+    await backupDatabase(prisma, "import");
     const written = await writePlantImports(
       evaluation.results.map((r) => ({ plantId: r.plantId, rows: r.rows })),
       ctx.profile

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { backupDatabase } from "@/lib/db-backup";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +70,9 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
     }
 
     const plantIds = project.plants.map((p) => p.id);
+
+    // Silme geri alınamaz: önce yedek (başarısız olursa hiçbir şey silinmez)
+    await backupDatabase(prisma, "delete-project");
 
     const [records, plants] = await prisma.$transaction([
       prisma.generationRecord.deleteMany({ where: { plantId: { in: plantIds } } }),

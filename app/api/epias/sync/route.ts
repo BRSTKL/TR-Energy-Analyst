@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { backupDatabase } from "@/lib/db-backup";
 import {
   syncEpiasToDatabase,
   testEpiasConnection,
@@ -89,7 +90,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // EPİAŞ senkronizasyonunu çalıştır
+    // EPİAŞ senkronizasyonunu çalıştır (ay ay senkronda her ay için ayrı yedek alınmaz)
+    await backupDatabase(prisma, "epias-sync", { minIntervalMs: 10 * 60_000 });
     const syncResult = await syncEpiasToDatabase({
       startDate,
       endDate,

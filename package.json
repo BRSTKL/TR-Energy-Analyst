@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "tsx scripts/backup-db.mts startup",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -14,7 +15,8 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:seed": "tsx prisma/seed.ts",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "db:backup": "tsx scripts/backup-db.mts"
   },
   "dependencies": {
     "@prisma/client": "^5.21.1",

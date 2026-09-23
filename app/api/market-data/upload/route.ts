@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { backupDatabase } from "@/lib/db-backup";
 import { parseMarketFile, mergeMarketRows, PartialMarketRow } from "@/lib/parsers/epias-parser";
 import { upsertMarketRecords, recalculateProjectImbalances } from "@/lib/services/epias-service";
 
@@ -87,6 +88,7 @@ export async function POST(request: Request) {
     }
 
     // 3. Veritabanına yaz ve (istenirse) proje maliyetlerini yeniden hesapla
+    await backupDatabase(prisma, "market-upload", { minIntervalMs: 10 * 60_000 });
     const totalMarketRecords = await upsertMarketRecords(complete, "FILE");
 
     const start = complete[0].timestamp;
