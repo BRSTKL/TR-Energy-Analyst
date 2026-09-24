@@ -17,14 +17,14 @@ describe("EPİAŞ santral servisi (sahte cevaplarla)", () => {
     calls.length = 0;
   });
 
-  it("KGÜP isteğini belgedeki alanlarla atar (bölge TR1, UEVÇB, tarih aralığı)", async () => {
+  it("KGÜP isteğini belgedeki alanlarla atar; varsayılan ilk versiyon, istenirse son versiyon", async () => {
     responder = () => ({ items: [{ date: "2025-01-01T00:00:00+03:00", time: "00:00", toplam: 5 }] });
     const items = await fetchKgup(77, "2025-01-01", "2025-01-31");
     expect(items).toHaveLength(1);
-    expect(calls[0]).toEqual({
-      path: "/generation/data/dpp",
-      body: { region: "TR1", uevcbId: 77, startDate: "2025-01-01T00:00:00+03:00", endDate: "2025-01-31T23:00:00+03:00" },
-    });
+    const body = { region: "TR1", uevcbId: 77, startDate: "2025-01-01T00:00:00+03:00", endDate: "2025-01-31T23:00:00+03:00" };
+    expect(calls[0]).toEqual({ path: "/generation/data/dpp-first-version", body });
+    await fetchKgup(77, "2025-01-01", "2025-01-31", "FINAL");
+    expect(calls[1]).toEqual({ path: "/generation/data/dpp", body });
   });
 
   it("Toplam kayıt sayısı ilk sayfadan fazlaysa sonraki sayfaları ister", async () => {

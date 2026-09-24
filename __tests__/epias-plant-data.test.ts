@@ -29,6 +29,16 @@ describe("EPİAŞ santral verisi", () => {
     expect(searchPowerPlants(plants, "a")).toEqual([]);
   });
 
+  it("EIC koduyla veya EPİAŞ ekranındaki tam adla da bulur", () => {
+    const plants = [
+      { id: 7663, name: "BALABANLI RES-40W000000007663Y", eic: "40W000000007663Y", shortName: "BALABANLI RES" },
+      { id: 8, name: "Başka RES", eic: "40W000000000008X" },
+    ];
+    expect(searchPowerPlants(plants, "40W000000007663Y").map((p) => p.id)).toEqual([7663]);
+    expect(searchPowerPlants(plants, "BALABANLI RES-40W000000007663Y").map((p) => p.id)).toEqual([7663]);
+    expect(searchPowerPlants(plants, "40W000000000008X").map((p) => p.id)).toEqual([8]);
+  });
+
   it("KGÜP ve UEVM kayıtlarını duvar saatine çevirir", () => {
     const k = parseKgupItems([kgupItem("2025-06-10", 13, 42.5)]);
     const u = parseUevmItems([uevmItem("2025-06-10", 13, 40.1)]);

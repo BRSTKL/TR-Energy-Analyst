@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     const project = await prisma.project.create({
       data: {
         name: projectName,
-        description: `EPİAŞ açık verisi: KGÜP (plan) ve UEVM (gerçekleşen). Santral kimliği ${body.source?.powerPlantId ?? "?"}, UEVÇB ${
+        description: `EPİAŞ açık verisi: KGÜP ${body.source?.kgupVersion === "FINAL" ? "son" : "ilk"} versiyon (plan) ve UEVM (gerçekleşen). Santral kimliği ${body.source?.powerPlantId ?? "?"}, UEVÇB ${
           Array.isArray(body.source?.uevcbIds) ? body.source.uevcbIds.join(", ") : "?"
         }.`,
         pricingProfiles: {

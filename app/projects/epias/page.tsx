@@ -11,6 +11,8 @@ import {
   detectTechnology,
   EpiasPowerPlant,
   HourlySeries,
+  KGUP_VERSION_LABELS,
+  KgupVersion,
   mergePlantSeries,
   PlantTechnology,
   SerializedSeries,
@@ -44,6 +46,9 @@ export default function EpiasPlantImportPage() {
   // 2. Dönem ve çekim
   const [startDay, setStartDay] = useState("2025-01-01");
   const [endDay, setEndDay] = useState("2025-12-31");
+  const [kgupVersion, setKgupVersion] = useState<KgupVersion>("FIRST");
+  /** Ekrandaki verinin çekildiği KGÜP versiyonu (seçim sonradan değişse de başarısız aylar bununla tekrar denenir) */
+  const [fetchedVersion, setFetchedVersion] = useState<KgupVersion | null>(null);
   const [uevcbs, setUevcbs] = useState<Uevcb[] | null>(null);
   const [fetching, setFetching] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number; label: string } | null>(null);
@@ -94,7 +99,7 @@ export default function EpiasPlantImportPage() {
     setProjectName(p.name);
   };
 
-  const runFetch = async (chunks: DateChunk[], units: Uevcb[]) => {
+  const runFetch = async (chunks: DateChunk[], units: Uevcb[], version: KgupVersion) => {
     if (!plant) return;
     setFetching(true);
     const failures: Array<DateChunk & { error: string }> = [];
@@ -105,7 +110,7 @@ export default function EpiasPlantImportPage() {
         const res = await fetch("/api/epias/plants/fetch", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ powerPlantId: plant.id, uevcbIds: units.map((u) => u.id), startDay: c.start, endDay: c.end }),
+          body: JSON.stringify({ powerPlantId: plant.id, uevcbIds: units.map((u) => u.id), startDay: c.start, endDay: c.end, kgupVersion: version }),
         });
         const d = await res.json();
         if (!d.success) throw new Error(d.error);
@@ -126,6 +131,7 @@ export default function EpiasPlantImportPage() {
     setKgupParts([]);
     setUevmParts([]);
     setFailed([]);
+    setFetchedVersion(kgupVersion);
     try {
       const res = await fetch("/api/epias/plants/resolve", {
         method: "POST",
@@ -136,7 +142,7 @@ export default function EpiasPlantImportPage() {
       if (!d.success) throw new Error(d.error);
       if (!d.uevcbs.length) throw new Error("Bu santral için uzlaştırma birimi (UEVÇB) bulunamadı; KGÜP çekilemez.");
       setUevcbs(d.uevcbs);
-      await runFetch(monthChunks(startDay, endDay), d.uevcbs);
+      await runFetch(monthChunks(startDay, endDay), d.uevcbs, kgupVersion);
     } catch (e) {
       setFetchError(e instanceof Error ? e.message : "Veri çekilemedi.");
     }
@@ -176,7 +182,7 @@ export default function EpiasPlantImportPage() {
           plantName,
           type,
           capacityMw: Number(capacity.replace(",", ".")),
-          source: { powerPlantId: plant.id, uevcbIds: uevcbs?.map((u) => u.id) },
+          source: { powerPlantId: plant.id, uevcbIds: uevcbs?.map((u) => u.id), kgupVersion: fetchedVersion },
           rows: merged.series.rows.map((r) => [r.timestamp.getTime(), r.forecastMwh, r.actualMwh]),
         }),
       });
@@ -263,7 +269,7 @@ export default function EpiasPlantImportPage() {
               <CardDescription>Veri ay ay çekilir; bağlantı koparsa yalnızca başarısız aylar tekrar denenir.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+              <div className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
                 <label className="block text-xs font-semibold text-slate-700">
                   Başlangıç
                   <input type="date" className={`${inputClass} mt-1`} value={startDay} onChange={(e) => setStartDay(e.target.value)} />
@@ -271,6 +277,22 @@ export default function EpiasPlantImportPage() {
                 <label className="block text-xs font-semibold text-slate-700">
                   Bitiş
                   <input type="date" className={`${inputClass} mt-1`} value={endDay} onChange={(e) => setEndDay(e.target.value)} />
+                </label>
+                <label className="block text-xs font-semibold text-slate-700">
+                  KGÜP versiyonu
+                  <select
+                    className={`${inputClass} mt-1`}
+                    value={kgupVersion}
+                    onChange={(e) => setKgupVersion(e.target.value as KgupVersion)}
+                    title="İlk versiyon gün öncesi plandır ve sapma analizi için doğru olandır. Son versiyon gün içi düzeltmeleri içerir; hata olduğundan küçük görünür."
+                  >
+                    {(Object.keys(KGUP_VERSION_LABELS) as KgupVersion[]).map((v) => (
+                      <option key={v} value={v}>
+                        {KGUP_VERSION_LABELS[v]}
+                        {v === "FIRST" ? " (önerilen)" : ""}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <Button onClick={startFetch} disabled={fetching || !startDay || !endDay || startDay > endDay} className="gap-1.5 bg-sky-600 text-white hover:bg-sky-700">
                   {fetching ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />}
@@ -280,6 +302,7 @@ export default function EpiasPlantImportPage() {
               {uevcbs && (
                 <p className="text-xs text-slate-500">
                   Uzlaştırma birimleri: {uevcbs.map((u) => u.name).join(", ")} (KGÜP bunların toplamıdır)
+                  {fetchedVersion && ` · KGÜP ${KGUP_VERSION_LABELS[fetchedVersion].toLocaleLowerCase("tr-TR")}`}
                 </p>
               )}
               {fetchError && (
@@ -292,7 +315,7 @@ export default function EpiasPlantImportPage() {
                   <span>
                     {failed.length} dönem çekilemedi: {failed.map((f) => f.label).join(", ")}. İlk hata: {failed[0].error}
                   </span>
-                  <Button size="sm" variant="outline" onClick={() => uevcbs && runFetch(failed, uevcbs)} className="gap-1">
+                  <Button size="sm" variant="outline" onClick={() => uevcbs && fetchedVersion && runFetch(failed, uevcbs, fetchedVersion)} className="gap-1">
                     <RefreshCw className="h-3.5 w-3.5" /> Tekrar dene
                   </Button>
                 </div>

@@ -4,15 +4,17 @@
  * Zincir (EPİAŞ Şeffaflık 2.0 servis belgesine göre):
  *   1. GET  /generation/data/injection-quantity-powerplant-list   → UEVM yayımlanan santraller (id, ad, EIC)
  *   2. POST /markets/data/uevcb-list-by-power-plant-id           → santralin uzlaştırma birimleri (UEVÇB)
- *   3. POST /generation/data/dpp { region: "TR1", uevcbId }       → KGÜP (her UEVÇB için; toplanır)
+ *   3. POST /generation/data/dpp-first-version veya /dpp { region: "TR1", uevcbId } → KGÜP ilk/son versiyon
+ *      (her UEVÇB için; toplanır)
  *   4. POST /generation/data/injection-quantity { powerplantId }  → UEVM
  *
- * Not: Bu zincir belgeye göre kuruldu; gerçek servisle doğrulanmadı. Cevap biçimi beklenenden farklıysa
- * plant-data.ts okunamayan kayıtları sayar ve kontroller kullanıcıya uyarı olarak gösterir.
+ * Canlı doğrulama (BALABANLI RES, Mayıs–Aralık 2025): 1–4 (KGÜP ilk ve son versiyon dahil) gerçek servisle çalıştı;
+ * dpp-first-version da canlı denendi: KGÜP ilk versiyon ve UEVM elle indirilen dosyalarla saat saat aynı.
+ * Cevap biçimi beklenenden farklıysa plant-data.ts okunamayan kayıtları sayar ve kontroller uyarı gösterir.
  */
 
 import { epiasRequest, formatToEpiasIso } from "@/lib/services/epias-service";
-import type { EpiasPowerPlant } from "@/lib/epias-plant/plant-data";
+import type { EpiasPowerPlant, KgupVersion } from "@/lib/epias-plant/plant-data";
 
 export interface EpiasUevcb {
   id: number;
@@ -65,8 +67,8 @@ async function fetchAllPages(path: string, body: Record<string, unknown>): Promi
 }
 
 /** Bir UEVÇB'nin KGÜP kayıtları ([start, end] gün dahil) */
-export async function fetchKgup(uevcbId: number, startDay: string, endDay: string) {
-  return fetchAllPages("/generation/data/dpp", {
+export async function fetchKgup(uevcbId: number, startDay: string, endDay: string, version: KgupVersion = "FIRST") {
+  return fetchAllPages(version === "FIRST" ? "/generation/data/dpp-first-version" : "/generation/data/dpp", {
     region: "TR1",
     uevcbId,
     startDate: formatToEpiasIso(startDay, false),

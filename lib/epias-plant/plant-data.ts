@@ -27,6 +27,15 @@ function epiasDateToWallClock(dateStr: string): Date {
   return new Date(new Date(dateStr).getTime() + 3 * 3600 * 1000);
 }
 
+/**
+ * KGÜP versiyonu. İlk versiyon gün öncesinde bildirilen plandır; son versiyon gün içi düzeltmeleri de içerir.
+ * Sapma analizi gün öncesi tahminin hatasını ölçtüğü için varsayılan ilk versiyondur: son versiyonla hata
+ * olduğundan küçük görünür.
+ */
+export type KgupVersion = "FIRST" | "FINAL";
+export const KGUP_VERSION_LABELS: Record<KgupVersion, string> = { FIRST: "İlk versiyon", FINAL: "Son versiyon" };
+export const isKgupVersion = (v: unknown): v is KgupVersion => v === "FIRST" || v === "FINAL";
+
 export interface EpiasPowerPlant {
   id: number;
   name: string;
@@ -64,7 +73,8 @@ export function normalizePlantName(s: string): string {
 }
 
 /**
- * Santral listesinde arama. Sorgunun tüm kelimeleri adda (veya kısa adda) geçmelidir.
+ * Santral listesinde arama. Sorgunun tüm kelimeleri adda, kısa adda veya EIC kodunda geçmelidir
+ * ("BALABANLI RES-40W000000007663Y" gibi EPİAŞ ekranından kopyalanan tam ad da bulunur).
  * Sıralama: tam eşleşme → baştan eşleşme → diğerleri; eşitlikte kısa ad önce.
  */
 export function searchPowerPlants(plants: EpiasPowerPlant[], query: string, limit = 20): EpiasPowerPlant[] {
@@ -73,7 +83,7 @@ export function searchPowerPlants(plants: EpiasPowerPlant[], query: string, limi
   const words = q.split(" ");
   const scored = plants
     .map((p) => {
-      const name = normalizePlantName(`${p.name} ${p.shortName ?? ""}`);
+      const name = normalizePlantName(`${p.name} ${p.shortName ?? ""} ${p.eic ?? ""}`);
       if (!words.every((w) => name.includes(w))) return null;
       const main = normalizePlantName(p.name);
       const score = main === q ? 0 : main.startsWith(q) ? 1 : 2;
