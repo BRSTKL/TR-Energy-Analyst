@@ -21,7 +21,8 @@
  * Her iki ölçü de dengesizlik maliyetinden pay ister; planlama iyileştirmesi ve DSG netleştirmesiyle TOPLANAMAZ.
  */
 
-import { HourlyResult, SystemDirection } from "@/lib/calculations/types";
+import { HourlyResult, ImbalancePricingProfile, SystemDirection } from "@/lib/calculations/types";
+import { processHourlyRecord } from "@/lib/calculations/engine";
 
 export interface ArbitrageAggregate {
   period: string; // "YYYY-MM" veya "YYYY"
@@ -764,5 +765,43 @@ export function evaluateRealisticClosing(
         desiredMwh: round(r.desiredMwh),
         closedMwh: round(r.closedMwh),
       })),
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Gün içi kalıcılık kuralı: "son görülen hata devam eder" varsayımıyla GİP'te işlem
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * `lagHours` saat önce görülen hatanın `alpha` kadarını bu saat için GİP'te kapatma kuralının kazancı.
+ * Önceki saatte fazla üretildiyse bu saat için GİP'te satılır, eksik üretildiyse alınır. Hata bu saatte
+ * yön değiştirirse işlem dengesizliği büyütür ve kazanç negatif olur (zarar da sayılır).
+ *
+ * Kazanç = gelir(tahmin + s) − gelir(tahmin) + s × (GİP işlem fiyatı − PTF), s = işlem miktarı
+ * (satışta pozitif). Gelirler verilen profil ile hesaplama motorundan geçirilir; işlem fiyatı
+ * realisticTradePrice ile (zor saatte kayma) ve miktar saatlik GİP hacminin `volumeCapPercent` payıyla sınırlı.
+ */
+export function persistenceTradeGain(
+  h: HourlyResult,
+  prev: Pick<HourlyResult, "actualMwh" | "forecastMwh"> | undefined,
+  alpha: number,
+  profile: ImbalancePricingProfile,
+  realism: Pick<IntradayRealism, "volumeCapPercent" | "stressHaircutPercent"> = DEFAULT_INTRADAY_REALISM
+): { gainTl: number; tradeMwh: number } {
+  if (!prev || alpha <= 0 || !hasGip(h)) return { gainTl: 0, tradeMwh: 0 };
+  let s = alpha * (prev.actualMwh - prev.forecastMwh);
+  if (s === 0) return { gainTl: 0, tradeMwh: 0 };
+  const vol = h.gipVolumeMwh;
+  if (vol !== null && vol !== undefined && Number.isFinite(vol)) {
+    const cap = (Math.max(0, realism.volumeCapPercent) / 100) * vol;
+    s = Math.sign(s) * Math.min(Math.abs(s), cap);
+  }
+  const { price } = realisticTradePrice(h, s > 0 ? "sell" : "buy", realism.stressHaircutPercent);
+  const market = { timestamp: h.timestamp, ptf: h.ptf, smf: h.smf, systemDirection: h.systemDirection };
+  const revenue = (forecastMwh: number) =>
+    processHourlyRecord({ timestamp: h.timestamp, actualMwh: h.actualMwh, forecastMwh }, market, profile).totalRevenue;
+  return {
+    gainTl: revenue(h.forecastMwh + s) - revenue(h.forecastMwh) + s * (price - h.ptf),
+    tradeMwh: s,
   };
 }

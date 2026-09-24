@@ -65,7 +65,8 @@ export default function BacktestPage() {
 
   const verdict = useMemo(() => {
     if (!result) return null;
-    const learned = result.strategies.filter((s) => !s.id.startsWith("gip-"));
+    // Yalnızca teklif miktarını ayarlayan kurallar (GİP ve gün içi kalıcılık kuralları ayrı değerlendirilir)
+    const learned = result.strategies.filter((s) => !s.id.startsWith("gip-") && !s.id.startsWith("persistence-"));
     const best = learned.reduce<StrategyBacktest | null>(
       (b, s) => (!b || s.outOfSampleSavingTl > b.outOfSampleSavingTl ? s : b),
       null

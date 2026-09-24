@@ -5,6 +5,25 @@ import { AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { RealisticClosingResult } from "@/lib/analysis/intraday-arbitrage";
 
+interface PersistenceResponse {
+  success: boolean;
+  available?: boolean;
+  error?: string;
+  testMonths?: string[];
+  strategies?: Array<{
+    id: string;
+    label: string;
+    outOfSampleSavingTl: number;
+    outOfSampleSavingPercent: number;
+    positiveMonths: number;
+    testMonths: number;
+  }>;
+  nextMonth?: Array<{ plantName: string; params: Record<string, string> }>;
+}
+
+const MONTHS_TR = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
+const monthLabel = (m: string) => `${MONTHS_TR[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
+
 interface ScenarioResponse {
   success: boolean;
   error?: string;
@@ -72,6 +91,20 @@ export function GipScenarioPanel({ projectId, scope }: { projectId: string; scop
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const requestId = useRef(0);
+  const [persistence, setPersistence] = useState<PersistenceResponse | null>(null);
+
+  // Veriyle test: kaydırıcılardan bağımsız, kapsam değişince bir kez hesaplanır (birkaç saniye sürebilir)
+  useEffect(() => {
+    let cancelled = false;
+    setPersistence(null);
+    fetch(`/api/projects/${projectId}/gip-persistence?scope=${encodeURIComponent(scope)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d: PersistenceResponse) => !cancelled && setPersistence(d))
+      .catch(() => !cancelled && setPersistence({ success: false, error: "Hesaplanamadı." }));
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, scope]);
 
   useEffect(() => {
     const id = ++requestId.current;
@@ -200,6 +233,55 @@ export function GipScenarioPanel({ projectId, scope }: { projectId: string; scop
             </table>
           </div>
         )}
+
+        {/* Veriyle test: sabit varsayım vs "son görülen hata sürer" kuralı, görmediği aylarda */}
+        <div className="rounded-md border border-slate-200 bg-white p-3">
+          <div className="text-xs font-semibold text-slate-800">
+            Veriyle test: hatayı gerçekten ne kadar erken görebilirsiniz?
+          </div>
+          {!persistence && <p className="mt-1 text-xs text-slate-500">Geriye dönük test çalıştırılıyor…</p>}
+          {persistence && (!persistence.success || !persistence.available) && (
+            <p className="mt-1 text-xs text-slate-500">
+              {persistence.error ?? "Test için yeterli veri yok (önceki 4 ayın tamamı gerekir)."}
+            </p>
+          )}
+          {persistence?.available && persistence.strategies && persistence.testMonths && (
+            <>
+              <p className="mt-1 text-2xs text-slate-500">
+                {monthLabel(persistence.testMonths[0])} – {monthLabel(persistence.testMonths[persistence.testMonths.length - 1])}
+                , kuralın görmediği aylarda. &quot;Kalıcılık&quot; kuralı, birkaç saat önce görülen hatanın sürdüğünü
+                varsayıp bir kısmını GİP&apos;te kapatır; hata yön değiştirirse zarar da sayılır. Kapatılan oran her
+                santral için önceki 4 aydan öğrenilir.
+              </p>
+              <table className="mt-2 w-full text-xs">
+                <tbody>
+                  {persistence.strategies.map((st) => (
+                    <tr key={st.id} className={`border-b last:border-0 ${st.id.startsWith("gip-close") ? "text-slate-500" : ""}`}>
+                      <td className="py-1.5 pr-2">
+                        {st.id.startsWith("gip-close") ? "Sabit %25 varsayımı (yönü hep doğru bilir)" : st.label}
+                      </td>
+                      <td className={`py-1.5 pr-2 text-right font-semibold tabular-nums ${st.outOfSampleSavingTl < 0 ? "text-rose-700" : "text-emerald-700"}`}>
+                        {tl(st.outOfSampleSavingTl)}
+                      </td>
+                      <td className="py-1.5 pr-2 text-right tabular-nums">
+                        %{st.outOfSampleSavingPercent.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}
+                      </td>
+                      <td className="py-1.5 text-right tabular-nums text-slate-500">
+                        {st.positiveMonths}/{st.testMonths} ay kazançlı
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {persistence.nextMonth && persistence.nextMonth.length > 0 && (
+                <p className="mt-2 text-2xs text-slate-500">
+                  Gelecek ay için öğrenilen oran (2 saat önce görülürse):{" "}
+                  {persistence.nextMonth.map((p) => `${p.plantName} ${p.params["persistence-2h"] ?? "—"}`).join(" · ")}
+                </p>
+              )}
+            </>
+          )}
+        </div>
 
         <p className="text-xs leading-relaxed text-slate-600">
           {r && hardShare > 0 && (

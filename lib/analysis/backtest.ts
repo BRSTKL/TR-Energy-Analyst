@@ -13,7 +13,7 @@
 
 import { processHourlyRecord } from "@/lib/calculations/engine";
 import { HourlyResult, ImbalancePricingProfile } from "@/lib/calculations/types";
-import { DEFAULT_INTRADAY_REALISM, realisticHourGain } from "@/lib/analysis/intraday-arbitrage";
+import { DEFAULT_INTRADAY_REALISM, persistenceTradeGain, realisticHourGain } from "@/lib/analysis/intraday-arbitrage";
 
 /** Profil altında yeniden fiyatlanmış bir saat */
 export interface PricedHour {
@@ -23,6 +23,8 @@ export interface PricedHour {
   baselineCost: number;
   positivePrice: number;
   negativePrice: number;
+  /** Aynı santralin `lagHours` saat önceki kaydı (ay sınırını aşsa da; yoksa undefined) */
+  prev: (lagHours: number) => HourlyResult | undefined;
 }
 
 /** Eğitilmiş kural: test saatindeki simüle maliyeti verir */
@@ -83,7 +85,11 @@ function monthOf(t: Date | string): string {
 
 /** Saatleri verilen profil altında yeniden fiyatlar (baz maliyet ve dengesizlik fiyatları) */
 export function priceHours(hourly: HourlyResult[], profile: ImbalancePricingProfile): PricedHour[] {
+  // Santral + zaman anahtarı: birden fazla santral aynı listede olsa da geçmiş saat doğru santralden gelir
+  const key = (plantId: string | undefined, t: number) => `${plantId ?? ""}|${t}`;
+  const byKey = new Map(hourly.map((h) => [key(h.plantId, new Date(h.timestamp).getTime()), h]));
   return hourly.map((h) => {
+    const t = new Date(h.timestamp).getTime();
     const r = processHourlyRecord(
       { timestamp: h.timestamp, actualMwh: h.actualMwh, forecastMwh: h.forecastMwh },
       { timestamp: h.timestamp, ptf: h.ptf, smf: h.smf, systemDirection: h.systemDirection },
@@ -96,6 +102,7 @@ export function priceHours(hourly: HourlyResult[], profile: ImbalancePricingProf
       baselineCost: r.imbalanceCost,
       positivePrice: r.positivePrice,
       negativePrice: r.negativePrice,
+      prev: (lagHours: number) => byKey.get(key(h.plantId, t - lagHours * 3_600_000)),
     };
   });
 }
@@ -209,11 +216,48 @@ export function intradayClosingStrategy(sharePercent = DEFAULT_INTRADAY_REALISM.
   };
 }
 
+const ALPHA_GRID = [0, 0.25, 0.5, 0.75, 1];
+
+/**
+ * Gün içi kalıcılık: `lagHours` saat önce görülen hatanın α kadarı bu saat için GİP'te kapatılır
+ * (persistenceTradeGain; gerçekçi fiyat ve hacim sınırı). α, eğitim döneminde kazancı en yüksek yapan
+ * değer olarak 0 / %25 / %50 / %75 / %100 arasından seçilir; hiçbiri kazandırmıyorsa α = 0 (işlem yok).
+ */
+export function persistenceStrategy(lagHours: number): Strategy {
+  return {
+    id: `persistence-${lagHours}h`,
+    label: `Gün içi kalıcılık (${lagHours} saat önce)`,
+    description:
+      `Her saat, ${lagHours} saat önce görülen tahmin hatasının bir kısmı "hata sürecek" varsayımıyla GİP'te ` +
+      `kapatılır; hata yön değiştirirse zarar da sayılır. Kapatılan oran önceki aylardan öğrenilir.`,
+    fit: (train, profile) => {
+      const gain = (h: PricedHour, alpha: number) => persistenceTradeGain(h.source, h.prev(lagHours), alpha, profile).gainTl;
+      let bestAlpha = 0;
+      let bestGain = 0;
+      for (const alpha of ALPHA_GRID) {
+        if (alpha === 0) continue;
+        const g = train.reduce((sum, h) => sum + gain(h, alpha), 0);
+        if (g > bestGain) {
+          bestGain = g;
+          bestAlpha = alpha;
+        }
+      }
+      return {
+        cost: (h) => h.baselineCost - gain(h, bestAlpha),
+        summary: bestAlpha === 0 ? "işlem yok" : `%${bestAlpha * 100} kapat`,
+      };
+    },
+  };
+}
+
 export const DEFAULT_STRATEGIES: Strategy[] = [
   volumeRatioStrategy,
   costMinMultiplierStrategy,
   hourlyMultiplierStrategy,
   intradayClosingStrategy(25),
+  persistenceStrategy(1),
+  persistenceStrategy(2),
+  persistenceStrategy(3),
 ];
 
 // ---------------------------------------------------------------------------------------------
