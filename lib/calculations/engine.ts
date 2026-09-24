@@ -335,6 +335,9 @@ export function processHourlyRecord(
     imbalanceCost,
     unitImbalanceCost,
     gipPrice: marketPriceRecord.gipPrice ?? null,
+    gipVolumeMwh: marketPriceRecord.gipVolumeMwh ?? null,
+    gipMinPrice: marketPriceRecord.gipMinPrice ?? null,
+    gipMaxPrice: marketPriceRecord.gipMaxPrice ?? null,
     plantId: hourlyRecord.plantId,
     plantName: hourlyRecord.plantName,
   };

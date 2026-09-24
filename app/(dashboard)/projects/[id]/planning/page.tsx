@@ -76,11 +76,11 @@ import {
   ArbitrageAggregate,
   TopArbitrageHour,
   HourlyProfilePoint,
-  intradayClosingScenario,
 } from "@/lib/analysis/intraday-arbitrage";
 import { SystemDirection } from "@/lib/calculations/types";
 import type { BacktestSummary } from "@/lib/analysis/backtest";
 import { EpiasSyncDialog } from "@/components/epias-sync-dialog";
+import { GipScenarioPanel } from "@/components/gip-scenario-panel";
 import { DataQualityBanner } from "@/components/data-quality-banner";
 import { MarketDataUploadDialog } from "@/components/market-data-upload-dialog";
 
@@ -214,8 +214,6 @@ export default function PlanningEfficiencyPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedScope, setSelectedScope] = useState<string>("portfolio");
   const [activeSectionTab, setActiveSectionTab] = useState<"efficiency" | "arbitrage">("efficiency");
-  // GİP kapatma senaryosu: tahmin hatasının gün içinde görülüp GİP'te kapatıldığı varsayılan payı (%)
-  const [closingSharePercent, setClosingSharePercent] = useState(25);
   const [divergenceMode, setDivergenceMode] = useState<"hourly" | "monthly">("hourly");
 
   // 24s Drill-Down Modal State
@@ -1436,52 +1434,12 @@ export default function PlanningEfficiencyPage() {
                 {/* 1. KPI KARTLARI */}
                 {(() => {
                   const arb = currentView.arbitrage;
-                  const scenario = intradayClosingScenario(arb, closingSharePercent);
                   const tl = (v: number) => `${v < 0 ? "−" : ""}${Math.abs(Math.round(v)).toLocaleString("tr-TR")} ₺`;
                   return (
                     <>
                       <section className="grid gap-4 lg:grid-cols-3">
-                        {/* KPI 1: Senaryo (ana gösterim) */}
-                        <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50/60 to-white shadow-sm lg:col-span-2">
-                          <CardHeader className="pb-2">
-                            <CardTitle className="text-xs font-medium uppercase tracking-wider text-emerald-800">
-                              Senaryo: tahmin hatasının %{closingSharePercent} payı gün içinde GİP&apos;te kapatılsaydı
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="flex flex-wrap items-baseline gap-3">
-                              <div
-                                className={`text-3xl font-bold tracking-tight ${
-                                  scenario.gainTl < 0 ? "text-rose-600" : "text-emerald-600"
-                                }`}
-                              >
-                                {tl(scenario.gainTl)}
-                              </div>
-                              <span className="text-sm text-slate-600">
-                                dengesizlik maliyetinin %{scenario.shareOfCostPercent.toLocaleString("tr-TR")} payı
-                              </span>
-                            </div>
-                            <div className="mt-4 flex items-center gap-3">
-                              <span className="text-xs text-slate-500">%0</span>
-                              <input
-                                type="range"
-                                min={0}
-                                max={100}
-                                step={5}
-                                value={closingSharePercent}
-                                onChange={(e) => setClosingSharePercent(Number(e.target.value))}
-                                className="flex-1 accent-emerald-600"
-                                aria-label="GİP'te kapatılan hata payı"
-                              />
-                              <span className="text-xs text-slate-500">%100</span>
-                            </div>
-                            <p className="mt-3 text-xs leading-relaxed text-slate-600">
-                              Her saatte dengesizliğin aynı payının GİP ağırlıklı ortalama fiyatından kapatıldığı varsayılır.
-                              GİP&apos;in hangi saatte avantajlı olacağı önceden bilinmediği için dezavantajlı saatler de
-                              hesaba girer. Likidite ve AOF&apos;tan sapma dikkate alınmaz.
-                            </p>
-                          </CardContent>
-                        </Card>
+                        {/* KPI 1: Gerçekçi GİP senaryosu (hacim sınırı + zor saatte fiyat kayması) */}
+                        <GipScenarioPanel projectId={projectId} scope={selectedScope} />
 
                         {/* KPI 2: Teorik tavan (referans) */}
                         <Card className="border-slate-200 shadow-sm">

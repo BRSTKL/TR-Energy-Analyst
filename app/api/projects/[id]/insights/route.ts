@@ -100,6 +100,9 @@ export async function GET(_request: Request, { params }: { params: { id: string 
           smf: record.marketData.smf,
           systemDirection: record.marketData.systemDirection as SystemDirection,
           gipPrice: record.marketData.gipPrice,
+          gipVolumeMwh: record.marketData.gipVolumeMwh,
+          gipMinPrice: record.marketData.gipMinPrice,
+          gipMaxPrice: record.marketData.gipMaxPrice,
         };
 
         const result = processHourlyRecord(

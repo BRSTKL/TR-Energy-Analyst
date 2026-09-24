@@ -135,6 +135,10 @@ export interface MarketPriceRecord {
   smf: number;
   systemDirection: SystemDirection;
   gipPrice?: number | null;
+  /** GİP saatlik kontratında eşleşen miktar ve en düşük / en yüksek eşleşme fiyatı (yoksa null) */
+  gipVolumeMwh?: number | null;
+  gipMinPrice?: number | null;
+  gipMaxPrice?: number | null;
 }
 
 export interface HourlyResult {
@@ -155,6 +159,10 @@ export interface HourlyResult {
   imbalanceCost: number;
   unitImbalanceCost: number;
   gipPrice?: number | null;
+  /** GİP saatlik kontratında eşleşen miktar ve en düşük / en yüksek eşleşme fiyatı (yoksa null) */
+  gipVolumeMwh?: number | null;
+  gipMinPrice?: number | null;
+  gipMaxPrice?: number | null;
   plantId?: string;
   plantName?: string;
 }

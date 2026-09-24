@@ -13,7 +13,7 @@
 
 import { processHourlyRecord } from "@/lib/calculations/engine";
 import { HourlyResult, ImbalancePricingProfile } from "@/lib/calculations/types";
-import { calculateArbitrageOpportunity } from "@/lib/analysis/intraday-arbitrage";
+import { DEFAULT_INTRADAY_REALISM, realisticHourGain } from "@/lib/analysis/intraday-arbitrage";
 
 /** Profil altında yeniden fiyatlanmış bir saat */
 export interface PricedHour {
@@ -180,18 +180,29 @@ export const hourlyMultiplierStrategy: Strategy = {
   },
 };
 
-/** GİP'te sabit pay kapatma: öğrenilen parametre yok, aylık tutarlılığı göstermek için */
-export function intradayClosingStrategy(sharePercent = 25): Strategy {
-  const share = sharePercent / 100;
+/**
+ * GİP'te sabit pay kapatma (gerçekçi model): öğrenilen parametre yok, aylık tutarlılığı göstermek için.
+ * Saatlik GİP hacmine göre sınır ve zor saatlerde fiyat kayması uygulanır (evaluateRealisticClosing ile aynı
+ * kurallar). Sınır burada santral bazında uygulanır.
+ */
+export function intradayClosingStrategy(sharePercent = DEFAULT_INTRADAY_REALISM.sharePercent): Strategy {
+  const params = { ...DEFAULT_INTRADAY_REALISM, sharePercent };
   return {
     id: `gip-close-${sharePercent}`,
     label: `GİP'te %${sharePercent} kapatma`,
-    description: `Her saatte dengesizliğin %${sharePercent} payı GİP ağırlıklı ortalama fiyatından kapatılır. Öğrenilen parametre yoktur; payın gün içinde öngörülebildiği varsayılır.`,
+    description:
+      `Her saatte dengesizliğin %${sharePercent} payı GİP'te kapatılır; saatlik GİP hacminin en fazla ` +
+      `%${params.volumeCapPercent} payı kadar, zor saatlerde fiyat en kötü eşleşme fiyatına doğru ` +
+      `%${params.stressHaircutPercent} kayar. Öğrenilen parametre yoktur; payın gün içinde öngörülebildiği varsayılır.`,
     fit: () => ({
       cost: (h) => {
-        const s = h.source;
-        if (s.gipPrice === null || s.gipPrice === undefined || Number.isNaN(s.gipPrice)) return h.baselineCost;
-        return h.baselineCost - share * calculateArbitrageOpportunity(s.imbalanceMwh, s.gipPrice, h.positivePrice, h.negativePrice);
+        // Dengesizlik fiyatları seçilen profile göre (ör. 2026 kuralları) yeniden hesaplanmış olanlardır
+        const priced = { ...h.source, positivePrice: h.positivePrice, negativePrice: h.negativePrice };
+        const desired = (params.sharePercent / 100) * Math.abs(priced.imbalanceMwh);
+        const vol = priced.gipVolumeMwh;
+        const cap = vol === null || vol === undefined ? Infinity : (params.volumeCapPercent / 100) * vol;
+        const scale = desired > cap ? cap / desired : 1;
+        return h.baselineCost - realisticHourGain(priced, params, scale).gainTl;
       },
       summary: "—",
     }),

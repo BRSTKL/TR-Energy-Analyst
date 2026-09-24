@@ -561,3 +561,208 @@ export function intradayClosingScenario(
         : 0,
   };
 }
+
+// ---------------------------------------------------------------------------------------------
+// Gerçekçi GİP kapatma senaryosu: likidite ve fiyat kayması
+// ---------------------------------------------------------------------------------------------
+
+export interface IntradayRealism {
+  /** Dengesizliğin gün içinde görülüp GİP'te kapatılmaya çalışılan payı (%) */
+  sharePercent: number;
+  /** Bir saatte kapatılabilecek en fazla miktar: o saatin GİP eşleşme hacminin yüzdesi (%) */
+  volumeCapPercent: number;
+  /**
+   * "Zor" saatlerde fiyat kayması (%): sistem fazladayken satarken fiyat ortalamadan en düşük eşleşme
+   * fiyatına, sistem açıktayken alırken en yüksek eşleşme fiyatına doğru bu oranda kayar.
+   */
+  stressHaircutPercent: number;
+}
+
+export const DEFAULT_INTRADAY_REALISM: IntradayRealism = {
+  sharePercent: 25,
+  volumeCapPercent: 10,
+  stressHaircutPercent: 50,
+};
+
+export type ClosingSide = "sell" | "buy";
+
+/**
+ * Saatin GİP'te gerçekleşebilecek işlem fiyatı.
+ * Sistemle aynı yönde işlem (fazlada satış, açıkta alış) "zor" kabul edilir: karşı taraf azdır, fiyat
+ * ortalamadan en kötü eşleşme fiyatına doğru kayar. Diğer saatlerde ağırlıklı ortalama fiyat kullanılır.
+ * Min/maks fiyat verisi yoksa ağırlıklı ortalama fiyat kullanılır.
+ */
+export function realisticTradePrice(
+  h: Pick<HourlyResult, "systemDirection" | "gipPrice" | "gipMinPrice" | "gipMaxPrice">,
+  side: ClosingSide,
+  stressHaircutPercent: number
+): { price: number; stressed: boolean; hasRange: boolean } {
+  const wap = h.gipPrice ?? 0;
+  const stressed = (side === "sell" && h.systemDirection === "SURPLUS") || (side === "buy" && h.systemDirection === "DEFICIT");
+  const hc = Math.min(100, Math.max(0, stressHaircutPercent)) / 100;
+  if (side === "sell") {
+    const min = h.gipMinPrice;
+    const hasRange = min !== null && min !== undefined && Number.isFinite(min);
+    if (!stressed || !hasRange) return { price: wap, stressed, hasRange };
+    return { price: wap - hc * Math.max(0, wap - (min as number)), stressed, hasRange };
+  }
+  const max = h.gipMaxPrice;
+  const hasRange = max !== null && max !== undefined && Number.isFinite(max);
+  if (!stressed || !hasRange) return { price: wap, stressed, hasRange };
+  return { price: wap + hc * Math.max(0, (max as number) - wap), stressed, hasRange };
+}
+
+const hasGip = (h: HourlyResult) => h.gipPrice !== null && h.gipPrice !== undefined && !Number.isNaN(h.gipPrice);
+
+/**
+ * Tek bir santral saatinde, `scale` (hacim sınırından gelen oran, 0–1) uygulandıktan sonra kapatılan
+ * miktar ve dengesizlikte kalmaya göre kazanç. Fazla üretim GİP'te satılır, eksik üretim GİP'ten alınır.
+ */
+export function realisticHourGain(
+  h: HourlyResult,
+  params: IntradayRealism,
+  scale = 1
+): { closedMwh: number; gainTl: number; stressed: boolean; hasRange: boolean } {
+  if (!hasGip(h) || h.imbalanceMwh === 0) return { closedMwh: 0, gainTl: 0, stressed: false, hasRange: false };
+  const side: ClosingSide = h.imbalanceMwh > 0 ? "sell" : "buy";
+  const closedMwh = (Math.min(100, Math.max(0, params.sharePercent)) / 100) * Math.abs(h.imbalanceMwh) * scale;
+  const { price, stressed, hasRange } = realisticTradePrice(h, side, params.stressHaircutPercent);
+  const perMwh = side === "sell" ? price - h.positivePrice : h.negativePrice - price;
+  return { closedMwh, gainTl: closedMwh * perMwh, stressed, hasRange };
+}
+
+export interface ClosingBreakdownRow {
+  direction: SystemDirection;
+  side: ClosingSide;
+  hours: number;
+  imbalanceCostTl: number;
+  /** Basit senaryo: pay × ağırlıklı ortalama fiyat, hacim sınırı yok */
+  simpleGainTl: number;
+  realisticGainTl: number;
+  desiredMwh: number;
+  closedMwh: number;
+}
+
+export interface RealisticClosingResult {
+  params: IntradayRealism;
+  simpleGainTl: number;
+  realisticGainTl: number;
+  /** GİP verisi olan saatlerdeki dengesizlik maliyeti (kıyas tabanı) */
+  imbalanceCostTl: number;
+  simpleShareOfCostPercent: number;
+  realisticShareOfCostPercent: number;
+  desiredMwh: number;
+  closedMwh: number;
+  /** Hacim sınırının bağladığı saat sayısı */
+  cappedHours: number;
+  /** GİP eşleşme hacmi olmayan (sınır uygulanamayan) saatler */
+  hoursWithoutVolume: number;
+  /** Zor olup min/maks fiyatı olmayan (ortalama fiyat kullanılan) saatler */
+  stressedHoursWithoutRange: number;
+  breakdown: ClosingBreakdownRow[];
+}
+
+/**
+ * Gerçekçi GİP kapatma senaryosu.
+ * - Her santral saatinde dengesizliğin `sharePercent` payı kapatılmak istenir.
+ * - Aynı saatteki tüm santrallerin istediği toplam miktar, o saatin GİP eşleşme hacminin
+ *   `volumeCapPercent` payıyla sınırlanır (sınır aşılırsa santrallerin payları orantılı küçülür).
+ * - Fiyat, zor saatlerde en kötü eşleşme fiyatına doğru kayar (realisticTradePrice).
+ * Basit senaryo (pay × ağırlıklı ortalama, sınırsız) kıyas için yanında hesaplanır.
+ */
+export function evaluateRealisticClosing(
+  hourly: HourlyResult[],
+  params: IntradayRealism = DEFAULT_INTRADAY_REALISM
+): RealisticClosingResult {
+  const share = Math.min(100, Math.max(0, params.sharePercent)) / 100;
+  const byTime = new Map<number, HourlyResult[]>();
+  let imbalanceCostTl = 0;
+  for (const h of hourly) {
+    if (!hasGip(h)) continue;
+    imbalanceCostTl += h.imbalanceCost;
+    if (h.imbalanceMwh === 0) continue;
+    const t = new Date(h.timestamp).getTime();
+    const list = byTime.get(t) ?? [];
+    list.push(h);
+    byTime.set(t, list);
+  }
+
+  const rows = new Map<string, ClosingBreakdownRow>();
+  let simple = 0;
+  let realistic = 0;
+  let desiredTotal = 0;
+  let closedTotal = 0;
+  let cappedHours = 0;
+  let hoursWithoutVolume = 0;
+  let stressedWithoutRange = 0;
+
+  for (const hours of byTime.values()) {
+    const desired = hours.reduce((s, h) => s + share * Math.abs(h.imbalanceMwh), 0);
+    const volume = hours[0].gipVolumeMwh;
+    let scale = 1;
+    if (volume === null || volume === undefined || !Number.isFinite(volume)) {
+      hoursWithoutVolume++;
+    } else {
+      const cap = (Math.max(0, params.volumeCapPercent) / 100) * volume;
+      if (desired > cap) {
+        scale = desired > 0 ? cap / desired : 0;
+        cappedHours++;
+      }
+    }
+    for (const h of hours) {
+      const r = realisticHourGain(h, params, scale);
+      const s = share * calculateArbitrageOpportunity(h.imbalanceMwh, h.gipPrice, h.positivePrice, h.negativePrice);
+      if (r.stressed && !r.hasRange) stressedWithoutRange++;
+      const side: ClosingSide = h.imbalanceMwh > 0 ? "sell" : "buy";
+      const key = `${h.systemDirection}-${side}`;
+      const row = rows.get(key) ?? {
+        direction: h.systemDirection,
+        side,
+        hours: 0,
+        imbalanceCostTl: 0,
+        simpleGainTl: 0,
+        realisticGainTl: 0,
+        desiredMwh: 0,
+        closedMwh: 0,
+      };
+      row.hours++;
+      row.imbalanceCostTl += h.imbalanceCost;
+      row.simpleGainTl += s;
+      row.realisticGainTl += r.gainTl;
+      row.desiredMwh += share * Math.abs(h.imbalanceMwh);
+      row.closedMwh += r.closedMwh;
+      rows.set(key, row);
+      simple += s;
+      realistic += r.gainTl;
+      desiredTotal += share * Math.abs(h.imbalanceMwh);
+      closedTotal += r.closedMwh;
+    }
+  }
+
+  const round = (v: number) => Number(v.toFixed(2));
+  const pct = (v: number) => (imbalanceCostTl > 0 ? Number(((v / imbalanceCostTl) * 100).toFixed(1)) : 0);
+  const order = ["SURPLUS-sell", "DEFICIT-buy", "SURPLUS-buy", "DEFICIT-sell", "BALANCED-sell", "BALANCED-buy"];
+  return {
+    params,
+    simpleGainTl: round(simple),
+    realisticGainTl: round(realistic),
+    imbalanceCostTl: round(imbalanceCostTl),
+    simpleShareOfCostPercent: pct(simple),
+    realisticShareOfCostPercent: pct(realistic),
+    desiredMwh: round(desiredTotal),
+    closedMwh: round(closedTotal),
+    cappedHours,
+    hoursWithoutVolume,
+    stressedHoursWithoutRange: stressedWithoutRange,
+    breakdown: Array.from(rows.entries())
+      .sort(([a], [b]) => order.indexOf(a) - order.indexOf(b))
+      .map(([, r]) => ({
+        ...r,
+        imbalanceCostTl: round(r.imbalanceCostTl),
+        simpleGainTl: round(r.simpleGainTl),
+        realisticGainTl: round(r.realisticGainTl),
+        desiredMwh: round(r.desiredMwh),
+        closedMwh: round(r.closedMwh),
+      })),
+  };
+}

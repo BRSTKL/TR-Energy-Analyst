@@ -10,7 +10,7 @@
 
 import { processHourlyRecord } from "@/lib/calculations/engine";
 import { HourlyResult, ImbalancePricingProfile } from "@/lib/calculations/types";
-import { calculateArbitrageOpportunity } from "@/lib/analysis/intraday-arbitrage";
+import { DEFAULT_INTRADAY_REALISM, evaluateRealisticClosing } from "@/lib/analysis/intraday-arbitrage";
 
 export interface SimulatedImpact {
   /** Pozitif = maliyet azalır (tasarruf), negatif = maliyet artar */
@@ -59,22 +59,20 @@ export function simulateForecastMultiplier(
 }
 
 /**
- * Seçilen saatlerde dengesizliğin `share` kadarı GİP AOF'tan kapatılsaydı elde edilecek net tasarruf.
- * GİP'in dezavantajlı olduğu saatler de dahildir (fiyat önceden bilinmez). GİP verisi olmayan saatler atlanır.
+ * Seçilen saatlerde dengesizliğin `share` kadarı GİP'te kapatılsaydı elde edilecek net tasarruf (gerçekçi
+ * model: saatlik GİP hacmine göre sınır, zor saatlerde fiyat kayması). GİP'in dezavantajlı olduğu saatler de
+ * dahildir (fiyat önceden bilinmez). GİP verisi olmayan saatler atlanır.
  */
 export function simulateIntradayShare(
   hourly: HourlyResult[],
   select: (h: HourlyResult) => boolean,
   share: number
 ): { savingTl: number; hoursWithGip: number } {
-  let saving = 0;
-  let hoursWithGip = 0;
-  for (const h of hourly) {
-    if (!select(h) || h.gipPrice === null || h.gipPrice === undefined || Number.isNaN(h.gipPrice)) continue;
-    hoursWithGip++;
-    saving += share * calculateArbitrageOpportunity(h.imbalanceMwh, h.gipPrice, h.positivePrice, h.negativePrice);
-  }
-  return { savingTl: saving, hoursWithGip };
+  const selected = hourly.filter(
+    (h) => select(h) && h.gipPrice !== null && h.gipPrice !== undefined && !Number.isNaN(h.gipPrice)
+  );
+  const r = evaluateRealisticClosing(selected, { ...DEFAULT_INTRADAY_REALISM, sharePercent: share * 100 });
+  return { savingTl: r.realisticGainTl, hoursWithGip: selected.length };
 }
 
 /** Değerlerin p. yüzdelik dilimi (0–1), doğrusal enterpolasyonsuz: sıralı dizideki en yakın alt eleman */
@@ -97,8 +95,8 @@ export function intradayImpact(
   return toImpact(
     savingTl,
     hourly,
-    `${scopeLabel} saatlerinde dengesizliğin %${INTRADAY_SHARE * 100} payı GİP ağırlıklı ortalama fiyatından kapatıldı (${hoursWithGip.toLocaleString("tr-TR")} saat).`,
-    "Kapatılan payın gün içinde öngörülebildiği varsayılır; likidite ve AOF'tan sapma dikkate alınmaz."
+    `${scopeLabel} saatlerinde dengesizliğin %${INTRADAY_SHARE * 100} payı GİP'te kapatıldı (${hoursWithGip.toLocaleString("tr-TR")} saat; saatlik GİP hacminin en fazla %${DEFAULT_INTRADAY_REALISM.volumeCapPercent} payı, zor saatlerde fiyat kayması %${DEFAULT_INTRADAY_REALISM.stressHaircutPercent}).`,
+    "Kapatılan payın gün içinde öngörülebildiği varsayılır. GİP hacim ve min/maks fiyat verisi olmayan saatlerde ortalama fiyat kullanılır."
   );
 }
 

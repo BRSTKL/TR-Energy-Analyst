@@ -45,6 +45,9 @@ export async function loadProjectHourly(projectId: string): Promise<ProjectHourl
                   smf: r.marketData.smf,
                   systemDirection: r.marketData.systemDirection as SystemDirection,
                   gipPrice: r.marketData.gipPrice,
+                  gipVolumeMwh: r.marketData.gipVolumeMwh,
+                  gipMinPrice: r.marketData.gipMinPrice,
+                  gipMaxPrice: r.marketData.gipMaxPrice,
                 },
                 profile
               ),

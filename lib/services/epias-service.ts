@@ -31,6 +31,21 @@ export interface EpiasMarketItem {
   smf: number;
   systemDirection: SystemDirection;
   gipPrice: number | null;
+  /** GİP saatlik kontrat istatistikleri (eşleşme miktarı, en düşük / en yüksek eşleşme fiyatı) */
+  gipVolumeMwh?: number | null;
+  gipMinPrice?: number | null;
+  gipMaxPrice?: number | null;
+}
+
+/**
+ * GİP saatlik kontrat adını duvar saatine çevirir: "PH25061013" → 2025-06-10 13:00 (UTC alanlarında).
+ * Blok kontratlar veya tanınmayan adlar için null.
+ */
+export function idmContractToWallClock(name: string): Date | null {
+  const m = /^PH(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(name ?? "");
+  if (!m) return null;
+  const [yy, mm, dd, hh] = m.slice(1).map(Number);
+  return new Date(Date.UTC(2000 + yy, mm - 1, dd, hh));
 }
 
 export interface EpiasSyncResult {
@@ -312,7 +327,13 @@ export async function fetchMarketDataFromEpias(
 
   for (const chunk of chunks) {
     // 4 servisi eşzamanlı olarak çek
-    const [mcpItems, smpItems, sdItems, wapItems] = await Promise.all([
+    // GİP hacim ve min/maks fiyatları yardımcı veridir: alınamazsa senkron bozulmaz, alanlar boş kalır
+    const optional = <T,>(p: Promise<T[]>, label: string) =>
+      p.catch((err) => {
+        console.warn(`EPİAŞ ${label} alınamadı; GİP hacim/fiyat alanları boş kalacak:`, err instanceof Error ? err.message : err);
+        return [] as T[];
+      });
+    const [mcpItems, smpItems, sdItems, wapItems, idmQtyItems, idmMinMaxItems] = await Promise.all([
       callEpiasEndpoint<{ date: string; hour: string; price: number }>(
         "/markets/dam/data/mcp",
         chunk.startIso,
@@ -336,6 +357,24 @@ export async function fetchMarketDataFromEpias(
         chunk.startIso,
         chunk.endIso,
         tgt
+      ),
+      optional(
+        callEpiasEndpoint<{ kontratAdi: string; clearingQuantityAsk: number; clearingQuantityBid: number }>(
+          "/markets/idm/data/matching-quantity",
+          chunk.startIso,
+          chunk.endIso,
+          tgt
+        ),
+        "GİP eşleşme miktarı"
+      ),
+      optional(
+        callEpiasEndpoint<{ contractName: string; minMatchingPrice: number; maxMatchingPrice: number }>(
+          "/markets/idm/data/min-max-matching-price",
+          chunk.startIso,
+          chunk.endIso,
+          tgt
+        ),
+        "GİP min/maks eşleşme fiyatı"
       ),
     ]);
 
@@ -382,6 +421,22 @@ export async function fetchMarketDataFromEpias(
       allItemsMap.get(key)!.gipPrice =
         item.wap !== undefined && item.wap !== null ? Number(item.wap) : null;
     }
+
+    // 5. GİP saatlik kontrat istatistikleri (kontrat adından saate eşlenir; blok kontratlar atlanır)
+    const numOrNull = (v: unknown) => (v === undefined || v === null || Number.isNaN(Number(v)) ? null : Number(v));
+    for (const item of idmQtyItems) {
+      const ts = idmContractToWallClock(item.kontratAdi);
+      const entry = ts && allItemsMap.get(ts.toISOString());
+      if (entry) entry.gipVolumeMwh = numOrNull(item.clearingQuantityAsk ?? item.clearingQuantityBid);
+    }
+    for (const item of idmMinMaxItems) {
+      const ts = idmContractToWallClock(item.contractName);
+      const entry = ts && allItemsMap.get(ts.toISOString());
+      if (entry) {
+        entry.gipMinPrice = numOrNull(item.minMatchingPrice);
+        entry.gipMaxPrice = numOrNull(item.maxMatchingPrice);
+      }
+    }
   }
 
   // Sonuçları sıralı diziye dönüştür ve eksik yönleri tamamla
@@ -404,6 +459,9 @@ export async function fetchMarketDataFromEpias(
       smf: item.smf,
       systemDirection: direction,
       gipPrice: item.gipPrice ?? null,
+      gipVolumeMwh: item.gipVolumeMwh ?? null,
+      gipMinPrice: item.gipMinPrice ?? null,
+      gipMaxPrice: item.gipMaxPrice ?? null,
     });
   }
 
@@ -424,6 +482,9 @@ export async function upsertMarketRecords(
     smf: number;
     systemDirection: SystemDirection;
     gipPrice: number | null;
+    gipVolumeMwh?: number | null;
+    gipMinPrice?: number | null;
+    gipMaxPrice?: number | null;
   }>,
   source: "EPIAS" | "FILE"
 ): Promise<number> {
@@ -439,6 +500,10 @@ export async function upsertMarketRecords(
           smf: item.smf,
           systemDirection: item.systemDirection,
           gipPrice: item.gipPrice,
+          // Dosya yüklemelerinde bu alanlar yoktur (undefined): mevcut değerler korunur
+          gipVolumeMwh: item.gipVolumeMwh,
+          gipMinPrice: item.gipMinPrice,
+          gipMaxPrice: item.gipMaxPrice,
           source,
           syncedAt,
         };
