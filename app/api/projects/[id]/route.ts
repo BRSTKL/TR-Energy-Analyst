@@ -6,7 +6,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/projects/[id]
- * Proje, santralleri (kayıt sayılarıyla) ve kayıtlı kolon eşleştirme şablonunun olup olmadığı.
+ * Proje, santralleri (kayıt sayılarıyla), kayıtlı kolon eşleştirme şablonunun olup olmadığı ve
+ * üretim verisinin tarih aralığı (dataRange: { start, end } "YYYY-MM-DD", veri yoksa null).
  */
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
   const project = await prisma.project.findUnique({
@@ -26,6 +27,18 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     );
   }
 
+  // Üretim verisinin kapsadığı tarih aralığı (duvar saati; UTC alanlarında saklanır)
+  const range = await prisma.generationRecord.aggregate({
+    where: { plant: { projectId: project.id } },
+    _min: { timestamp: true },
+    _max: { timestamp: true },
+  });
+  const day = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
+  const dataRange =
+    range._min.timestamp && range._max.timestamp
+      ? { start: day(range._min.timestamp), end: day(range._max.timestamp) }
+      : null;
+
   return NextResponse.json({
     success: true,
     project: {
@@ -33,6 +46,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
       name: project.name,
       description: project.description,
       hasImportTemplate: !!project.importTemplate,
+      dataRange,
       plants: project.plants.map((p) => ({
         id: p.id,
         name: p.name,
