@@ -3,8 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { backupDatabase } from "@/lib/db-backup";
 import { writePlantImports } from "@/lib/import/persist";
 import { syncEpiasToDatabase } from "@/lib/services/epias-service";
-import { DEFAULT_IMBALANCE_PROFILE } from "@/lib/calculations/types";
-import { validatePlantInput } from "@/lib/plants/validation";
+import { DEFAULT_IMBALANCE_PROFILE, toPricingProfile } from "@/lib/calculations/types";
+import { plantNameKey, validatePlantInput } from "@/lib/plants/validation";
 import { monthChunks } from "@/lib/date-chunks";
 import type { ParsedGenerationRow } from "@/lib/parsers/generation-parser";
 
@@ -12,17 +12,33 @@ export const dynamic = "force-dynamic";
 
 /**
  * POST /api/epias/plants/project
- * { projectName, plantName, type, capacityMw, source: { powerPlantId, uevcbIds }, rows: [[t, kgup, uevm], ...] }
- * EPİAŞ'tan çekilip birleştirilmiş saatlik veriyle yeni proje ve santral oluşturur. Aralıktaki piyasa fiyatı
- * eksik aylar önce EPİAŞ'tan senkronlanır (başarısız olursa kayıtlar yine yazılır, eksik saatler raporlanır).
+ * { projectName | targetProjectId, plantName, type, capacityMw, source: { powerPlantId, uevcbIds, kgupVersion },
+ *   rows: [[t, kgup, uevm], ...] }
+ * EPİAŞ'tan çekilip birleştirilmiş saatlik veriyle santral oluşturur: targetProjectId verilirse o projeye eklenir
+ * (portföy ve DSG analizi için; projenin fiyat profili kullanılır), yoksa yeni proje açılır. Aralıktaki piyasa
+ * fiyatı eksik aylar önce EPİAŞ'tan senkronlanır (başarısız olursa kayıtlar yine yazılır, eksik saatler raporlanır).
  */
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    const targetProjectId = typeof body.targetProjectId === "string" && body.targetProjectId ? body.targetProjectId : null;
     const projectName = typeof body.projectName === "string" ? body.projectName.trim() : "";
-    if (!projectName) return NextResponse.json({ success: false, error: "Proje adı gerekli." }, { status: 400 });
+    if (!targetProjectId && !projectName) {
+      return NextResponse.json({ success: false, error: "Proje adı gerekli." }, { status: 400 });
+    }
 
-    const plant = validatePlantInput({ name: body.plantName, type: body.type, capacityMw: body.capacityMw }, new Set());
+    const target = targetProjectId
+      ? await prisma.project.findUnique({
+          where: { id: targetProjectId },
+          include: { plants: { select: { id: true, name: true } }, pricingProfiles: true },
+        })
+      : null;
+    if (targetProjectId && !target) {
+      return NextResponse.json({ success: false, error: "Seçilen proje bulunamadı." }, { status: 404 });
+    }
+
+    const taken = new Set((target?.plants ?? []).map((p) => plantNameKey(p.name)));
+    const plant = validatePlantInput({ name: body.plantName, type: body.type, capacityMw: body.capacityMw }, taken);
     if (!plant.ok) return NextResponse.json({ success: false, error: `Santral: ${plant.error}.` }, { status: 400 });
 
     const rows: ParsedGenerationRow[] = (Array.isArray(body.rows) ? body.rows : [])
@@ -50,14 +66,46 @@ export async function POST(request: Request) {
       }
     }
 
-    // 2. Proje, fiyat profili ve santral; 3. saatlik kayıtlar (öncesinde yedek)
+    // 2. Proje (veya mevcut proje), fiyat profili ve santral; 3. saatlik kayıtlar (öncesinde yedek)
     await backupDatabase(prisma, "epias-plant-import");
+    const sourceNote = `KGÜP ${body.source?.kgupVersion === "FINAL" ? "son" : "ilk"} versiyon (plan) ve UEVM (gerçekleşen). Santral kimliği ${
+      body.source?.powerPlantId ?? "?"
+    }, UEVÇB ${Array.isArray(body.source?.uevcbIds) ? body.source.uevcbIds.join(", ") : "?"}.`;
+
+    if (target) {
+      // Portföy analizleri (DSG) ortak saatlere bakar: mevcut santrallerle hiç ortak saat yoksa uyar
+      const overlap =
+        target.plants.length === 0
+          ? null
+          : await prisma.generationRecord.count({
+              where: {
+                plantId: { in: target.plants.map((p) => p.id) },
+                timestamp: { gte: new Date(Math.min(...times)), lte: new Date(Math.max(...times)) },
+              },
+            });
+      const created = await prisma.powerPlant.create({ data: { ...plant.value, projectId: target.id } });
+      await prisma.project.update({
+        where: { id: target.id },
+        data: {
+          description: [target.description, `EPİAŞ: ${plant.value.name}: ${sourceNote}`].filter(Boolean).join("\n"),
+        },
+      });
+      const [written] = await writePlantImports([{ plantId: created.id, rows }], toPricingProfile(target.pricingProfiles?.[0]));
+      return NextResponse.json({
+        success: true,
+        projectId: target.id,
+        added: true,
+        written: written?.written ?? 0,
+        missingMarketHours: written?.missingMarketHours ?? 0,
+        noOverlapWithExisting: overlap === 0,
+        syncErrors,
+      });
+    }
+
     const project = await prisma.project.create({
       data: {
         name: projectName,
-        description: `EPİAŞ açık verisi: KGÜP ${body.source?.kgupVersion === "FINAL" ? "son" : "ilk"} versiyon (plan) ve UEVM (gerçekleşen). Santral kimliği ${body.source?.powerPlantId ?? "?"}, UEVÇB ${
-          Array.isArray(body.source?.uevcbIds) ? body.source.uevcbIds.join(", ") : "?"
-        }.`,
+        description: `EPİAŞ açık verisi: ${sourceNote}`,
         pricingProfiles: {
           create: {
             name: "EPİAŞ Standart Profil",

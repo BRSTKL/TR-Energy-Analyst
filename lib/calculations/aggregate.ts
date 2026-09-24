@@ -39,8 +39,9 @@ export function aggregateMonthly(hourlyResults: HourlyResult[]): MonthlyAggregat
 
   for (const item of hourlyResults) {
     const dateObj = new Date(item.timestamp);
-    const year = dateObj.getFullYear();
-    const month = dateObj.getMonth() + 1; // 1-12
+    // Zaman damgaları UTC alanında duvar saatidir: ay/yıl UTC okunur (yerel saat dilimi ayın son saatlerini kaydırır)
+    const year = dateObj.getUTCFullYear();
+    const month = dateObj.getUTCMonth() + 1; // 1-12
     const monthStr = month < 10 ? `0${month}` : `${month}`;
     const yearMonth = `${year}-${monthStr}`;
 

@@ -139,6 +139,18 @@ describe("Agregasyon Motoru Birim Testleri", () => {
     it("boş liste verildiğinde boş dizi döndürmelidir", () => {
       expect(aggregateMonthly([])).toEqual([]);
     });
+
+    it("ayı UTC alanındaki duvar saatinden okur; ayın son saati bilgisayarın saat diliminden bağımsız olarak o ayda kalır", () => {
+      const base = { actualMwh: 1, forecastMwh: 1, dayAheadSalesAmount: 1, imbalanceAmount: 0, totalRevenue: 1, imbalanceCost: 0 };
+      const monthly = aggregateMonthly([
+        { ...base, timestamp: new Date("2025-12-31T23:00:00Z") },
+        { ...base, timestamp: new Date("2025-01-01T00:00:00Z") },
+      ] as unknown as HourlyResult[]);
+      expect(monthly.map((m) => [m.year, m.month])).toEqual([
+        [2025, 1],
+        [2025, 12],
+      ]);
+    });
   });
 
   describe("aggregateYearly (Ağırlıklı Ortalama Doğrulaması)", () => {

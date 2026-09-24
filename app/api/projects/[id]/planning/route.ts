@@ -83,9 +83,9 @@ function buildHeatmapMatrix(results: HourlyResult[]): DayHourHeatmapCell[] {
 
   for (const item of results) {
     const d = new Date(item.timestamp);
-    // JS getDay(): 0 = Pazar, 1 = Pzt, ..., 6 = Cmt
+    // JS getUTCDay() (duvar saati UTC alanında): 0 = Pazar, 1 = Pzt, ..., 6 = Cmt
     // Pazartesi = 0, Salı = 1, ..., Pazar = 6
-    const dayIndex = (d.getDay() + 6) % 7;
+    const dayIndex = (d.getUTCDay() + 6) % 7;
     const hour = d.getUTCHours();
 
     const cell = buckets[dayIndex][hour];

@@ -32,6 +32,12 @@ const inputClass =
 
 const num = (v: number, d = 0) => v.toLocaleString("tr-TR", { maximumFractionDigits: d });
 
+interface ProjectOption {
+  id: string;
+  name: string;
+  plantCount: number;
+}
+
 export default function EpiasPlantImportPage() {
   const router = useRouter();
 
@@ -64,6 +70,23 @@ export default function EpiasPlantImportPage() {
   const [capacity, setCapacity] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  /** Yeni proje mi, yoksa mevcut projeye (portföy/DSG için) santral olarak ekleme mi */
+  const [target, setTarget] = useState<"new" | "existing">("new");
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
+  const [targetProjectId, setTargetProjectId] = useState("");
+  const [addedNotice, setAddedNotice] = useState<{ projectId: string; noOverlap: boolean } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/projects")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.success) return;
+        const list: ProjectOption[] = d.projects.map((p: ProjectOption) => ({ id: p.id, name: p.name, plantCount: p.plantCount }));
+        setProjects(list);
+        if (list.length > 0) setTargetProjectId((cur) => cur || list[0].id);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const q = query.trim();
@@ -95,8 +118,11 @@ export default function EpiasPlantImportPage() {
     setUevmParts([]);
     setFailed([]);
     setFetchError(null);
-    setPlantName(p.name);
-    setProjectName(p.name);
+    // EPİAŞ adı çoğunlukla EIC kodunu da içerir ("BALABANLI RES-40W..."); varsa kısa ad kullanılır
+    const display = p.shortName?.trim() || p.name;
+    setPlantName(display);
+    setProjectName(display);
+    setAddedNotice(null);
   };
 
   const runFetch = async (chunks: DateChunk[], units: Uevcb[], version: KgupVersion) => {
@@ -132,6 +158,7 @@ export default function EpiasPlantImportPage() {
     setUevmParts([]);
     setFailed([]);
     setFetchedVersion(kgupVersion);
+    setAddedNotice(null);
     try {
       const res = await fetch("/api/epias/plants/resolve", {
         method: "POST",
@@ -178,7 +205,7 @@ export default function EpiasPlantImportPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          projectName,
+          ...(target === "existing" ? { targetProjectId } : { projectName }),
           plantName,
           type,
           capacityMw: Number(capacity.replace(",", ".")),
@@ -188,6 +215,12 @@ export default function EpiasPlantImportPage() {
       });
       const d = await res.json();
       if (!d.success) throw new Error(d.error);
+      if (d.added && d.noOverlapWithExisting) {
+        // Ortak saat yoksa sonuç sayfasına geçmeden uyar: DSG analizi bu santrali diğerleriyle birlikte göremez
+        setAddedNotice({ projectId: d.projectId, noOverlap: true });
+        setCreating(false);
+        return;
+      }
       router.push(`/projects/${d.projectId}/results`);
     } catch (e) {
       setCreateError(e instanceof Error ? e.message : "Proje oluşturulamadı.");
@@ -371,11 +404,53 @@ export default function EpiasPlantImportPage() {
                 })}
               </div>
 
+              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Santral nereye kaydedilsin">
+                {(
+                  [
+                    ["new", "Yeni proje oluştur"],
+                    ["existing", "Mevcut projeye ekle"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={target === value}
+                    disabled={value === "existing" && projects.length === 0}
+                    onClick={() => setTarget(value)}
+                    className={`rounded-md border px-3 py-1.5 text-sm font-medium disabled:opacity-40 ${
+                      target === value ? "border-indigo-600 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {target === "existing" && (
+                <p className="text-xs text-slate-500">
+                  Santral seçilen projeye eklenir ve projenin fiyat profiliyle hesaplanır. Birden çok santrali tek projede
+                  toplamak portföy ve DSG (dengeden sorumlu grup) analizini açar; bunun için santrallerin aynı dönemi kapsaması gerekir.
+                </p>
+              )}
+
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block text-xs font-semibold text-slate-700">
-                  Proje adı
-                  <input className={`${inputClass} mt-1`} value={projectName} onChange={(e) => setProjectName(e.target.value)} />
-                </label>
+                {target === "new" ? (
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Proje adı
+                    <input className={`${inputClass} mt-1`} value={projectName} onChange={(e) => setProjectName(e.target.value)} />
+                  </label>
+                ) : (
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Proje
+                    <select className={`${inputClass} mt-1`} value={targetProjectId} onChange={(e) => setTargetProjectId(e.target.value)}>
+                      {projects.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} ({p.plantCount} santral)
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <label className="block text-xs font-semibold text-slate-700">
                   Santral adı
                   <input className={`${inputClass} mt-1`} value={plantName} onChange={(e) => setPlantName(e.target.value)} />
@@ -403,12 +478,38 @@ export default function EpiasPlantImportPage() {
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {createError}
                 </div>
               )}
+              {addedNotice?.noOverlap && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    Santral eklendi, ancak projedeki diğer santrallerle ortak saati yok. Portföy ve DSG analizleri yalnızca
+                    ortak saatlere bakar; aynı dönemi çekip tekrar eklemeniz gerekebilir.{" "}
+                    <Link href={`/projects/${addedNotice.projectId}/results`} className="font-semibold underline">
+                      Yine de sonuçlara git
+                    </Link>
+                  </span>
+                </div>
+              )}
               <Button
                 onClick={createProject}
-                disabled={creating || hasError || !type || !capacity || !projectName.trim()}
+                disabled={
+                  creating ||
+                  hasError ||
+                  !type ||
+                  !capacity ||
+                  !plantName.trim() ||
+                  (target === "new" ? !projectName.trim() : !targetProjectId) ||
+                  addedNotice !== null
+                }
                 className="bg-indigo-600 text-white hover:bg-indigo-700"
               >
-                {creating ? "Proje oluşturuluyor (eksik piyasa fiyatları da çekiliyor)…" : "Projeyi oluştur ve analiz et"}
+                {creating
+                  ? target === "new"
+                    ? "Proje oluşturuluyor (eksik piyasa fiyatları da çekiliyor)…"
+                    : "Santral ekleniyor (eksik piyasa fiyatları da çekiliyor)…"
+                  : target === "new"
+                    ? "Projeyi oluştur ve analiz et"
+                    : "Projeye ekle ve analiz et"}
               </Button>
             </CardContent>
           </Card>
