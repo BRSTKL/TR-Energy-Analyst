@@ -14,7 +14,7 @@
  */
 
 import { epiasRequest, formatToEpiasIso } from "@/lib/services/epias-service";
-import type { EpiasPowerPlant, KgupVersion } from "@/lib/epias-plant/plant-data";
+import type { EpiasOrganization, EpiasPowerPlant, KgupVersion } from "@/lib/epias-plant/plant-data";
 
 export interface EpiasUevcb {
   id: number;
@@ -35,6 +35,44 @@ export async function listUevmPowerPlants(forceRefresh = false): Promise<EpiasPo
   if (plants.length === 0) throw new Error("EPİAŞ santral listesi boş döndü.");
   plantCache = { at: Date.now(), plants };
   return plants;
+}
+
+let orgCache: { at: number; key: string; orgs: EpiasOrganization[] } | null = null;
+
+/** Verilen aralıkta tanımlı piyasa katılımcıları (şirketler; 12 saat önbellekli) */
+export async function listOrganizations(startDay: string, endDay: string): Promise<EpiasOrganization[]> {
+  const key = `${startDay}|${endDay}`;
+  if (orgCache && orgCache.key === key && Date.now() - orgCache.at < CACHE_TTL_MS) return orgCache.orgs;
+  const json = await epiasRequest<{ items?: any[] }>("/generation/data/organization-list", {
+    startDate: formatToEpiasIso(startDay, false),
+    endDate: formatToEpiasIso(endDay, true),
+  });
+  const orgs: EpiasOrganization[] = (json.items ?? [])
+    .filter((o) => o && o.organizationId !== undefined && o.organizationName)
+    .map((o) => ({
+      id: Number(o.organizationId),
+      name: String(o.organizationName).trim(),
+      shortName: o.organizationShortName ?? null,
+      eic: o.organizationEtsoCode ?? null,
+    }));
+  if (orgs.length === 0) throw new Error("EPİAŞ şirket listesi boş döndü.");
+  orgCache = { at: Date.now(), key, orgs };
+  return orgs;
+}
+
+/**
+ * Şirketin santralleri. Canlı doğrulandı (SOMA ENERJİ → SOMA RES, kimlik 760): dönen santral kimlikleri UEVM
+ * santral listesindeki kimliklerle aynıdır.
+ */
+export async function listPlantsByOrganization(organizationId: number, startDay: string, endDay: string): Promise<EpiasPowerPlant[]> {
+  const json = await epiasRequest<{ items?: any[] }>("/markets/data/power-plant-list-by-organization-id", {
+    organizationId,
+    startDate: formatToEpiasIso(startDay, false),
+    endDate: formatToEpiasIso(endDay, true),
+  });
+  return (json.items ?? [])
+    .filter((p) => p && p.id !== undefined && p.name)
+    .map((p) => ({ id: Number(p.id), name: String(p.name).trim(), eic: p.eic ?? null, shortName: p.shortName ?? null }));
 }
 
 /** Santralin uzlaştırma birimleri (KGÜP bu birimler için bildirilir) */

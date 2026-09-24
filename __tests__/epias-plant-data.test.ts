@@ -6,6 +6,7 @@ import {
   parseKgupItems,
   parseUevmItems,
   searchPowerPlants,
+  guessTechnologyFromName,
   suggestCapacityMw,
   sumSeries,
 } from "../lib/epias-plant/plant-data";
@@ -98,5 +99,18 @@ describe("EPİAŞ santral verisi", () => {
   it("Hiç ortak saat yoksa hata üretir", () => {
     const m = mergePlantSeries(parseKgupItems([]), parseUevmItems([]), "2025-03-01", "2025-03-01");
     expect(m.checks[0].level).toBe("error");
+  });
+});
+
+describe("Santral türünü addan tahmin", () => {
+  it("yenilenebilir ve diğer türleri ayırır, anlaşılamayanı belirsiz bırakır", () => {
+    expect(guessTechnologyFromName("AKKÖY RES(ENERJİSA)")).toBe("RES");
+    expect(guessTechnologyFromName("K3_OSMANGAZİ_RÜZGAR")).toBe("RES");
+    expect(guessTechnologyFromName("DOĞANÇAY REG. ve HES(ENERJİSA ENR.)")).toBe("HES");
+    expect(guessTechnologyFromName("Karapınar GES")).toBe("GES");
+    expect(guessTechnologyFromName("BANDIRMA II DGKÇS")).toBe("OTHER");
+    expect(guessTechnologyFromName("2BZ ÇUBUK BES")).toBe("OTHER");
+    expect(guessTechnologyFromName("ENERJISA BANDIRMA SANTRALI")).toBeNull();
+    expect(guessTechnologyFromName("TRESKON")).toBeNull();
   });
 });

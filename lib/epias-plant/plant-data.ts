@@ -94,6 +94,54 @@ export function searchPowerPlants(plants: EpiasPowerPlant[], query: string, limi
   return scored.slice(0, limit).map((x) => x.p);
 }
 
+/**
+ * Santral türünü adından tahmin eder (şirketin santral listesinde veri çekmeden önce göstermek için).
+ * Kesin tür, veri çekildikten sonra UEVM'nin kaynak kırılımından bulunur (detectTechnology).
+ * - "RES" | "HES" | "GES": uygulamanın analiz ettiği türler
+ * - "OTHER": adından açıkça başka bir tür olduğu anlaşılan santral (doğalgaz, kömür, jeotermal, biyokütle, depolama…)
+ * - null: addan anlaşılamıyor
+ */
+export function guessTechnologyFromName(name: string): PlantTechnology | "OTHER" | null {
+  // Kısa kodlar (RES, HES…) tam kelime olarak, uzun kelimeler (rüzgar, jeotermal…) kelime başı olarak aranır
+  const words = normalizePlantName(name).split(" ");
+  const has = (...keys: string[]) => keys.some((k) => words.some((w) => (k.length <= 5 ? w === k : w.startsWith(k))));
+  if (has("res", "ruzgar")) return "RES";
+  if (has("ges", "gunes")) return "GES";
+  if (has("hes", "reg", "regulator", "baraj")) return "HES";
+  if (has("dgkcs", "dgkc", "dgcs", "tes", "kojen", "kojenerasyon", "dogalgaz", "komur", "linyit", "jes", "jeotermal", "bes", "biyokutle", "biyogaz", "cop", "motorin", "fuel"))
+    return "OTHER";
+  return null;
+}
+
+/**
+ * EPİAŞ'ta kayıtlı piyasa katılımcısı (tüzel kişi). Büyük gruplar santrallerini çoğu zaman ayrı şirketlerde tutar;
+ * bir grubun tüm santralleri için birden çok şirket seçmek gerekebilir.
+ */
+export interface EpiasOrganization {
+  id: number;
+  name: string;
+  shortName?: string | null;
+  eic?: string | null;
+}
+
+/** Şirket listesinde arama: sorgunun tüm kelimeleri unvanda, kısa adda veya EIC kodunda geçmelidir. */
+export function searchOrganizations(orgs: EpiasOrganization[], query: string, limit = 20): EpiasOrganization[] {
+  const q = normalizePlantName(query);
+  if (q.length < 2) return [];
+  const words = q.split(" ");
+  return orgs
+    .map((o) => {
+      const hay = normalizePlantName(`${o.name} ${o.shortName ?? ""} ${o.eic ?? ""}`);
+      if (!words.every((w) => hay.includes(w))) return null;
+      const main = normalizePlantName(o.name);
+      return { o, score: main.startsWith(q) ? 0 : 1, len: main.length };
+    })
+    .filter((x): x is { o: EpiasOrganization; score: number; len: number } => x !== null)
+    .sort((a, b) => a.score - b.score || a.len - b.len)
+    .slice(0, limit)
+    .map((x) => x.o);
+}
+
 // ------------------------------------------------------------------------------------------------
 // Servis cevaplarını saatlik seriye çevirme
 // ------------------------------------------------------------------------------------------------
