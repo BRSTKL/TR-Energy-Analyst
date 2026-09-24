@@ -37,6 +37,7 @@ import {
   UploadCloud,
   Wind,
   Zap,
+  CloudDownload,
 } from "lucide-react";
 
 import { PricingProfileDialog } from "@/components/pricing-profile-dialog";
@@ -218,6 +219,13 @@ export default function ProjectsPage() {
             <Button variant="outline" size="sm" onClick={fetchProjects} className="gap-1.5">
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
               Yenile
+            </Button>
+
+            <Button asChild variant="outline" size="sm" className="gap-1.5 border-sky-300 text-sky-800 hover:bg-sky-50">
+              <Link href="/projects/epias">
+                <CloudDownload className="h-4 w-4" />
+                EPİAŞ&apos;tan santral analiz et
+              </Link>
             </Button>
 
             {/* Yeni Proje Ekle Dialog */}

@@ -286,6 +286,40 @@ async function callEpiasEndpoint<T = any>(
 }
 
 /**
+ * Herhangi bir EPİAŞ Şeffaflık servisini çağırır (GET veya gövdeli POST) ve JSON cevabı döndürür.
+ * TGT süresi dolmuşsa bir kez yeniler; ağ hatalarında fetchWithNetworkRetry ile tekrar dener.
+ * `path`, API_BASE'e göre verilir: "/generation/data/dpp".
+ */
+export async function epiasRequest<T = any>(path: string, body?: unknown): Promise<T> {
+  const send = async (tgt: string) =>
+    fetchWithNetworkRetry(`${API_BASE}${path}`, {
+      method: body === undefined ? "GET" : "POST",
+      headers: {
+        TGT: tgt,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "User-Agent": DEFAULT_USER_AGENT,
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+
+  let res = await send(await getEpiasTgt());
+  if (res.status === 401 || res.status === 403) res = await send(await getEpiasTgt(true));
+  if (!res.ok) {
+    const text = await res.text();
+    let detail = text.slice(0, 200);
+    try {
+      const j = JSON.parse(text);
+      detail = j?.errors?.map((e: any) => e.errorMessage).join("; ") || detail;
+    } catch {
+      // JSON değilse ham metin kullanılır
+    }
+    throw new Error(`EPİAŞ servisi hata döndürdü (${path} - HTTP ${res.status}): ${detail}`);
+  }
+  return (await res.json()) as T;
+}
+
+/**
  * Verilen tarih aralığı için EPİAŞ'tan PTF, SMF, Sistem Yönü ve GİP AÖF verilerini çeker ve birleştirir.
  * 31 günden uzun aralıkları otomatik olarak 30 günlük parçalara (chunks) böler.
  */
