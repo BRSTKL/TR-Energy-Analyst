@@ -95,7 +95,9 @@ export function GipScenarioPanel({ projectId, scope }: { projectId: string; scop
   }, [projectId, scope, share, cap, haircut]);
 
   const r = data?.result;
-  const noVolume = data && data.coverage.gipHours > 0 && data.coverage.volumeHours === 0;
+  const coverage = data?.coverage;
+  const noVolume = !!coverage && coverage.gipHours > 0 && coverage.volumeHours === 0;
+  const partialVolume = !!coverage && coverage.volumeHours > 0 && coverage.volumeHours < coverage.gipHours;
   const hardShare =
     r && r.simpleGainTl > 0
       ? r.breakdown.filter((b) => isHard(`${b.direction}-${b.side}`)).reduce((s, b) => s + b.simpleGainTl, 0) / r.simpleGainTl
@@ -152,6 +154,15 @@ export function GipScenarioPanel({ projectId, scope }: { projectId: string; scop
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             Bu dönem için GİP hacim ve en düşük/en yüksek fiyat verisi henüz çekilmemiş; hacim sınırı ve fiyat kayması
             uygulanamıyor, sonuç basit senaryoya eşit. EPİAŞ&apos;tan yeniden çekince tamamlanır.
+          </div>
+        )}
+        {partialVolume && coverage && (
+          <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            GİP hacim ve en düşük/en yüksek fiyat verisi {coverage.volumeHours.toLocaleString("tr-TR")} /{" "}
+            {coverage.gipHours.toLocaleString("tr-TR")} saat için var. Kalan saatlerde hacim sınırı ve fiyat kayması
+            uygulanamadı (ortalama fiyat kullanıldı); gerçekçi sonuç olduğundan iyimser. Eksik ayları EPİAŞ&apos;tan
+            yeniden çekin.
           </div>
         )}
 
