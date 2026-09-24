@@ -16,6 +16,7 @@ import {
   YearlyAggregate,
 } from "../calculations/types";
 import { intradayImpact, multiplierImpact, percentile, SimulatedImpact } from "./impact-simulation";
+import { volumeRatioBacktestSummary } from "../analysis/backtest";
 
 export type TimeOfDayInterval = "NIGHT" | "MORNING" | "AFTERNOON" | "EVENING";
 
@@ -494,14 +495,26 @@ export function generateMitigationSuggestions(
         "Tahmin modeline son dönem sapmasına göre güncellenen bir yanlılık düzeltmesi ekleyin.",
         "Düzeltmeyi ileriye dönük uygulamadan önce geçmiş verinin ayrı bir döneminde test edin.",
       ],
-      impact: multiplierImpact(
-        hourly,
-        () => true,
-        factor,
-        profile,
-        `Tüm saatlerde tahmin ${factor.toLocaleString("tr-TR", { maximumFractionDigits: 3 })} ile çarpıldı (Σ gerçekleşen / Σ tahmin).`,
-        "Katsayı aynı dönemin verisinden hesaplandı; gelecekteki etki bunun altında kalabilir."
-      ),
+      // Yeterli veri varsa etki geriye dönük testle (görmediği aylarda) ölçülür; yoksa aynı dönem hesabı
+      impact: (() => {
+        const bt = volumeRatioBacktestSummary(hourly, profile);
+        if (bt) {
+          return {
+            savingTl: bt.outOfSampleSavingTl,
+            percentOfCost: Number(bt.outOfSampleSavingPercent.toFixed(1)),
+            method: `Geriye dönük test: her ay, önceki 4 ayın Σ gerçekleşen / Σ tahmin oranıyla ölçeklendi (${bt.testMonths} test ayı, ${bt.positiveMonths} ayı kazançlı).`,
+            caveat: "Oran, planlama sayfasındaki yanlılık düzeltmesiyle aynı yöntemle hesaplandı.",
+          };
+        }
+        return multiplierImpact(
+          hourly,
+          () => true,
+          factor,
+          profile,
+          `Tüm saatlerde tahmin ${factor.toLocaleString("tr-TR", { maximumFractionDigits: 3 })} ile çarpıldı (Σ gerçekleşen / Σ tahmin).`,
+          "Katsayı aynı dönemin verisinden hesaplandı; gelecekteki etki bunun altında kalabilir."
+        );
+      })(),
     });
   }
 

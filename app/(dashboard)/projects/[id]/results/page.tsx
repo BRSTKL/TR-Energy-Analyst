@@ -51,6 +51,7 @@ import {
   Zap,
   UploadCloud,
   Factory,
+  FlaskConical,
 } from "lucide-react";
 import {
   HourlyResult,
@@ -506,6 +507,12 @@ export default function ProjectResultsPage() {
               <Link href={`/projects/${projectId}/import`}>
                 <UploadCloud className="h-4 w-4" />
                 Üretim Verisi Yükle
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="gap-1.5">
+              <Link href={`/projects/${projectId}/backtest`}>
+                <FlaskConical className="h-3.5 w-3.5" />
+                Geriye Dönük Test
               </Link>
             </Button>
             <Button asChild variant="outline" size="sm" className="gap-1.5">

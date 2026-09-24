@@ -223,6 +223,7 @@ describe("PowerPoint Export Modülü (PptxGenJS)", () => {
                 changeTl: -98601,
                 changeRatio: -98601 / 3705379,
               },
+              backtest: { outOfSampleSavingTl: -54700, outOfSampleSavingPercent: -2.49, positiveMonths: 2, testMonths: 8 },
             },
             { plantName: "RES_1", plantType: "RES", overall: res },
           ],
@@ -243,6 +244,9 @@ describe("PowerPoint Export Modülü (PptxGenJS)", () => {
     expect(accuracySlide!.xml).toContain("Ölçekli WAPE");
     expect(accuracySlide!.xml).toContain("Tahmin Ölçeklemesinin Dengesizlik Maliyetine Etkisi");
     expect(accuracySlide!.xml).toContain("−98.601 ₺");
+    // Geriye dönük test sütunu: tasarruf −54.700 → maliyet değişimi +54.700 (kötüleşme)
+    expect(accuracySlide!.xml).toContain("Geriye Dönük Test");
+    expect(accuracySlide!.xml).toContain("+54.700 ₺");
 
     for (const box of accuracySlide!.boxes) {
       expect(box.right).toBeLessThanOrEqual(a.width);

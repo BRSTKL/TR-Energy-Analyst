@@ -20,6 +20,7 @@ import {
   calculateEfficiencyRatio,
 } from "@/lib/analysis/planning-efficiency";
 import { evaluateIntradayArbitrage } from "@/lib/analysis/intraday-arbitrage";
+import { volumeRatioBacktestSummary } from "@/lib/analysis/backtest";
 
 export const dynamic = "force-dynamic";
 
@@ -449,6 +450,7 @@ export async function GET(
         },
         bias,
         uplift,
+        upliftBacktest: volumeRatioBacktestSummary(plantHourly, projectProfile),
         monthlyEfficiency,
         worst10Days,
         heatmap,
@@ -476,6 +478,7 @@ export async function GET(
         },
         bias: portfolioBias,
         uplift: portfolioUplift,
+        upliftBacktest: volumeRatioBacktestSummary(allHourlyResults, projectProfile),
         monthlyEfficiency: portfolioMonthlyEfficiency,
         worst10Days: portfolioWorst10Days,
         heatmap: portfolioHeatmap,

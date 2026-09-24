@@ -79,6 +79,7 @@ import {
   intradayClosingScenario,
 } from "@/lib/analysis/intraday-arbitrage";
 import { SystemDirection } from "@/lib/calculations/types";
+import type { BacktestSummary } from "@/lib/analysis/backtest";
 import { EpiasSyncDialog } from "@/components/epias-sync-dialog";
 import { DataQualityBanner } from "@/components/data-quality-banner";
 import { MarketDataUploadDialog } from "@/components/market-data-upload-dialog";
@@ -159,6 +160,7 @@ interface PlantPlanningData {
   summary: SummaryData;
   bias: ForecastBiasResult;
   uplift: PotentialUpliftResult;
+  upliftBacktest: BacktestSummary | null;
   monthlyEfficiency: MonthlyEfficiencyItem[];
   worst10Days: WorstDayItem[];
   heatmap: HeatmapCell[];
@@ -182,6 +184,7 @@ interface PlanningApiResponse {
     summary: SummaryData;
     bias: ForecastBiasResult;
     uplift: PotentialUpliftResult;
+    upliftBacktest: BacktestSummary | null;
     monthlyEfficiency: MonthlyEfficiencyItem[];
     worst10Days: WorstDayItem[];
     heatmap: HeatmapCell[];
@@ -279,6 +282,7 @@ export default function PlanningEfficiencyPage() {
         summary: data.portfolio.summary,
         bias: data.portfolio.bias,
         uplift: data.portfolio.uplift,
+        upliftBacktest: data.portfolio.upliftBacktest,
         monthlyEfficiency: data.portfolio.monthlyEfficiency,
         worst10Days: data.portfolio.worst10Days,
         heatmap: data.portfolio.heatmap,
@@ -293,6 +297,7 @@ export default function PlanningEfficiencyPage() {
         summary: data.portfolio.summary,
         bias: data.portfolio.bias,
         uplift: data.portfolio.uplift,
+        upliftBacktest: data.portfolio.upliftBacktest,
         monthlyEfficiency: data.portfolio.monthlyEfficiency,
         worst10Days: data.portfolio.worst10Days,
         heatmap: data.portfolio.heatmap,
@@ -305,6 +310,7 @@ export default function PlanningEfficiencyPage() {
       summary: plant.summary,
       bias: plant.bias,
       uplift: plant.uplift,
+      upliftBacktest: plant.upliftBacktest,
       monthlyEfficiency: plant.monthlyEfficiency,
       worst10Days: plant.worst10Days,
       heatmap: plant.heatmap,
@@ -850,6 +856,27 @@ export default function PlanningEfficiencyPage() {
                   {Math.abs(currentView.uplift.costReductionTl).toLocaleString("tr-TR")} ₺
                 </span>
               </div>
+              {currentView.upliftBacktest && (
+                <div className="mt-2 border-t border-slate-200/60 pt-2 text-xs text-slate-600">
+                  <div className="flex items-center justify-between">
+                    <span>Geriye dönük test:</span>
+                    <span
+                      className={`font-mono font-semibold ${
+                        currentView.upliftBacktest.outOfSampleSavingTl < 0 ? "text-rose-700" : "text-emerald-700"
+                      }`}
+                    >
+                      {formatSignedTl(Math.round(currentView.upliftBacktest.outOfSampleSavingTl))} ₺
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-2xs text-slate-500">
+                    Görmediği {currentView.upliftBacktest.testMonths} ayda, {currentView.upliftBacktest.positiveMonths}{" "}
+                    ayı kazançlı.{" "}
+                    <Link href={`/projects/${projectId}/backtest`} className="text-indigo-600 hover:underline">
+                      Ayrıntı
+                    </Link>
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </section>

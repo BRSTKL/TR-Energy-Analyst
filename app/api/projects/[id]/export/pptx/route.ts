@@ -28,6 +28,7 @@ import {
 } from "@/lib/export/pptx";
 import { computeAccuracyStats } from "@/lib/analysis/forecast-accuracy";
 import { simulateForecastScaling } from "@/lib/analysis/scaling-impact";
+import { volumeRatioBacktestSummary } from "@/lib/analysis/backtest";
 import { analyzePortfolioNetting } from "@/lib/analysis/portfolio-netting";
 
 export const dynamic = "force-dynamic";
@@ -195,6 +196,10 @@ export async function GET(
               plantResultsMap[plant.id]?.hourly.length > 0
                 ? simulateForecastScaling(plantResultsMap[plant.id].hourly, projectProfile)
                 : undefined,
+            backtest:
+              plantResultsMap[plant.id]?.hourly.length > 0
+                ? volumeRatioBacktestSummary(plantResultsMap[plant.id].hourly, projectProfile)
+                : null,
           })),
         portfolio: computeAccuracyStats(project.plants.flatMap((plant) => plant.records)),
       },

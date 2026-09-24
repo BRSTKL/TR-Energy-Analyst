@@ -22,6 +22,7 @@ import {
 } from "../strategy/insights";
 import { AccuracyStats, diagnoseAccuracy } from "../analysis/forecast-accuracy";
 import type { ScalingImpact } from "../analysis/scaling-impact";
+import type { BacktestSummary } from "../analysis/backtest";
 import type { NettingGroupResult, NettingResult } from "../analysis/portfolio-netting";
 
 export interface PptxMonthlyMetric {
@@ -47,6 +48,8 @@ export interface PptxExportProjectData {
       overall: AccuracyStats;
       /** Tahmin Σgerçekleşen/Σtahmin ile ölçeklenseydi dengesizlik maliyeti (piyasa verisi olan saatler) */
       scaling?: ScalingImpact;
+      /** Aynı ölçeklemenin geriye dönük testi (görmediği aylarda); test edilemiyorsa null */
+      backtest?: BacktestSummary | null;
     }>;
     portfolio: AccuracyStats;
   };
@@ -893,16 +896,21 @@ export async function exportToPptx(
 
       const signedTl = (v: number) =>
         `${v < 0 ? "−" : v > 0 ? "+" : ""}${formatTL(Math.abs(v))}`;
-      const impactRow = (label: string, base: number, after: number, bold = false) => {
+      const colorOf = (change: number) =>
+        change < 0 ? colors.success : change > 0 ? colors.danger : colors.textPrimary;
+      // backtestChange: geriye dönük testteki maliyet değişimi (negatif = tasarruf); null = test edilemedi
+      const impactRow = (label: string, base: number, after: number, backtestChange: number | null, bold = false) => {
         const change = after - base;
         const ratio = base !== 0 ? change / base : 0;
-        const changeColor = change < 0 ? colors.success : change > 0 ? colors.danger : colors.textPrimary;
         return [
           { text: label, options: { bold: true, color: colors.textPrimary } },
           { text: formatTL(base), options: { align: "right", bold, color: colors.textPrimary } },
           { text: formatTL(after), options: { align: "right", bold, color: colors.textSecondary } },
-          { text: signedTl(change), options: { align: "right", bold: true, color: changeColor } },
-          { text: pct(ratio, 1, true), options: { align: "right", bold: true, color: changeColor } },
+          { text: signedTl(change), options: { align: "right", bold: true, color: colorOf(change) } },
+          { text: pct(ratio, 1, true), options: { align: "right", bold: true, color: colorOf(change) } },
+          backtestChange === null
+            ? { text: "—", options: { align: "right", color: colors.textSecondary } }
+            : { text: signedTl(backtestChange), options: { align: "right", bold: true, color: colorOf(backtestChange) } },
         ];
       };
 
@@ -913,18 +921,22 @@ export async function exportToPptx(
           headerCell("Ölçekli Tahminle"),
           headerCell("Değişim"),
           headerCell("Değişim %"),
+          headerCell("Geriye Dönük Test"),
         ],
       ];
       let totalBase = 0;
       let totalAfter = 0;
+      let totalBacktest: number | null = null;
       scaled.forEach((p) => {
         totalBase += p.scaling!.baselineImbalanceCost;
         totalAfter += p.scaling!.scaledImbalanceCost;
+        const bt = p.backtest ? -p.backtest.outOfSampleSavingTl : null;
+        if (bt !== null) totalBacktest = (totalBacktest ?? 0) + bt;
         impactRows.push(
-          impactRow(p.plantName, p.scaling!.baselineImbalanceCost, p.scaling!.scaledImbalanceCost)
+          impactRow(p.plantName, p.scaling!.baselineImbalanceCost, p.scaling!.scaledImbalanceCost, bt)
         );
       });
-      const totalRow = impactRow("Portföy", totalBase, totalAfter, true);
+      const totalRow = impactRow("Portföy", totalBase, totalAfter, totalBacktest, true);
       totalRow.forEach((cell: any) => (cell.options.fill = { color: "F1F5F9" }));
       impactRows.push(totalRow);
 
@@ -932,7 +944,7 @@ export async function exportToPptx(
         x: 0.8,
         y: impactY + 0.35,
         w: 6.9,
-        colW: [1.6, 1.4, 1.4, 1.4, 1.1],
+        colW: [1.2, 1.2, 1.2, 1.1, 0.9, 1.3],
         border: { pt: 0.5, color: "CBD5E1" },
         fontSize: 9,
         rowH: 0.32,
@@ -941,9 +953,12 @@ export async function exportToPptx(
 
       const changeRatio = totalBase !== 0 ? (totalAfter - totalBase) / totalBase : 0;
       slideAcc.addText(
-        Math.abs(changeRatio) < 0.05
+        (Math.abs(changeRatio) < 0.05
           ? `Sonuç: Net hacim sapmasını gidermek portföy dengesizlik maliyetini yalnızca ${pct(changeRatio, 1, true)} değiştiriyor. Maliyeti saat bazındaki hatalar belirliyor; kaldıraç tahmin modelinin iyileştirilmesidir.`
-          : `Sonuç: Tahmin ölçeklemesi portföy dengesizlik maliyetini ${pct(changeRatio, 1, true)} değiştiriyor.`,
+          : `Sonuç: Tahmin ölçeklemesi portföy dengesizlik maliyetini ${pct(changeRatio, 1, true)} değiştiriyor.`) +
+          (totalBacktest !== null
+            ? ` Geriye dönük testte (katsayı önceki 4 aydan, görmediği aylarda) değişim: ${signedTl(totalBacktest)}.`
+            : ""),
         {
           x: 0.8,
           y: impactY + 0.35 + impactRows.length * 0.32 + 0.1,
