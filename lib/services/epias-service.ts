@@ -429,6 +429,7 @@ export async function upsertMarketRecords(
 ): Promise<number> {
   // SQLite'ta tek tek upsert yavaş olduğu için 500'lük işlemler (transaction) halinde yazılır
   const CHUNK_SIZE = 500;
+  const syncedAt = new Date();
   for (let i = 0; i < items.length; i += CHUNK_SIZE) {
     const chunk = items.slice(i, i + CHUNK_SIZE);
     await prisma.$transaction(
@@ -439,6 +440,7 @@ export async function upsertMarketRecords(
           systemDirection: item.systemDirection,
           gipPrice: item.gipPrice,
           source,
+          syncedAt,
         };
         return prisma.marketData.upsert({
           where: { timestamp: item.timestamp },

@@ -63,6 +63,7 @@ import {
 import { PricingProfileDialog } from "@/components/pricing-profile-dialog";
 import { EpiasSyncDialog } from "@/components/epias-sync-dialog";
 import { DataQualityBanner } from "@/components/data-quality-banner";
+import { MarketDataStatus } from "@/components/market-data-status";
 import { MarketDataUploadDialog } from "@/components/market-data-upload-dialog";
 import { PlantComparisonCard } from "@/components/plant-comparison-card";
 import { ForecastAccuracyCard } from "@/components/forecast-accuracy-card";
@@ -560,6 +561,8 @@ export default function ProjectResultsPage() {
 
       <main className="mx-auto max-w-7xl space-y-8 px-4 pt-8 sm:px-6 lg:px-8">
         <DataQualityBanner projectId={projectId} refreshKey={data} />
+
+        <MarketDataStatus projectId={projectId} refreshKey={data} onSyncSuccess={() => fetchData()} />
 
         {/* Aktif Piyasa Profili Rozeti */}
         {data.pricingProfile && (

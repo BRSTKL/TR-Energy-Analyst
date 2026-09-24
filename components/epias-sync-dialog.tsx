@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { DateChunk, formatDay, monthChunks } from "@/lib/date-chunks";
+import { coverageState, useMarketCoverage } from "@/components/use-market-coverage";
 import {
   CloudDownload,
   CheckCircle2,
@@ -61,6 +62,11 @@ export function EpiasSyncDialog({
   // Ay ay senkron ilerlemesi ve başarısız aylar (tekrar denemek için)
   const [progress, setProgress] = useState<{ done: number; total: number; label: string } | null>(null);
   const [failedChunks, setFailedChunks] = useState<DateChunk[]>([]);
+
+  // Bu projenin piyasa verisi kapsamı (senkron sonrası yenilenir)
+  const [coverageKey, setCoverageKey] = useState(0);
+  const coverage = useMarketCoverage(open ? projectId : undefined, coverageKey);
+  const projectCoverage = coverageState(coverage);
 
   // Sonuç / Bildirim
   const [resultMessage, setResultMessage] = useState<{
@@ -238,6 +244,7 @@ export function EpiasSyncDialog({
       .then((json) => json?.dbStats && setDbTotalRecords(json.dbStats.totalRecords))
       .catch(() => {});
 
+    setCoverageKey((k) => k + 1);
     if (totalMarket > 0 && onSyncSuccess) onSyncSuccess();
     setSyncing(false);
   };
@@ -319,6 +326,35 @@ export function EpiasSyncDialog({
               <strong className="text-slate-700 font-mono">
                 {dbTotalRecords.toLocaleString("tr-TR")} saat
               </strong>
+            </div>
+          )}
+
+          {projectId && coverage && projectCoverage !== "empty" && (
+            <div
+              className={`mt-2 flex items-center gap-1.5 border-t pt-2 ${
+                projectCoverage === "complete"
+                  ? "text-emerald-700"
+                  : projectCoverage === "partial"
+                    ? "text-amber-700"
+                    : "text-rose-700"
+              }`}
+            >
+              {projectCoverage === "complete" ? (
+                <CheckCircle2 className="h-3 w-3" />
+              ) : (
+                <AlertCircle className="h-3 w-3" />
+              )}
+              <span>Bu projenin saatleri: </span>
+              <strong className="font-mono">
+                {coverage.calendarVerifiedHours.toLocaleString("tr-TR")} / {coverage.calendarHours.toLocaleString("tr-TR")}
+              </strong>
+              <span>
+                {projectCoverage === "complete"
+                  ? "saat EPİAŞ fiyatıyla hesaplı (tam)"
+                  : projectCoverage === "partial"
+                    ? `saat fiyatlı; ${coverage.months.filter((m) => m.verifiedHours < m.hours).length} ay eksik`
+                    : "saat; piyasa verisi henüz çekilmedi"}
+              </span>
             </div>
           )}
         </div>

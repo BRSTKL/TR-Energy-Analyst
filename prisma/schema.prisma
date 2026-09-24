@@ -45,6 +45,7 @@ model MarketData {
   systemDirection String             // "SURPLUS" | "DEFICIT" | "BALANCED"
   gipPrice        Float?             // Gün İçi Piyasası Ağırlıklı Ortalama Fiyatı (TL/MWh, opsiyonel)
   source          String             @default("LEGACY") // "EPIAS" | "FILE" | "SEED" | "LEGACY" (kaynağı doğrulanmamış eski kayıt)
+  syncedAt        DateTime?          // EPİAŞ'tan çekildiği veya dosyadan yüklendiği son an (eski kayıtlarda boş)
   records         GenerationRecord[]
   createdAt       DateTime           @default(now())
 }

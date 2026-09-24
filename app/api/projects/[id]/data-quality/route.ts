@@ -10,6 +10,7 @@ const VERIFIED_SOURCES = ["EPIAS", "FILE"];
  * GET /api/projects/[id]/data-quality
  * Projedeki saatlik üretim kayıtlarının hangi kaynaktan gelen piyasa fiyatıyla hesaplandığını özetler.
  * Sentetik (SEED), kaynağı doğrulanmamış (LEGACY) veya eksik fiyatlı saatler dashboard'da uyarı olarak gösterilir.
+ * Ayrıca ay bazında kapsamı ve doğrulanmış piyasa verisinin son çekilme zamanını döndürür (durum göstergesi için).
  */
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
   try {
@@ -51,6 +52,48 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     const verifiedHours = VERIFIED_SOURCES.reduce((sum, s) => sum + (hoursBySource[s] || 0), 0);
     const unverifiedHours = totalHours - verifiedHours - missingPriceHours;
 
+    // Takvim saati ve ay bazında kapsam, son çekim zamanı (göstergede hangi ayların eksik olduğunu görmek için)
+    const rows = await prisma.generationRecord.findMany({
+      where: projectRecords,
+      select: {
+        timestamp: true,
+        marketData: { select: { source: true, syncedAt: true, createdAt: true } },
+      },
+    });
+    // Takvim saati bazında: bir saat, o saatteki tüm santral kayıtları doğrulanmış fiyatlıysa "tamam" sayılır
+    // (santral × saat sayısı 4 santralde yılda 35.040 eder; kullanıcıya 8.760 takvim saati gösterilir)
+    const byHour = new Map<number, { verified: boolean; missing: boolean }>();
+    let lastSyncedAt: Date | null = null;
+    for (const r of rows) {
+      const t = r.timestamp.getTime();
+      const h = byHour.get(t) ?? { verified: true, missing: false };
+      if (!r.marketData) {
+        h.verified = false;
+        h.missing = true;
+      } else if (!VERIFIED_SOURCES.includes(r.marketData.source)) {
+        h.verified = false;
+      } else {
+        // syncedAt eklenmeden önce çekilen kayıtlarda ilk yazılma anı kullanılır
+        const at = r.marketData.syncedAt ?? r.marketData.createdAt;
+        if (!lastSyncedAt || at > lastSyncedAt) lastSyncedAt = at;
+      }
+      byHour.set(t, h);
+    }
+    const monthMap = new Map<string, { month: string; hours: number; verifiedHours: number; missingHours: number }>();
+    let calendarVerified = 0;
+    for (const [t, h] of byHour) {
+      const month = new Date(t).toISOString().slice(0, 7);
+      const m = monthMap.get(month) ?? { month, hours: 0, verifiedHours: 0, missingHours: 0 };
+      m.hours++;
+      if (h.verified) {
+        m.verifiedHours++;
+        calendarVerified++;
+      }
+      if (h.missing) m.missingHours++;
+      monthMap.set(month, m);
+    }
+    const months = Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month));
+
     return NextResponse.json({
       success: true,
       totalHours,
@@ -60,6 +103,12 @@ export async function GET(_request: Request, { params }: { params: { id: string 
       syntheticHours: hoursBySource.SEED || 0,
       legacyHours: hoursBySource.LEGACY || 0,
       hoursBySource,
+      epiasHours: hoursBySource.EPIAS || 0,
+      fileHours: hoursBySource.FILE || 0,
+      lastSyncedAt,
+      calendarHours: byHour.size,
+      calendarVerifiedHours: calendarVerified,
+      months,
       isFullyVerified: totalHours > 0 && verifiedHours === totalHours,
       dateRange: {
         start: range._min.timestamp,
