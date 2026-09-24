@@ -139,7 +139,10 @@ export async function GET(
     }
 
     // 2. Portföy Geneli Aylık ve Yıllık
-    const portfolioMonthly = aggregateMonthly(allHourlyResults);
+    // aggregateMonthly plantId taşıyan saatleri santral bazında gruplar: portföy ayı için santral bilgisi çıkarılır
+    const portfolioMonthly = aggregateMonthly(
+      allHourlyResults.map((r) => ({ ...r, plantId: undefined, plantName: undefined }))
+    );
     const portfolioYearly = aggregateYearly(portfolioMonthly);
 
     // 3. Strateji ve İçgörüler

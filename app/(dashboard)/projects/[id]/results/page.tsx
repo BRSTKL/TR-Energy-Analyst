@@ -65,6 +65,7 @@ import { EpiasSyncDialog } from "@/components/epias-sync-dialog";
 import { DataQualityBanner } from "@/components/data-quality-banner";
 import { MarketDataStatus } from "@/components/market-data-status";
 import { MarketDataUploadDialog } from "@/components/market-data-upload-dialog";
+import { ReportDownloadDialog } from "@/components/report-download-dialog";
 import { PlantComparisonCard } from "@/components/plant-comparison-card";
 import { ForecastAccuracyCard } from "@/components/forecast-accuracy-card";
 import type { PlantComparisonResult } from "@/lib/analysis/plant-comparison";
@@ -477,6 +478,7 @@ export default function ProjectResultsPage() {
                 Planlama Verimliliği
               </Link>
             </Button>
+            <ReportDownloadDialog projectId={projectId} />
             <a
               href={`/api/projects/${projectId}/export/excel`}
               download
