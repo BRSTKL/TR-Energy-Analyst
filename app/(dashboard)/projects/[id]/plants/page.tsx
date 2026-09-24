@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { AlertCircle, AlertTriangle, ArrowLeft, CheckCircle2, Factory, Plus, Save, Trash2, Upload } from "lucide-react";
+import { AlertCircle, AlertTriangle, ArrowLeft, CheckCircle2, CloudDownload, Factory, Plus, Save, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PLANT_TYPES } from "@/lib/plants/validation";
@@ -171,7 +171,12 @@ export default function PlantsPage() {
                 içe aktarma ekranından yüklenir.
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              <Button asChild size="sm" className="bg-sky-600 text-white hover:bg-sky-700">
+                <Link href={`/projects/epias?projectId=${projectId}`}>
+                  <CloudDownload className="mr-1.5 h-3.5 w-3.5" /> EPİAŞ&apos;tan santral ekle
+                </Link>
+              </Button>
               <Button asChild variant="outline" size="sm">
                 <Link href={`/projects/${projectId}/import`}>
                   <Upload className="mr-1.5 h-3.5 w-3.5" /> Veri Yükle
@@ -297,6 +302,13 @@ export default function PlantsPage() {
             <CardTitle className="flex items-center gap-2 text-base">
               <Plus className="h-4 w-4 text-emerald-600" /> Santral ekle
             </CardTitle>
+            <CardDescription>
+              Santrali elle tanımlayıp verisini dosyadan yükleyin ya da{" "}
+              <Link href={`/projects/epias?projectId=${projectId}`} className="font-medium text-sky-700 underline">
+                EPİAŞ&apos;tan adıyla arayıp ekleyin
+              </Link>{" "}
+              (veri otomatik çekilir).
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <form

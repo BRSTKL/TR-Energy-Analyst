@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { AlertCircle, AlertTriangle, ArrowLeft, CheckCircle2, CloudDownload, RefreshCw, Search } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { AlertCircle, AlertTriangle, ArrowLeft, CheckCircle2, CloudDownload, Loader2, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { EpiasPlantPicker, plantDisplayName } from "@/components/epias-plant-picker";
 import {
   deserializeSeries,
   detectTechnology,
@@ -27,54 +28,74 @@ interface Uevcb {
   eic?: string | null;
 }
 
-const inputClass =
-  "w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500";
-
-const num = (v: number, d = 0) => v.toLocaleString("tr-TR", { maximumFractionDigits: d });
-
 interface ProjectOption {
   id: string;
   name: string;
   plantCount: number;
 }
 
-export default function EpiasPlantImportPage() {
+/** Bir santralin EPİAŞ çekim durumu */
+interface PlantJob {
+  /** Verinin çekildiği dönem ve KGÜP versiyonu ("başlangıç|bitiş|versiyon"); ayar değişirse yeniden çekilir */
+  key: string;
+  version: KgupVersion;
+  uevcbs: Uevcb[];
+  kgupParts: HourlySeries[];
+  uevmParts: HourlySeries[];
+  failed: Array<DateChunk & { error: string }>;
+  error: string | null;
+  running: boolean;
+}
+
+/** Kullanıcının düzenleyebildiği santral bilgileri (öneriler bir kez doldurulur, sonra ezilmez) */
+interface PlantForm {
+  name: string;
+  type: PlantTechnology | "";
+  capacity: string;
+}
+
+const inputClass =
+  "w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500";
+
+const num = (v: number, d = 0) => v.toLocaleString("tr-TR", { maximumFractionDigits: d });
+
+async function postJson<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  if (!d.success) throw new Error(d.error);
+  return d as T;
+}
+
+function EpiasPlantImport() {
   const router = useRouter();
+  const params = useSearchParams();
+  const presetProjectId = params.get("projectId");
 
-  // 1. Arama
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<EpiasPowerPlant[]>([]);
-  const [searchError, setSearchError] = useState<string | null>(null);
-  const [searching, setSearching] = useState(false);
-  const [plant, setPlant] = useState<EpiasPowerPlant | null>(null);
-  const searchId = useRef(0);
+  // 1. Proje
+  const [target, setTarget] = useState<"new" | "existing">(presetProjectId ? "existing" : "new");
+  const [projectName, setProjectName] = useState(params.get("name") ?? "");
+  const [description, setDescription] = useState(params.get("desc") ?? "");
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
+  const [targetProjectId, setTargetProjectId] = useState(presetProjectId ?? "");
 
-  // 2. Dönem ve çekim
+  // 2. Santraller
+  const [selected, setSelected] = useState<EpiasPowerPlant[]>([]);
+  const [presetError, setPresetError] = useState<string | null>(null);
+
+  // 3. Dönem ve çekim
   const [startDay, setStartDay] = useState("2025-01-01");
   const [endDay, setEndDay] = useState("2025-12-31");
   const [kgupVersion, setKgupVersion] = useState<KgupVersion>("FIRST");
-  /** Ekrandaki verinin çekildiği KGÜP versiyonu (seçim sonradan değişse de başarısız aylar bununla tekrar denenir) */
-  const [fetchedVersion, setFetchedVersion] = useState<KgupVersion | null>(null);
-  const [uevcbs, setUevcbs] = useState<Uevcb[] | null>(null);
+  const [jobs, setJobs] = useState<Record<number, PlantJob>>({});
   const [fetching, setFetching] = useState(false);
-  const [progress, setProgress] = useState<{ done: number; total: number; label: string } | null>(null);
-  const [kgupParts, setKgupParts] = useState<HourlySeries[]>([]);
-  const [uevmParts, setUevmParts] = useState<HourlySeries[]>([]);
-  const [failed, setFailed] = useState<Array<DateChunk & { error: string }>>([]);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<string | null>(null);
+  const datesTouched = useRef(false);
 
-  // 3. Proje
-  const [projectName, setProjectName] = useState("");
-  const [plantName, setPlantName] = useState("");
-  const [type, setType] = useState<PlantTechnology | "">("");
-  const [capacity, setCapacity] = useState("");
+  // 4. Kontrol ve kayıt
+  const [forms, setForms] = useState<Record<number, PlantForm>>({});
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  /** Yeni proje mi, yoksa mevcut projeye (portföy/DSG için) santral olarak ekleme mi */
-  const [target, setTarget] = useState<"new" | "existing">("new");
-  const [projects, setProjects] = useState<ProjectOption[]>([]);
-  const [targetProjectId, setTargetProjectId] = useState("");
-  const [addedNotice, setAddedNotice] = useState<{ projectId: string; noOverlap: boolean } | null>(null);
+  const [addedNotice, setAddedNotice] = useState<{ projectId: string } | null>(null);
 
   useEffect(() => {
     fetch("/api/projects")
@@ -88,234 +109,338 @@ export default function EpiasPlantImportPage() {
       .catch(() => {});
   }, []);
 
+  // Yeni proje penceresinde seçilen santraller (?ids=) listeye alınır
   useEffect(() => {
-    const q = query.trim();
-    if (q.length < 2) {
-      setResults([]);
-      return;
-    }
-    const id = ++searchId.current;
-    setSearching(true);
-    const timer = setTimeout(() => {
-      fetch(`/api/epias/plants?q=${encodeURIComponent(q)}`)
-        .then((r) => r.json())
-        .then((d) => {
-          if (id !== searchId.current) return;
-          if (!d.success) throw new Error(d.error);
-          setResults(d.plants);
-          setSearchError(null);
-        })
-        .catch((e) => id === searchId.current && setSearchError(e instanceof Error ? e.message : "Arama yapılamadı."))
-        .finally(() => id === searchId.current && setSearching(false));
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [query]);
+    const ids = params.get("ids");
+    if (!ids) return;
+    fetch(`/api/epias/plants?ids=${encodeURIComponent(ids)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.success) throw new Error(d.error);
+        setSelected(d.plants);
+      })
+      .catch((e) => setPresetError(e instanceof Error ? e.message : "Seçilen santraller yüklenemedi."));
+  }, [params]);
 
-  const choosePlant = (p: EpiasPowerPlant) => {
-    setPlant(p);
-    setUevcbs(null);
-    setKgupParts([]);
-    setUevmParts([]);
-    setFailed([]);
-    setFetchError(null);
-    // EPİAŞ adı çoğunlukla EIC kodunu da içerir ("BALABANLI RES-40W..."); varsa kısa ad kullanılır
-    const display = p.shortName?.trim() || p.name;
-    setPlantName(display);
-    setProjectName(display);
-    setAddedNotice(null);
-  };
+  // Mevcut projeye eklerken dönem, projedeki üretim verisinin aralığıyla başlar (DSG ortak saatlere bakar)
+  useEffect(() => {
+    if (target !== "existing" || !targetProjectId || datesTouched.current) return;
+    fetch(`/api/projects/${targetProjectId}`)
+      .then((r) => r.json())
+      .then((d) => {
+        const range = d?.project?.dataRange;
+        if (range && !datesTouched.current) {
+          setStartDay(range.start);
+          setEndDay(range.end);
+        }
+      })
+      .catch(() => {});
+  }, [target, targetProjectId]);
 
-  const runFetch = async (chunks: DateChunk[], units: Uevcb[], version: KgupVersion) => {
-    if (!plant) return;
-    setFetching(true);
+  const fetchKey = `${startDay}|${endDay}|${kgupVersion}`;
+
+  const updateJob = (id: number, patch: Partial<PlantJob> | ((j: PlantJob) => Partial<PlantJob>)) =>
+    setJobs((prev) => {
+      const cur = prev[id];
+      if (!cur) return prev;
+      return { ...prev, [id]: { ...cur, ...(typeof patch === "function" ? patch(cur) : patch) } };
+    });
+
+  /** Bir santral için verilen ayları çeker; başarısız aylar job.failed'e yazılır */
+  const fetchChunks = async (plant: EpiasPowerPlant, uevcbs: Uevcb[], chunks: DateChunk[], version: KgupVersion) => {
     const failures: Array<DateChunk & { error: string }> = [];
     for (let i = 0; i < chunks.length; i++) {
       const c = chunks[i];
-      setProgress({ done: i, total: chunks.length, label: c.label });
+      setProgress(`${plantDisplayName(plant)} · ${c.label} (${i + 1}/${chunks.length})`);
       try {
-        const res = await fetch("/api/epias/plants/fetch", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ powerPlantId: plant.id, uevcbIds: units.map((u) => u.id), startDay: c.start, endDay: c.end, kgupVersion: version }),
+        const d = await postJson<{ kgup: SerializedSeries; uevm: SerializedSeries }>("/api/epias/plants/fetch", {
+          powerPlantId: plant.id,
+          uevcbIds: uevcbs.map((u) => u.id),
+          startDay: c.start,
+          endDay: c.end,
+          kgupVersion: version,
         });
-        const d = await res.json();
-        if (!d.success) throw new Error(d.error);
-        setKgupParts((prev) => [...prev, deserializeSeries(d.kgup as SerializedSeries)]);
-        setUevmParts((prev) => [...prev, deserializeSeries(d.uevm as SerializedSeries)]);
+        const k = deserializeSeries(d.kgup);
+        const u = deserializeSeries(d.uevm);
+        updateJob(plant.id, (j) => ({ kgupParts: [...j.kgupParts, k], uevmParts: [...j.uevmParts, u] }));
       } catch (e) {
         failures.push({ ...c, error: e instanceof Error ? e.message : "hata" });
       }
     }
-    setFailed(failures);
+    updateJob(plant.id, { failed: failures, running: false });
+  };
+
+  const fetchPlant = async (plant: EpiasPowerPlant) => {
+    setJobs((prev) => ({
+      ...prev,
+      [plant.id]: { key: fetchKey, version: kgupVersion, uevcbs: [], kgupParts: [], uevmParts: [], failed: [], error: null, running: true },
+    }));
+    try {
+      setProgress(`${plantDisplayName(plant)} · uzlaştırma birimleri`);
+      const d = await postJson<{ uevcbs: Uevcb[] }>("/api/epias/plants/resolve", { powerPlantId: plant.id, startDay });
+      if (!d.uevcbs.length) throw new Error("Uzlaştırma birimi (UEVÇB) bulunamadı; KGÜP çekilemez.");
+      updateJob(plant.id, { uevcbs: d.uevcbs });
+      await fetchChunks(plant, d.uevcbs, monthChunks(startDay, endDay), kgupVersion);
+    } catch (e) {
+      updateJob(plant.id, { error: e instanceof Error ? e.message : "Veri çekilemedi.", running: false });
+    }
+  };
+
+  /** Seçili santrallerden bu dönem/versiyon için verisi olmayanları sırayla çeker */
+  const fetchAll = async () => {
+    setFetching(true);
+    setAddedNotice(null);
+    for (const p of selected) {
+      if (jobs[p.id]?.key === fetchKey && !jobs[p.id].error) continue;
+      await fetchPlant(p);
+    }
     setProgress(null);
     setFetching(false);
   };
 
-  const startFetch = async () => {
-    if (!plant) return;
-    setFetchError(null);
-    setKgupParts([]);
-    setUevmParts([]);
-    setFailed([]);
-    setFetchedVersion(kgupVersion);
-    setAddedNotice(null);
-    try {
-      const res = await fetch("/api/epias/plants/resolve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ powerPlantId: plant.id, startDay }),
-      });
-      const d = await res.json();
-      if (!d.success) throw new Error(d.error);
-      if (!d.uevcbs.length) throw new Error("Bu santral için uzlaştırma birimi (UEVÇB) bulunamadı; KGÜP çekilemez.");
-      setUevcbs(d.uevcbs);
-      await runFetch(monthChunks(startDay, endDay), d.uevcbs, kgupVersion);
-    } catch (e) {
-      setFetchError(e instanceof Error ? e.message : "Veri çekilemedi.");
+  const retryFailed = async (plant: EpiasPowerPlant) => {
+    const job = jobs[plant.id];
+    if (!job) return;
+    setFetching(true);
+    if (job.error || job.uevcbs.length === 0) await fetchPlant(plant);
+    else {
+      updateJob(plant.id, { running: true });
+      await fetchChunks(plant, job.uevcbs, job.failed, job.version);
     }
+    setProgress(null);
+    setFetching(false);
   };
 
+  // Santral bazında birleştirilmiş seri, tür ve güç önerisi
   const merged = useMemo(() => {
-    if (kgupParts.length === 0 && uevmParts.length === 0) return null;
-    const kgup = sumSeries(kgupParts);
-    const uevm = sumSeries(uevmParts);
-    return {
-      series: mergePlantSeries(kgup, uevm, startDay, endDay),
-      tech: detectTechnology(uevm.byFuel),
-      capacity: suggestCapacityMw(uevm.values.values()),
-      skipped: kgup.skipped + uevm.skipped,
-    };
-  }, [kgupParts, uevmParts, startDay, endDay]);
+    const out: Record<number, ReturnType<typeof buildMerged>> = {};
+    for (const p of selected) {
+      const j = jobs[p.id];
+      if (j && !j.running && (j.kgupParts.length > 0 || j.uevmParts.length > 0)) out[p.id] = buildMerged(j, startDay, endDay);
+    }
+    return out;
+  }, [selected, jobs, startDay, endDay]);
 
   // Önerileri bir kez doldur; kullanıcı değiştirirse ezme
   useEffect(() => {
-    if (!merged || fetching) return;
-    if (!type && merged.tech.type) setType(merged.tech.type);
-    if (!capacity && merged.capacity > 0) setCapacity(String(merged.capacity));
-  }, [merged, fetching, type, capacity]);
+    setForms((prev) => {
+      let next = prev;
+      for (const p of selected) {
+        const m = merged[p.id];
+        const cur = prev[p.id] ?? { name: plantDisplayName(p), type: "", capacity: "" };
+        const filled: PlantForm = {
+          name: cur.name,
+          type: cur.type || m?.tech.type || "",
+          capacity: cur.capacity || (m && m.capacity > 0 ? String(m.capacity) : ""),
+        };
+        if (!prev[p.id] || filled.type !== cur.type || filled.capacity !== cur.capacity) next = { ...next, [p.id]: filled };
+      }
+      return next;
+    });
+  }, [selected, merged]);
 
-  const hasError = merged?.series.checks.some((c) => c.level === "error") ?? true;
+  const setForm = (id: number, patch: Partial<PlantForm>) => setForms((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
 
-  const createProject = async () => {
-    if (!merged || !plant) return;
+  const plantStatus = (p: EpiasPowerPlant): "none" | "stale" | "running" | "error" | "ready" => {
+    const j = jobs[p.id];
+    if (!j) return "none";
+    if (j.running) return "running";
+    if (j.key !== fetchKey) return "stale";
+    const m = merged[p.id];
+    if (j.error || !m || m.series.checks.some((c) => c.level === "error")) return "error";
+    return "ready";
+  };
+
+  const allReady = selected.length > 0 && selected.every((p) => plantStatus(p) === "ready");
+  const formsValid = selected.every((p) => {
+    const f = forms[p.id];
+    return f && f.name.trim() && f.type && Number(f.capacity.replace(",", ".")) > 0;
+  });
+  const needFetch = selected.some((p) => ["none", "stale", "error"].includes(plantStatus(p)));
+
+  const save = async () => {
     setCreating(true);
     setCreateError(null);
     try {
-      const res = await fetch("/api/epias/plants/project", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...(target === "existing" ? { targetProjectId } : { projectName }),
-          plantName,
-          type,
-          capacityMw: Number(capacity.replace(",", ".")),
-          source: { powerPlantId: plant.id, uevcbIds: uevcbs?.map((u) => u.id), kgupVersion: fetchedVersion },
-          rows: merged.series.rows.map((r) => [r.timestamp.getTime(), r.forecastMwh, r.actualMwh]),
+      const d = await postJson<{ projectId: string; noOverlapWithExisting: boolean; added: boolean }>("/api/epias/plants/project", {
+        ...(target === "existing" ? { targetProjectId } : { projectName, description }),
+        plants: selected.map((p) => {
+          const f = forms[p.id];
+          const j = jobs[p.id];
+          return {
+            plantName: f.name,
+            type: f.type,
+            capacityMw: Number(f.capacity.replace(",", ".")),
+            source: { powerPlantId: p.id, uevcbIds: j.uevcbs.map((u) => u.id), kgupVersion: j.version },
+            rows: merged[p.id].series.rows.map((r) => [r.timestamp.getTime(), r.forecastMwh, r.actualMwh]),
+          };
         }),
       });
-      const d = await res.json();
-      if (!d.success) throw new Error(d.error);
       if (d.added && d.noOverlapWithExisting) {
-        // Ortak saat yoksa sonuç sayfasına geçmeden uyar: DSG analizi bu santrali diğerleriyle birlikte göremez
-        setAddedNotice({ projectId: d.projectId, noOverlap: true });
+        // Ortak saat yoksa sonuç sayfasına geçmeden uyar: DSG analizi bu santralleri diğerleriyle birlikte göremez
+        setAddedNotice({ projectId: d.projectId });
         setCreating(false);
         return;
       }
       router.push(`/projects/${d.projectId}/results`);
     } catch (e) {
-      setCreateError(e instanceof Error ? e.message : "Proje oluşturulamadı.");
+      setCreateError(e instanceof Error ? e.message : "Kaydedilemedi.");
       setCreating(false);
     }
   };
+
+  const targetProject = projects.find((p) => p.id === targetProjectId);
 
   return (
     <div className="min-h-screen bg-slate-50/60 pb-20">
       <header className="border-b bg-white">
         <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6">
-          <Link href="/projects" className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900">
-            <ArrowLeft className="h-3 w-3" /> Projelerim
+          <Link
+            href={presetProjectId ? `/projects/${presetProjectId}/plants` : "/projects"}
+            className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900"
+          >
+            <ArrowLeft className="h-3 w-3" /> {presetProjectId ? "Santraller" : "Projelerim"}
           </Link>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">EPİAŞ&apos;tan santral analizi</h1>
           <p className="mt-1 text-sm text-slate-600">
-            Santralin adını yazın. Gün öncesi planı (KGÜP) ve gerçekleşen üretimi (UEVM) EPİAŞ Şeffaflık
-            Platformu&apos;ndan çekilir, saat saat birleştirilir ve analiz için proje oluşturulur.
+            Santralleri adıyla arayıp seçin. Her birinin gün öncesi planı (KGÜP) ve gerçekleşen üretimi (UEVM) EPİAŞ
+            Şeffaflık Platformu&apos;ndan çekilir, saat saat birleştirilir ve tek projede analiz edilir.
           </p>
         </div>
       </header>
 
       <main className="mx-auto max-w-4xl space-y-6 px-4 pt-6 sm:px-6">
-        {/* 1. Santral */}
+        {/* 1. Proje */}
         <Card className="shadow-sm">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">1. Santral</CardTitle>
-            <CardDescription>Yalnızca EPİAŞ&apos;ın santral bazında üretim yayımladığı (lisanslı) santraller listelenir.</CardDescription>
+            <CardTitle className="text-base">1. Proje</CardTitle>
+            <CardDescription>
+              Santraller yeni bir projeye ya da mevcut bir projeye eklenir. Aynı projedeki santraller portföy ve DSG
+              (dengeden sorumlu grup) analizinde birlikte değerlendirilir.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-              <input
-                className={`${inputClass} pl-9`}
-                placeholder="Santral adı, örneğin Bahçe RES"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
+            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Santraller nereye kaydedilsin">
+              {(
+                [
+                  ["new", "Yeni proje"],
+                  ["existing", "Mevcut projeye ekle"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={target === value}
+                  disabled={(value === "existing" && projects.length === 0) || creating}
+                  onClick={() => setTarget(value)}
+                  className={`rounded-md border px-3 py-1.5 text-sm font-medium disabled:opacity-40 ${
+                    target === value ? "border-indigo-600 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
-            {searching && (
-              <p className="text-xs text-slate-500">
-                EPİAŞ&apos;a bağlanılıyor… İlk aramada santral listesi indirilir; bağlantı yoksa hata 30 saniye kadar
-                sonra gösterilir.
-              </p>
-            )}
-            {searchError && (
-              <div className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {searchError}
+            {target === "new" ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Proje adı *
+                  <input
+                    className={`${inputClass} mt-1`}
+                    value={projectName}
+                    placeholder="Örn: Ege RES portföyü 2025"
+                    onChange={(e) => setProjectName(e.target.value)}
+                  />
+                </label>
+                <label className="block text-xs font-semibold text-slate-700">
+                  Açıklama / Kapsam
+                  <input
+                    className={`${inputClass} mt-1`}
+                    value={description}
+                    placeholder="Örn: RES ve GES santralleri portföy optimizasyonu"
+                    onChange={(e) => setDescription(e.target.value)}
+                  />
+                </label>
               </div>
-            )}
-            {results.length > 0 && (
-              <div className="max-h-64 divide-y overflow-y-auto rounded-md border border-slate-200 bg-white">
-                {results.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => choosePlant(p)}
-                    className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-50 ${
-                      plant?.id === p.id ? "bg-indigo-50 text-indigo-900" : "text-slate-800"
-                    }`}
-                  >
-                    <span>{p.name}</span>
-                    <span className="font-mono text-2xs text-slate-400">{p.eic}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {!searching && !searchError && query.trim().length >= 2 && results.length === 0 && (
-              <p className="text-xs text-slate-500">Eşleşen santral yok.</p>
+            ) : (
+              <label className="block text-xs font-semibold text-slate-700 sm:max-w-md">
+                Proje
+                <select className={`${inputClass} mt-1`} value={targetProjectId} onChange={(e) => setTargetProjectId(e.target.value)}>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.plantCount} santral)
+                    </option>
+                  ))}
+                </select>
+              </label>
             )}
           </CardContent>
         </Card>
 
-        {/* 2. Dönem ve çekim */}
-        {plant && (
+        {/* 2. Santraller */}
+        <Card className="shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">2. Santraller</CardTitle>
+            <CardDescription>
+              İstediğiniz kadar santral ekleyin. Yalnızca EPİAŞ&apos;ın santral bazında üretim yayımladığı (lisanslı)
+              santraller listelenir.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {presetError && (
+              <div className="mb-3 flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 p-2.5 text-sm text-rose-700">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {presetError}
+              </div>
+            )}
+            <EpiasPlantPicker selected={selected} onChange={setSelected} disabled={fetching || creating} />
+          </CardContent>
+        </Card>
+
+        {/* 3. Dönem ve çekim */}
+        {selected.length > 0 && (
           <Card className="shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">2. Dönem: {plant.name}</CardTitle>
-              <CardDescription>Veri ay ay çekilir; bağlantı koparsa yalnızca başarısız aylar tekrar denenir.</CardDescription>
+              <CardTitle className="text-base">3. Dönem ve veri</CardTitle>
+              <CardDescription>
+                Santraller sırayla, ay ay çekilir. Bağlantı koparsa yalnızca başarısız aylar tekrar denenir; daha önce
+                çekilmiş santraller yeniden çekilmez.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
                 <label className="block text-xs font-semibold text-slate-700">
                   Başlangıç
-                  <input type="date" className={`${inputClass} mt-1`} value={startDay} onChange={(e) => setStartDay(e.target.value)} />
+                  <input
+                    type="date"
+                    className={`${inputClass} mt-1`}
+                    value={startDay}
+                    disabled={fetching}
+                    onChange={(e) => {
+                      datesTouched.current = true;
+                      setStartDay(e.target.value);
+                    }}
+                  />
                 </label>
                 <label className="block text-xs font-semibold text-slate-700">
                   Bitiş
-                  <input type="date" className={`${inputClass} mt-1`} value={endDay} onChange={(e) => setEndDay(e.target.value)} />
+                  <input
+                    type="date"
+                    className={`${inputClass} mt-1`}
+                    value={endDay}
+                    disabled={fetching}
+                    onChange={(e) => {
+                      datesTouched.current = true;
+                      setEndDay(e.target.value);
+                    }}
+                  />
                 </label>
                 <label className="block text-xs font-semibold text-slate-700">
                   KGÜP versiyonu
                   <select
                     className={`${inputClass} mt-1`}
                     value={kgupVersion}
+                    disabled={fetching}
                     onChange={(e) => setKgupVersion(e.target.value as KgupVersion)}
                     title="İlk versiyon gün öncesi plandır ve sapma analizi için doğru olandır. Son versiyon gün içi düzeltmeleri içerir; hata olduğundan küçük görünür."
                   >
@@ -327,194 +452,263 @@ export default function EpiasPlantImportPage() {
                     ))}
                   </select>
                 </label>
-                <Button onClick={startFetch} disabled={fetching || !startDay || !endDay || startDay > endDay} className="gap-1.5 bg-sky-600 text-white hover:bg-sky-700">
+                <Button
+                  onClick={fetchAll}
+                  disabled={fetching || creating || !needFetch || !startDay || !endDay || startDay > endDay}
+                  className="gap-1.5 bg-sky-600 text-white hover:bg-sky-700"
+                >
                   {fetching ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />}
-                  {fetching && progress ? `${progress.label} (${progress.done + 1}/${progress.total})` : "Verileri çek"}
+                  {fetching ? "Çekiliyor…" : needFetch ? "Verileri çek" : "Veriler hazır"}
                 </Button>
               </div>
-              {uevcbs && (
+              {target === "existing" && targetProject && (
                 <p className="text-xs text-slate-500">
-                  Uzlaştırma birimleri: {uevcbs.map((u) => u.name).join(", ")} (KGÜP bunların toplamıdır)
-                  {fetchedVersion && ` · KGÜP ${KGUP_VERSION_LABELS[fetchedVersion].toLocaleLowerCase("tr-TR")}`}
+                  Dönem, &quot;{targetProject.name}&quot; projesindeki üretim verisinin aralığıyla başladı; DSG analizi yalnızca
+                  ortak saatlere bakar.
                 </p>
               )}
-              {fetchError && (
-                <div className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {fetchError}
-                </div>
-              )}
-              {failed.length > 0 && !fetching && (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                  <span>
-                    {failed.length} dönem çekilemedi: {failed.map((f) => f.label).join(", ")}. İlk hata: {failed[0].error}
-                  </span>
-                  <Button size="sm" variant="outline" onClick={() => uevcbs && fetchedVersion && runFetch(failed, uevcbs, fetchedVersion)} className="gap-1">
-                    <RefreshCw className="h-3.5 w-3.5" /> Tekrar dene
-                  </Button>
-                </div>
+              {progress && (
+                <p className="flex items-center gap-2 text-xs text-sky-700">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> {progress}
+                </p>
               )}
             </CardContent>
           </Card>
         )}
 
-        {/* 3. Özet ve proje */}
-        {merged && !fetching && (
+        {/* 4. Kontrol ve kayıt */}
+        {selected.length > 0 && Object.keys(jobs).length > 0 && (
           <Card className="shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">3. Kontrol ve proje</CardTitle>
+              <CardTitle className="text-base">4. Kontrol ve kayıt</CardTitle>
               <CardDescription>
-                Plan (KGÜP) {num(merged.series.kgupTotalMwh)} MWh · Gerçekleşen (UEVM) {num(merged.series.uevmTotalMwh)} MWh ·
-                Eşleşen saat {num(merged.series.rows.length)}
-                {merged.skipped > 0 && ` · okunamayan kayıt ${num(merged.skipped)}`}
+                Her santralin verisini kontrol edin; ad, tür ve kurulu gücü gerekirse düzeltin.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                {merged.series.checks.map((c, i) => (
-                  <div
-                    key={i}
-                    className={`flex items-start gap-2 rounded-md border p-2.5 text-sm ${
-                      c.level === "error"
-                        ? "border-rose-200 bg-rose-50 text-rose-800"
-                        : c.level === "warning"
-                          ? "border-amber-200 bg-amber-50 text-amber-900"
-                          : "border-emerald-200 bg-emerald-50 text-emerald-800"
-                    }`}
-                  >
-                    {c.level === "ok" ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}
-                    {c.message}
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex flex-wrap gap-1">
-                {merged.series.coverage.map((m) => {
-                  const r = m.hours ? m.bothHours / m.hours : 0;
-                  return (
-                    <span
-                      key={m.month}
-                      title={`${m.month}: KGÜP ${m.kgupHours}, UEVM ${m.uevmHours}, eşleşen ${m.bothHours} / ${m.hours} saat`}
-                      className={`rounded px-1.5 py-0.5 text-2xs font-semibold ${
-                        r >= 0.95 ? "bg-emerald-500 text-white" : r > 0 ? "bg-amber-400 text-amber-950" : "bg-rose-400 text-white"
-                      }`}
-                    >
-                      {m.month.slice(5)}.{m.month.slice(2, 4)}
-                    </span>
-                  );
-                })}
-              </div>
-
-              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Santral nereye kaydedilsin">
-                {(
-                  [
-                    ["new", "Yeni proje oluştur"],
-                    ["existing", "Mevcut projeye ekle"],
-                  ] as const
-                ).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    role="radio"
-                    aria-checked={target === value}
-                    disabled={value === "existing" && projects.length === 0}
-                    onClick={() => setTarget(value)}
-                    className={`rounded-md border px-3 py-1.5 text-sm font-medium disabled:opacity-40 ${
-                      target === value ? "border-indigo-600 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              {target === "existing" && (
-                <p className="text-xs text-slate-500">
-                  Santral seçilen projeye eklenir ve projenin fiyat profiliyle hesaplanır. Birden çok santrali tek projede
-                  toplamak portföy ve DSG (dengeden sorumlu grup) analizini açar; bunun için santrallerin aynı dönemi kapsaması gerekir.
-                </p>
-              )}
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                {target === "new" ? (
-                  <label className="block text-xs font-semibold text-slate-700">
-                    Proje adı
-                    <input className={`${inputClass} mt-1`} value={projectName} onChange={(e) => setProjectName(e.target.value)} />
-                  </label>
-                ) : (
-                  <label className="block text-xs font-semibold text-slate-700">
-                    Proje
-                    <select className={`${inputClass} mt-1`} value={targetProjectId} onChange={(e) => setTargetProjectId(e.target.value)}>
-                      {projects.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} ({p.plantCount} santral)
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-                <label className="block text-xs font-semibold text-slate-700">
-                  Santral adı
-                  <input className={`${inputClass} mt-1`} value={plantName} onChange={(e) => setPlantName(e.target.value)} />
-                </label>
-                <label className="block text-xs font-semibold text-slate-700">
-                  Tür{" "}
-                  <span className="font-normal text-slate-500">
-                    {merged.tech.type ? "(UEVM'den bulundu)" : merged.tech.dominant ? "(kaynak karışık, seçin)" : "(seçin)"}
-                  </span>
-                  <select className={`${inputClass} mt-1`} value={type} onChange={(e) => setType(e.target.value as PlantTechnology)}>
-                    <option value="">Seçin</option>
-                    <option value="RES">RES</option>
-                    <option value="HES">HES</option>
-                    <option value="GES">GES</option>
-                  </select>
-                </label>
-                <label className="block text-xs font-semibold text-slate-700">
-                  Kurulu güç (MW) <span className="font-normal text-slate-500">(en yüksek üretimden önerildi)</span>
-                  <input className={`${inputClass} mt-1`} inputMode="decimal" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
-                </label>
-              </div>
+              {selected.map((p) => (
+                <PlantReview
+                  key={p.id}
+                  plant={p}
+                  status={plantStatus(p)}
+                  job={jobs[p.id]}
+                  merged={merged[p.id]}
+                  form={forms[p.id]}
+                  onForm={(patch) => setForm(p.id, patch)}
+                  onRetry={() => retryFailed(p)}
+                  onRemove={() => setSelected((prev) => prev.filter((s) => s.id !== p.id))}
+                  busy={fetching || creating}
+                />
+              ))}
 
               {createError && (
                 <div className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {createError}
                 </div>
               )}
-              {addedNotice?.noOverlap && (
+              {addedNotice && (
                 <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>
-                    Santral eklendi, ancak projedeki diğer santrallerle ortak saati yok. Portföy ve DSG analizleri yalnızca
-                    ortak saatlere bakar; aynı dönemi çekip tekrar eklemeniz gerekebilir.{" "}
+                    Santraller eklendi, ancak projedeki diğer santrallerle ortak saatleri yok. Portföy ve DSG analizleri
+                    yalnızca ortak saatlere bakar; aynı dönemi çekip tekrar eklemeniz gerekebilir.{" "}
                     <Link href={`/projects/${addedNotice.projectId}/results`} className="font-semibold underline">
                       Yine de sonuçlara git
                     </Link>
                   </span>
                 </div>
               )}
+              {!allReady && !fetching && (
+                <p className="text-xs text-slate-500">
+                  Kaydetmek için tüm santrallerin verisi bu dönem için çekilmiş ve hatasız olmalı. Sorunlu santrali
+                  tekrar deneyin ya da listeden çıkarın.
+                </p>
+              )}
               <Button
-                onClick={createProject}
+                onClick={save}
                 disabled={
                   creating ||
-                  hasError ||
-                  !type ||
-                  !capacity ||
-                  !plantName.trim() ||
+                  fetching ||
+                  !allReady ||
+                  !formsValid ||
                   (target === "new" ? !projectName.trim() : !targetProjectId) ||
                   addedNotice !== null
                 }
                 className="bg-indigo-600 text-white hover:bg-indigo-700"
               >
                 {creating
-                  ? target === "new"
-                    ? "Proje oluşturuluyor (eksik piyasa fiyatları da çekiliyor)…"
-                    : "Santral ekleniyor (eksik piyasa fiyatları da çekiliyor)…"
+                  ? "Kaydediliyor (eksik piyasa fiyatları da çekiliyor)…"
                   : target === "new"
-                    ? "Projeyi oluştur ve analiz et"
-                    : "Projeye ekle ve analiz et"}
+                    ? `Projeyi oluştur ve analiz et (${selected.length} santral)`
+                    : `Projeye ekle ve analiz et (${selected.length} santral)`}
               </Button>
             </CardContent>
           </Card>
         )}
       </main>
     </div>
+  );
+}
+
+function buildMerged(j: PlantJob, startDay: string, endDay: string) {
+  const kgup = sumSeries(j.kgupParts);
+  const uevm = sumSeries(j.uevmParts);
+  return {
+    series: mergePlantSeries(kgup, uevm, startDay, endDay),
+    tech: detectTechnology(uevm.byFuel),
+    capacity: suggestCapacityMw(uevm.values.values()),
+    skipped: kgup.skipped + uevm.skipped,
+  };
+}
+
+function PlantReview({
+  plant,
+  status,
+  job,
+  merged,
+  form,
+  onForm,
+  onRetry,
+  onRemove,
+  busy,
+}: {
+  plant: EpiasPowerPlant;
+  status: "none" | "stale" | "running" | "error" | "ready";
+  job?: PlantJob;
+  merged?: ReturnType<typeof buildMerged>;
+  form?: PlantForm;
+  onForm: (patch: Partial<PlantForm>) => void;
+  onRetry: () => void;
+  onRemove: () => void;
+  busy: boolean;
+}) {
+  const badge = {
+    none: ["Çekilmedi", "bg-slate-100 text-slate-600"],
+    stale: ["Dönem değişti, yeniden çekilecek", "bg-slate-100 text-slate-600"],
+    running: ["Çekiliyor", "bg-sky-100 text-sky-800"],
+    error: ["Sorun var", "bg-rose-100 text-rose-800"],
+    ready: ["Hazır", "bg-emerald-100 text-emerald-800"],
+  }[status];
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-slate-900">{plantDisplayName(plant)}</span>
+          <span className={`rounded px-1.5 py-0.5 text-2xs font-semibold ${badge[1]}`}>{badge[0]}</span>
+        </div>
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={busy}
+          aria-label={`${plantDisplayName(plant)} santralini listeden çıkar`}
+          className="text-slate-400 hover:text-rose-500 disabled:opacity-40"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      {job?.error && (
+        <p className="mt-2 flex items-start gap-1.5 text-xs text-rose-700">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {job.error}
+        </p>
+      )}
+      {job && !job.running && job.failed.length > 0 && (
+        <p className="mt-2 text-xs text-amber-800">
+          {job.failed.length} ay çekilemedi: {job.failed.map((f) => f.label).join(", ")}. İlk hata: {job.failed[0].error}
+        </p>
+      )}
+      {job && !job.running && (job.error || job.failed.length > 0) && (
+        <Button size="sm" variant="outline" onClick={onRetry} disabled={busy} className="mt-2 gap-1">
+          <RefreshCw className="h-3.5 w-3.5" /> Tekrar dene
+        </Button>
+      )}
+
+      {merged && status !== "running" && (
+        <>
+          <p className="mt-2 text-xs text-slate-500">
+            Plan (KGÜP) {num(merged.series.kgupTotalMwh)} MWh · Gerçekleşen (UEVM) {num(merged.series.uevmTotalMwh)} MWh ·
+            Eşleşen saat {num(merged.series.rows.length)}
+            {merged.skipped > 0 && ` · okunamayan kayıt ${num(merged.skipped)}`}
+            {job && ` · UEVÇB: ${job.uevcbs.map((u) => u.name).join(", ")} · KGÜP ${KGUP_VERSION_LABELS[job.version].toLocaleLowerCase("tr-TR")}`}
+          </p>
+          <div className="mt-2 space-y-1">
+            {merged.series.checks.map((c, i) => (
+              <p
+                key={i}
+                className={`flex items-start gap-1.5 text-xs ${
+                  c.level === "error" ? "text-rose-700" : c.level === "warning" ? "text-amber-800" : "text-emerald-700"
+                }`}
+              >
+                {c.level === "ok" ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" /> : <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
+                {c.message}
+              </p>
+            ))}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1">
+            {merged.series.coverage.map((m) => {
+              const r = m.hours ? m.bothHours / m.hours : 0;
+              return (
+                <span
+                  key={m.month}
+                  title={`${m.month}: KGÜP ${m.kgupHours}, UEVM ${m.uevmHours}, eşleşen ${m.bothHours} / ${m.hours} saat`}
+                  className={`rounded px-1.5 py-0.5 text-2xs font-semibold ${
+                    r >= 0.95 ? "bg-emerald-500 text-white" : r > 0 ? "bg-amber-400 text-amber-950" : "bg-rose-400 text-white"
+                  }`}
+                >
+                  {m.month.slice(5)}.{m.month.slice(2, 4)}
+                </span>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {form && (
+        <div className="mt-3 grid gap-2 sm:grid-cols-[2fr_1fr_1fr]">
+          <label className="block text-2xs font-semibold text-slate-600">
+            Santral adı
+            <input className={`${inputClass} mt-0.5`} value={form.name} disabled={busy} onChange={(e) => onForm({ name: e.target.value })} />
+          </label>
+          <label className="block text-2xs font-semibold text-slate-600">
+            Tür{" "}
+            {merged && (
+              <span className="font-normal text-slate-500">
+                {merged.tech.type ? "(UEVM'den)" : merged.tech.dominant ? "(karışık, seçin)" : "(seçin)"}
+              </span>
+            )}
+            <select
+              className={`${inputClass} mt-0.5`}
+              value={form.type}
+              disabled={busy}
+              onChange={(e) => onForm({ type: e.target.value as PlantTechnology })}
+            >
+              <option value="">Seçin</option>
+              <option value="RES">RES</option>
+              <option value="HES">HES</option>
+              <option value="GES">GES</option>
+            </select>
+          </label>
+          <label className="block text-2xs font-semibold text-slate-600">
+            Kurulu güç (MW)
+            <input
+              className={`${inputClass} mt-0.5`}
+              inputMode="decimal"
+              value={form.capacity}
+              disabled={busy}
+              onChange={(e) => onForm({ capacity: e.target.value })}
+            />
+          </label>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function EpiasPlantImportPage() {
+  return (
+    <Suspense fallback={null}>
+      <EpiasPlantImport />
+    </Suspense>
   );
 }

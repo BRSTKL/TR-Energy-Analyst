@@ -43,6 +43,8 @@ import {
 import { PricingProfileDialog } from "@/components/pricing-profile-dialog";
 import { EpiasSyncDialog } from "@/components/epias-sync-dialog";
 import { DeleteProjectDialog } from "@/components/delete-project-dialog";
+import { EpiasPlantPicker } from "@/components/epias-plant-picker";
+import type { EpiasPowerPlant } from "@/lib/epias-plant/plant-data";
 import { ImbalancePricingProfile } from "@/lib/calculations/types";
 
 interface PlantSummary {
@@ -100,6 +102,9 @@ export default function ProjectsPage() {
   const [projectName, setProjectName] = useState("");
   const [projectDesc, setProjectDesc] = useState("");
   const [newPlants, setNewPlants] = useState<PlantDraft[]>([emptyPlant()]);
+  /** Santraller EPİAŞ'tan seçilip verisi otomatik çekilir mi, yoksa elle tanımlanıp dosyadan mı yüklenir */
+  const [plantSource, setPlantSource] = useState<"epias" | "manual">("epias");
+  const [epiasPlants, setEpiasPlants] = useState<EpiasPowerPlant[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const router = useRouter();
 
@@ -139,18 +144,34 @@ export default function ProjectsPage() {
   };
 
   const plantErrors = validatePlantDrafts(newPlants);
-  const formValid = projectName.trim().length > 0 && plantErrors.every((e) => e === null);
+  const formValid =
+    projectName.trim().length > 0 &&
+    (plantSource === "epias" ? epiasPlants.length > 0 : plantErrors.every((e) => e === null));
 
   const resetForm = () => {
     setProjectName("");
     setProjectDesc("");
     setNewPlants([emptyPlant()]);
+    setEpiasPlants([]);
     setFormError(null);
   };
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formValid) return;
+
+    if (plantSource === "epias") {
+      // Veri çekme ve kontrol EPİAŞ sayfasında yapılır; proje, veriler doğrulandıktan sonra oluşturulur
+      const q = new URLSearchParams({
+        name: projectName.trim(),
+        desc: projectDesc.trim(),
+        ids: epiasPlants.map((p) => p.id).join(","),
+      });
+      setDialogOpen(false);
+      resetForm();
+      router.push(`/projects/epias?${q.toString()}`);
+      return;
+    }
 
     setSubmitting(true);
     setFormError(null);
@@ -279,73 +300,114 @@ export default function ProjectsPage() {
                       />
                     </div>
 
-                    {/* Santraller */}
+                    {/* Santrallerin kaynağı */}
                     <div className="space-y-2 pt-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <label className="text-xs font-semibold text-slate-700">
-                          Santral sayısı *
-                        </label>
-                        <input
-                          type="number"
-                          min={1}
-                          max={MAX_PLANTS}
-                          value={newPlants.length}
-                          onChange={(e) => setPlantCount(Number(e.target.value))}
-                          className="w-20 rounded-md border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                        />
-                      </div>
-                      <p className="text-[11px] text-slate-500">
-                        Her santralin adını, türünü ve kurulu gücünü girin. Üretim dosyasını yüklerken
-                        dosyadaki sayfa ve kolonları bu santrallerle eşleştireceksiniz.
-                      </p>
-
-                      <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
-                        {newPlants.map((plant, idx) => (
-                          <div key={idx} className="rounded-md border bg-slate-50 p-2 text-xs">
-                            <div className="flex items-center gap-2">
-                              <span className="w-5 text-right text-slate-400">{idx + 1}.</span>
-                              <input
-                                type="text"
-                                value={plant.name}
-                                onChange={(e) => updatePlant(idx, { name: e.target.value })}
-                                placeholder="Santral adı (örn. Karaburun RES)"
-                                className="flex-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs"
-                              />
-                              <select
-                                value={plant.type}
-                                onChange={(e) => updatePlant(idx, { type: e.target.value })}
-                                className="rounded border border-slate-200 bg-white px-2 py-1 text-xs"
-                              >
-                                <option value="RES">RES</option>
-                                <option value="HES">HES</option>
-                                <option value="GES">GES</option>
-                              </select>
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                value={plant.capacityMw}
-                                onChange={(e) => updatePlant(idx, { capacityMw: e.target.value })}
-                                placeholder="MW"
-                                className="w-16 rounded border border-slate-200 bg-white px-2 py-1 text-xs"
-                              />
-                              {newPlants.length > 1 && (
-                                <button
-                                  type="button"
-                                  aria-label={`${idx + 1}. santrali kaldır`}
-                                  onClick={() => handleRemovePlantRow(idx)}
-                                  className="text-slate-400 hover:text-rose-500"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
-                              )}
-                            </div>
-                            {plantErrors[idx] && (plant.name || plant.capacityMw) && (
-                              <p className="mt-1 pl-7 text-[11px] text-rose-600">{plantErrors[idx]}</p>
-                            )}
-                          </div>
+                      <label className="text-xs font-semibold text-slate-700">Santraller *</label>
+                      <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Santraller nasıl eklensin">
+                        {(
+                          [
+                            ["epias", "EPİAŞ'tan seç (veri otomatik)"],
+                            ["manual", "Elle tanımla (dosya yükleyeceğim)"],
+                          ] as const
+                        ).map(([value, label]) => (
+                          <button
+                            key={value}
+                            type="button"
+                            role="radio"
+                            aria-checked={plantSource === value}
+                            onClick={() => setPlantSource(value)}
+                            className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
+                              plantSource === value
+                                ? "border-indigo-600 bg-indigo-50 text-indigo-700"
+                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                            }`}
+                          >
+                            {label}
+                          </button>
                         ))}
                       </div>
                     </div>
+
+                    {plantSource === "epias" && (
+                      <div className="space-y-1">
+                        <p className="text-[11px] text-slate-500">
+                          Santralleri adıyla arayıp tek tek ekleyin. Sonraki adımda dönemi seçip plan (KGÜP) ve
+                          gerçekleşen üretimi (UEVM) EPİAŞ&apos;tan çekeceksiniz. Projeye daha sonra başka santral de
+                          ekleyebilirsiniz.
+                        </p>
+                        <EpiasPlantPicker selected={epiasPlants} onChange={setEpiasPlants} compact />
+                      </div>
+                    )}
+
+                    {/* Santraller */}
+                    {plantSource === "manual" && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <label className="text-xs font-semibold text-slate-700">
+                            Santral sayısı *
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={MAX_PLANTS}
+                            value={newPlants.length}
+                            onChange={(e) => setPlantCount(Number(e.target.value))}
+                            className="w-20 rounded-md border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                          />
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          Her santralin adını, türünü ve kurulu gücünü girin. Üretim dosyasını yüklerken
+                          dosyadaki sayfa ve kolonları bu santrallerle eşleştireceksiniz.
+                        </p>
+
+                        <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                          {newPlants.map((plant, idx) => (
+                            <div key={idx} className="rounded-md border bg-slate-50 p-2 text-xs">
+                              <div className="flex items-center gap-2">
+                                <span className="w-5 text-right text-slate-400">{idx + 1}.</span>
+                                <input
+                                  type="text"
+                                  value={plant.name}
+                                  onChange={(e) => updatePlant(idx, { name: e.target.value })}
+                                  placeholder="Santral adı (örn. Karaburun RES)"
+                                  className="flex-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs"
+                                />
+                                <select
+                                  value={plant.type}
+                                  onChange={(e) => updatePlant(idx, { type: e.target.value })}
+                                  className="rounded border border-slate-200 bg-white px-2 py-1 text-xs"
+                                >
+                                  <option value="RES">RES</option>
+                                  <option value="HES">HES</option>
+                                  <option value="GES">GES</option>
+                                </select>
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={plant.capacityMw}
+                                  onChange={(e) => updatePlant(idx, { capacityMw: e.target.value })}
+                                  placeholder="MW"
+                                  className="w-16 rounded border border-slate-200 bg-white px-2 py-1 text-xs"
+                                />
+                                {newPlants.length > 1 && (
+                                  <button
+                                    type="button"
+                                    aria-label={`${idx + 1}. santrali kaldır`}
+                                    onClick={() => handleRemovePlantRow(idx)}
+                                    className="text-slate-400 hover:text-rose-500"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                              {plantErrors[idx] && (plant.name || plant.capacityMw) && (
+                                <p className="mt-1 pl-7 text-[11px] text-rose-600">{plantErrors[idx]}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {formError && (
                       <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
@@ -363,7 +425,11 @@ export default function ProjectsPage() {
                       İptal
                     </Button>
                     <Button type="submit" disabled={submitting || !formValid}>
-                      {submitting ? "Kaydediliyor..." : "Projeyi Oluştur ve Veri Yükle"}
+                      {submitting
+                        ? "Kaydediliyor..."
+                        : plantSource === "epias"
+                          ? `Devam: EPİAŞ'tan veri çek${epiasPlants.length ? ` (${epiasPlants.length} santral)` : ""}`
+                          : "Projeyi Oluştur ve Veri Yükle"}
                     </Button>
                   </DialogFooter>
                 </form>
