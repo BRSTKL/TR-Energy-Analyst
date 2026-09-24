@@ -30,6 +30,7 @@ import { computeAccuracyStats } from "@/lib/analysis/forecast-accuracy";
 import { simulateForecastScaling } from "@/lib/analysis/scaling-impact";
 import { volumeRatioBacktestSummary } from "@/lib/analysis/backtest";
 import { analyzePortfolioNetting } from "@/lib/analysis/portfolio-netting";
+import { analyzeDsgScenario } from "@/lib/analysis/dsg-scenarios";
 
 export const dynamic = "force-dynamic";
 
@@ -212,6 +213,19 @@ export async function GET(
         })),
         projectProfile
       ),
+      dsgAllocation: (() => {
+        const withData = project.plants
+          .map((plant) => ({
+            plantId: plant.id,
+            plantName: plant.name,
+            plantType: plant.type,
+            hourly: plantResultsMap[plant.id]?.hourly ?? [],
+          }))
+          .filter((p) => p.hourly.length > 0);
+        return withData.length >= 2
+          ? analyzeDsgScenario(withData, withData.map((p) => p.plantId), projectProfile).allocation
+          : null;
+      })(),
     };
 
     const pptxInsightsData: PptxExportInsightsData = {

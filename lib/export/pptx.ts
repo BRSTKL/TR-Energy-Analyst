@@ -8,6 +8,7 @@
  * - Slayt 4: Santral Karşılaştırması & Portföy Riski (Birim metrikler, skor tablosu)
  * - Slayt 5: Tahmin Doğruluğu & Sistematik Sapma (Fiyattan bağımsız; veri varsa eklenir)
  * - Slayt 6: DSG Netleştirme Analizi (Birden fazla santral varsa eklenir)
+ * - Slayt 6b: DSG Faydasının Paylaştırılması (paylaştırma verisi varsa eklenir)
  * - Slayt 7: Strateji ve Azaltım Önerileri (Kural tabanlı somut aksiyon adımları)
  * - Slayt 8: Sonuç & Uygulama Yol Haritası (Kısa, orta ve uzun vadeli adımlar)
  *
@@ -24,6 +25,7 @@ import { AccuracyStats, diagnoseAccuracy } from "../analysis/forecast-accuracy";
 import type { ScalingImpact } from "../analysis/scaling-impact";
 import type { BacktestSummary } from "../analysis/backtest";
 import type { NettingGroupResult, NettingResult } from "../analysis/portfolio-netting";
+import type { AllocationMethod } from "../analysis/dsg-scenarios";
 
 export interface PptxMonthlyMetric {
   month: string;
@@ -54,6 +56,8 @@ export interface PptxExportProjectData {
     portfolio: AccuracyStats;
   };
   netting?: NettingResult;
+  /** Tüm santrallerin tek DSG'de toplandığı durum için paylaştırma yöntemleri (en fazla 8 santral) */
+  dsgAllocation?: AllocationMethod[] | null;
 }
 
 export interface PptxExportInsightsData {
@@ -1186,6 +1190,134 @@ export async function exportToPptx(
     slideNet.addText(
       "Netleşmiş maliyet: grubun saatlik toplam tahmin ve gerçekleşeni aynı PTF / SMF / sistem yönü ve katsayılarla " +
         "uzlaştırılarak hesaplanır. Maliyetin grup üyeleri arasında paylaşımı DSG sözleşmesine bağlıdır ve modellenmemiştir.",
+      { x: 0.8, y: 6.75, w: 11.7, h: 0.4, fontSize: 7.5, color: colors.textMuted }
+    );
+  }
+
+  const allocation = projectData.dsgAllocation;
+  if (allocation && allocation.length > 0 && allocation[0].shares.length >= 2) {
+    const slideAlloc = pptx.addSlide();
+    slideAlloc.background = { color: colors.slideBg };
+    const pctA = (v: number) =>
+      `${v < 0 ? "−" : ""}%${new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 }).format(Math.abs(v) * 100)}`;
+
+    slideAlloc.addText("DSG Faydasının Paylaştırılması", {
+      x: 0.8,
+      y: 0.5,
+      w: 11.7,
+      h: 0.45,
+      fontSize: 20,
+      bold: true,
+      color: colors.textPrimary,
+    });
+    slideAlloc.addText(
+      "Tüm santraller tek grupta: her santralin grup içinde ödeyeceği maliyet ve tek başına kalmaya göre indirimi",
+      { x: 0.8, y: 0.95, w: 11.7, h: 0.3, fontSize: 11, color: colors.textSecondary }
+    );
+
+    const head = (text: string, align: "left" | "right" = "right") => ({
+      text,
+      options: { bold: true, color: "FFFFFF", fill: { color: "1E293B" }, align },
+    });
+    const shares = allocation[0].shares;
+    const rows: any[][] = [[head("Santral", "left"), head("Tek Başına"), ...allocation.map((m) => head(m.label))]];
+    shares.forEach((share, i) => {
+      rows.push([
+        { text: share.plantName, options: { bold: true, color: colors.textPrimary } },
+        { text: formatTL(share.standaloneCost), options: { align: "right", color: colors.textPrimary } },
+        ...allocation.map((m) => ({
+          text: `${formatTL(m.shares[i].allocatedCost)} (${pctA(m.shares[i].discountRatio)})`,
+          options: { align: "right", color: m.shares[i].discountRatio < 0 ? colors.danger : colors.textPrimary },
+        })),
+      ]);
+    });
+    const totalStandalone = shares.reduce((s, x) => s + x.standaloneCost, 0);
+    const totalAllocated = allocation[0].shares.reduce((s, x) => s + x.allocatedCost, 0);
+    const totalFill = { color: "F1F5F9" };
+    rows.push([
+      { text: "Toplam", options: { bold: true, color: colors.textPrimary, fill: totalFill } },
+      { text: formatTL(totalStandalone), options: { align: "right", bold: true, color: colors.textPrimary, fill: totalFill } },
+      ...allocation.map(() => ({
+        text: formatTL(totalAllocated),
+        options: { align: "right", bold: true, color: colors.success, fill: totalFill },
+      })),
+    ]);
+    slideAlloc.addTable(rows, {
+      x: 0.8,
+      y: 1.45,
+      w: 11.7,
+      colW: [2.1, 2.1, ...allocation.map(() => 7.5 / allocation.length)],
+      border: { pt: 0.5, color: "CBD5E1" },
+      fontSize: 10,
+      rowH: 0.34,
+      autoPage: false,
+    });
+
+    // Yöntem notları ve istikrar
+    const notesY = 1.45 + rows.length * 0.34 + 0.3;
+    allocation.forEach((m, i) => {
+      const x = 0.8 + i * (11.7 / allocation.length);
+      const w = 11.7 / allocation.length - 0.15;
+      slideAlloc.addShape(pptx.ShapeType.roundRect, {
+        x,
+        y: notesY,
+        w,
+        h: 1.25,
+        fill: { color: colors.cardBg },
+        line: { color: m.unstableSubgroups.length ? colors.danger : colors.border, width: 1 },
+        rectRadius: 0.08,
+      });
+      slideAlloc.addText(
+        [
+          { text: `${m.label}\n`, options: { bold: true, color: colors.textPrimary, fontSize: 10.5 } },
+          { text: `${m.description}\n`, options: { color: colors.textSecondary, fontSize: 8.5 } },
+          {
+            text: m.unstableSubgroups.length
+              ? `Ayrılmak isteyebilecek: ${m.unstableSubgroups.map((g) => g.join(" + ")).join("; ")}`
+              : "İstikrarlı: hiçbir alt grup ayrılarak daha ucuza gelmez.",
+            options: { bold: true, color: m.unstableSubgroups.length ? colors.danger : colors.success, fontSize: 8.5 },
+          },
+        ],
+        { x: x + 0.12, y: notesY + 0.06, w: w - 0.24, h: 1.13, valign: "top" }
+      );
+    });
+
+    const shapley = allocation.find((m) => m.id === "shapley");
+    // Çok santralde tablo uzar; yorum kutusu dipnotla çakışacaksa çizilmez
+    const fitsMessage = notesY + 1.45 + 0.75 <= 6.7;
+    if (shapley && fitsMessage) {
+      const sorted = [...shapley.shares].sort((a, b) => b.discountRatio - a.discountRatio);
+      const top = sorted[0];
+      const bottom = sorted[sorted.length - 1];
+      const message =
+        `Katkıya göre (Shapley) en yüksek indirim ${top.plantName} için ${pctA(top.discountRatio)}, en düşük ` +
+        `${bottom.plantName} için ${pctA(bottom.discountRatio)}. Maliyet orantılı paylaştırmada her santral aynı ` +
+        `oranda (${pctA(1 - totalAllocated / totalStandalone)}) indirim alır; seçilen yöntem, kimin gruba katılmak ` +
+        `isteyeceğini doğrudan belirler.`;
+      const msgY = notesY + 1.45;
+      slideAlloc.addShape(pptx.ShapeType.roundRect, {
+        x: 0.8,
+        y: msgY,
+        w: 11.7,
+        h: 0.75,
+        fill: { color: "ECFDF5" },
+        line: { color: colors.success, width: 1 },
+        rectRadius: 0.08,
+      });
+      slideAlloc.addText(message, {
+        x: 1.0,
+        y: msgY + 0.06,
+        w: 11.3,
+        h: 0.63,
+        fontSize: 10.5,
+        color: colors.textPrimary,
+        valign: "middle",
+      });
+    }
+
+    slideAlloc.addText(
+      "Paylaştırma DSG sözleşmesiyle belirlenir; tablo seçenekleri karşılaştırır. İstikrar: herhangi bir alt grubun kendi " +
+        "aralarında kuracağı grupta ödeyeceği maliyet, bu yöntemle ödeyeceği toplamdan düşükse o alt grup ayrılmak ister.",
       { x: 0.8, y: 6.75, w: 11.7, h: 0.4, fontSize: 7.5, color: colors.textMuted }
     );
   }

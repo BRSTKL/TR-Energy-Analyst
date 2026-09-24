@@ -3,6 +3,7 @@ import JSZip from "jszip";
 import { exportToPptx, PptxExportProjectData, PptxExportInsightsData } from "../lib/export/pptx";
 import { computeAccuracyStats } from "../lib/analysis/forecast-accuracy";
 import type { NettingGroupResult } from "../lib/analysis/portfolio-netting";
+import type { AllocationMethod } from "../lib/analysis/dsg-scenarios";
 
 /** Sunumu açar; slayt boyutunu ve her slayttaki öğelerin sağ/alt kenarlarını (EMU) döner */
 async function inspectPptx(buffer: Buffer) {
@@ -303,6 +304,53 @@ describe("PowerPoint Export Modülü (PptxGenJS)", () => {
         expect(box.right, `${slide.file} sağ kenar`).toBeLessThanOrEqual(width);
         expect(box.bottom, `${slide.file} alt kenar`).toBeLessThanOrEqual(height);
       }
+    }
+  });
+
+  it("DSG paylaştırma verisi varsa sınırlar içinde kalan paylaştırma slaydı eklemelidir", async () => {
+    // Gain 2025 rakamları (4 santral, 8 santral sınırına kadar satır sayısı artar)
+    const standalone: Record<string, number> = { RES_1: 17290000, RES_2: 6740000, HES_1: 3500000, HES_2: 3480000 };
+    const method = (
+      id: AllocationMethod["id"],
+      label: string,
+      costs: Record<string, number>,
+      unstable: string[][] = []
+    ): AllocationMethod => ({
+      id,
+      label,
+      description: "Açıklama metni; iki satıra kadar uzayabilir ve kutunun içinde kalmalıdır.",
+      shares: Object.keys(standalone).map((name) => ({
+        plantId: name,
+        plantName: name,
+        standaloneCost: standalone[name],
+        allocatedCost: costs[name],
+        discountTl: standalone[name] - costs[name],
+        discountRatio: 1 - costs[name] / standalone[name],
+      })),
+      unstableSubgroups: unstable,
+    });
+    const allocation = [
+      method("shapley", "Shapley", { RES_1: 13880000, RES_2: 3660000, HES_1: 2050000, HES_2: 1990000 }),
+      method("cost-proportional", "Maliyet orantılı", { RES_1: 12030000, RES_2: 4690000, HES_1: 2440000, HES_2: 2420000 }),
+      method("volume-proportional", "Hata hacmi orantılı", { RES_1: 12370000, RES_2: 4970000, HES_1: 2150000, HES_2: 2090000 }, [
+        ["RES_1", "RES_2"],
+      ]),
+    ];
+
+    const withAlloc = await exportToPptx({ ...mockProject, dsgAllocation: allocation }, mockInsights);
+    const without = await exportToPptx(mockProject, mockInsights);
+    const a = await inspectPptx(withAlloc);
+    const b = await inspectPptx(without);
+    expect(a.slides.length).toBe(b.slides.length + 1);
+
+    const slide = a.slides.find((s) => s.xml.includes("DSG Faydasının Paylaştırılması"));
+    expect(slide).toBeDefined();
+    expect(slide!.xml).toContain("13.880.000 ₺ (%20)");
+    expect(slide!.xml).toContain("Ayrılmak isteyebilecek: RES_1 + RES_2");
+    expect(slide!.xml).toContain("en yüksek indirim RES_2 için %46");
+    for (const box of slide!.boxes) {
+      expect(box.right).toBeLessThanOrEqual(a.width);
+      expect(box.bottom).toBeLessThanOrEqual(a.height);
     }
   });
 });

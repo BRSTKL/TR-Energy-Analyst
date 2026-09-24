@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -49,7 +50,7 @@ function GroupRow({ group }: { group: NettingGroupResult }) {
  * Dengeden sorumlu grup (DSG) netleştirme faydası: santrallerin tek başına ve grup halinde netleşmiş
  * dengesizlik maliyetlerini karşılaştırır.
  */
-export function NettingCard({ netting }: { netting: NettingResult }) {
+export function NettingCard({ netting, projectId }: { netting: NettingResult; projectId?: string }) {
   const portfolio = netting.portfolio;
   if (!portfolio) return null;
 
@@ -64,7 +65,15 @@ export function NettingCard({ netting }: { netting: NettingResult }) {
           birbirini dengelerdi. Bağımsız maliyet, santrallerin tek başına dengesizlik maliyetlerinin
           toplamı; netleşmiş maliyet, grubun saatlik toplam dengesizliğinin aynı fiyatlarla maliyetidir.
           Grup düzeyinde aynı fiyat formülü varsayılır; maliyetin üyeler arasında paylaşımı DSG
-          sözleşmesine bağlıdır ve modellenmez.
+          sözleşmesine bağlıdır.
+          {projectId && (
+            <>
+              {" "}
+              <Link href={`/projects/${projectId}/dsg`} className="font-medium text-indigo-600 hover:underline">
+                Grup seçimi ve paylaştırma seçenekleri için DSG Senaryoları →
+              </Link>
+            </>
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">

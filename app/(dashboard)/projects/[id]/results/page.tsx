@@ -52,6 +52,7 @@ import {
   UploadCloud,
   Factory,
   FlaskConical,
+  Network,
 } from "lucide-react";
 import {
   HourlyResult,
@@ -510,6 +511,12 @@ export default function ProjectResultsPage() {
               </Link>
             </Button>
             <Button asChild variant="outline" size="sm" className="gap-1.5">
+              <Link href={`/projects/${projectId}/dsg`}>
+                <Network className="h-3.5 w-3.5" />
+                DSG Senaryoları
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="gap-1.5">
               <Link href={`/projects/${projectId}/backtest`}>
                 <FlaskConical className="h-3.5 w-3.5" />
                 Geriye Dönük Test
@@ -911,7 +918,7 @@ export default function ProjectResultsPage() {
         {data.comparison && <PlantComparisonCard comparison={data.comparison} />}
 
         {/* DSG Netleştirme Analizi */}
-        {data.netting && <NettingCard netting={data.netting} />}
+        {data.netting && <NettingCard netting={data.netting} projectId={projectId} />}
 
         {/* Fiyattan Bağımsız Tahmin Doğruluğu */}
         <ForecastAccuracyCard projectId={projectId} refreshKey={data} />
