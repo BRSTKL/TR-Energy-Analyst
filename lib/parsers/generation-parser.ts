@@ -7,6 +7,7 @@
  */
 
 import ExcelJS from "exceljs";
+import { loadWorkbookResilient } from "./xlsx-load";
 
 export interface RawGenerationInput {
   date: string | Date;
@@ -417,8 +418,7 @@ export async function parseExcelBuffer(buffer: Buffer): Promise<Record<string, a
 export async function parseExcelSheets(
   buffer: Buffer
 ): Promise<Array<{ sheetName: string; rows: Record<string, any>[] }>> {
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(buffer as any);
+  const workbook = await loadWorkbookResilient(buffer);
 
   return workbook.worksheets
     .map((worksheet) => ({ sheetName: worksheet.name.trim(), rows: worksheetToRows(worksheet) }))
@@ -432,8 +432,7 @@ export async function parseExcelSheets(
 export async function parseExcelGrids(
   buffer: Buffer
 ): Promise<Array<{ sheetName: string; grid: any[][] }>> {
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(buffer as any);
+  const workbook = await loadWorkbookResilient(buffer);
 
   return workbook.worksheets
     .map((worksheet) => {
