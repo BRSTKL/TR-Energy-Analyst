@@ -172,10 +172,12 @@ export async function exportPlantReportPptx(r: PlantReportData, opts: { prepared
     header(pptx, s, "Özet");
     s.addText(
       [
-        { text: `${periodLabel(r)} boyunca portföy dengesizliğe `, options: { color: C.text } },
+        { text: `${periodLabel(r)} boyunca portföyün dengesizlik maliyeti `, options: { color: C.text } },
         { text: formatTlShort(t.imbalanceCostTl), options: { color: C.cost, bold: true } },
         {
-          text: ` ödedi. Üretilen her MWh için ${nf(t.unitCostTl, 0)} TL; gelire oranı %${nf(t.costShareOfRevenuePct, 1)}.`,
+          text:
+            `. Üretilen her MWh için ${nf(t.unitCostTl, 0)} TL` +
+            (t.costShareOfRevenuePct !== null ? `; gelire oranı %${nf(t.costShareOfRevenuePct, 1)}.` : "."),
           options: { color: C.text },
         },
       ],
@@ -204,20 +206,34 @@ export async function exportPlantReportPptx(r: PlantReportData, opts: { prepared
         }${formatTlShort(r.coefficients2026.deltaTl)} (%${nf(r.coefficients2026.deltaPct, 1)}).`,
       });
     }
+    if (r.settlement.sameCompanyNettingTl > 0.005 * r.settlement.plantLevelCostTl) {
+      findings.push({
+        kind: "exact",
+        text: `Aynı şirketin santralleri her saat birbirini dengeler: santral santral hesaplanan ${formatTlShort(
+          r.settlement.plantLevelCostTl
+        )} maliyetin ${formatTlShort(r.settlement.sameCompanyNettingTl)} kadarı uzlaştırmada zaten netleşiyor.`,
+      });
+    }
+    if (r.yekdem) {
+      findings.push({
+        kind: "exact",
+        text: `${r.yekdem.plantNames.join(", ")} bu dönemde YEKDEM'deydi. YEKDEM süresi biten santral piyasa fiyatına ve 2026 katsayılarına doğrudan maruz kalır.`,
+      });
+    }
     if (r.plants.length > 1) {
       const top = r.plants[0];
       findings.push({
         kind: "exact",
-        text: `En yüksek maliyet ${top.name} santralinde: ${formatTlShort(top.imbalanceCostTl)} (portföy maliyetindeki payı %${nf(
-          (top.imbalanceCostTl / (t.imbalanceCostTl || 1)) * 100,
+        text: `Tek başına en yüksek maliyet ${top.name} santralinde: ${formatTlShort(top.imbalanceCostTl)} (santral bazında toplamın %${nf(
+          (top.imbalanceCostTl / (r.settlement.plantLevelCostTl || 1)) * 100,
           0
-        )}).`,
+        )} kadarı).`,
       });
     }
     if (r.dsg && r.dsg.benefitTl > 0) {
       findings.push({
         kind: "scenario",
-        text: `Santraller tek dengeden sorumlu grupta saatlik netleşseydi maliyet ${formatTlShort(r.dsg.benefitTl)} (%${nf(r.dsg.benefitPct, 0)}) azalırdı.`,
+        text: `Farklı şirketlerdeki santraller tek dengeden sorumlu grupta netleşseydi maliyet ${formatTlShort(r.dsg.benefitTl)} (%${nf(r.dsg.benefitPct, 0)}) daha azalırdı.`,
       });
     }
     if (r.intraday && r.intraday.savingTl > 0) {
@@ -226,13 +242,15 @@ export async function exportPlantReportPptx(r: PlantReportData, opts: { prepared
         text: `Tahmin hatası 1 saat önceden görülüp kısmen gün içi piyasada kapatılsaydı, test edilen ${r.intraday.testMonths} ayda maliyet %${nf(
           r.intraday.savingPct,
           0
-        )} (${formatTlShort(r.intraday.savingTl)}) azalırdı.`,
+        )} (yaklaşık ${formatTlShort(r.intraday.savingTl)}) azalırdı.`,
       });
     }
-    findings.slice(0, 4).forEach((f, i) => {
-      const y = 4.1 + i * 0.7;
+    const shownFindings = findings.slice(0, 5);
+    const step = shownFindings.length > 4 ? 0.56 : 0.7;
+    shownFindings.forEach((f, i) => {
+      const y = 4.0 + i * step;
       tag(pptx, s, f.kind, 0.7, y + 0.12);
-      s.addText(f.text, { x: 2.1, y, w: 10.5, h: 0.55, fontSize: 13, color: C.text, valign: "middle" });
+      s.addText(f.text, { x: 2.1, y, w: 10.5, h: 0.55, fontSize: shownFindings.length > 4 ? 12 : 13, color: C.text, valign: "middle" });
     });
     footer(s, r, page);
   }
@@ -241,9 +259,14 @@ export async function exportPlantReportPptx(r: PlantReportData, opts: { prepared
   {
     const s = pptx.addSlide();
     page++;
-    header(pptx, s, "Santral bazında dengesizlik maliyeti", "Maliyete göre büyükten küçüğe sıralı");
+    header(
+      pptx,
+      s,
+      "Santral bazında dengesizlik maliyeti",
+      "Her santral tek başına uzlaştırılsaydı; maliyete göre büyükten küçüğe sıralı"
+    );
     tag(pptx, s, "exact", 11.35, 0.5);
-    const MAX_ROWS = 12;
+    const MAX_ROWS = 10;
     const shown = r.plants.slice(0, MAX_ROWS);
     const rest = r.plants.slice(MAX_ROWS);
     const head = ["Santral", "Tür", "MW", "Üretim", "Dengesizlik maliyeti", "TL/MWh", "Gelir payı", "Plan farkı"];
@@ -253,12 +276,12 @@ export async function exportPlantReportPptx(r: PlantReportData, opts: { prepared
       ...shown.map((p) =>
         [
           cell(p.name),
-          cell(p.type),
+          cell(p.yekdem ? `${p.type} (YEKDEM)` : p.type, { fontSize: p.yekdem ? 9 : 10 }),
           cell(nf(p.capacityMw, 0), { align: "right" }),
           cell(formatEnergy(p.actualMwh), { align: "right" }),
           cell(formatTlShort(p.imbalanceCostTl), { align: "right", bold: true }),
           cell(nf(p.unitCostTl, 0), { align: "right" }),
-          cell(`%${nf(p.costShareOfRevenuePct, 1)}`, { align: "right" }),
+          cell(p.costShareOfRevenuePct !== null ? `%${nf(p.costShareOfRevenuePct, 1)}` : "—", { align: "right" }),
           cell(`%${nf(p.deviationPct, 1)}`, { align: "right" }),
         ]
       ),
@@ -277,27 +300,52 @@ export async function exportPlantReportPptx(r: PlantReportData, opts: { prepared
       ]);
     }
     const bold = { bold: true, fill: { color: "F1F5F9" } };
+    const netted = r.settlement.sameCompanyNettingTl > 0.005 * r.settlement.plantLevelCostTl;
     rows.push([
-      cell("Toplam", bold),
+      cell(netted ? "Toplam (santral bazında)" : "Toplam", bold),
       cell("", bold),
       cell(nf(t.capacityMw, 0), { ...bold, align: "right" }),
       cell(formatEnergy(t.actualMwh), { ...bold, align: "right" }),
-      cell(formatTlShort(t.imbalanceCostTl), { ...bold, align: "right", color: C.cost }),
-      cell(nf(t.unitCostTl, 0), { ...bold, align: "right" }),
-      cell(`%${nf(t.costShareOfRevenuePct, 1)}`, { ...bold, align: "right" }),
+      cell(formatTlShort(r.settlement.plantLevelCostTl), { ...bold, align: "right", color: netted ? C.text : C.cost }),
+      cell(nf(t.actualMwh > 0 ? r.settlement.plantLevelCostTl / t.actualMwh : 0, 0), { ...bold, align: "right" }),
+      cell(netted || t.costShareOfRevenuePct === null ? "" : `%${nf(t.costShareOfRevenuePct, 1)}`, { ...bold, align: "right" }),
       cell(`%${nf(t.deviationPct, 1)}`, { ...bold, align: "right" }),
     ]);
+    if (netted) {
+      rows.push([
+        cell("Şirket bazında uzlaştırma", bold),
+        cell("", bold),
+        cell("", bold),
+        cell("", bold),
+        cell(formatTlShort(t.imbalanceCostTl), { ...bold, align: "right", color: C.cost }),
+        cell(nf(t.unitCostTl, 0), { ...bold, align: "right" }),
+        cell(t.costShareOfRevenuePct !== null ? `%${nf(t.costShareOfRevenuePct, 1)}` : "", { ...bold, align: "right" }),
+        cell("", bold),
+      ]);
+    }
+    // Satır yüksekliği satır sayısına göre: alttaki açıklamalar tablonun üstüne binmesin
+    const rowH = rows.length > 11 ? 0.3 : 0.34;
     s.addTable(rows as any, {
       x: 0.7,
-      y: 1.6,
+      y: 1.55,
       w: 11.9,
-      colW: [3.3, 0.7, 0.8, 1.3, 2.1, 1.1, 1.2, 1.4],
+      colW: [2.9, 1.1, 0.8, 1.3, 2.1, 1.1, 1.2, 1.4],
       border: { type: "solid", pt: 0.5, color: C.border },
-      rowH: 0.34,
+      rowH,
+      fontSize: 10,
     });
+    const tableBottom = 1.55 + rows.length * rowH;
+    const companies = r.settlement.companies;
+    const owners =
+      companies.length === 1 && companies[0].name
+        ? `Tüm santraller ${companies[0].name} şirketine ait; uzlaştırmada birlikte netleşir.`
+        : `Şirketler — ${companies.map((c) => `${c.name ?? "Sahibi bulunamadı"}: ${c.plantNames.join(", ")}`).join(" · ")}`;
+    s.addText(owners, { x: 0.7, y: tableBottom + 0.1, w: 11.9, h: 0.45, fontSize: 9, color: C.text, valign: "top" });
     s.addText(
-      "Gelir payı: dengesizlik maliyetinin gün öncesi satış ve dengesizlik tutarları toplamına oranı. Plan farkı: saatlik |gerçekleşen − plan| toplamının gerçekleşen üretime oranı.",
-      { x: 0.7, y: 6.55, w: 11.9, h: 0.4, fontSize: 9, color: C.sub }
+      "Uzlaştırma şirket bazındadır: aynı şirketin santralleri her saat birbirini dengeler. Gelir payı: maliyetin gün öncesi satış ve " +
+        "dengesizlik tutarları toplamına oranı (YEKDEM santrallerinde gelir YEKDEM fiyatından oluştuğu için verilmedi). Plan farkı: " +
+        "saatlik |gerçekleşen − plan| toplamının gerçekleşen üretime oranı.",
+      { x: 0.7, y: Math.max(tableBottom + 0.55, 6.3), w: 11.9, h: 0.6, fontSize: 9, color: C.sub, valign: "top" }
     );
     footer(s, r, page);
   }
@@ -400,12 +448,22 @@ export async function exportPlantReportPptx(r: PlantReportData, opts: { prepared
     const items: Array<{ title: string; value: string; body: string }> = [];
     if (r.dsg) {
       items.push({
-        title: "Dengeden sorumlu grupta netleşme",
+        title: "Başka şirketlerle dengeden sorumlu grupta netleşme",
         value: r.dsg.benefitTl > 0 ? `${formatTlShort(r.dsg.benefitTl)} · %${nf(r.dsg.benefitPct, 0)}` : "Belirgin fayda yok",
         body:
-          `Santraller tek grupta olsaydı her saat fazla ve eksik üretenler birbirini dengelerdi. En az bir santralin fazla, ` +
-          `bir diğerinin eksik ürettiği saatlerin oranı: %${nf(r.dsg.offsettingHourSharePct, 0)}. ` +
+          `Aynı şirketin santralleri zaten birlikte uzlaştırılıyor; bu tutar yalnızca farklı şirketler arasındaki ek netleşmedir. ` +
+          `Bir şirketin fazla, diğerinin eksik ürettiği saatlerin oranı: %${nf(r.dsg.offsettingHourSharePct, 0)}. ` +
           "Varsayım: grubun dengesizliği saatlik net toplam üzerinden fiyatlanır; grup içi paylaşım ayrıca kararlaştırılır.",
+      });
+    }
+    if (!r.dsg && r.settlement.companies.length === 1 && r.plants.length > 1) {
+      items.push({
+        title: "Portföy içi netleşme",
+        value: `${formatTlShort(r.settlement.sameCompanyNettingTl)} (zaten gerçekleşiyor)`,
+        body:
+          "Santrallerin hepsi aynı şirkette olduğu için birbirini dengeleme faydası uzlaştırmada zaten alınıyor ve taban maliyete " +
+          "dahildir. Ek fayda ancak başka şirketlerin santralleriyle (ters yönde sapan, farklı teknoloji veya bölge) dengeden " +
+          "sorumlu grup kurularak sağlanabilir; bu raporun verisiyle hesaplanamaz.",
       });
     }
     if (r.intraday) {
@@ -415,7 +473,8 @@ export async function exportPlantReportPptx(r: PlantReportData, opts: { prepared
         body:
           `Her saat, 1 saat önce görülen tahmin hatasının bir kısmı gün içi piyasada kapatılır; kapatılan oran önceki 4 aydan ` +
           `öğrenilir ve sonraki ayda test edilir (${monthLabel(r.intraday.firstTestMonth)} – ${monthLabel(r.intraday.lastTestMonth)}, ${r.intraday.testMonths} ay). ` +
-          "İşlem fiyatı gerçek eşleşme fiyatlarından, piyasanın zor olduğu saatlerde daha kötü alınır.",
+          "İşlem fiyatı gerçek eşleşme fiyatlarından, piyasanın zor olduğu saatlerde daha kötü alınır. Test santral bazında yapıldı; " +
+          "tutar, bulunan oranın şirket bazındaki maliyete uygulanmasıyla hesaplanan yaklaşık değerdir.",
       });
     }
     if (items.length === 0) {
@@ -449,7 +508,16 @@ export async function exportPlantReportPptx(r: PlantReportData, opts: { prepared
         "(gün öncesi satış + dengesizlik tutarı) arasındaki fark.",
       "Santralin gün içi piyasa işlemleri ve ikili anlaşmaları açık veride yok. Gün içinde kapatılan sapmalar varsa " +
         "gerçek maliyet bu rapordakinden düşüktür.",
-      "Santral zaten bir dengeden sorumlu grubun üyesiyse grup içi netleşme ve paylaşım bu rapora yansımaz.",
+      "Uzlaştırma şirket bazındadır: aynı şirketin santralleri saat saat birlikte netleştirildi. Santrallerin sahibi EPİAŞ " +
+        "katılımcı kayıtlarından alındı" +
+        (r.settlement.unknownOwnerCount > 0 ? `; sahibi bulunamayan ${r.settlement.unknownOwnerCount} santral ayrı şirket sayıldı.` : ".") +
+        " Şirket zaten bir dengeden sorumlu grubun üyesiyse grup içi netleşme ve paylaşım bu rapora yansımaz.",
+      ...(r.yekdem
+        ? [
+            "YEKDEM'deki santrallerin geliri PTF'den değil YEKDEM fiyatından oluşur; bu santraller için gelir oranı verilmedi. " +
+              "YEKDEM döneminde dengesizliğin santrale mi YEKDEM portföyüne mi yansıdığı mevzuattan ayrıca doğrulanmalıdır.",
+          ]
+        : []),
       "SENARYO etiketli tutarlar varsayıma dayanır ve kesin tasarruf taahhüdü değildir.",
     ];
     s.addText(

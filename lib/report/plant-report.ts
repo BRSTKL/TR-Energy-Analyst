@@ -5,12 +5,16 @@
  *   - KESİN HESAP: veriden doğrudan çıkan tutarlar (geçmiş maliyet, 2026 katsayılarıyla aynı üretimin maliyeti)
  *   - SENARYO: bir davranış varsayımına dayanan tutarlar (DSG'de netleşme, gün içi pozisyon güncelleme)
  * Sunum katmanı (lib/export/plant-report-pptx.ts) bu ayrımı her slaytta etiketler.
+ *
+ * Uzlaştırma şirket bazındadır: her piyasa katılımcısı kendi dengesinden sorumludur, aynı şirketin santralleri her
+ * saat zaten birlikte netleşir. Bu yüzden taban maliyet santraller şirketlerine göre gruplanıp saatlik net
+ * dengesizlik üzerinden hesaplanır; DSG senaryosu yalnızca farklı şirketler arasındaki netleşmeyi sayar.
+ * Sahibi bilinmeyen santral kendi başına bir şirket sayılır.
  */
 
 import { processHourlyRecord } from "@/lib/calculations/engine";
 import { aggregateMonthly } from "@/lib/calculations/aggregate";
 import { HourlyResult, ImbalancePricingProfile, REGULATORY_IMBALANCE_REGIMES } from "@/lib/calculations/types";
-import { analyzePortfolioNetting } from "@/lib/analysis/portfolio-netting";
 import { combineBacktests, persistenceStrategy, runBacktest } from "@/lib/analysis/backtest";
 import type { ProjectHourly } from "@/lib/services/project-hourly";
 
@@ -18,13 +22,17 @@ export interface ReportPlantRow {
   name: string;
   type: string;
   capacityMw: number;
+  organizationName: string | null;
+  /** Veri döneminde YEKDEM'de (null: bilinmiyor) */
+  yekdem: boolean | null;
   actualMwh: number;
   revenueTl: number;
+  /** Santral tek başına uzlaştırılsaydı dengesizlik maliyeti */
   imbalanceCostTl: number;
   /** TL / MWh (gerçekleşen üretim başına) */
   unitCostTl: number;
-  /** Dengesizlik maliyetinin gelire oranı (%) */
-  costShareOfRevenuePct: number;
+  /** Dengesizlik maliyetinin gelire oranı (%); YEKDEM santralinde gelir PTF'den oluşmadığı için null */
+  costShareOfRevenuePct: number | null;
   /** Σ|gerçekleşen − plan| / Σ gerçekleşen (%) */
   deviationPct: number;
 }
@@ -36,17 +44,50 @@ export interface ReportMonth {
   unitCostTl: number;
 }
 
+export interface ReportCompany {
+  name: string | null;
+  plantNames: string[];
+}
+
 export interface PlantReportData {
   projectName: string;
   period: { start: string; end: string; months: number; hours: number };
   plants: ReportPlantRow[];
-  totals: Omit<ReportPlantRow, "name" | "type"> & { plantCount: number };
+  /**
+   * Portföy toplamı, şirket bazında uzlaştırmayla (aynı şirketin santralleri netleşmiş). imbalanceCostTl ana rakamdır.
+   * costShareOfRevenuePct: portföyde YEKDEM santrali varsa null.
+   */
+  totals: Omit<ReportPlantRow, "name" | "type" | "organizationName" | "yekdem"> & { plantCount: number };
+  settlement: {
+    /** Santraller tek tek uzlaştırılsaydı */
+    plantLevelCostTl: number;
+    /** Şirket bazında (gerçek uzlaştırmaya en yakın) */
+    companyLevelCostTl: number;
+    /** Aynı şirketin santralleri arasında zaten gerçekleşen netleşme */
+    sameCompanyNettingTl: number;
+    companies: ReportCompany[];
+    /** Sahibi bilinmeyen santral sayısı (her biri ayrı şirket sayıldı) */
+    unknownOwnerCount: number;
+  };
+  /** Veri döneminde YEKDEM'de olan santraller (yoksa null) */
+  yekdem: { plantNames: string[] } | null;
+  /** Şirket bazında aylık maliyet */
   monthly: ReportMonth[];
-  /** KESİN HESAP: aynı saatlik veri 2026 katsayılarıyla fiyatlansaydı. Veri zaten tamamen 2026+ ise null. */
+  /** KESİN HESAP: aynı saatlik veri 2026 katsayılarıyla fiyatlansaydı (şirket bazında). Veri zaten tamamen 2026+ ise null. */
   coefficients2026: { baseCostTl: number; cost2026Tl: number; deltaTl: number; deltaPct: number } | null;
-  /** SENARYO: santraller tek dengeden sorumlu grupta saatlik netleşseydi (en az 2 santral) */
-  dsg: { standaloneCostTl: number; nettedCostTl: number; benefitTl: number; benefitPct: number; offsettingHourSharePct: number } | null;
-  /** SENARYO: 1 saat önce görülen hatanın bir kısmı GİP'te kapatılsaydı (geçmiş veriyle, önceki aylardan öğrenerek test) */
+  /** SENARYO: farklı şirketlerdeki santraller tek dengeden sorumlu grupta netleşseydi (en az 2 şirket) */
+  dsg: {
+    companyLevelCostTl: number;
+    nettedCostTl: number;
+    benefitTl: number;
+    benefitPct: number;
+    /** Farklı şirketlerden en az birinin fazla, birinin eksik olduğu saatlerin oranı (%) */
+    offsettingHourSharePct: number;
+  } | null;
+  /**
+   * SENARYO: 1 saat önce görülen hatanın bir kısmı GİP'te kapatılsaydı (santral bazında, önceki aylardan öğrenerek
+   * test). savingTl, test edilen oranın şirket bazındaki maliyete uygulanmasıyla bulunan yaklaşık tutardır.
+   */
   intraday: { savingTl: number; savingPct: number; testMonths: number; firstTestMonth: string; lastTestMonth: string } | null;
 }
 
@@ -56,35 +97,54 @@ const REGIME_2026_START = Date.parse(`${REGULATORY_IMBALANCE_REGIMES[REGULATORY_
 const pct = (a: number, b: number) => (b === 0 ? 0 : (a / b) * 100);
 const iso = (t: Date | string | number) => new Date(t).toISOString().slice(0, 10);
 
-/** Aynı saatlik sonucu başka katsayılarla yeniden fiyatlar */
-function reprice(h: HourlyResult, profile: ImbalancePricingProfile): HourlyResult {
-  return processHourlyRecord(
-    { timestamp: h.timestamp, actualMwh: h.actualMwh, forecastMwh: h.forecastMwh },
-    { timestamp: h.timestamp, ptf: h.ptf, smf: h.smf, systemDirection: h.systemDirection },
-    profile
+/**
+ * Bir grubun (şirketin) santrallerini saat saat toplayıp net dengesizlik üzerinden fiyatlar: her saat için tek bir
+ * sonuç. Plan ve gerçekleşen toplandığından gelir, üretim ve maliyet grup düzeyindedir.
+ */
+function settleGroup(plants: HourlyResult[][], profile: ImbalancePricingProfile): HourlyResult[] {
+  const buckets = new Map<number, { sample: HourlyResult; forecastMwh: number; actualMwh: number }>();
+  for (const hourly of plants) {
+    for (const h of hourly) {
+      const t = new Date(h.timestamp).getTime();
+      const b = buckets.get(t) ?? { sample: h, forecastMwh: 0, actualMwh: 0 };
+      b.forecastMwh += h.forecastMwh;
+      b.actualMwh += h.actualMwh;
+      buckets.set(t, b);
+    }
+  }
+  return Array.from(buckets.values()).map((b) =>
+    processHourlyRecord(
+      { timestamp: b.sample.timestamp, actualMwh: b.actualMwh, forecastMwh: b.forecastMwh },
+      { timestamp: b.sample.timestamp, ptf: b.sample.ptf, smf: b.sample.smf, systemDirection: b.sample.systemDirection },
+      profile
+    )
   );
 }
 
-function plantRow(name: string, type: string, capacityMw: number, hourly: HourlyResult[]): ReportPlantRow {
+const sumCost = (hours: HourlyResult[]) => hours.reduce((s, h) => s + h.imbalanceCost, 0);
+
+function plantRow(p: ProjectHourly["plants"][number]): ReportPlantRow {
   let actual = 0;
   let revenue = 0;
   let cost = 0;
   let absDev = 0;
-  for (const h of hourly) {
+  for (const h of p.hourly) {
     actual += h.actualMwh;
     revenue += h.totalRevenue;
     cost += h.imbalanceCost;
     absDev += Math.abs(h.actualMwh - h.forecastMwh);
   }
   return {
-    name,
-    type,
-    capacityMw,
+    name: p.plantName,
+    type: p.plantType,
+    capacityMw: p.capacityMw,
+    organizationName: p.organizationName,
+    yekdem: p.yekdem,
     actualMwh: actual,
     revenueTl: revenue,
     imbalanceCostTl: cost,
     unitCostTl: actual > 0 ? cost / actual : 0,
-    costShareOfRevenuePct: pct(cost, revenue),
+    costShareOfRevenuePct: p.yekdem ? null : pct(cost, revenue),
     deviationPct: pct(absDev, actual),
   };
 }
@@ -95,21 +155,44 @@ export function buildPlantReport(data: ProjectHourly): PlantReportData {
   if (all.length === 0) throw new Error("Projede piyasa fiyatı eşleşmiş saatlik veri yok; rapor üretilemez.");
 
   // Çok santralli projede yüz binlerce saat olabilir: Math.min(...dizi) yerine döngü
-  const times = all.map((h) => new Date(h.timestamp).getTime());
   let start = Infinity;
   let end = -Infinity;
-  for (const t of times) {
+  const hourSet = new Set<number>();
+  for (const h of all) {
+    const t = new Date(h.timestamp).getTime();
+    hourSet.add(t);
     if (t < start) start = t;
     if (t > end) end = t;
   }
 
-  const plants = withData
-    .map((p) => plantRow(p.plantName, p.plantType, p.capacityMw, p.hourly))
-    .sort((a, b) => b.imbalanceCostTl - a.imbalanceCostTl);
-  const total = plantRow("Portföy", "", withData.reduce((s, p) => s + p.capacityMw, 0), all);
+  const plants = withData.map(plantRow).sort((a, b) => b.imbalanceCostTl - a.imbalanceCostTl);
 
-  // aggregateMonthly plantId taşıyan saatleri santral bazında gruplar: portföy ayı için santral bilgisi çıkarılır
-  const monthly = aggregateMonthly(all.map((h) => ({ ...h, plantId: undefined, plantName: undefined }))).map((m) => ({
+  // Şirketlere göre gruplama (sahibi bilinmeyen santral kendi grubudur)
+  const groups = new Map<string, { name: string | null; plants: typeof withData }>();
+  for (const p of withData) {
+    const key = p.organizationId !== null ? `org:${p.organizationId}` : `plant:${p.plantId}`;
+    const g = groups.get(key) ?? { name: p.organizationName, plants: [] };
+    g.plants.push(p);
+    groups.set(key, g);
+  }
+  const groupList = Array.from(groups.values());
+  const settle = (profile: ImbalancePricingProfile) => groupList.flatMap((g) => settleGroup(g.plants.map((p) => p.hourly), profile));
+
+  const companyHours = settle(data.profile);
+  const companyCost = sumCost(companyHours);
+  const plantLevelCost = sumCost(all);
+
+  let actual = 0;
+  let revenue = 0;
+  let absDev = 0;
+  for (const h of all) absDev += Math.abs(h.actualMwh - h.forecastMwh);
+  for (const h of companyHours) {
+    actual += h.actualMwh;
+    revenue += h.totalRevenue;
+  }
+  const hasYekdem = withData.some((p) => p.yekdem);
+
+  const monthly = aggregateMonthly(companyHours).map((m) => ({
     month: m.yearMonth,
     actualMwh: m.totalActualMwh,
     imbalanceCostTl: m.totalImbalanceCost,
@@ -119,42 +202,50 @@ export function buildPlantReport(data: ProjectHourly): PlantReportData {
   // 2026 katsayıları: yalnızca 2026 öncesi saat varsa anlamlı (aksi halde maliyet zaten bu kurallarla)
   let coefficients2026: PlantReportData["coefficients2026"] = null;
   if (start < REGIME_2026_START) {
-    const profile2026: ImbalancePricingProfile = { mode: "CUSTOM", ...COEF_2026 };
-    const cost2026 = all.reduce((s, h) => s + reprice(h, profile2026).imbalanceCost, 0);
+    const cost2026 = sumCost(settle({ mode: "CUSTOM", ...COEF_2026 }));
     coefficients2026 = {
-      baseCostTl: total.imbalanceCostTl,
+      baseCostTl: companyCost,
       cost2026Tl: cost2026,
-      deltaTl: cost2026 - total.imbalanceCostTl,
-      deltaPct: pct(cost2026 - total.imbalanceCostTl, total.imbalanceCostTl),
+      deltaTl: cost2026 - companyCost,
+      deltaPct: pct(cost2026 - companyCost, companyCost),
     };
   }
 
+  // DSG: farklı şirketler tek grupta. Aynı şirket içi netleşme zaten tabanda olduğundan fayda yalnızca şirketler arası
   let dsg: PlantReportData["dsg"] = null;
-  if (withData.length >= 2) {
-    const netting = analyzePortfolioNetting(
-      withData.map((p) => ({ plantId: p.plantId, plantName: p.plantName, plantType: p.plantType, hourly: p.hourly })),
-      data.profile
-    );
-    const g = netting.portfolio;
-    if (g) {
-      dsg = {
-        standaloneCostTl: g.standaloneCost,
-        nettedCostTl: g.nettedCost,
-        benefitTl: g.benefitTl,
-        benefitPct: g.benefitRatio * 100,
-        offsettingHourSharePct: g.offsettingHourShare * 100,
-      };
+  if (groupList.length >= 2) {
+    const nettedCost = sumCost(settleGroup(withData.map((p) => p.hourly), data.profile));
+    // Şirketlerin saatlik net sapmaları ters yönde mi
+    const groupDeltas = groupList.map((g) => {
+      const m = new Map<number, number>();
+      for (const p of g.plants) for (const h of p.hourly) {
+        const t = new Date(h.timestamp).getTime();
+        m.set(t, (m.get(t) ?? 0) + h.actualMwh - h.forecastMwh);
+      }
+      return m;
+    });
+    let offsetting = 0;
+    for (const t of hourSet) {
+      const ds = groupDeltas.map((m) => m.get(t) ?? 0);
+      if (ds.some((d) => d > 0) && ds.some((d) => d < 0)) offsetting++;
     }
+    dsg = {
+      companyLevelCostTl: companyCost,
+      nettedCostTl: nettedCost,
+      benefitTl: companyCost - nettedCost,
+      benefitPct: pct(companyCost - nettedCost, companyCost),
+      offsettingHourSharePct: pct(offsetting, hourSet.size),
+    };
   }
 
-  // Gün içi: önceki 4 aydan öğrenilen oranla, 1 saat önce görülen hatanın kapatılması (santral bazında, sonra toplam)
+  // Gün içi: önceki 4 aydan öğrenilen oranla, 1 saat önce görülen hatanın kapatılması (santral bazında test)
   let intraday: PlantReportData["intraday"] = null;
   const backtests = withData.map((p) => runBacktest(p.hourly, data.profile, { strategies: [persistenceStrategy(1)] }));
   const combined = combineBacktests(backtests.filter((b) => b.testMonths.length > 0));
   const s = combined?.strategies[0];
   if (combined && s && combined.testMonths.length > 0) {
     intraday = {
-      savingTl: s.outOfSampleSavingTl,
+      savingTl: (s.outOfSampleSavingPercent / 100) * companyCost,
       savingPct: s.outOfSampleSavingPercent,
       testMonths: combined.testMonths.length,
       firstTestMonth: combined.testMonths[0],
@@ -164,9 +255,26 @@ export function buildPlantReport(data: ProjectHourly): PlantReportData {
 
   return {
     projectName: data.project.name,
-    period: { start: iso(start), end: iso(end), months: monthly.length, hours: new Set(times).size },
+    period: { start: iso(start), end: iso(end), months: monthly.length, hours: hourSet.size },
     plants,
-    totals: { ...total, plantCount: withData.length },
+    totals: {
+      capacityMw: withData.reduce((sum, p) => sum + p.capacityMw, 0),
+      actualMwh: actual,
+      revenueTl: revenue,
+      imbalanceCostTl: companyCost,
+      unitCostTl: actual > 0 ? companyCost / actual : 0,
+      costShareOfRevenuePct: hasYekdem ? null : pct(companyCost, revenue),
+      deviationPct: pct(absDev, actual),
+      plantCount: withData.length,
+    },
+    settlement: {
+      plantLevelCostTl: plantLevelCost,
+      companyLevelCostTl: companyCost,
+      sameCompanyNettingTl: plantLevelCost - companyCost,
+      companies: groupList.map((g) => ({ name: g.name, plantNames: g.plants.map((p) => p.plantName) })),
+      unknownOwnerCount: withData.filter((p) => p.organizationId === null).length,
+    },
+    yekdem: hasYekdem ? { plantNames: withData.filter((p) => p.yekdem).map((p) => p.plantName) } : null,
     monthly,
     coefficients2026,
     dsg,

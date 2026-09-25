@@ -13,6 +13,8 @@
  * Cevap biçimi beklenenden farklıysa plant-data.ts okunamayan kayıtları sayar ve kontroller uyarı gösterir.
  */
 
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import { epiasRequest, formatToEpiasIso } from "@/lib/services/epias-service";
 import type { EpiasOrganization, EpiasPowerPlant, KgupVersion } from "@/lib/epias-plant/plant-data";
 
@@ -121,4 +123,148 @@ export async function fetchUevm(powerPlantId: number, startDay: string, endDay: 
     startDate: formatToEpiasIso(startDay, false),
     endDate: formatToEpiasIso(endDay, true),
   });
+}
+
+// ------------------------------------------------------------------------------------------------
+// Santralin sahibi (şirket) ve YEKDEM durumu
+// ------------------------------------------------------------------------------------------------
+
+export interface PlantOwner {
+  organizationId: number;
+  organizationName: string;
+}
+
+const INDEX_TTL_MS = 30 * 24 * 3_600_000;
+const indexFile = (year: number) => path.join(process.cwd(), ".cache", "epias", `plant-owners-${year}.json`);
+
+interface OwnerIndexFile {
+  /** [santral kimliği, sahip] */
+  entries: Array<[number, PlantOwner]>;
+  /** Santral listesi alınabilen şirketler */
+  scanned: number[];
+  /** Taranamayan şirket sayısı (0 ise dizin tam) */
+  pending: number;
+}
+
+export interface PlantOwnerIndex {
+  owners: Map<number, PlantOwner>;
+  /** Taranamayan şirket sayısı: 0 değilse bir santralin sahibi henüz bulunmamış olabilir */
+  pending: number;
+}
+
+const ownerIndexes = new Map<number, Promise<PlantOwnerIndex>>();
+
+/**
+ * Santral kimliği → şirket dizini. EPİAŞ'ta santralden şirkete giden bir servis yok; bu yüzden yıl içinde tanımlı
+ * tüm şirketlerin santral listesi (power-plant-list-by-organization-id) taranır ve diske yazılır
+ * (.cache/epias, 30 gün geçerli). Tarama kaldığı yerden devam eder: bağlantı koparsa yalnızca taranamayan şirketler
+ * bir sonraki çağrıda yeniden denenir. EPİAŞ yoğun paralel isteği reddettiği için az paralellikle, bekleyerek çalışır.
+ */
+export function plantOwnerIndex(year: number, forceRefresh = false): Promise<PlantOwnerIndex> {
+  const cached = ownerIndexes.get(year);
+  if (cached && !forceRefresh) return cached;
+  const build = (async (): Promise<PlantOwnerIndex> => {
+    const file = indexFile(year);
+    let saved: OwnerIndexFile | null = null;
+    if (!forceRefresh) {
+      try {
+        const stat = await fs.stat(file);
+        if (Date.now() - stat.mtimeMs < INDEX_TTL_MS) saved = JSON.parse(await fs.readFile(file, "utf8"));
+      } catch {
+        // dosya yok veya okunamadı: baştan taranır
+      }
+    }
+    if (saved && saved.pending === 0) return { owners: new Map(saved.entries), pending: 0 };
+
+    const start = `${year}-01-01`;
+    const end = `${year}-12-31`;
+    const orgs = await listOrganizations(start, end);
+    const owners = new Map<number, PlantOwner>(saved?.entries ?? []);
+    const scanned = new Set<number>(saved?.scanned ?? []);
+    const todo = orgs.filter((o) => !scanned.has(o.id));
+    let next = 0;
+    const worker = async () => {
+      while (next < todo.length) {
+        const org = todo[next++];
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            for (const p of await listPlantsByOrganization(org.id, start, end)) {
+              owners.set(p.id, { organizationId: org.id, organizationName: org.name });
+            }
+            scanned.add(org.id);
+            break;
+          } catch {
+            await new Promise((r) => setTimeout(r, 1500 * attempt));
+          }
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: 2 }, worker));
+
+    const pending = orgs.filter((o) => !scanned.has(o.id)).length;
+    const out: OwnerIndexFile = { entries: Array.from(owners.entries()), scanned: Array.from(scanned), pending };
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(file, JSON.stringify(out));
+    return { owners, pending };
+  })();
+  ownerIndexes.set(year, build);
+  // Eksik kalan dizin önbellekte tutulmaz: sonraki çağrı kalan şirketleri tarar
+  build.then((r) => r.pending > 0 && ownerIndexes.delete(year)).catch(() => ownerIndexes.delete(year));
+  return build;
+}
+
+/**
+ * Yıl içinde YEKDEM'den yararlanan santraller (renewables/data/licensed-powerplant-list, period = yılın ilk günü).
+ * Canlı doğrulandı: 2025 için 768 santral; KORU RES ve MUT RES listede, BALABANLI RES yok.
+ */
+export async function listYekdemPlantIds(year: number): Promise<Set<number>> {
+  // Bu servis diğerlerinden farklı olarak { items } değil doğrudan dizi döndürür
+  const json = await epiasRequest<any[] | { items?: any[] }>("/renewables/data/licensed-powerplant-list", {
+    period: formatToEpiasIso(`${year}-01-01`, false),
+  });
+  const items = Array.isArray(json) ? json : (json.items ?? []);
+  const ids = new Set(items.map((p) => Number(p.powerPlantId)).filter((n) => Number.isFinite(n)));
+  // Boş liste "hiçbiri YEKDEM'de değil" demek değildir (ör. biçim değişikliği, dönem henüz yayımlanmamış): bilinmiyor
+  if (ids.size === 0) throw new Error("EPİAŞ YEKDEM santral listesi boş döndü; YEKDEM durumu belirlenemedi.");
+  return ids;
+}
+
+export interface PlantMeta {
+  epiasPlantId: number;
+  organizationId: number | null;
+  organizationName: string | null;
+  yekdem: boolean | null;
+}
+
+/**
+ * Santrallerin sahibi ve YEKDEM durumu. Biri alınamazsa (bağlantı) ilgili alanlar null döner; kayıt yine yapılır.
+ */
+export async function resolvePlantMeta(ids: number[], year: number): Promise<{ items: PlantMeta[]; errors: string[] }> {
+  const errors: string[] = [];
+  const [owners, yekdem] = await Promise.all([
+    plantOwnerIndex(year)
+      .then((idx) => {
+        if (idx.pending > 0 && ids.some((id) => !idx.owners.has(id))) {
+          errors.push(`${idx.pending} şirketin santral listesi henüz alınamadı; bazı santrallerin sahibi bulunamamış olabilir. Tekrar denendiğinde kalan şirketler taranır.`);
+        }
+        return idx.owners;
+      })
+      .catch((e) => {
+        errors.push(e instanceof Error ? e.message : "Şirket bilgisi alınamadı.");
+        return null;
+      }),
+    listYekdemPlantIds(year).catch((e) => {
+      errors.push(e instanceof Error ? e.message : "YEKDEM listesi alınamadı.");
+      return null;
+    }),
+  ]);
+  return {
+    items: ids.map((id) => ({
+      epiasPlantId: id,
+      organizationId: owners?.get(id)?.organizationId ?? null,
+      organizationName: owners?.get(id)?.organizationName ?? null,
+      yekdem: yekdem ? yekdem.has(id) : null,
+    })),
+    errors,
+  };
 }

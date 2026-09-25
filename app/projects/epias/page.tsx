@@ -28,6 +28,13 @@ interface Uevcb {
   eic?: string | null;
 }
 
+interface PlantMeta {
+  epiasPlantId: number;
+  organizationId: number | null;
+  organizationName: string | null;
+  yekdem: boolean | null;
+}
+
 interface ProjectOption {
   id: string;
   name: string;
@@ -96,6 +103,9 @@ function EpiasPlantImport() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [addedNotice, setAddedNotice] = useState<{ projectId: string } | null>(null);
+  /** Santrallerin sahibi (şirket) ve YEKDEM durumu: dengesizlik şirket bazında uzlaştırılır */
+  const [meta, setMeta] = useState<Record<number, PlantMeta>>({});
+  const [metaError, setMetaError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/projects")
@@ -194,8 +204,26 @@ function EpiasPlantImport() {
       if (jobs[p.id]?.key === fetchKey && !jobs[p.id].error) continue;
       await fetchPlant(p);
     }
+    await loadMeta(selected.map((p) => p.id));
     setProgress(null);
     setFetching(false);
+  };
+
+  /** Sahip şirket ve YEKDEM durumu; ilk seferde EPİAŞ'taki tüm şirketler taranır (birkaç dakika sürebilir) */
+  const loadMeta = async (ids: number[]) => {
+    const missing = ids.filter((id) => !meta[id]);
+    if (missing.length === 0) return;
+    setProgress("Santrallerin sahibi ve YEKDEM durumu (ilk seferde birkaç dakika sürebilir)");
+    try {
+      const d = await postJson<{ items: PlantMeta[]; errors: string[] }>("/api/epias/plants/meta", {
+        ids: missing,
+        year: Number(startDay.slice(0, 4)),
+      });
+      setMeta((prev) => ({ ...prev, ...Object.fromEntries(d.items.map((m) => [m.epiasPlantId, m])) }));
+      setMetaError(d.errors.length ? d.errors.join(" ") : null);
+    } catch (e) {
+      setMetaError(e instanceof Error ? e.message : "Santral sahibi bulunamadı.");
+    }
   };
 
   const retryFailed = async (plant: EpiasPowerPlant) => {
@@ -272,6 +300,7 @@ function EpiasPlantImport() {
             type: f.type,
             capacityMw: Number(f.capacity.replace(",", ".")),
             source: { powerPlantId: p.id, uevcbIds: j.uevcbs.map((u) => u.id), kgupVersion: j.version },
+            meta: meta[p.id] ?? null,
             rows: merged[p.id].series.rows.map((r) => [r.timestamp.getTime(), r.forecastMwh, r.actualMwh]),
           };
         }),
@@ -494,6 +523,7 @@ function EpiasPlantImport() {
                   job={jobs[p.id]}
                   merged={merged[p.id]}
                   form={forms[p.id]}
+                  meta={meta[p.id]}
                   onForm={(patch) => setForm(p.id, patch)}
                   onRetry={() => retryFailed(p)}
                   onRemove={() => setSelected((prev) => prev.filter((s) => s.id !== p.id))}
@@ -501,6 +531,12 @@ function EpiasPlantImport() {
                 />
               ))}
 
+              {metaError && (
+                <p className="flex items-start gap-1.5 text-xs text-amber-800">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Santral sahibi / YEKDEM bilgisi alınamadı: {metaError} Kayıt
+                  yine yapılır; bilgiyi sonradan proje sayfasından güncelleyebilirsiniz.
+                </p>
+              )}
               {createError && (
                 <div className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {createError}
@@ -567,6 +603,7 @@ function PlantReview({
   job,
   merged,
   form,
+  meta,
   onForm,
   onRetry,
   onRemove,
@@ -577,6 +614,7 @@ function PlantReview({
   job?: PlantJob;
   merged?: ReturnType<typeof buildMerged>;
   form?: PlantForm;
+  meta?: PlantMeta;
   onForm: (patch: Partial<PlantForm>) => void;
   onRetry: () => void;
   onRemove: () => void;
@@ -596,6 +634,7 @@ function PlantReview({
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-slate-900">{plantDisplayName(plant)}</span>
           <span className={`rounded px-1.5 py-0.5 text-2xs font-semibold ${badge[1]}`}>{badge[0]}</span>
+          {meta?.yekdem && <span className="rounded bg-violet-100 px-1.5 py-0.5 text-2xs font-semibold text-violet-800">YEKDEM</span>}
         </div>
         <button
           type="button"
@@ -608,6 +647,7 @@ function PlantReview({
         </button>
       </div>
 
+      {meta?.organizationName && <p className="mt-1 text-2xs text-slate-500">Sahibi: {meta.organizationName}</p>}
       {job?.error && (
         <p className="mt-2 flex items-start gap-1.5 text-xs text-rose-700">
           <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {job.error}

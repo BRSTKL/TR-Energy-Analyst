@@ -5,7 +5,18 @@ import { HourlyResult, ImbalancePricingProfile, SystemDirection, toPricingProfil
 export interface ProjectHourly {
   project: { id: string; name: string };
   profile: ImbalancePricingProfile;
-  plants: Array<{ plantId: string; plantName: string; plantType: string; capacityMw: number; hourly: HourlyResult[] }>;
+  plants: Array<{
+    plantId: string;
+    plantName: string;
+    plantType: string;
+    capacityMw: number;
+    /** Sahip şirket (EPİAŞ): dengesizlik şirket bazında uzlaştırıldığından aynı şirketin santralleri birlikte netleşir */
+    organizationId: number | null;
+    organizationName: string | null;
+    /** Veri döneminde YEKDEM'de mi (bilinmiyorsa null) */
+    yekdem: boolean | null;
+    hourly: HourlyResult[];
+  }>;
 }
 
 /**
@@ -34,6 +45,9 @@ export async function loadProjectHourly(projectId: string): Promise<ProjectHourl
       plantName: plant.name,
       plantType: plant.type,
       capacityMw: plant.capacityMw,
+      organizationId: plant.organizationId,
+      organizationName: plant.organizationName,
+      yekdem: plant.yekdem,
       hourly: plant.records.flatMap((r): HourlyResult[] =>
         r.marketData
           ? [

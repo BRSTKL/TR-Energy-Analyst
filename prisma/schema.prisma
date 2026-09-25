@@ -30,6 +30,13 @@ model PowerPlant {
   name        String
   type        String             // "RES" | "HES" | "GES"
   capacityMw  Float
+  /// EPİAŞ santral kimliği (UEVM santral listesi); EPİAŞ'tan eklenen santrallerde dolu
+  epiasPlantId     Int?
+  /// Santralin sahibi olan piyasa katılımcısı. Dengesizlik şirket bazında uzlaştırılır: aynı şirketin santralleri zaten netleşir
+  organizationId   Int?
+  organizationName String?
+  /// Verinin dönemi içinde YEKDEM'den yararlanıyor mu (EPİAŞ YEKDEM santral listesine göre)
+  yekdem           Boolean?
   projectId   String?
   project     Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
   records     GenerationRecord[]

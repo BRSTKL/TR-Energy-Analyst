@@ -7,10 +7,21 @@ const at = (y: number, m: number, d: number, h: number) => new Date(Date.UTC(y, 
 const hour = (t: Date, forecastMwh: number, actualMwh: number, ptf: number, smf: number, dir: SystemDirection) =>
   processHourlyRecord({ timestamp: t, forecastMwh, actualMwh }, { timestamp: t, ptf, smf, systemDirection: dir }, DEFAULT_IMBALANCE_PROFILE);
 
-const project = (plants: Array<{ name: string; type: string; hourly: ReturnType<typeof hour>[] }>) => ({
+const project = (
+  plants: Array<{ name: string; type: string; hourly: ReturnType<typeof hour>[]; org?: number; yekdem?: boolean }>
+) => ({
   project: { id: "p", name: "Deneme" },
   profile: DEFAULT_IMBALANCE_PROFILE,
-  plants: plants.map((p, i) => ({ plantId: `id${i}`, plantName: p.name, plantType: p.type, capacityMw: 10, hourly: p.hourly })),
+  plants: plants.map((p, i) => ({
+    plantId: `id${i}`,
+    plantName: p.name,
+    plantType: p.type,
+    capacityMw: 10,
+    organizationId: p.org ?? null,
+    organizationName: p.org ? `Şirket ${p.org}` : null,
+    yekdem: p.yekdem ?? null,
+    hourly: p.hourly,
+  })),
 });
 
 describe("Santral raporu verisi", () => {
@@ -43,6 +54,43 @@ describe("Santral raporu verisi", () => {
     expect(r.dsg!.benefitTl).toBeGreaterThan(0);
     // Tek saatlik veride gün içi testi için önceki aylar yok
     expect(r.intraday).toBeNull();
+  });
+
+  it("aynı şirketin santralleri taban maliyette netleşir; DSG faydası yalnızca şirketler arasıdır", () => {
+    const t = at(2025, 5, 1, 12);
+    const a = hour(t, 10, 12, 2000, 1800, "SURPLUS");
+    const b = hour(t, 10, 8, 2000, 2400, "DEFICIT");
+    const same = buildPlantReport(project([
+      { name: "A", type: "RES", hourly: [a], org: 1 },
+      { name: "B", type: "HES", hourly: [b], org: 1 },
+    ]));
+    // Aynı şirket: +2 ve −2 aynı saatte netleşir, uzlaştırmada maliyet yok
+    expect(same.settlement.plantLevelCostTl).toBeCloseTo(1452, 6);
+    expect(same.totals.imbalanceCostTl).toBeCloseTo(0, 6);
+    expect(same.settlement.sameCompanyNettingTl).toBeCloseTo(1452, 6);
+    expect(same.settlement.companies).toHaveLength(1);
+    // Tek şirket: DSG ile ek fayda yok
+    expect(same.dsg).toBeNull();
+
+    const two = buildPlantReport(project([
+      { name: "A", type: "RES", hourly: [a], org: 1 },
+      { name: "B", type: "HES", hourly: [b], org: 2 },
+    ]));
+    expect(two.totals.imbalanceCostTl).toBeCloseTo(1452, 6);
+    expect(two.dsg!.benefitTl).toBeCloseTo(1452, 6);
+    expect(two.dsg!.offsettingHourSharePct).toBe(100);
+  });
+
+  it("YEKDEM santralinde gelir oranı verilmez ve santral işaretlenir", () => {
+    const t = at(2025, 5, 1, 12);
+    const r = buildPlantReport(project([
+      { name: "A", type: "RES", hourly: [hour(t, 10, 12, 2000, 1800, "SURPLUS")], yekdem: true },
+      { name: "B", type: "RES", hourly: [hour(t, 10, 11, 2000, 1800, "SURPLUS")], yekdem: false },
+    ]));
+    expect(r.yekdem).toEqual({ plantNames: ["A"] });
+    expect(r.totals.costShareOfRevenuePct).toBeNull();
+    expect(r.plants.find((p) => p.name === "A")!.costShareOfRevenuePct).toBeNull();
+    expect(r.plants.find((p) => p.name === "B")!.costShareOfRevenuePct).not.toBeNull();
   });
 
   it("veri tamamen 2026 ve sonrasındaysa katsayı karşılaştırması yapmaz; tek santralde DSG yoktur", () => {

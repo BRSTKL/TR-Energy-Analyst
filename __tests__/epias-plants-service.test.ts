@@ -10,7 +10,7 @@ vi.mock("@/lib/services/epias-service", () => ({
   formatToEpiasIso: (d: string, end: boolean) => `${d}T${end ? "23:00" : "00:00"}:00+03:00`,
 }));
 
-import { fetchKgup, fetchUevm, listUevcbsForPlant, listUevmPowerPlants } from "../lib/services/epias-plants";
+import { fetchKgup, fetchUevm, listUevcbsForPlant, listUevmPowerPlants, listYekdemPlantIds } from "../lib/services/epias-plants";
 
 describe("EPİAŞ santral servisi (sahte cevaplarla)", () => {
   beforeEach(() => {
@@ -47,5 +47,14 @@ describe("EPİAŞ santral servisi (sahte cevaplarla)", () => {
 
     responder = () => ({ items: [] });
     await expect(listUevmPowerPlants(true)).rejects.toThrow("boş");
+  });
+
+  it("YEKDEM listesini doğrudan dizi cevabından okur; boş listeyi 'bilinmiyor' sayar", async () => {
+    responder = () => [{ powerPlantId: 9083, name: "KORU RES" }, { powerPlantId: 9221, name: "MUT RES" }];
+    const ids = await listYekdemPlantIds(2025);
+    expect(Array.from(ids)).toEqual([9083, 9221]);
+    expect(calls.at(-1)).toEqual({ path: "/renewables/data/licensed-powerplant-list", body: { period: "2025-01-01T00:00:00+03:00" } });
+    responder = () => [];
+    await expect(listYekdemPlantIds(2025)).rejects.toThrow("belirlenemedi");
   });
 });

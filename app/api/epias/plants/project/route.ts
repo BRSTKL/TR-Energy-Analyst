@@ -15,6 +15,8 @@ interface PlantPayload {
   type: unknown;
   capacityMw: unknown;
   source?: { powerPlantId?: number; uevcbIds?: number[]; kgupVersion?: string };
+  /** EPİAŞ'tan bulunan sahip şirket ve YEKDEM durumu (bulunamadıysa null) */
+  meta?: { organizationId?: number | null; organizationName?: string | null; yekdem?: boolean | null };
   rows: unknown;
 }
 
@@ -67,7 +69,8 @@ export async function POST(request: Request) {
 
     // 1. Doğrulama: ad (proje ve istek içinde benzersiz), tür, güç ve saatlik veri
     const taken = new Set((target?.plants ?? []).map((p) => plantNameKey(p.name)));
-    const plants: Array<{ input: PlantInput; rows: ParsedGenerationRow[]; source: PlantPayload["source"] }> = [];
+    type EpiasFields = { epiasPlantId?: number; organizationId?: number; organizationName?: string; yekdem?: boolean };
+    const plants: Array<{ input: PlantInput & EpiasFields; rows: ParsedGenerationRow[]; source: PlantPayload["source"] }> = [];
     for (const p of payloads) {
       const v = validatePlantInput({ name: p.plantName, type: p.type, capacityMw: p.capacityMw }, taken);
       if (!v.ok) return NextResponse.json({ success: false, error: `Santral: ${v.error}.` }, { status: 400 });
@@ -76,7 +79,14 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: false, error: `${v.value.name}: yazılacak saatlik veri yok.` }, { status: 400 });
       }
       taken.add(plantNameKey(v.value.name));
-      plants.push({ input: v.value, rows, source: p.source });
+      const epias: EpiasFields = {};
+      if (Number.isInteger(p.source?.powerPlantId)) epias.epiasPlantId = p.source!.powerPlantId;
+      if (Number.isInteger(p.meta?.organizationId)) {
+        epias.organizationId = p.meta!.organizationId!;
+        epias.organizationName = String(p.meta!.organizationName ?? "");
+      }
+      if (typeof p.meta?.yekdem === "boolean") epias.yekdem = p.meta.yekdem;
+      plants.push({ input: { ...v.value, ...epias }, rows, source: p.source });
     }
 
     // 2. Piyasa fiyatı eksik ayları senkronla

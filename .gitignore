@@ -44,3 +44,6 @@ prisma/backups/
 
 # macOS klasör ikonu
 Icon?
+
+# EPİAŞ dizin önbelleği
+/.cache/
