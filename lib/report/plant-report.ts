@@ -183,6 +183,23 @@ function settleGroup(plants: HourlyResult[][], profile: ImbalancePricingProfile)
 
 const sumCost = (hours: HourlyResult[]) => hours.reduce((s, h) => s + h.imbalanceCost, 0);
 
+/**
+ * Santralleri şirketlerine göre gruplayıp her şirketi saatlik net dengesizlik üzerinden fiyatlar (şirket bazında
+ * uzlaştırma). Sonuç: şirket × saat başına bir satır. Sonuç sayfası da portföy toplamlarını bununla hesaplar.
+ */
+export function settleByCompany(
+  plants: Array<Pick<ProjectHourly["plants"][number], "plantId" | "organizationId" | "hourly">>,
+  profile: ImbalancePricingProfile
+): HourlyResult[] {
+  const byOrg = new Map<string, HourlyResult[][]>();
+  for (const p of plants) {
+    if (p.hourly.length === 0) continue;
+    const key = p.organizationId !== null ? `org:${p.organizationId}` : `plant:${p.plantId}`;
+    byOrg.set(key, [...(byOrg.get(key) ?? []), p.hourly]);
+  }
+  return Array.from(byOrg.values()).flatMap((group) => settleGroup(group, profile));
+}
+
 /** Sapma sistemle aynı yönde mi: sistem fazlasındayken fazla üretim ya da sistem açığındayken eksik üretim */
 const sameDirection = (h: HourlyResult) =>
   (h.imbalanceMwh > 0 && h.systemDirection === "SURPLUS") || (h.imbalanceMwh < 0 && h.systemDirection === "DEFICIT");
@@ -223,7 +240,14 @@ function plantRow(p: Plant): ReportPlantRow {
   };
 }
 
-export function buildPlantReport(data: ProjectHourly, context: ReportContext = {}): PlantReportData {
+/**
+ * @param options.intraday false ise gün içi geriye dönük test atlanır (sonuç sayfası gibi hızlı yanıt gereken yerler)
+ */
+export function buildPlantReport(
+  data: ProjectHourly,
+  context: ReportContext = {},
+  options: { intraday?: boolean } = {}
+): PlantReportData {
   const withData = data.plants.filter((p) => p.hourly.length > 0);
   const all = withData.flatMap((p) => p.hourly);
   if (all.length === 0) throw new Error("Projede piyasa fiyatı eşleşmiş saatlik veri yok; rapor üretilemez.");
@@ -250,16 +274,9 @@ export function buildPlantReport(data: ProjectHourly, context: ReportContext = {
     groups.set(key, g);
   }
   const groupList = Array.from(groups.values());
-  const settle = (profile: ImbalancePricingProfile) => groupList.flatMap((g) => settleGroup(g.plants.map((p) => p.hourly), profile));
+  const settle = (profile: ImbalancePricingProfile) => settleByCompany(withData, profile);
   /** Verilen santralleri şirketlerine göre netleştirip fiyatlar */
-  const settleSubset = (subset: Plant[], profile: ImbalancePricingProfile) => {
-    const byOrg = new Map<string, Plant[]>();
-    for (const p of subset) {
-      const key = p.organizationId !== null ? `org:${p.organizationId}` : `plant:${p.plantId}`;
-      byOrg.set(key, [...(byOrg.get(key) ?? []), p]);
-    }
-    return sumCost(Array.from(byOrg.values()).flatMap((ps) => settleGroup(ps.map((p) => p.hourly), profile)));
-  };
+  const settleSubset = (subset: Plant[], profile: ImbalancePricingProfile) => sumCost(settleByCompany(subset, profile));
   const profile2026: ImbalancePricingProfile = { mode: "CUSTOM", ...COEF_2026 };
 
   const companyHours = settle(data.profile);
@@ -347,7 +364,8 @@ export function buildPlantReport(data: ProjectHourly, context: ReportContext = {
 
   // Gün içi: önceki 4 aydan öğrenilen oranla, 1 saat önce görülen hatanın kapatılması (santral bazında test)
   let intraday: PlantReportData["intraday"] = null;
-  const backtests = withData.map((p) => runBacktest(p.hourly, data.profile, { strategies: [persistenceStrategy(1)] }));
+  const backtests =
+    options.intraday === false ? [] : withData.map((p) => runBacktest(p.hourly, data.profile, { strategies: [persistenceStrategy(1)] }));
   const combined = combineBacktests(backtests.filter((b) => b.testMonths.length > 0));
   const s = combined?.strategies[0];
   if (combined && s && combined.testMonths.length > 0) {

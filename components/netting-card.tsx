@@ -50,9 +50,23 @@ function GroupRow({ group }: { group: NettingGroupResult }) {
  * Dengeden sorumlu grup (DSG) netleştirme faydası: santrallerin tek başına ve grup halinde netleşmiş
  * dengesizlik maliyetlerini karşılaştırır.
  */
-export function NettingCard({ netting, projectId }: { netting: NettingResult; projectId?: string }) {
+export function NettingCard({
+  netting,
+  projectId,
+  companies,
+  crossCompanyBenefitTl = null,
+}: {
+  netting: NettingResult;
+  projectId?: string;
+  /** Santrallerin sahip şirketleri: dengesizlik şirket bazında uzlaştırıldığı için aynı şirket içi netleşme zaten gerçekleşir */
+  companies?: Array<{ name: string | null; plantNames: string[] }>;
+  /** Yalnızca farklı şirketler arasındaki ek netleşme faydası (en az iki şirket varsa) */
+  crossCompanyBenefitTl?: number | null;
+}) {
   const portfolio = netting.portfolio;
   if (!portfolio) return null;
+  const sameCompanyGroups = (companies ?? []).filter((c) => c.name && c.plantNames.length > 1);
+  const allOneCompany = companies?.length === 1 && !!companies[0].name;
 
   return (
     <Card className="shadow-sm">
@@ -77,6 +91,27 @@ export function NettingCard({ netting, projectId }: { netting: NettingResult; pr
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
+        {sameCompanyGroups.length > 0 && (
+          <div className="rounded-md border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-900">
+            {allOneCompany ? (
+              <>
+                <span className="font-semibold">Tüm santraller aynı şirkette ({companies![0].name}).</span> Dengesizlik şirket
+                bazında uzlaştırıldığı için aşağıdaki netleşme uzlaştırmada zaten gerçekleşiyor; bu, yeni bir DSG faydası
+                değildir. Ek fayda ancak başka şirketlerin santralleriyle grup kurularak sağlanabilir.
+              </>
+            ) : (
+              <>
+                <span className="font-semibold">Aynı şirketin santralleri zaten birlikte uzlaştırılıyor</span> (
+                {sameCompanyGroups.map((c) => c.name).join(", ")}). Aşağıdaki fayda bu şirket içi netleşmeyi de içerir;
+                yalnızca farklı şirketler arasındaki ek fayda
+                {crossCompanyBenefitTl !== null
+                  ? ` ${Math.round(crossCompanyBenefitTl).toLocaleString("tr-TR")} ₺`
+                  : " hesaplanamadı"}
+                .
+              </>
+            )}
+          </div>
+        )}
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-lg border border-slate-200 bg-white p-3">
             <span className="text-xs text-slate-500">Bağımsız Toplam Maliyet</span>

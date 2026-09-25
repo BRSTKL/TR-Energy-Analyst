@@ -15,6 +15,8 @@ import {
 } from "@/lib/calculations/types";
 import { comparePlants } from "@/lib/analysis/plant-comparison";
 import { analyzePortfolioNetting } from "@/lib/analysis/portfolio-netting";
+import { buildPlantReport, settleByCompany } from "@/lib/report/plant-report";
+import { buildReportContext } from "@/lib/services/report-context";
 
 export const dynamic = "force-dynamic";
 
@@ -104,21 +106,50 @@ export async function GET(_request: Request, { params }: { params: { id: string 
         plantName: plant.name,
         plantType: plant.type,
         capacityMw: plant.capacityMw,
+        organizationId: plant.organizationId,
+        organizationName: plant.organizationName,
+        yekdem: plant.yekdem,
+        yekdemNextYear: plant.yekdemNextYear,
+        epiasPlantId: plant.epiasPlantId,
         hourly: plantHourlyResults,
         monthly,
         yearly,
       });
     }
 
-    // 3. Tüm portföy için konsolide aylık ve yıllık agregasyon
-    // Portföy toplamı için plantId filtrelemesini kaldırarak grupluyoruz
-    const portfolioHourly = allHourlyResults.map((r) => ({
+    // 3. Tüm portföy: dengesizlik şirket bazında uzlaştırılır (her piyasa katılımcısı kendi dengesinden sorumludur;
+    // aynı şirketin santralleri her saat birlikte netleşir). Santral bazındaki toplam `settlement.plantLevelCostTl`'dedir.
+    const portfolioHourly = settleByCompany(plantResults, projectProfile).map((r) => ({
       ...r,
       plantId: undefined,
       plantName: undefined,
     }));
     const portfolioMonthly = aggregateMonthly(portfolioHourly);
     const portfolioYearly = aggregateYearly(portfolioMonthly);
+
+    // 4. Sapma yükü özeti (Dengesizlik Karnesi ile aynı motor): KÜPST, YEKDEM varsayımları, 2026, portföy kapsamı
+    const withData = plantResults.filter((p) => p.hourly.length > 0);
+    let sapma = null;
+    if (withData.length > 0) {
+      const year = new Date(withData[0].hourly[0].timestamp).getUTCFullYear();
+      const { context, check } = await buildReportContext(withData, year);
+      const report = buildPlantReport(
+        { project: { id: project.id, name: project.name }, profile: projectProfile, plants: withData },
+        context,
+        { intraday: false }
+      );
+      sapma = {
+        settlement: report.settlement,
+        kupst: report.kupst,
+        kupstByPlant: Object.fromEntries(report.plants.map((p) => [p.name, p.kupstTl])),
+        exposure: report.exposure,
+        coefficients2026: report.coefficients2026,
+        yekdem: report.yekdem,
+        coverage: report.coverage,
+        dsg: report.dsg,
+        check,
+      };
+    }
 
     const plantInputs = plantResults.map((p) => ({
       plantId: p.plantId,
@@ -145,6 +176,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
       },
       comparison: comparePlants(plantInputs),
       netting: analyzePortfolioNetting(plantInputs, projectProfile),
+      sapma,
     });
   } catch (error) {
     console.error("Results API error:", error);

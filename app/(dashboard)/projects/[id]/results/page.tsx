@@ -69,6 +69,7 @@ import { PlantComparisonCard } from "@/components/plant-comparison-card";
 import { ForecastAccuracyCard } from "@/components/forecast-accuracy-card";
 import type { PlantComparisonResult } from "@/lib/analysis/plant-comparison";
 import { NettingCard } from "@/components/netting-card";
+import { SapmaYukuCard, type SapmaSummary } from "@/components/sapma-yuku-card";
 import type { NettingResult } from "@/lib/analysis/portfolio-netting";
 
 interface PlantResult {
@@ -96,6 +97,8 @@ interface ApiResponse {
   };
   comparison?: PlantComparisonResult;
   netting?: NettingResult;
+  /** Şirket bazında uzlaştırma, KÜPST ve YEKDEM varsayımları (Dengesizlik Karnesi ile aynı motor) */
+  sapma?: SapmaSummary | null;
 }
 
 export default function ProjectResultsPage() {
@@ -704,7 +707,13 @@ export default function ProjectResultsPage() {
                   <span className="text-sm font-normal text-slate-500">₺</span>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
-                  Fiktif gelire göre oluşan net kayıp
+                  {selectedPlantId === "all"
+                    ? data?.sapma && data.sapma.settlement.sameCompanyNettingTl > 0
+                      ? `Şirket bazında uzlaştırma (santral bazında ${Math.round(
+                          data.sapma.settlement.plantLevelCostTl
+                        ).toLocaleString("tr-TR")} ₺)`
+                      : "Şirket bazında uzlaştırma"
+                    : "Santral tek başına uzlaştırılsaydı"}
                 </p>
               </CardContent>
             </Card>
@@ -732,6 +741,9 @@ export default function ProjectResultsPage() {
             </Card>
           </div>
         )}
+
+        {/* Sapma yükü: şirket bazında dengesizlik + KÜPST, 2026 ve YEKDEM varsayımları */}
+        {data.sapma && <SapmaYukuCard sapma={data.sapma} projectId={projectId} onRefresh={fetchData} />}
 
         {/* 2. Recharts Görsel Analitik Grafikleri */}
         <div className="grid gap-6 lg:grid-cols-2">
@@ -908,7 +920,14 @@ export default function ProjectResultsPage() {
         {data.comparison && <PlantComparisonCard comparison={data.comparison} />}
 
         {/* DSG Netleştirme Analizi */}
-        {data.netting && <NettingCard netting={data.netting} projectId={projectId} />}
+        {data.netting && (
+          <NettingCard
+            netting={data.netting}
+            projectId={projectId}
+            companies={data.sapma?.settlement.companies}
+            crossCompanyBenefitTl={data.sapma?.dsg?.benefitTl ?? null}
+          />
+        )}
 
         {/* Fiyattan Bağımsız Tahmin Doğruluğu */}
         <ForecastAccuracyCard projectId={projectId} refreshKey={data} />
