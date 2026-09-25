@@ -15,13 +15,18 @@ interface PlantOption {
   capacityMw: number;
   hasData: boolean;
   selected: boolean;
+  /** Üye bir şirketse santralleri (üye = piyasa katılımcısı) */
+  memberPlants: string[];
+  isCompany: boolean;
 }
 
 interface DsgResponse extends DsgScenarioResult {
   success: boolean;
   error?: string;
   project: { id: string; name: string };
+  /** Grup üyeleri şirketlerdir (sahibi bilinmeyen santral kendi başına üye) */
   plants: PlantOption[];
+  unknownOwnerPlants: string[];
 }
 
 const MONTHS_TR = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
@@ -91,8 +96,9 @@ export default function DsgScenarioPage() {
             <Network className="h-6 w-6 text-indigo-600" /> DSG Senaryoları
           </h1>
           <p className="mt-1 max-w-3xl text-sm text-slate-600">
-            Santralleri aynı dengeden sorumlu grupta toplamak, saatlik dengesizliklerin birbirini götürmesini sağlar.
-            Grubu seçin; netleşme faydasını, her santralin katkısını ve faydanın nasıl paylaştırılabileceğini görün.
+            Dengeden sorumlu grubu şirketler (piyasa katılımcıları) kurar. Aynı şirketin santralleri zaten birlikte
+            uzlaştırıldığından her şirket tek üyedir; fayda yalnızca şirketler arasındaki ek netleşmedir. Grubu seçin;
+            netleşme faydasını, her üyenin katkısını ve faydanın nasıl paylaştırılabileceğini görün.
           </p>
         </div>
       </header>
@@ -111,7 +117,9 @@ export default function DsgScenarioPage() {
             <Card className="shadow-sm">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Grup</CardTitle>
-                <CardDescription>En az iki santral seçin. {loading && "Hesaplanıyor..."}</CardDescription>
+                <CardDescription>
+                  En az iki üye (şirket) seçin. {loading && "Hesaplanıyor..."}
+                </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-wrap gap-2">
                 {data.plants.map((p) => {
@@ -130,20 +138,47 @@ export default function DsgScenarioPage() {
                     >
                       <div className="font-semibold">{p.plantName}</div>
                       <div className="text-xs text-slate-500">
-                        {p.plantType} · {p.capacityMw.toLocaleString("tr-TR")} MW{!p.hasData && " · veri yok"}
+                        {p.plantType} · {p.capacityMw.toLocaleString("tr-TR", { maximumFractionDigits: 0 })} MW
+                        {p.isCompany && ` · ${p.memberPlants.length} santral`}
+                        {!p.isCompany && " · sahibi bilinmiyor"}
+                        {!p.hasData && " · veri yok"}
                       </div>
+                      {p.isCompany && p.memberPlants.length > 1 && (
+                        <div className="mt-0.5 max-w-xs text-2xs text-slate-400">{p.memberPlants.join(", ")}</div>
+                      )}
                     </button>
                   );
                 })}
               </CardContent>
             </Card>
 
-            {data.plants.filter((p) => p.hasData).length < 3 && (
-              <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            {data.plants.filter((p) => p.hasData).length === 1 ? (
+              <div className="flex items-start gap-2 rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-900">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                Projede verisi olan {data.plants.filter((p) => p.hasData).length} santral var; grup seçenekleri ve
-                paylaştırma karşılaştırması üç veya daha fazla santralde anlam kazanır.
+                <span>
+                  Projedeki tüm santraller aynı şirkete ait ({data.plants.find((p) => p.hasData)?.plantName}). Bu santraller
+                  uzlaştırmada zaten birlikte netleşiyor; DSG ancak başka şirketlerle kurulabilir. Aday şirketlerin
+                  santrallerini{" "}
+                  <Link href={`/projects/epias?projectId=${projectId}`} className="font-semibold underline">
+                    EPİAŞ&apos;tan ekleyerek
+                  </Link>{" "}
+                  birlikte kuracağınız grubun faydasını burada görebilirsiniz.
+                </span>
               </div>
+            ) : (
+              data.plants.filter((p) => p.hasData).length < 3 && (
+                <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  Projede verisi olan {data.plants.filter((p) => p.hasData).length} üye (şirket) var; grup seçenekleri ve
+                  paylaştırma karşılaştırması üç veya daha fazla üyede anlam kazanır.
+                </div>
+              )
+            )}
+            {data.unknownOwnerPlants.length > 0 && (
+              <p className="text-xs text-slate-500">
+                Sahibi bilinmeyen santraller ayrı üye sayıldı: {data.unknownOwnerPlants.join(", ")}. Aynı şirketin
+                santralleriyse sonuç sayfasındaki &ldquo;EPİAŞ bilgilerini güncelle&rdquo; ile sahiplerini doldurun.
+              </p>
             )}
 
             {data.selection ? (
@@ -151,7 +186,7 @@ export default function DsgScenarioPage() {
                 {/* Özet */}
                 <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   {[
-                    ["Tek başına toplam maliyet", tl(data.selection.standaloneCost), "Santrallerin ayrı ayrı ödediği"],
+                    ["Tek başına toplam maliyet", tl(data.selection.standaloneCost), "Üyelerin ayrı ayrı ödediği (şirket bazında)"],
                     ["Grup içinde maliyet", tl(data.selection.nettedCost), "Saatlik netleşmiş dengesizlik"],
                     [
                       "Netleşme faydası",
@@ -161,7 +196,7 @@ export default function DsgScenarioPage() {
                     [
                       "Zıt yönlü saatler",
                       pct(data.offsettingHourShare, 0),
-                      "En az bir santral fazla, biri eksik üretti",
+                      "En az bir üye fazla, biri eksik üretti",
                     ],
                   ].map(([title, value, note], i) => (
                     <Card key={title} className={i === 2 ? "border-emerald-200 bg-emerald-50/50" : ""}>
@@ -204,7 +239,7 @@ export default function DsgScenarioPage() {
                   {/* Marjinal değer */}
                   <Card className="shadow-sm">
                     <CardHeader className="pb-3">
-                      <CardTitle className="text-base">Santrallerin katkısı</CardTitle>
+                      <CardTitle className="text-base">Üyelerin katkısı</CardTitle>
                       <CardDescription>
                         Gruptakiler: ayrılırsa kaybedilecek fayda · Dışarıdakiler: eklenirse kazanılacak fayda
                       </CardDescription>
@@ -246,7 +281,7 @@ export default function DsgScenarioPage() {
                       <CardDescription>
                         {data.subsetsExhaustive
                           ? "Tüm olası gruplar içinden"
-                          : "Santral sayısı fazla olduğundan çiftler (ve 12 santrale kadar üçlüler) içinden"}
+                          : "Üye sayısı fazla olduğundan çiftler (ve 12 üyeye kadar üçlüler) içinden"}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -284,7 +319,7 @@ export default function DsgScenarioPage() {
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">Netleşen maliyetin paylaştırılması</CardTitle>
                     <CardDescription>
-                      Her santralin grup içinde ödeyeceği maliyet ve tek başına kalmaya göre indirimi. Paylaştırma DSG
+                      Her üyenin grup içinde ödeyeceği maliyet ve tek başına kalmaya göre indirimi. Paylaştırma DSG
                       sözleşmesiyle belirlenir; tablo seçenekleri karşılaştırır.
                     </CardDescription>
                   </CardHeader>
@@ -294,7 +329,7 @@ export default function DsgScenarioPage() {
                         <table className="w-full min-w-[720px] text-sm">
                           <thead>
                             <tr className="border-b text-left text-xs uppercase tracking-wider text-slate-500">
-                              <th className="py-2 pr-3">Santral</th>
+                              <th className="py-2 pr-3">Üye</th>
                               <th className="py-2 pr-3 text-right">Tek başına</th>
                               {data.allocation.map((m) => (
                                 <th key={m.id} className="py-2 pr-3 text-right">
@@ -352,7 +387,7 @@ export default function DsgScenarioPage() {
             ) : (
               <Card className="border-dashed">
                 <CardContent className="p-8 text-center text-sm text-slate-600">
-                  Grup sonucu için en az iki santral seçin.
+                  Grup sonucu için en az iki üye (şirket) seçin.
                   {data.topSubsets[0] && (
                     <>
                       {" "}
@@ -371,11 +406,11 @@ export default function DsgScenarioPage() {
               <CardContent className="space-y-1.5 p-4 text-xs leading-relaxed text-slate-600">
                 <p>
                   <strong>Varsayımlar.</strong> Grup düzeyinde aynı dengesizlik fiyat formülü ve katsayıları uygulanır.
-                  DSG kurma ve üyelik şartları, YEKDEM kapsamındaki santrallerin katılımı ve KÜPST gibi santral bazındaki
-                  diğer kalemler modellenmez.
+                  Her üyenin maliyeti şirket bazında uzlaştırılmış dengesizliktir. DSG kurma ve üyelik şartları, YEKDEM
+                  kapsamındaki santrallerin katılımı modellenmez; KÜPST santral bazında olduğundan DSG ile değişmez.
                 </p>
                 <p>
-                  Fayda geçmiş verinin aynı santral bileşimiyle hesaplanır. Grup içinde GİP&apos;te yalnızca netleşmiş
+                  Fayda geçmiş verinin aynı üye bileşimiyle hesaplanır. Grup içinde GİP&apos;te yalnızca netleşmiş
                   pozisyon kapatılacağından, GİP senaryosunun faydası bu faydaya eklenemez.
                 </p>
               </CardContent>
