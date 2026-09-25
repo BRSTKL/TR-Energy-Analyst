@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ReportDownloadDialog } from "@/components/report-download-dialog";
 import {
   Table,
   TableBody,
@@ -33,7 +34,6 @@ import {
   Flame,
   Layers,
   Lightbulb,
-  Presentation,
   RefreshCw,
   ShieldAlert,
   ShieldCheck,
@@ -222,20 +222,7 @@ export default function ProjectInsightsPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <a
-              href={`/api/projects/${projectId}/export/pptx`}
-              download
-              className="inline-flex items-center"
-            >
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5 border-amber-600 text-amber-700 hover:bg-amber-50"
-              >
-                <Presentation className="h-3.5 w-3.5 text-amber-600" />
-                PPT Sunumu İndir (.pptx)
-              </Button>
-            </a>
+            <ReportDownloadDialog projectId={projectId} />
             <a
               href={`/api/projects/${projectId}/export/excel`}
               download

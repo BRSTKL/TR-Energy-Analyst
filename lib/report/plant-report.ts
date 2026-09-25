@@ -35,6 +35,10 @@ export interface ReportPlantRow {
   costShareOfRevenuePct: number | null;
   /** Σ|gerçekleşen − plan| / Σ gerçekleşen (%) */
   deviationPct: number;
+  /** Sistematik sapma: (Σ plan − Σ gerçekleşen) / Σ gerçekleşen (%); pozitif = plan fazla (eksik üretim) */
+  biasPct: number;
+  /** Sapma MWh'inin sistemle aynı yönde olan payı (%): sistem fazlasındayken fazla, açığındayken eksik üretim */
+  sameDirectionPct: number;
 }
 
 export interface ReportMonth {
@@ -57,7 +61,7 @@ export interface PlantReportData {
    * Portföy toplamı, şirket bazında uzlaştırmayla (aynı şirketin santralleri netleşmiş). imbalanceCostTl ana rakamdır.
    * costShareOfRevenuePct: portföyde YEKDEM santrali varsa null.
    */
-  totals: Omit<ReportPlantRow, "name" | "type" | "organizationName" | "yekdem"> & { plantCount: number };
+  totals: Omit<ReportPlantRow, "name" | "type" | "organizationName" | "yekdem" | "biasPct" | "sameDirectionPct"> & { plantCount: number };
   settlement: {
     /** Santraller tek tek uzlaştırılsaydı */
     plantLevelCostTl: number;
@@ -71,6 +75,11 @@ export interface PlantReportData {
   };
   /** Veri döneminde YEKDEM'de olan santraller (yoksa null) */
   yekdem: { plantNames: string[] } | null;
+  /**
+   * Şirket bazında net sapmanın sistemle aynı yöndeki payı. 2026'dan itibaren %6'lık katsayı yalnızca bu sapmalara
+   * uygulanır; maliyetin de büyük kısmı bu saatlerde oluşur.
+   */
+  alignment: { sameDirectionMwhPct: number; sameDirectionCostPct: number };
   /** Şirket bazında aylık maliyet */
   monthly: ReportMonth[];
   /**
@@ -128,16 +137,24 @@ function settleGroup(plants: HourlyResult[][], profile: ImbalancePricingProfile)
 
 const sumCost = (hours: HourlyResult[]) => hours.reduce((s, h) => s + h.imbalanceCost, 0);
 
+/** Sapma sistemle aynı yönde mi: sistem fazlasındayken fazla üretim ya da sistem açığındayken eksik üretim */
+const sameDirection = (h: HourlyResult) =>
+  (h.imbalanceMwh > 0 && h.systemDirection === "SURPLUS") || (h.imbalanceMwh < 0 && h.systemDirection === "DEFICIT");
+
 function plantRow(p: ProjectHourly["plants"][number]): ReportPlantRow {
   let actual = 0;
+  let forecast = 0;
   let revenue = 0;
   let cost = 0;
   let absDev = 0;
+  let sameDev = 0;
   for (const h of p.hourly) {
     actual += h.actualMwh;
+    forecast += h.forecastMwh;
     revenue += h.totalRevenue;
     cost += h.imbalanceCost;
     absDev += Math.abs(h.actualMwh - h.forecastMwh);
+    if (sameDirection(h)) sameDev += Math.abs(h.imbalanceMwh);
   }
   return {
     name: p.plantName,
@@ -151,6 +168,8 @@ function plantRow(p: ProjectHourly["plants"][number]): ReportPlantRow {
     unitCostTl: actual > 0 ? cost / actual : 0,
     costShareOfRevenuePct: p.yekdem ? null : pct(cost, revenue),
     deviationPct: pct(absDev, actual),
+    biasPct: pct(forecast - actual, actual),
+    sameDirectionPct: pct(sameDev, absDev),
   };
 }
 
@@ -203,6 +222,17 @@ export function buildPlantReport(data: ProjectHourly): PlantReportData {
     imbalanceCostTl: m.totalImbalanceCost,
     unitCostTl: m.unitImbalanceCost,
   }));
+
+  let netAbs = 0;
+  let netSame = 0;
+  let sameCost = 0;
+  for (const h of companyHours) {
+    netAbs += Math.abs(h.imbalanceMwh);
+    if (sameDirection(h)) {
+      netSame += Math.abs(h.imbalanceMwh);
+      sameCost += h.imbalanceCost;
+    }
+  }
 
   const monthIndex = new Map(monthly.map((m, i) => [m.month, i]));
   const cells = monthly.map(() => new Array<number>(24).fill(0));
@@ -292,6 +322,7 @@ export function buildPlantReport(data: ProjectHourly): PlantReportData {
       unknownOwnerCount: withData.filter((p) => p.organizationId === null).length,
     },
     yekdem: hasYekdem ? { plantNames: withData.filter((p) => p.yekdem).map((p) => p.plantName) } : null,
+    alignment: { sameDirectionMwhPct: pct(netSame, netAbs), sameDirectionCostPct: pct(sameCost, companyCost) },
     monthly,
     heatmap: { cells, hourTotals },
     coefficients2026,

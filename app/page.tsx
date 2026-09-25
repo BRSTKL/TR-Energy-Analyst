@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ReportDownloadDialog } from "@/components/report-download-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
@@ -40,7 +41,6 @@ import {
   Layers,
   Lightbulb,
   PlusCircle,
-  Presentation,
   Sun,
   Wind,
   Zap,
@@ -140,16 +140,7 @@ function LatestProjectBanner() {
               Excel (.xlsx)
             </Button>
           </a>
-          <a href={`/api${base}/export/pptx`} download>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 border-amber-600 text-amber-700 hover:bg-amber-50"
-            >
-              <Presentation className="h-3.5 w-3.5 text-amber-600" />
-              PPT (.pptx)
-            </Button>
-          </a>
+          <ReportDownloadDialog projectId={project.id} label="PPT (.pptx)" />
         </div>
       </div>
     </div>

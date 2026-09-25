@@ -30,7 +30,6 @@ import {
   FolderPlus,
   Layers,
   Lightbulb,
-  Presentation,
   RefreshCw,
   Sun,
   Trash2,
@@ -44,6 +43,7 @@ import { PricingProfileDialog } from "@/components/pricing-profile-dialog";
 import { EpiasSyncDialog } from "@/components/epias-sync-dialog";
 import { DeleteProjectDialog } from "@/components/delete-project-dialog";
 import { EpiasPlantPicker } from "@/components/epias-plant-picker";
+import { ReportDownloadDialog } from "@/components/report-download-dialog";
 import type { EpiasPowerPlant } from "@/lib/epias-plant/plant-data";
 import { ImbalancePricingProfile } from "@/lib/calculations/types";
 
@@ -642,20 +642,7 @@ export default function ProjectsPage() {
                           Excel (.xlsx)
                         </Button>
                       </a>
-                      <a
-                        href={`/api/projects/${project.id}/export/pptx`}
-                        download
-                        className="w-full"
-                      >
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full gap-1 border-amber-600 text-amber-700 hover:bg-amber-50 text-xs"
-                        >
-                          <Presentation className="h-3 w-3 text-amber-600" />
-                          PPT (.pptx)
-                        </Button>
-                      </a>
+                      <ReportDownloadDialog projectId={project.id} label="PPT (.pptx)" compact className="w-full" />
                     </div>
 
                     <Button

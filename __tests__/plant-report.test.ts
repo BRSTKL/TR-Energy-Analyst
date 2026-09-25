@@ -40,6 +40,11 @@ describe("Santral raporu verisi", () => {
     expect(r.totals.imbalanceCostTl).toBeCloseTo(508 + 944, 6);
     expect(r.totals.plantCount).toBe(2);
     expect(r.period).toMatchObject({ start: "2025-06-01", end: "2025-06-01", months: 1, hours: 1 });
+    // A sistem fazlasında fazla üretti (aynı yön), B sistem açığında eksik üretti (aynı yön)
+    expect(r.plants.find((p) => p.name === "A")!.sameDirectionPct).toBe(100);
+    expect(r.plants.find((p) => p.name === "A")!.biasPct).toBeCloseTo(((10 - 12) / 12) * 100, 10);
+    expect(r.alignment.sameDirectionMwhPct).toBe(100);
+    expect(r.alignment.sameDirectionCostPct).toBeCloseTo(100, 10);
     // Isı haritası: Haziran, saat 12
     expect(r.heatmap.cells).toHaveLength(1);
     expect(r.heatmap.cells[0][12]).toBeCloseTo(508 + 944, 6);

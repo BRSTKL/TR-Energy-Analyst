@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { FileText } from "lucide-react";
+import { Presentation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -35,10 +35,22 @@ const FIELDS: Array<{ key: keyof Author; label: string; placeholder: string; typ
 ];
 
 /**
- * Santral sahibine gönderilecek "Dengesizlik Karnesi" sunumunu indirir. Hazırlayanın adı ve iletişim bilgileri kapakta
+ * Uygulamanın PowerPoint çıktısı: santral sahibine gönderilecek "Dengesizlik Karnesi" sunumunu indirir. Tüm PPT
+ * düğmeleri bu bileşeni kullanır. Hazırlayanın adı ve iletişim bilgileri kapakta
  * ve kapanış slaytında yer alır; bu tarayıcıda hatırlanır (yalnızca kolaylık; saklanamazsa her seferinde yazılır).
  */
-export function ReportDownloadDialog({ projectId }: { projectId: string }) {
+export function ReportDownloadDialog({
+  projectId,
+  label = "PowerPoint Raporu (.pptx)",
+  compact = false,
+  className = "",
+}: {
+  projectId: string;
+  label?: string;
+  /** Proje kartlarındaki küçük düğme görünümü */
+  compact?: boolean;
+  className?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [author, setAuthor] = useState<Author>(EMPTY);
 
@@ -71,14 +83,18 @@ export function ReportDownloadDialog({ projectId }: { projectId: string }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" className="gap-1.5 bg-slate-900 text-white hover:bg-slate-800">
-          <FileText className="h-3.5 w-3.5" />
-          Dengesizlik Karnesi
+        <Button
+          variant="outline"
+          size="sm"
+          className={`gap-1.5 border-amber-600 text-amber-700 hover:bg-amber-50 ${compact ? "text-xs" : ""} ${className}`}
+        >
+          <Presentation className={compact ? "h-3 w-3 text-amber-600" : "h-3.5 w-3.5 text-amber-600"} />
+          {label}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Dengesizlik Karnesi</DialogTitle>
+          <DialogTitle>PowerPoint raporu: Dengesizlik Karnesi</DialogTitle>
           <DialogDescription>
             Santral sahibine gönderilecek PowerPoint raporu: yönetici özeti, maliyet köprüsü, santral karnesi, saatlik
             ısı haritası, 2026 riski, fırsatlar ve sonraki adım. Kesin hesaplar ve senaryolar ayrı etiketlenir.

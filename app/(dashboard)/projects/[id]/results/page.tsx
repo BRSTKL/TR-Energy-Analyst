@@ -42,7 +42,6 @@ import {
   Flame,
   Layers,
   Lightbulb,
-  Presentation,
   RefreshCw,
   Sun,
   Target,
@@ -491,20 +490,6 @@ export default function ProjectResultsPage() {
               >
                 <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
                 Excel İndir (.xlsx)
-              </Button>
-            </a>
-            <a
-              href={`/api/projects/${projectId}/export/pptx`}
-              download
-              className="inline-flex items-center"
-            >
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5 border-amber-600 text-amber-700 hover:bg-amber-50"
-              >
-                <Presentation className="h-3.5 w-3.5 text-amber-600" />
-                PPT İndir (.pptx)
               </Button>
             </a>
             <Button asChild size="sm" className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700">

@@ -7,10 +7,12 @@
  *   2. Yönetici özeti: üç ana rakam ve öne çıkanlar
  *   3. Maliyet köprüsü (şelale): santral bazında → şirket içi netleşme → 2025 → 2026 katsayıları → gün içi fırsat
  *   4. Santral karnesi: MWh başına maliyete göre sıralı çubuklar
- *   5. Saat × ay ısı haritası: kaybın ne zaman oluştuğu
- *   6. 2026 katsayıları ve YEKDEM çıkışı
- *   7. Fırsatlar
- *   8. Önerilen sonraki adım ve iletişim
+ *   5. Tahmin kalitesi: sistemle aynı yöndeki sapmanın payı ve santral bazında sistematik sapma
+ *   6. Saat × ay ısı haritası: kaybın ne zaman oluştuğu
+ *   7. 2026 katsayıları ve YEKDEM çıkışı
+ *   8. Fırsatlar
+ *   9. Önerilen sonraki adım ve iletişim
+ * Her slaytta sunum yapan kişi için konuşmacı notu vardır (ne söylenir, hangi sorular gelir).
  *   Ek A: santral detay tablosu · Ek B: yöntem ve sınırlar
  *
  * Grafikler şekillerle çizilir: PptxGenJS'in grafik nesnelerini Keynote göstermiyor; rapor her programda aynı görünmeli
@@ -188,6 +190,10 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     const s = pptx.addSlide();
     page++;
     s.background = { color: C.navy };
+    s.addNotes(
+      "Açılış: Bu çalışma yalnızca EPİAŞ Şeffaflık Platformu'nun herkese açık verisiyle hazırlandı; şirketten hiçbir veri istenmedi. " +
+        "Önce iki dakikada ana bulguyu, sonra nasıl hesaplandığını anlatacağım. Amaç, maliyetin büyüklüğünü ve 2026'da neyin değiştiğini göstermek."
+    );
     text(s, `DENGESİZLİK KARNESİ · ${yearOf(r)}`, { x: M + 0.1, y: 1.25, w: 8, h: 0.3, fontSize: 12, bold: true, charSpacing: 3, color: "7FD1C7" });
     text(s, r.projectName, { x: M + 0.1, y: 1.7, w: CW - 0.2, h: 1.3, fontSize: 44, bold: true, fontFace: FONT_HEAD, color: C.white, valign: "top" });
     text(
@@ -233,6 +239,12 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       ? `${yearOf(r)} dengesizlik maliyeti ${formatTlShort(cost)}; aynı üretimle 2026 katsayılarında ${formatTlShort(s2026.cost2026Tl)}`
       : `Portföyün dengesizlik maliyeti ${formatTlShort(cost)}: üretilen MWh başına ${nf(t.unitCostTl, 0)} TL`;
     const s = contentSlide("Yönetici özeti", title);
+    s.addNotes(
+      `Ana mesaj: ${periodLabel(r)} döneminde dengesizlik maliyeti ${formatTlShort(cost)}` +
+        (s2026 ? `; aynı üretim ve aynı tahmin kalitesiyle 2026 kurallarında ${formatTlShort(s2026.cost2026Tl)}.` : ".") +
+        " Gelebilecek itiraz: 'Gerçek maliyetimiz farklı.' Cevap: Evet olabilir; gün içi işlemleriniz ve ikili anlaşmalarınız açık veride yok. " +
+        "Bu yüzden önerdiğim ikinci adım, analizi sizin verinizle doğrulamak. Kesin hesap etiketli rakamlar veriden doğrudan çıkıyor; senaryo etiketliler varsayıma dayanıyor."
+    );
 
     const stats: Array<{ value: string; label: string; color: string }> = [
       { value: formatTlShort(cost), label: `${yearOf(r)} dengesizlik maliyeti (şirket bazında uzlaştırma)`, color: C.cost },
@@ -335,6 +347,17 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
         }`
       : "Maliyet köprüsü: santral bazından şirket bazına";
     const s = contentSlide("Maliyet köprüsü", title);
+    s.addNotes(
+      "Köprüyü soldan sağa okuyun. " +
+        (netted
+          ? `İlk sütun santraller tek tek uzlaştırılsaydı oluşacak maliyet; aynı şirketin santralleri her saat birbirini dengelediği için ${formatTlShort(
+              r.settlement.sameCompanyNettingTl
+            )} zaten netleşiyor. `
+          : "") +
+        (s2026 ? `2026 katsayıları aynı üretimle ${formatTlShort(s2026.deltaTl)} ek yük getiriyor. ` : "") +
+        (intradayOn ? "Son iki sütun senaryodur: gün içi pozisyon güncellemesinin geçmiş veride test edilmiş etkisi. " : "") +
+        "Bu slayt, 'ne kadar kaybediyoruz ve ne kadarı geri alınabilir' sorusunun tek bakışta cevabıdır."
+    );
 
     // Her adımın başlangıç ve bitiş seviyesi
     const bars: Array<{ lo: number; hi: number }> = [];
@@ -421,6 +444,11 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
         ? `En pahalı santral ${worst.name}: MWh başına ${nf(worst.unitCostTl, 0)} TL; en düşük ${best.name}, ${nf(best.unitCostTl, 0)} TL`
         : `${worst.name}: MWh başına ${nf(worst.unitCostTl, 0)} TL dengesizlik maliyeti`;
     const s = contentSlide("Santral karnesi", title, "exact");
+    s.addNotes(
+      "Çubuklar santralin MWh başına maliyetini, yani tahmin kalitesini karşılaştırır; büyük santralin toplam maliyeti yüksek ama birim maliyeti düşük olabilir. " +
+        "Kırmızı santraller önceliklidir: aynı üretimle ortalamadan belirgin fazla ödüyorlar. Soru gelirse: rakam santral tek başına uzlaştırılsaydı oluşacak maliyettir; " +
+        "şirket içi netleşme toplamı düşürür ama santraller arası sıralamayı değiştirmez."
+    );
     const MAX = 12;
     const rows = ranked.slice(0, MAX);
     const top = 2.2;
@@ -468,7 +496,85 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
   }
 
   // ---------------------------------------------------------------------------------------------
-  // 5. ISI HARİTASI
+  // 5. TAHMİN KALİTESİ
+  // ---------------------------------------------------------------------------------------------
+  {
+    const a = r.alignment;
+    const title = `Net sapmanın %${nf(a.sameDirectionMwhPct, 0)} kadarı sistemle aynı yönde, ama maliyetin %${nf(
+      a.sameDirectionCostPct,
+      0
+    )} kadarı bu saatlerden geliyor`;
+    const s = contentSlide("Tahmin kalitesi", title, "exact");
+    s.addNotes(
+      "Kilit kavram: sistemle aynı yöndeki sapma. Sistem fazladayken fazla üretmek ya da sistem açıktayken eksik üretmek pahalıdır; ters yöndeki sapma sistemi dengelediği için neredeyse maliyetsizdir. " +
+        `Bu portföyde net sapmanın %${nf(r.alignment.sameDirectionMwhPct, 0)} kadarı aynı yönde ama maliyetin %${nf(r.alignment.sameDirectionCostPct, 0)} kadarı buradan geliyor. ` +
+        "Sağdaki çubuklar planın yıl boyunca sistematik olarak yüksek ya da düşük olup olmadığını gösterir; sürekli yüksek plan, basit bir kalibrasyonla düzeltilebilir."
+    );
+
+    // Sol: iki büyük rakam
+    const lw = 4.6;
+    text(s, `%${nf(a.sameDirectionMwhPct, 0)}`, { x: M, y: 1.95, w: lw, h: 0.85, fontSize: 44, bold: true, fontFace: FONT_HEAD, color: C.ink });
+    text(s, "net sapmanın sistemle aynı yönde olan payı (sistem fazlasındayken fazla, açığındayken eksik üretim)", {
+      x: M,
+      y: 2.8,
+      w: lw,
+      h: 0.6,
+      fontSize: 12,
+      color: C.sub,
+      valign: "top",
+    });
+    text(s, `%${nf(a.sameDirectionCostPct, 0)}`, { x: M, y: 3.6, w: lw, h: 0.85, fontSize: 44, bold: true, fontFace: FONT_HEAD, color: C.cost });
+    text(s, "dengesizlik maliyetinin bu saatlerden gelen payı", { x: M, y: 4.45, w: lw, h: 0.4, fontSize: 12, color: C.sub, valign: "top" });
+    text(
+      s,
+      "Ters yöndeki sapma sistemi dengelediği için ucuzdur; maliyet neredeyse tamamen sistemle aynı yöndeki sapmadan doğar. 2026'dan itibaren %6'lık katsayı da yalnızca bu sapmalara uygulanıyor.",
+      { x: M, y: 5.1, w: lw, h: 1.3, fontSize: 12, valign: "top" }
+    );
+
+    // Sağ: santral bazında sistematik sapma (sapan çubuklar, sıfır ortada)
+    const px = M + lw + 0.6;
+    const pw = W - M - px;
+    const plantsBias = [...r.plants].sort((x, y) => y.biasPct - x.biasPct).slice(0, 12);
+    const overCount = r.plants.filter((p) => p.biasPct > 1).length;
+    text(s, "Santral bazında sistematik sapma", { x: px, y: 1.9, w: pw, h: 0.35, fontSize: 14, bold: true, fontFace: FONT_HEAD });
+    text(s, "Plan, yıl boyunca gerçekleşen üretimden ne kadar fazla (+) ya da az (−)", { x: px, y: 2.25, w: pw, h: 0.3, fontSize: 10.5, color: C.sub });
+    const nameW = 2.3;
+    const zeroX = px + nameW + (pw - nameW - 0.8) / 2;
+    const half = (pw - nameW - 0.8) / 2;
+    const maxB = Math.max(5, ...plantsBias.map((p) => Math.abs(p.biasPct)));
+    const top = 2.75;
+    const rowH = Math.min(0.32, 3.4 / plantsBias.length);
+    plantsBias.forEach((p, i) => {
+      const y = top + i * rowH;
+      text(s, p.name, { x: px, y, w: nameW, h: rowH, fontSize: 10.5, valign: "middle" });
+      const w = Math.max((Math.abs(p.biasPct) / maxB) * half, 0.02);
+      const pos = p.biasPct >= 0;
+      rect(s, pos ? zeroX : zeroX - w, y + rowH * 0.2, w, rowH * 0.6, pos ? C.cost : C.gain);
+      text(s, `${pos ? "+" : "−"}%${nf(Math.abs(p.biasPct), 1)}`, {
+        x: pos ? zeroX + w + 0.06 : zeroX - w - 0.86,
+        y,
+        w: 0.8,
+        h: rowH,
+        fontSize: 10,
+        bold: true,
+        align: pos ? "left" : "right",
+        valign: "middle",
+        color: pos ? C.cost : C.gain,
+      });
+    });
+    const yEnd = top + plantsBias.length * rowH;
+    s.addShape(pptx.ShapeType.line, { x: zeroX, y: top - 0.05, w: 0, h: yEnd - top + 0.1, line: { color: C.ink, width: 1 } });
+    text(
+      s,
+      overCount > r.plants.length / 2
+        ? `${r.plants.length} santralin ${overCount} tanesinde plan sistematik olarak yüksek: plan kalibrasyonu en hızlı kazanç kalemlerinden biri.`
+        : "Belirgin bir sistematik sapma yok; maliyet saatlik tahmin hatasından kaynaklanıyor.",
+      { x: px, y: Math.max(yEnd + 0.2, 6.2), w: pw, h: 0.6, fontSize: 11.5, valign: "top" }
+    );
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // 6. ISI HARİTASI
   // ---------------------------------------------------------------------------------------------
   {
     const totals = r.heatmap.hourTotals;
@@ -479,6 +585,10 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     const worstHour = order[0][1];
     const title = `Maliyetin %${nf(top6Share, 0)} kadarı günün en pahalı 6 saatinde oluşuyor; en pahalı saat ${hourRange(worstHour)}`;
     const s = contentSlide("Kayıp ne zaman oluşuyor", title, "exact");
+    s.addNotes(
+      "Her hücre bir ayın bir saatindeki toplam dengesizlik maliyetidir; koyu hücreler en pahalı saatlerdir. " +
+        "Mesaj: iyileştirme çabası her saate eşit dağıtılmamalı; en pahalı saatlere odaklanan tahmin güncellemesi ve gün içi işlem en yüksek getiriyi sağlar."
+    );
 
     const months = r.monthly.map((m) => m.month);
     const labelW = 0.7;
@@ -520,13 +630,19 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
   }
 
   // ---------------------------------------------------------------------------------------------
-  // 6. 2026 KATSAYILARI VE YEKDEM
+  // 7. 2026 KATSAYILARI VE YEKDEM
   // ---------------------------------------------------------------------------------------------
   if (s2026) {
     const title = r.yekdem
       ? `2026'da iki etki birleşiyor: katsayı %6'ya çıkıyor ve ${r.yekdem.plantNames.length} santral YEKDEM korumasından çıkıyor`
       : `2026 katsayılarıyla aynı üretim ${formatTlShort(s2026.deltaTl)} daha fazla maliyet yaratıyor (%${nf(s2026.deltaPct, 0)})`;
     const s = contentSlide("2026 riski", title, "exact");
+    s.addNotes(
+      "1 Ocak 2026'dan itibaren sistemle aynı yöndeki sapmada katsayı %3'ten %6'ya çıktı; aynı tahmin kalitesiyle maliyet artıyor. " +
+        (r.yekdem
+          ? "YEKDEM kısmında karşı tarafa sorun: 'YEKDEM döneminde dengesizlik maliyeti size mi yansıyordu, YEKDEM portföyüne mi?' Cevap ikincisiyse bu santrallerin dengesizliği 2026'da ilk kez sizin maliyetiniz olur. Bu, görüşmenin en güçlü sorusudur."
+          : "")
+    );
     const leftW = r.yekdem ? 6.3 : CW;
 
     text(
@@ -577,7 +693,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
   }
 
   // ---------------------------------------------------------------------------------------------
-  // 7. FIRSATLAR
+  // 8. FIRSATLAR
   // ---------------------------------------------------------------------------------------------
   {
     type Item = { title: string; impact: string; body: string; kind: "exact" | "scenario"; effort: string };
@@ -596,7 +712,10 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     items.push({
       title: "En pahalı saatlere odaklı tahmin iyileştirme",
       impact: "Hesaplanmadı",
-      body: "Maliyetin büyük kısmı az sayıda saatte ve sistemle aynı yöndeki sapmalarda oluşuyor. Bu saatlerde tahmin sağlayıcıyla hedefli iyileştirme ve güncel meteoroloji verisiyle gün içi düzeltme.",
+      body:
+        `Maliyetin %${nf(r.alignment.sameDirectionCostPct, 0)} kadarı sistemle aynı yöndeki sapmalardan geliyor. ` +
+        (r.plants.filter((p) => p.biasPct > 1).length > r.plants.length / 2 ? "Planlar sistematik olarak yüksek: kalibrasyon ilk adım. " : "") +
+        "En pahalı saatlerde tahmin sağlayıcıyla hedefli iyileştirme ve güncel meteoroloji verisiyle gün içi düzeltme.",
       kind: "scenario",
       effort: "Düşük–orta · tahmin sağlayıcı",
     });
@@ -621,6 +740,10 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       ? `En büyük kaldıraç gün içi pozisyon güncelleme: maliyetin yaklaşık %${nf(r.intraday!.savingPct, 0)} kadarı`
       : "Maliyeti azaltmanın yolları";
     const s = contentSlide("Fırsatlar", title);
+    s.addNotes(
+      "Fırsatların tamamı senaryodur, taahhüt değildir. Gün içi testin yöntemi: kapatılacak oran önceki 4 aydan öğrenilir ve bir sonraki ayda uygulanır; yani sonuç geleceği bilmeden elde edilmiştir. " +
+        "İşlem fiyatı gerçek gün içi eşleşme fiyatlarından alınmış, piyasanın zor olduğu saatlerde daha kötü fiyat varsayılmıştır."
+    );
     const top = 1.9;
     const gap = 0.2;
     const h = Math.min(1.55, (4.9 - gap * (items.length - 1)) / items.length);
@@ -647,12 +770,16 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
   }
 
   // ---------------------------------------------------------------------------------------------
-  // 8. SONRAKİ ADIM VE İLETİŞİM
+  // 9. SONRAKİ ADIM VE İLETİŞİM
   // ---------------------------------------------------------------------------------------------
   {
     const s = pptx.addSlide();
     page++;
     s.background = { color: C.navy };
+    s.addNotes(
+      "Kapanış: Somut bir sonraki adım isteyin. 30 dakikalık bir görüşme, ardından sizin tahmin ve uzlaştırma verinizle analizin doğrulanması. " +
+        "Pilot önerisi düşük riskli bir başlangıçtır: 3 ay boyunca günlük izleme ve aylık sonuç raporu."
+    );
     text(s, "ÖNERİLEN SONRAKİ ADIM", { x: M + 0.1, y: 0.8, w: 8, h: 0.3, fontSize: 11, bold: true, charSpacing: 3, color: "7FD1C7" });
     text(s, "Açık veriyle yapılan bu analizi kendi verinizle doğrulayalım", {
       x: M + 0.1,
@@ -690,6 +817,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
   // ---------------------------------------------------------------------------------------------
   {
     const s = contentSlide("Ek A", "Santral detayları", "exact");
+    s.addNotes("Ayrıntı isteyenler için: santral bazında kurulu güç, üretim, tek başına maliyet, birim maliyet, gelir payı ve plan farkı.");
     const MAX_ROWS = 14;
     const shown = r.plants.slice(0, MAX_ROWS);
     const rest = r.plants.slice(MAX_ROWS);
@@ -774,6 +902,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
   // ---------------------------------------------------------------------------------------------
   {
     const s = contentSlide("Ek B", "Yöntem ve sınırlar");
+    s.addNotes("Yöntem sorusu gelirse bu slaytı açın. Özellikle sınırları kendiniz söyleyin: açık veride gün içi işlemler ve ikili anlaşmalar yok.");
     const blocks: Array<[string, string]> = [
       [
         "Veri",
