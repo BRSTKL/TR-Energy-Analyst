@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { displayDescription } from "@/lib/projects/description";
 import { prisma } from "@/lib/prisma";
 import {
   processHourlyRecord,
@@ -168,7 +169,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
       project: {
         id: project.id,
         name: project.name,
-        description: project.description,
+        description: displayDescription(project.description),
       },
       portfolioAnalysis: {
         highestCostHours: portfolioHighestCostHours,

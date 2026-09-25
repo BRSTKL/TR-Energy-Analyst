@@ -97,6 +97,8 @@ interface ApiResponse {
   };
   comparison?: PlantComparisonResult;
   netting?: NettingResult;
+  /** Başlık altındaki sade özet */
+  summary?: { plantCount: number; capacityMw: number; companies: string[]; source: string };
   /** Şirket bazında uzlaştırma, KÜPST ve YEKDEM varsayımları (Dengesizlik Karnesi ile aynı motor) */
   sapma?: SapmaSummary | null;
 }
@@ -452,10 +454,25 @@ export default function ProjectResultsPage() {
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
               {data.project.name}
             </h1>
-            <p className="mt-1 text-xs text-slate-600 sm:text-sm">
-              {data.project.description ||
-                "Santral bazlı saatlik, aylık ve ağırlıklı yıllık dengesizlik analizi."}
-            </p>
+            {/* Açıklama özet satırındaki şirket adıyla aynıysa tekrar gösterilmez */}
+            {data.project.description &&
+              !data.summary?.companies.some(
+                (c) => c.toLocaleLowerCase("tr-TR") === data.project.description!.trim().toLocaleLowerCase("tr-TR")
+              ) && <p className="mt-1 max-w-2xl text-xs text-slate-600 sm:text-sm">{data.project.description}</p>}
+            {data.summary && (
+              <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                {data.summary.companies.length > 0 && (
+                  <span className="font-medium text-slate-700">
+                    {data.summary.companies.length === 1 ? data.summary.companies[0] : `${data.summary.companies.length} şirket`}
+                  </span>
+                )}
+                <span>{data.summary.plantCount} santral</span>
+                <span>·</span>
+                <span>{data.summary.capacityMw.toLocaleString("tr-TR", { maximumFractionDigits: 0 })} MW</span>
+                <span>·</span>
+                <span>Veri: {data.summary.source}</span>
+              </p>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">

@@ -98,9 +98,9 @@ function LatestProjectBanner() {
   }
 
   const base = `/projects/${project.id}`;
-  const summary =
-    project.description ||
-    `${project.plants.map((p) => `${p.name} (${p.type})`).join(", ")} santralleri`;
+  // Açıklama yoksa sade özet: santral sayısı ve teknolojiler (santral adları uzun portföylerde okunmaz)
+  const types = Array.from(new Set(project.plants.map((p) => p.type))).join(", ");
+  const summary = project.description || `${project.plants.length} santral · ${types}`;
 
   return (
     <div className="rounded-xl border border-sky-200 bg-gradient-to-r from-sky-50 via-indigo-50 to-slate-50 p-5 shadow-sm">

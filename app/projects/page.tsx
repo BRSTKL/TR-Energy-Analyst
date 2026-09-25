@@ -557,7 +557,10 @@ export default function ProjectsPage() {
                       {project.name}
                     </CardTitle>
                     <CardDescription className="line-clamp-2 text-xs text-slate-600">
-                      {project.description || "Açıklama belirtilmemiş."}
+                      {project.description ||
+                        `${project.plantCount} santral · ${project.plantTypes.join(", ")} · ${project.totalCapacityMw.toLocaleString("tr-TR", {
+                          maximumFractionDigits: 0,
+                        })} MW`}
                     </CardDescription>
                   </CardHeader>
 

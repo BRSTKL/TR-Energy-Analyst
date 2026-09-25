@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { displayDescription } from "@/lib/projects/description";
 import { prisma } from "@/lib/prisma";
 import {
   processHourlyRecord,
@@ -163,13 +164,26 @@ export async function GET(_request: Request, { params }: { params: { id: string 
       project: {
         id: project.id,
         name: project.name,
-        description: project.description,
+        description: displayDescription(project.description),
       },
       pricingProfile: project.pricingProfiles?.[0] || {
         name: "EPİAŞ Standart Profil",
         ...DEFAULT_IMBALANCE_PROFILE,
       },
       plants: plantResults,
+      // Başlık altındaki sade özet: şirket(ler), santral sayısı, kurulu güç ve veri kaynağı
+      summary: {
+        plantCount: project.plants.length,
+        capacityMw: project.plants.reduce((sum, p) => sum + p.capacityMw, 0),
+        companies: Array.from(new Set(project.plants.map((p) => p.organizationName).filter((n): n is string => !!n))),
+        source: (() => {
+          const epias = project.plants.filter((p) => p.epiasPlantId !== null);
+          if (epias.length === 0) return "Dosyadan yüklenen veri";
+          const versions = new Set(epias.map((p) => p.kgupVersion ?? "FIRST"));
+          const v = versions.size > 1 ? "KGÜP ilk ve son versiyon" : versions.has("FINAL") ? "KGÜP son versiyon" : "KGÜP ilk versiyon";
+          return epias.length === project.plants.length ? `EPİAŞ (${v}, UEVM)` : `EPİAŞ (${v}) ve dosya`;
+        })(),
+      },
       portfolio: {
         monthly: portfolioMonthly,
         yearly: portfolioYearly,

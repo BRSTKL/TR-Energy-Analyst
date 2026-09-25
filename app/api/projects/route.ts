@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { displayDescription } from "@/lib/projects/description";
 import { prisma } from "@/lib/prisma";
 import { plantNameKey, validatePlantInput } from "@/lib/plants/validation";
 
@@ -42,7 +43,7 @@ export async function GET() {
       return {
         id: p.id,
         name: p.name,
-        description: p.description,
+        description: displayDescription(p.description),
         createdAt: p.createdAt,
         updatedAt: p.updatedAt,
         plantCount: p.plants.length,

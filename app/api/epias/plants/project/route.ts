@@ -20,11 +20,6 @@ interface PlantPayload {
   rows: unknown;
 }
 
-const sourceNote = (s: PlantPayload["source"]) =>
-  `KGÜP ${s?.kgupVersion === "FINAL" ? "son" : "ilk"} versiyon (plan) ve UEVM (gerçekleşen). Santral kimliği ${
-    s?.powerPlantId ?? "?"
-  }, UEVÇB ${Array.isArray(s?.uevcbIds) ? s.uevcbIds.join(", ") : "?"}.`;
-
 const parseRows = (raw: unknown): ParsedGenerationRow[] =>
   (Array.isArray(raw) ? raw : [])
     .filter((r: unknown) => Array.isArray(r) && r.length === 3 && r.every((x) => Number.isFinite(Number(x))))
@@ -69,7 +64,15 @@ export async function POST(request: Request) {
 
     // 1. Doğrulama: ad (proje ve istek içinde benzersiz), tür, güç ve saatlik veri
     const taken = new Set((target?.plants ?? []).map((p) => plantNameKey(p.name)));
-    type EpiasFields = { epiasPlantId?: number; organizationId?: number; organizationName?: string; yekdem?: boolean; yekdemNextYear?: boolean };
+    type EpiasFields = {
+      epiasPlantId?: number;
+      organizationId?: number;
+      organizationName?: string;
+      yekdem?: boolean;
+      yekdemNextYear?: boolean;
+      kgupVersion?: string;
+      uevcbIds?: string;
+    };
     const plants: Array<{ input: PlantInput & EpiasFields; rows: ParsedGenerationRow[]; source: PlantPayload["source"] }> = [];
     for (const p of payloads) {
       const v = validatePlantInput({ name: p.plantName, type: p.type, capacityMw: p.capacityMw }, taken);
@@ -80,7 +83,10 @@ export async function POST(request: Request) {
       }
       taken.add(plantNameKey(v.value.name));
       const epias: EpiasFields = {};
+      // Kaynak bilgisi santral kaydında tutulur; proje açıklaması yalnızca kullanıcının metnidir
       if (Number.isInteger(p.source?.powerPlantId)) epias.epiasPlantId = p.source!.powerPlantId;
+      if (p.source?.kgupVersion === "FIRST" || p.source?.kgupVersion === "FINAL") epias.kgupVersion = p.source.kgupVersion;
+      if (Array.isArray(p.source?.uevcbIds) && p.source!.uevcbIds.length) epias.uevcbIds = p.source!.uevcbIds.join(",");
       if (Number.isInteger(p.meta?.organizationId)) {
         epias.organizationId = p.meta!.organizationId!;
         epias.organizationName = String(p.meta!.organizationName ?? "");
@@ -120,7 +126,6 @@ export async function POST(request: Request) {
 
     // 3. Proje (veya mevcut proje) ve santraller; 4. saatlik kayıtlar (öncesinde yedek)
     await backupDatabase(prisma, "epias-plant-import");
-    const notes = plants.map((p) => `EPİAŞ: ${p.input.name}: ${sourceNote(p.source)}`);
 
     let projectId: string;
     let createdPlants: Array<{ id: string; name: string }>;
@@ -139,16 +144,12 @@ export async function POST(request: Request) {
           await prisma.powerPlant.create({ data: { ...p.input, projectId: target.id }, select: { id: true, name: true } })
         );
       }
-      await prisma.project.update({
-        where: { id: target.id },
-        data: { description: [target.description, ...notes].filter(Boolean).join("\n") },
-      });
       projectId = target.id;
     } else {
       const project = await prisma.project.create({
         data: {
           name: projectName,
-          description: [description, ...notes].filter(Boolean).join("\n"),
+          description: description || null,
           pricingProfiles: {
             create: {
               name: "EPİAŞ Standart Profil",

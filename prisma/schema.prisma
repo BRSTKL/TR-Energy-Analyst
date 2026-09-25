@@ -32,6 +32,9 @@ model PowerPlant {
   capacityMw  Float
   /// EPİAŞ santral kimliği (UEVM santral listesi); EPİAŞ'tan eklenen santrallerde dolu
   epiasPlantId     Int?
+  /// EPİAŞ'tan eklenen santralin veri kaynağı: KGÜP versiyonu ("FIRST" | "FINAL") ve uzlaştırma birimleri (virgülle)
+  kgupVersion      String?
+  uevcbIds         String?
   /// Santralin sahibi olan piyasa katılımcısı. Dengesizlik şirket bazında uzlaştırılır: aynı şirketin santralleri zaten netleşir
   organizationId   Int?
   organizationName String?
