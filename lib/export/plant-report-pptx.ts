@@ -597,52 +597,58 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
         "Santraller tek başına karşılaştırılır; bu, tahmin kalitesinin kıyaslamasıdır. Bant sektörün orta %80'ini, koyu kısım orta %50'sini gösterir. " +
         "Gelebilecek soru: 'Santrallerimiz farklı bölgelerde, kıyas adil mi?' Cevap: Bölge ve rüzgâr rejimi etkiler; bu yüzden tek santrale değil portföy ortalamasına ve dağılımdaki yerine bakın."
     );
-    const rowH = Math.min(2.2, 4.4 / sec.types.length);
+    // Her teknoloji için bir bant; santraller bant üzerinde numaralı nokta, altında düzenli liste
+    const rowH = 4.4 / sec.types.length;
     const left = M + 1.6;
     const width = CW - 1.6 - 0.2;
     sec.types.forEach((t, ti) => {
-      const top = 1.95 + ti * rowH;
+      const top = 1.85 + ti * rowH;
       const d = t.unitImbalanceTl;
       const vals = [d.p10, d.p90, ...t.plants.map((p) => p.unitTl), t.portfolioUnitTl];
       const lo = Math.max(0, Math.min(...vals) * 0.9);
       const hi = Math.max(...vals) * 1.05;
       const xOf = (v: number) => left + ((v - lo) / (hi - lo)) * width;
-      const bandY = top + 0.75;
-      text(s, TECH_TR[t.type] ?? t.type, { x: M, y: bandY - 0.18, w: 1.5, h: 0.4, fontSize: 15, bold: true, fontFace: FONT_HEAD });
-      text(s, `${d.count} santral`, { x: M, y: bandY + 0.2, w: 1.5, h: 0.3, fontSize: 10, color: C.sub });
+      const bandY = top + 0.95;
+      text(s, TECH_TR[t.type] ?? t.type, { x: M, y: bandY - 0.2, w: 1.5, h: 0.4, fontSize: 15, bold: true, fontFace: FONT_HEAD });
+      text(s, `${d.count} santral`, { x: M, y: bandY + 0.18, w: 1.5, h: 0.3, fontSize: 10, color: C.sub });
       rect(s, xOf(d.p10), bandY - 0.13, xOf(d.p90) - xOf(d.p10), 0.26, "E6EBF0");
       rect(s, xOf(d.p25), bandY - 0.13, xOf(d.p75) - xOf(d.p25), 0.26, "B9C4D0");
       s.addShape(pptx.ShapeType.line, { x: xOf(d.median), y: bandY - 0.22, w: 0, h: 0.44, line: { color: C.navy, width: 2 } });
-      text(s, `Medyan ${nf(d.median, 0)}`, { x: xOf(d.median) - 0.8, y: bandY - 0.5, w: 1.6, h: 0.26, fontSize: 9.5, bold: true, align: "center", color: C.navy });
-      text(s, `P10 ${nf(d.p10, 0)}`, { x: xOf(d.p10) - 0.6, y: bandY + 0.17, w: 1.2, h: 0.24, fontSize: 8.5, align: "center", color: C.muted });
-      text(s, `P90 ${nf(d.p90, 0)}`, { x: xOf(d.p90) - 0.6, y: bandY + 0.17, w: 1.2, h: 0.24, fontSize: 8.5, align: "center", color: C.muted });
-      // Şirketin santralleri: bandın altında noktalar, portföy ortalaması üçgen işaretle
-      t.plants.forEach((p, pi) => {
+      text(s, `Medyan ${nf(d.median, 0)}`, { x: xOf(d.median) - 0.8, y: bandY + 0.2, w: 1.6, h: 0.24, fontSize: 9.5, bold: true, align: "center", color: C.navy });
+      text(s, `P10 ${nf(d.p10, 0)}`, { x: xOf(d.p10) - 0.6, y: bandY + 0.2, w: 1.2, h: 0.22, fontSize: 8.5, align: "center", color: C.muted });
+      text(s, `P90 ${nf(d.p90, 0)}`, { x: xOf(d.p90) - 0.6, y: bandY + 0.2, w: 1.2, h: 0.22, fontSize: 8.5, align: "center", color: C.muted });
+      // Portföy ortalaması: bandın üstünde üçgen
+      const px = xOf(t.portfolioUnitTl);
+      s.addShape(pptx.ShapeType.triangle, { x: px - 0.12, y: bandY - 0.72, w: 0.24, h: 0.2, fill: { color: C.risk }, line: { color: C.risk, width: 0 }, rotate: 180 });
+      text(s, `Portföyünüz ${nf(t.portfolioUnitTl, 0)} TL`, { x: px - 1.2, y: bandY - 1.0, w: 2.4, h: 0.26, fontSize: 10, bold: true, align: "center", color: C.risk });
+      // Santraller: noktalar ve üstünde sıra numarası (yakın noktalarda numaralar iki sıraya dağılır)
+      const shown = t.plants.slice(0, 15);
+      shown.forEach((p, pi) => {
         const x = xOf(p.unitTl);
         const above = p.unitTl > d.median;
-        s.addShape(pptx.ShapeType.ellipse, {
-          x: x - 0.07,
-          y: bandY - 0.07,
-          w: 0.14,
-          h: 0.14,
-          fill: { color: above ? C.cost : C.gain },
-          line: { color: C.white, width: 0.75 },
-        });
-        if (t.plants.length <= 12) {
-          text(s, p.name, {
-            x: x - 0.9,
-            y: bandY + 0.42 + (pi % 3) * 0.2,
-            w: 1.8,
-            h: 0.2,
-            fontSize: 7.5,
-            align: "center",
-            color: above ? C.cost : C.gain,
-          });
-        }
+        s.addShape(pptx.ShapeType.ellipse, { x: x - 0.07, y: bandY - 0.07, w: 0.14, h: 0.14, fill: { color: above ? C.cost : C.gain }, line: { color: C.white, width: 0.75 } });
+        text(s, String(pi + 1), { x: x - 0.15, y: bandY - 0.42 - (pi % 2) * 0.16, w: 0.3, h: 0.18, fontSize: 8, bold: true, align: "center", color: above ? C.cost : C.gain });
       });
-      const px = xOf(t.portfolioUnitTl);
-      s.addShape(pptx.ShapeType.triangle, { x: px - 0.12, y: bandY - 0.46, w: 0.24, h: 0.2, fill: { color: C.risk }, line: { color: C.risk, width: 0 }, rotate: 180 });
-      text(s, `Portföyünüz ${nf(t.portfolioUnitTl, 0)} TL`, { x: px - 1.2, y: bandY - 0.78, w: 2.4, h: 0.28, fontSize: 10, bold: true, align: "center", color: C.risk });
+      // Liste: sıra, ad, TL/MWh, sektörün yüzde kaçından iyi
+      const listTop = bandY + 0.55;
+      const cols = shown.length > 10 ? 3 : shown.length > 5 ? 2 : 1;
+      const perCol = Math.ceil(shown.length / cols);
+      const colW = CW / 3;
+      const lineH = Math.min(0.22, (rowH - 1.6) / Math.max(perCol, 1));
+      shown.forEach((p, pi) => {
+        const col = Math.floor(pi / perCol);
+        const row = pi % perCol;
+        const above = p.unitTl > d.median;
+        text(
+          s,
+          [
+            { text: `${pi + 1}  `, options: { bold: true, color: above ? C.cost : C.gain } },
+            { text: `${p.name}  `, options: { color: C.ink } },
+            { text: `${nf(p.unitTl, 0)} TL · sektörün %${nf(100 - p.rankPct, 0)} kadarından iyi`, options: { color: C.sub } },
+          ],
+          { x: M + col * colW, y: listTop + row * lineH, w: colW - 0.1, h: lineH, fontSize: 9.5, valign: "middle" }
+        );
+      });
     });
     const k = main.unitKupstTl;
     text(
@@ -650,7 +656,9 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       `MWh başına dengesizlik riski (santral tek başına, TL). Kırmızı nokta: sektör medyanının üstündeki santral; yeşil: altındaki. KÜPST'te sektör medyanı MWh başına ${nf(
         k.median,
         0
-      )} TL (${TECH_TR[main.type] ?? main.type}). Kaynak: EPİAŞ, ${sec.year}; kalite süzgecinden geçen lisanslı santraller.`,
+      )} TL (${TECH_TR[main.type] ?? main.type}). Kaynak: EPİAŞ, ${sec.year}; kalite süzgecinden geçen lisanslı santraller.${
+        r.plants.some((p) => !sec.types.some((t) => t.type === p.type)) ? " HES ve diğer türler sektör karnesinin kapsamında değil." : ""
+      }`,
       { x: M, y: 6.45, w: CW, h: 0.45, fontSize: 9.5, color: C.sub, valign: "top" }
     );
   }

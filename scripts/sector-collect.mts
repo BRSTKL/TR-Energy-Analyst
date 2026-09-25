@@ -7,6 +7,8 @@
  * → UEVM → veritabanındaki piyasa fiyatlarıyla saatlik hesap → göstergeler. Her santral .cache/epias/sector-<yıl>/
  * altına ayrı dosya olarak yazılır: bağlantı koparsa tekrar çalıştırıldığında yalnızca eksikler çekilir.
  * Sonunda .cache/epias/sector-<yıl>.json özet dosyası (kalite süzgecinden geçenler ve dağılımlar) üretilir.
+ * Hiç ortak saati olmayan (boş) santraller her çalıştırmada yeniden denenir; uzlaştırma birimi yıl başında yoksa
+ * (yıl içinde devreye giren santral) yıl ortası ve yıl sonu tarihleriyle de aranır.
  */
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -46,7 +48,12 @@ const [plantsAll, owners, yekdem] = await Promise.all([
 const targets = plantsAll
   .map((p) => ({ p, type: guessTechnologyFromName(p.name) }))
   .filter((x): x is { p: (typeof plantsAll)[number]; type: "RES" | "GES" } => x.type === "RES" || x.type === "GES");
-const done = new Set((await fs.readdir(dir)).map((f) => Number(f.replace(".json", ""))));
+// Tamamlanmış sayılan: en az bir ortak saati olan santral (boş sonuçlar yeniden denenir)
+const done = new Set<number>();
+for (const f of await fs.readdir(dir)) {
+  const m = JSON.parse(await fs.readFile(path.join(dir, f), "utf8"));
+  if (m.hours > 0) done.add(Number(f.replace(".json", "")));
+}
 const todo = targets.filter((x) => !done.has(x.p.id));
 console.log(`hedef ${targets.length} santral (RES+GES), tamamlanmış ${done.size}, kalan ${todo.length}`);
 
@@ -83,14 +90,21 @@ const worker = async () => {
   while (next < todo.length) {
     const { p, type } = todo[next++];
     try {
-      const uevcbs = await retry(() => listUevcbsForPlant(p.id, `${year}-01-01`));
+      // Yıl içinde devreye giren santralin uzlaştırma birimi yıl başında listelenmez
+      let uevcbs = await retry(() => listUevcbsForPlant(p.id, `${year}-01-01`));
+      for (const day of [`${year}-07-01`, `${year}-12-01`]) {
+        if (uevcbs.length) break;
+        uevcbs = await retry(() => listUevcbsForPlant(p.id, day));
+      }
       const kParts = [];
       const uParts = [];
       for (const [s, e] of quarters) {
         for (const u of uevcbs) kParts.push(parseKgupItems(await retry(() => fetchKgup(u.id, s, e, "FIRST"))));
         uParts.push(parseUevmItems(await retry(() => fetchUevm(p.id, s, e))));
       }
-      const merged = mergePlantSeries(sumSeries(kParts), sumSeries(uParts), `${year}-01-01`, `${year}-12-31`);
+      const kgup = sumSeries(kParts);
+      const uevm = sumSeries(uParts);
+      const merged = mergePlantSeries(kgup, uevm, `${year}-01-01`, `${year}-12-31`);
       const hourly = merged.rows.flatMap((row) => {
         const m = market.get(row.timestamp.getTime());
         return m
@@ -113,7 +127,9 @@ const worker = async () => {
         },
         hourly
       );
-      await fs.writeFile(path.join(dir, `${p.id}.json`), JSON.stringify(metrics));
+      // Tanı bilgisi: boş sonuçların nedenini görmek için
+      const diag = { uevcbCount: uevcbs.length, kgupHours: kgup.values.size, uevmHours: uevm.values.size };
+      await fs.writeFile(path.join(dir, `${p.id}.json`), JSON.stringify({ ...metrics, diag }));
       ok++;
     } catch (e) {
       failed++;
