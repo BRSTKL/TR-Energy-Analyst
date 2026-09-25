@@ -73,6 +73,11 @@ export interface PlantReportData {
   yekdem: { plantNames: string[] } | null;
   /** Şirket bazında aylık maliyet */
   monthly: ReportMonth[];
+  /**
+   * Şirket bazında maliyetin ay × günün saati dağılımı (ısı haritası). cells[i][h]: monthly[i] ayında h saatinin
+   * (0-23, Türkiye saati) toplam maliyeti. hourTotals: tüm dönemde saat başına toplam.
+   */
+  heatmap: { cells: number[][]; hourTotals: number[] };
   /** KESİN HESAP: aynı saatlik veri 2026 katsayılarıyla fiyatlansaydı (şirket bazında). Veri zaten tamamen 2026+ ise null. */
   coefficients2026: { baseCostTl: number; cost2026Tl: number; deltaTl: number; deltaPct: number } | null;
   /** SENARYO: farklı şirketlerdeki santraller tek dengeden sorumlu grupta netleşseydi (en az 2 şirket) */
@@ -199,6 +204,18 @@ export function buildPlantReport(data: ProjectHourly): PlantReportData {
     unitCostTl: m.unitImbalanceCost,
   }));
 
+  const monthIndex = new Map(monthly.map((m, i) => [m.month, i]));
+  const cells = monthly.map(() => new Array<number>(24).fill(0));
+  const hourTotals = new Array<number>(24).fill(0);
+  for (const h of companyHours) {
+    const d = new Date(h.timestamp);
+    const i = monthIndex.get(d.toISOString().slice(0, 7));
+    const hr = d.getUTCHours(); // zaman damgası UTC alanında Türkiye duvar saati
+    if (i === undefined) continue;
+    cells[i][hr] += h.imbalanceCost;
+    hourTotals[hr] += h.imbalanceCost;
+  }
+
   // 2026 katsayıları: yalnızca 2026 öncesi saat varsa anlamlı (aksi halde maliyet zaten bu kurallarla)
   let coefficients2026: PlantReportData["coefficients2026"] = null;
   if (start < REGIME_2026_START) {
@@ -276,6 +293,7 @@ export function buildPlantReport(data: ProjectHourly): PlantReportData {
     },
     yekdem: hasYekdem ? { plantNames: withData.filter((p) => p.yekdem).map((p) => p.plantName) } : null,
     monthly,
+    heatmap: { cells, hourTotals },
     coefficients2026,
     dsg,
     intraday,

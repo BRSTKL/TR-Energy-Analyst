@@ -40,6 +40,10 @@ describe("Santral raporu verisi", () => {
     expect(r.totals.imbalanceCostTl).toBeCloseTo(508 + 944, 6);
     expect(r.totals.plantCount).toBe(2);
     expect(r.period).toMatchObject({ start: "2025-06-01", end: "2025-06-01", months: 1, hours: 1 });
+    // Isı haritası: Haziran, saat 12
+    expect(r.heatmap.cells).toHaveLength(1);
+    expect(r.heatmap.cells[0][12]).toBeCloseTo(508 + 944, 6);
+    expect(r.heatmap.hourTotals.reduce((a, b) => a + b, 0)).toBeCloseTo(508 + 944, 6);
     // Aylık seri portföy toplamıdır: iki santral aynı ayda tek satır olur
     expect(r.monthly).toHaveLength(1);
     expect(r.monthly[0].imbalanceCostTl).toBeCloseTo(508 + 944, 6);
