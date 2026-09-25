@@ -7,9 +7,11 @@
  *   2. Yönetici özeti: üç ana rakam ve öne çıkanlar
  *   3. Maliyet köprüsü (şelale): santral bazında → şirket içi netleşme → 2025 → 2026 katsayıları → gün içi fırsat
  *   4. Santral karnesi: MWh başına maliyete göre sıralı çubuklar
+ *   4b. Sektörle kıyaslama (sektör karnesi varsa): teknoloji başına dağılım bandı ve şirketin santralleri
  *   5. Tahmin kalitesi: sistemle aynı yöndeki sapmanın payı ve santral bazında sistematik sapma
  *   6. Saat × ay ısı haritası: kaybın ne zaman oluştuğu
  *   7. 2026 katsayıları ve YEKDEM çıkışı
+ *   7b. Dengesizlik risk primi: MWh başına beklenen ve ihtiyatlı (P90) prim, santral bazında tablo
  *   8. Fırsatlar
  *   9. Önerilen sonraki adım ve iletişim
  * Her slaytta sunum yapan kişi için konuşmacı notu vardır (ne söylenir, hangi sorular gelir).
@@ -577,6 +579,83 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
   }
 
   // ---------------------------------------------------------------------------------------------
+  // 4b. SEKTÖRLE KIYASLAMA (sektör karnesi varsa)
+  // ---------------------------------------------------------------------------------------------
+  if (r.sector) {
+    const sec = r.sector;
+    const TECH_TR: Record<string, string> = { RES: "Rüzgâr", GES: "Güneş" };
+    const main = [...sec.types].sort((a, b) => b.plants.length - a.plants.length)[0];
+    const diffPct = ((main.portfolioUnitTl - main.unitImbalanceTl.median) / main.unitImbalanceTl.median) * 100;
+    const better = 100 - main.portfolioRankPct;
+    const title =
+      diffPct >= 0
+        ? `${TECH_TR[main.type] ?? main.type} santralleriniz MWh başına ${nf(main.portfolioUnitTl, 0)} TL ile sektör medyanının %${nf(diffPct, 0)} üstünde; sektörün yalnızca %${nf(better, 0)} kadarından iyi`
+        : `${TECH_TR[main.type] ?? main.type} santralleriniz MWh başına ${nf(main.portfolioUnitTl, 0)} TL ile sektör medyanının %${nf(-diffPct, 0)} altında; sektörün %${nf(better, 0)} kadarından iyi`;
+    const s = contentSlide("Sektörle kıyaslama", title, "exact");
+    s.addNotes(
+      `Kıyaslama, EPİAŞ'ta üretimi yayımlanan tüm lisanslı ${sec.types.map((t) => TECH_TR[t.type] ?? t.type).join(" ve ").toLocaleLowerCase("tr-TR")} santrallerinin ${sec.year} verisiyle, aynı yöntemle yapıldı. ` +
+        "Santraller tek başına karşılaştırılır; bu, tahmin kalitesinin kıyaslamasıdır. Bant sektörün orta %80'ini, koyu kısım orta %50'sini gösterir. " +
+        "Gelebilecek soru: 'Santrallerimiz farklı bölgelerde, kıyas adil mi?' Cevap: Bölge ve rüzgâr rejimi etkiler; bu yüzden tek santrale değil portföy ortalamasına ve dağılımdaki yerine bakın."
+    );
+    const rowH = Math.min(2.2, 4.4 / sec.types.length);
+    const left = M + 1.6;
+    const width = CW - 1.6 - 0.2;
+    sec.types.forEach((t, ti) => {
+      const top = 1.95 + ti * rowH;
+      const d = t.unitImbalanceTl;
+      const vals = [d.p10, d.p90, ...t.plants.map((p) => p.unitTl), t.portfolioUnitTl];
+      const lo = Math.max(0, Math.min(...vals) * 0.9);
+      const hi = Math.max(...vals) * 1.05;
+      const xOf = (v: number) => left + ((v - lo) / (hi - lo)) * width;
+      const bandY = top + 0.75;
+      text(s, TECH_TR[t.type] ?? t.type, { x: M, y: bandY - 0.18, w: 1.5, h: 0.4, fontSize: 15, bold: true, fontFace: FONT_HEAD });
+      text(s, `${d.count} santral`, { x: M, y: bandY + 0.2, w: 1.5, h: 0.3, fontSize: 10, color: C.sub });
+      rect(s, xOf(d.p10), bandY - 0.13, xOf(d.p90) - xOf(d.p10), 0.26, "E6EBF0");
+      rect(s, xOf(d.p25), bandY - 0.13, xOf(d.p75) - xOf(d.p25), 0.26, "B9C4D0");
+      s.addShape(pptx.ShapeType.line, { x: xOf(d.median), y: bandY - 0.22, w: 0, h: 0.44, line: { color: C.navy, width: 2 } });
+      text(s, `Medyan ${nf(d.median, 0)}`, { x: xOf(d.median) - 0.8, y: bandY - 0.5, w: 1.6, h: 0.26, fontSize: 9.5, bold: true, align: "center", color: C.navy });
+      text(s, `P10 ${nf(d.p10, 0)}`, { x: xOf(d.p10) - 0.6, y: bandY + 0.17, w: 1.2, h: 0.24, fontSize: 8.5, align: "center", color: C.muted });
+      text(s, `P90 ${nf(d.p90, 0)}`, { x: xOf(d.p90) - 0.6, y: bandY + 0.17, w: 1.2, h: 0.24, fontSize: 8.5, align: "center", color: C.muted });
+      // Şirketin santralleri: bandın altında noktalar, portföy ortalaması üçgen işaretle
+      t.plants.forEach((p, pi) => {
+        const x = xOf(p.unitTl);
+        const above = p.unitTl > d.median;
+        s.addShape(pptx.ShapeType.ellipse, {
+          x: x - 0.07,
+          y: bandY - 0.07,
+          w: 0.14,
+          h: 0.14,
+          fill: { color: above ? C.cost : C.gain },
+          line: { color: C.white, width: 0.75 },
+        });
+        if (t.plants.length <= 12) {
+          text(s, p.name, {
+            x: x - 0.9,
+            y: bandY + 0.42 + (pi % 3) * 0.2,
+            w: 1.8,
+            h: 0.2,
+            fontSize: 7.5,
+            align: "center",
+            color: above ? C.cost : C.gain,
+          });
+        }
+      });
+      const px = xOf(t.portfolioUnitTl);
+      s.addShape(pptx.ShapeType.triangle, { x: px - 0.12, y: bandY - 0.46, w: 0.24, h: 0.2, fill: { color: C.risk }, line: { color: C.risk, width: 0 }, rotate: 180 });
+      text(s, `Portföyünüz ${nf(t.portfolioUnitTl, 0)} TL`, { x: px - 1.2, y: bandY - 0.78, w: 2.4, h: 0.28, fontSize: 10, bold: true, align: "center", color: C.risk });
+    });
+    const k = main.unitKupstTl;
+    text(
+      s,
+      `MWh başına dengesizlik riski (santral tek başına, TL). Kırmızı nokta: sektör medyanının üstündeki santral; yeşil: altındaki. KÜPST'te sektör medyanı MWh başına ${nf(
+        k.median,
+        0
+      )} TL (${TECH_TR[main.type] ?? main.type}). Kaynak: EPİAŞ, ${sec.year}; kalite süzgecinden geçen lisanslı santraller.`,
+      { x: M, y: 6.45, w: CW, h: 0.45, fontSize: 9.5, color: C.sub, valign: "top" }
+    );
+  }
+
+  // ---------------------------------------------------------------------------------------------
   // 5. TAHMİN KALİTESİ
   // ---------------------------------------------------------------------------------------------
   {
@@ -806,6 +885,88 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       text(s, lines.join("\n\n"), { x: px + 0.3, y: 3.4, w: pw - 0.6, h: 2.0, fontSize: 11, valign: "top" });
       text(s, "Kaynak: EPİAŞ YEKDEM santral listeleri (veri yılı ve sonraki yıl); YEK Yönetmeliği md. 15–17.", { x: px + 0.3, y: 5.85, w: pw - 0.6, h: 0.4, fontSize: 9, color: C.sub, valign: "top" });
     }
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // 7b. DENGESİZLİK RİSK PRİMİ
+  // ---------------------------------------------------------------------------------------------
+  if (r.riskPremium) {
+    const rp = r.riskPremium;
+    const pf = rp.portfolio;
+    const title = `Sözleşme fiyatına eklenecek dengesizlik primi: MWh başına ${nf(pf.expectedTlPerMwh, 0)} TL beklenen, ${nf(
+      pf.p90MonthTlPerMwh,
+      0
+    )} TL ihtiyatlı`;
+    const s = contentSlide("Risk primi", title, "exact");
+    s.addNotes(
+      "Risk primi, bu portföyün (ya da bir santralin) üretimini satarken veya bir toplayıcıya devrederken fiyata eklenmesi gereken MWh başına sapma yüküdür: dengesizlik + KÜPST, 2026 kurallarıyla, piyasaya açık bir portföy varsayımıyla (YEKDEM yok). " +
+        "Beklenen değer yıllık ortalamadır; ihtiyatlı değer ayların %90'ının altında kaldığı seviyedir. Toplayıcılar teklif verirken bu iki rakam arasında bir prim seçer. " +
+        "Santral tablosu, portföye yeni santral alırken ya da santral bazında sözleşme yaparken kullanılır; santral tek başına uzlaştırılır, bu yüzden portföy priminden yüksektir."
+    );
+    const lw = 5.6;
+    const stats: Array<[string, string, string]> = [
+      [`${nf(pf.expectedTlPerMwh, 0)} TL/MWh`, "Beklenen prim (yıllık ortalama)", C.ink],
+      [`${nf(pf.p90MonthTlPerMwh, 0)} TL/MWh`, "İhtiyatlı prim (aylık P90)", C.risk],
+      [`${nf(pf.worstMonth.tlPerMwh, 0)} TL/MWh`, `En kötü ay: ${monthLabel(pf.worstMonth.month)}`, C.cost],
+    ];
+    stats.forEach(([v, l, color], i) => {
+      const x = M + i * (lw / 3);
+      text(s, v, { x, y: 1.9, w: lw / 3 - 0.1, h: 0.5, fontSize: 18, bold: true, fontFace: FONT_HEAD, color });
+      text(s, l, { x, y: 2.4, w: lw / 3 - 0.1, h: 0.45, fontSize: 10, color: C.sub, valign: "top" });
+    });
+    // Aylık MWh başına yük (şekillerle)
+    const months = pf.months;
+    const top = 3.25;
+    const bottom = 6.0;
+    const maxV = Math.max(...months.map((m) => m.tlPerMwh), pf.p90MonthTlPerMwh, 1);
+    const slot = lw / months.length;
+    const bw = Math.min(0.32, slot * 0.65);
+    months.forEach((m, i) => {
+      const x = M + i * slot + (slot - bw) / 2;
+      const h = (Math.max(m.tlPerMwh, 0) / maxV) * (bottom - top);
+      rect(s, x, bottom - h, bw, h, m.tlPerMwh >= pf.p90MonthTlPerMwh ? C.cost : "A7B4C2");
+      text(s, shortMonth(m.month), { x: x - 0.1, y: bottom + 0.05, w: bw + 0.2, h: 0.22, fontSize: 8, align: "center", color: C.sub });
+    });
+    const yP90 = bottom - (pf.p90MonthTlPerMwh / maxV) * (bottom - top);
+    const yExp = bottom - (pf.expectedTlPerMwh / maxV) * (bottom - top);
+    s.addShape(pptx.ShapeType.line, { x: M, y: yP90, w: lw, h: 0, line: { color: C.risk, width: 1, dashType: "dash" } });
+    s.addShape(pptx.ShapeType.line, { x: M, y: yExp, w: lw, h: 0, line: { color: C.ink, width: 1, dashType: "dash" } });
+    text(s, "P90", { x: M + lw + 0.05, y: yP90 - 0.12, w: 0.5, h: 0.24, fontSize: 8.5, bold: true, color: C.risk });
+    text(s, "ort.", { x: M + lw + 0.05, y: yExp - 0.12, w: 0.5, h: 0.24, fontSize: 8.5, bold: true, color: C.ink });
+    text(s, "Aylık MWh başına sapma yükü (2026 kurallarıyla)", { x: M, y: top - 0.32, w: lw, h: 0.26, fontSize: 9.5, color: C.sub });
+
+    // Sağ: santral bazında prim tablosu
+    const tx = M + lw + 0.75;
+    const tw = W - M - tx;
+    const cell = (v: string, o: Record<string, unknown> = {}) => ({ text: v, options: { fontSize: 9.5, fontFace: FONT_BODY, color: C.ink, ...o } });
+    const head = ["Santral", "Beklenen", "P90", "En kötü ay"].map((h, i) =>
+      cell(h, { bold: true, color: C.white, fill: { color: C.navy }, align: i === 0 ? "left" : "right" })
+    );
+    const rows = rp.plants.slice(0, 11).map((p, i) => {
+      const fill = i % 2 ? { fill: { color: C.panel } } : {};
+      return [
+        cell(p.name, fill),
+        cell(nf(p.expectedTlPerMwh, 0), { ...fill, align: "right" }),
+        cell(nf(p.p90MonthTlPerMwh, 0), { ...fill, align: "right" }),
+        cell(`${nf(p.worstMonth.tlPerMwh, 0)} · ${shortMonth(p.worstMonth.month)}`, { ...fill, align: "right" }),
+      ];
+    });
+    text(s, "Santral bazında (santral tek başına, TL/MWh)", { x: tx, y: 1.9, w: tw, h: 0.28, fontSize: 11, bold: true, fontFace: FONT_HEAD });
+    s.addTable([head, ...rows] as any, {
+      x: tx,
+      y: 2.25,
+      w: tw,
+      colW: [tw - 3.05, 0.85, 0.8, 1.4],
+      rowH: 0.3,
+      border: { type: "none" },
+      margin: [0, 0.06, 0, 0.06],
+      valign: "middle",
+    });
+    text(
+      s,
+      `${rp.rules}. Piyasaya açık portföy varsayımı (YEKDEM yok); gün içi işlemler öncesi. Portföy primi şirket bazında netleşmiş dengesizlikle hesaplandığı için santral primlerinden düşüktür.`,
+      { x: M, y: 6.45, w: CW, h: 0.45, fontSize: 9, color: C.sub, valign: "top" }
+    );
   }
 
   // ---------------------------------------------------------------------------------------------

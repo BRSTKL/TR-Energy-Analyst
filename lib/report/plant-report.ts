@@ -16,7 +16,8 @@ import { processHourlyRecord } from "@/lib/calculations/engine";
 import { aggregateMonthly } from "@/lib/calculations/aggregate";
 import { HourlyResult, ImbalancePricingProfile, REGULATORY_IMBALANCE_REGIMES } from "@/lib/calculations/types";
 import { combineBacktests, persistenceStrategy, runBacktest } from "@/lib/analysis/backtest";
-import { KUPST_REGIMES, kupstTotal } from "@/lib/calculations/kupst";
+import { KUPST_REGIMES, kupstForHour, kupstTotal } from "@/lib/calculations/kupst";
+import { percentileRank, quantile, type Distribution } from "@/lib/sector/benchmark";
 import type { ProjectHourly } from "@/lib/services/project-hourly";
 
 export interface ReportPlantRow {
@@ -46,6 +47,40 @@ export interface ReportPlantRow {
   sameDirectionPct: number;
 }
 
+export interface RiskPremium {
+  expectedTlPerMwh: number;
+  p90MonthTlPerMwh: number;
+  worstMonth: { month: string; tlPerMwh: number };
+  months: Array<{ month: string; tlPerMwh: number }>;
+}
+
+/**
+ * Saatlik sonuçlardan (dengesizlik zaten fiyatlanmış) ve saatlik KÜPST'ten risk primi. KÜPST şirket içinde
+ * netleşmediği için ayrı verilir (santral bazında toplanmış saatlik tutar).
+ */
+function riskPremiumOf(imbalanceHours: HourlyResult[], kupstByMonth: Map<string, number>): RiskPremium {
+  const byMonth = new Map<string, { mwh: number; cost: number }>();
+  for (const h of imbalanceHours) {
+    const m = new Date(h.timestamp).toISOString().slice(0, 7);
+    const b = byMonth.get(m) ?? { mwh: 0, cost: 0 };
+    b.mwh += h.actualMwh;
+    b.cost += h.imbalanceCost;
+    byMonth.set(m, b);
+  }
+  const months = Array.from(byMonth.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, b]) => ({ month, tlPerMwh: b.mwh > 0 ? (b.cost + (kupstByMonth.get(month) ?? 0)) / b.mwh : 0 }));
+  const mwh = Array.from(byMonth.values()).reduce((a, b) => a + b.mwh, 0);
+  const cost = Array.from(byMonth.values()).reduce((a, b) => a + b.cost, 0) + Array.from(kupstByMonth.values()).reduce((a, b) => a + b, 0);
+  const worst = months.reduce((w, m) => (m.tlPerMwh > w.tlPerMwh ? m : w), months[0]);
+  return {
+    expectedTlPerMwh: mwh > 0 ? cost / mwh : 0,
+    p90MonthTlPerMwh: quantile(months.map((m) => m.tlPerMwh).sort((a, b) => a - b), 0.9),
+    worstMonth: worst,
+    months,
+  };
+}
+
 export interface ReportMonth {
   month: string; // "YYYY-MM"
   actualMwh: number;
@@ -64,6 +99,11 @@ export interface ReportContext {
   missingCompanyPlants?: Map<number, string[]>;
   /** Şirketin EPİAŞ'ta kayıtlı toplam santral sayısı: organizationId → sayı */
   companyPlantTotals?: Map<number, number>;
+  /** Sektör karnesi (aynı yıl): teknoloji başına santrallerin MWh başına dengesizlik ve KÜPST değerleri */
+  sector?: {
+    year: number;
+    byType: Partial<Record<string, { unitImbalanceTl: Distribution; unitKupstTl: Distribution; values: number[]; kupstValues: number[] }>>;
+  };
 }
 
 export interface PlantReportData {
@@ -118,6 +158,32 @@ export interface PlantReportData {
     kupstDirectTl: number;
     kupstYekdemTl: number;
     kupstExposure2026Tl: number | null;
+  } | null;
+  /**
+   * Sektörle kıyaslama (sektör karnesi aynı yıl için varsa): teknoloji başına dağılım ve şirket santrallerinin yeri.
+   * rankPct: santralin MWh başına dengesizliğinin sektördeki yüzdelik sırası (düşük = daha iyi).
+   */
+  sector: {
+    year: number;
+    types: Array<{
+      type: string;
+      unitImbalanceTl: Distribution;
+      unitKupstTl: Distribution;
+      /** Şirketin bu teknolojideki santrallerinin üretim ağırlıklı MWh başına dengesizliği (santral bazında) */
+      portfolioUnitTl: number;
+      portfolioRankPct: number;
+      plants: Array<{ name: string; unitTl: number; rankPct: number; unitKupstTl: number }>;
+    }>;
+  } | null;
+  /**
+   * Dengesizlik risk primi: sözleşme fiyatına eklenecek MWh başına sapma yükü (dengesizlik + KÜPST). Piyasaya açık bir
+   * portföy varsayılır (YEKDEM yok), en güncel kurallarla (2026 katsayıları ve KÜPST oranları). En az 6 ay veri gerekir.
+   * expected: yıllık yük / üretim. p90Month: aylık MWh başına yükün 90. yüzdeliği. worstMonth: en yüksek ay.
+   */
+  riskPremium: {
+    rules: string;
+    portfolio: RiskPremium;
+    plants: Array<RiskPremium & { name: string; type: string }>;
   } | null;
   /** Şirketin EPİAŞ'taki santrallerinden projede olmayanlar (bilgi yoksa boş) */
   coverage: Array<{ company: string; inProject: number; total: number; missing: string[] }>;
@@ -416,6 +482,57 @@ export function buildPlantReport(
     coverage.push({ company: g.name ?? "", inProject: g.plants.length, total, missing });
   }
 
+  // Risk primi: en güncel kurallarla (2026 katsayıları + en güncel KÜPST oranları), piyasaya açık portföy varsayımı
+  let riskPremium: PlantReportData["riskPremium"] = null;
+  if (monthly.length >= 6) {
+    const latestProfile: ImbalancePricingProfile = { mode: "CUSTOM", ...COEF_2026 };
+    const kupstMonthly = (ps: Plant[]) => {
+      const m = new Map<string, number>();
+      for (const p of ps)
+        for (const h of p.hourly) {
+          const key = new Date(h.timestamp).toISOString().slice(0, 7);
+          m.set(key, (m.get(key) ?? 0) + kupstForHour(h, p.plantType, latestKupst));
+        }
+      return m;
+    };
+    riskPremium = {
+      rules: `2026 kuralları: sistemle aynı yönde %6 katsayı, KÜPST ${latestKupst.label}`,
+      portfolio: riskPremiumOf(settleByCompany(withData, latestProfile), kupstMonthly(withData)),
+      plants: withData
+        .map((p) => ({
+          name: p.plantName,
+          type: p.plantType,
+          ...riskPremiumOf(settleByCompany([p], latestProfile), kupstMonthly([p])),
+        }))
+        .sort((a, b) => b.expectedTlPerMwh - a.expectedTlPerMwh),
+    };
+  }
+
+  // Sektörle kıyaslama: santral bazında birim maliyet, aynı yılın sektör dağılımıyla (yalnızca veri yılı eşleşirse)
+  let sector: PlantReportData["sector"] = null;
+  const sectorCtx = context.sector;
+  if (sectorCtx && sectorCtx.year === new Date(start).getUTCFullYear()) {
+    const types: NonNullable<PlantReportData["sector"]>["types"] = [];
+    for (const [type, d] of Object.entries(sectorCtx.byType)) {
+      if (!d || d.values.length < 10) continue;
+      const own = plants.filter((p) => p.type === type && p.actualMwh > 0);
+      if (own.length === 0) continue;
+      const mwh = own.reduce((a, p) => a + p.actualMwh, 0);
+      const portfolioUnitTl = own.reduce((a, p) => a + p.imbalanceCostTl, 0) / mwh;
+      types.push({
+        type,
+        unitImbalanceTl: d.unitImbalanceTl,
+        unitKupstTl: d.unitKupstTl,
+        portfolioUnitTl,
+        portfolioRankPct: percentileRank(d.values, portfolioUnitTl),
+        plants: own
+          .map((p) => ({ name: p.name, unitTl: p.unitCostTl, rankPct: percentileRank(d.values, p.unitCostTl), unitKupstTl: p.kupstTl / p.actualMwh }))
+          .sort((a, b) => a.unitTl - b.unitTl),
+      });
+    }
+    if (types.length) sector = { year: sectorCtx.year, types };
+  }
+
   return {
     projectName: data.project.name,
     period: { start: iso(start), end: iso(end), months: monthly.length, hours: hourSet.size },
@@ -442,6 +559,8 @@ export function buildPlantReport(
     exposure,
     coverage,
     kupst,
+    sector,
+    riskPremium,
     alignment: { sameDirectionMwhPct: pct(netSame, netAbs), sameDirectionCostPct: pct(sameCost, companyCost) },
     monthly,
     heatmap: { cells, hourTotals },

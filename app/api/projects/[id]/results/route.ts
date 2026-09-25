@@ -148,6 +148,14 @@ export async function GET(_request: Request, { params }: { params: { id: string 
         yekdem: report.yekdem,
         coverage: report.coverage,
         dsg: report.dsg,
+        riskPremium: report.riskPremium
+          ? {
+              rules: report.riskPremium.rules,
+              portfolio: report.riskPremium.portfolio,
+              plants: report.riskPremium.plants.map(({ months: _m, ...p }) => p),
+            }
+          : null,
+        sector: report.sector,
         check,
       };
     }

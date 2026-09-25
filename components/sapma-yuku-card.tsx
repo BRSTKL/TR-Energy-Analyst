@@ -16,6 +16,12 @@ export interface SapmaSummary {
   yekdem: PlantReportData["yekdem"];
   coverage: PlantReportData["coverage"];
   dsg: PlantReportData["dsg"];
+  riskPremium: {
+    rules: string;
+    portfolio: NonNullable<PlantReportData["riskPremium"]>["portfolio"];
+    plants: Array<Omit<NonNullable<PlantReportData["riskPremium"]>["plants"][number], "months">>;
+  } | null;
+  sector: PlantReportData["sector"];
   check: { unknownOwner: string[]; yekdemNextUnknown: string[]; missing: Array<{ company: string; plants: string[] }> };
 }
 
@@ -135,6 +141,61 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh }: { sapma: SapmaSum
             />
           )}
         </div>
+
+        {(sapma.riskPremium || sapma.sector) && (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {sapma.riskPremium && (
+              <div className="rounded-lg border border-slate-200 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-slate-900">Dengesizlik risk primi</p>
+                  <Chip kind="exact" />
+                </div>
+                <p className="mt-0.5 text-2xs text-slate-500">
+                  Sözleşme fiyatına eklenecek MWh başına sapma yükü · {sapma.riskPremium.rules} · piyasaya açık portföy
+                </p>
+                <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+                  {[
+                    ["Beklenen", sapma.riskPremium.portfolio.expectedTlPerMwh, "text-slate-900"],
+                    ["İhtiyatlı (P90)", sapma.riskPremium.portfolio.p90MonthTlPerMwh, "text-amber-600"],
+                    [`En kötü ay (${sapma.riskPremium.portfolio.worstMonth.month.slice(5, 7)}.${sapma.riskPremium.portfolio.worstMonth.month.slice(2, 4)})`, sapma.riskPremium.portfolio.worstMonth.tlPerMwh, "text-rose-600"],
+                  ].map(([label, v, tone]) => (
+                    <div key={label as string} className="rounded-md bg-slate-50 p-2">
+                      <p className={`text-lg font-bold ${tone}`}>{Math.round(v as number).toLocaleString("tr-TR")}</p>
+                      <p className="text-2xs text-slate-500">{label} · ₺/MWh</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {sapma.sector && (
+              <div className="rounded-lg border border-slate-200 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-slate-900">Sektörle kıyaslama ({sapma.sector.year})</p>
+                  <Chip kind="exact" />
+                </div>
+                <p className="mt-0.5 text-2xs text-slate-500">MWh başına dengesizlik riski, santral tek başına; EPİAŞ&apos;taki lisanslı santraller</p>
+                <div className="mt-2 space-y-1.5">
+                  {sapma.sector.types.map((t) => {
+                    const diff = ((t.portfolioUnitTl - t.unitImbalanceTl.median) / t.unitImbalanceTl.median) * 100;
+                    return (
+                      <div key={t.type} className="flex flex-wrap items-baseline justify-between gap-2 rounded-md bg-slate-50 px-2 py-1.5 text-xs">
+                        <span className="font-semibold text-slate-800">{t.type === "RES" ? "Rüzgâr" : t.type === "GES" ? "Güneş" : t.type}</span>
+                        <span className="text-slate-600">
+                          Portföyünüz <strong>{Math.round(t.portfolioUnitTl).toLocaleString("tr-TR")} ₺</strong> · sektör medyanı{" "}
+                          {Math.round(t.unitImbalanceTl.median).toLocaleString("tr-TR")} ₺ ·{" "}
+                          <span className={diff > 0 ? "font-semibold text-rose-600" : "font-semibold text-emerald-600"}>
+                            {diff > 0 ? "+" : "−"}%{Math.abs(Math.round(diff))}
+                          </span>{" "}
+                          · sektörün %{Math.round(100 - t.portfolioRankPct)} kadarından iyi
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {ex && (
           <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-3">

@@ -136,6 +136,26 @@ describe("Santral raporu verisi", () => {
     expect(r.coverage).toEqual([{ company: "Şirket 1", inProject: 3, total: 4, missing: ["Eksik RES"] }]);
   });
 
+  it("risk primi: 2026 kurallarıyla MWh başına beklenen yük, aylık P90 ve en kötü ay (en az 6 ay)", () => {
+    // 2025'in 6 ayı, her ay bir saat: sistem fazlasında fazla üretim (2026'da %6 katsayı), sapma aydan aya artıyor
+    const hourly = [0, 1, 2, 3, 4, 5].map((m) => hour(at(2025, m, 1, 12), 10, 11 + m, 2000, 1800, "SURPLUS"));
+    const r = buildPlantReport(project([{ name: "A", type: "RES", hourly }]), {}, { intraday: false });
+    const rp = r.riskPremium!;
+    const per26 = 2000 - 1800 * 0.94; // MWh başına 2026 dengesizlik bedeli
+    // KÜPST (2026, RES %15 → tolerans 1,5): sapma 1..6 → aşan 0, 0,5, 1,5, 2,5, 3,5, 4,5 × 2000 × 0,03
+    const kupst = [0, 0.5, 1.5, 2.5, 3.5, 4.5].map((x) => x * 2000 * 0.03);
+    const months = [0, 1, 2, 3, 4, 5].map((m) => ((1 + m) * per26 + kupst[m]) / (11 + m));
+    expect(rp.portfolio.months.map((m) => m.tlPerMwh)).toEqual(months.map((v) => expect.closeTo(v, 6)));
+    const totalMwh = [11, 12, 13, 14, 15, 16].reduce((a, b) => a + b, 0);
+    const totalCost = [1, 2, 3, 4, 5, 6].reduce((a, d) => a + d * per26, 0) + kupst.reduce((a, b) => a + b, 0);
+    expect(rp.portfolio.expectedTlPerMwh).toBeCloseTo(totalCost / totalMwh, 6);
+    expect(rp.portfolio.worstMonth.month).toBe("2025-06");
+    expect(rp.plants).toHaveLength(1);
+    // 6 veride 0,9 yüzdelik: 4,5. sıra → 5. ve 6. ayın arası
+    const sorted = [...months].sort((x, y) => x - y);
+    expect(rp.portfolio.p90MonthTlPerMwh).toBeCloseTo(sorted[4] + (sorted[5] - sorted[4]) * 0.5, 6);
+  });
+
   it("veri tamamen 2026 ve sonrasındaysa katsayı karşılaştırması yapmaz; tek santralde DSG yoktur", () => {
     const r = buildPlantReport(project([{ name: "A", type: "RES", hourly: [hour(at(2026, 0, 5, 3), 10, 11, 2000, 2100, "DEFICIT")] }]));
     expect(r.coefficients2026).toBeNull();
