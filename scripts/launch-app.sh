@@ -18,7 +18,21 @@ is_up() {
   curl -s -o /dev/null -m 2 "$URL"
 }
 
-if ! is_up; then
+# Sunucu süreci var mı: ilk derleme sırasında sayfa 2 saniyede cevap vermeyebilir. Bu durumda ikinci bir sunucu
+# başlatılırsa ikisi aynı .next klasörüne yazar ve "Cannot find module './vendor-chunks/...'" hatası çıkar.
+is_running() {
+  lsof -nP -iTCP:3000 -sTCP:LISTEN >/dev/null 2>&1 || pgrep -f "$PROJECT_DIR/node_modules/.bin/next dev" >/dev/null 2>&1
+}
+
+if is_running && ! is_up; then
+  notify "Sunucu hazırlanıyor…"
+  for _ in $(seq 1 90); do
+    is_up && break
+    sleep 1
+  done
+fi
+
+if ! is_running; then
   notify "Sunucu başlatılıyor…"
   cd "$PROJECT_DIR" || exit 1
   echo "--- masaüstü ikonundan başlatıldı: $(date)" >>"$LOG"
