@@ -233,15 +233,23 @@ export interface PlantMeta {
   epiasPlantId: number;
   organizationId: number | null;
   organizationName: string | null;
+  /** `year` içinde YEKDEM'de mi */
   yekdem: boolean | null;
+  /** `year + 1` içinde YEKDEM'de mi (liste henüz yayımlanmadıysa veya alınamadıysa null) */
+  yekdemNextYear: boolean | null;
 }
 
 /**
- * Santrallerin sahibi ve YEKDEM durumu. Biri alınamazsa (bağlantı) ilgili alanlar null döner; kayıt yine yapılır.
+ * Santrallerin sahibi ve YEKDEM durumu (veri yılı ve sonraki yıl). Biri alınamazsa (bağlantı) ilgili alanlar null
+ * döner; kayıt yine yapılır. `year`: verinin ilk yılı; `lastYear`: verinin son yılı (sonraki yıl = lastYear + 1).
  */
-export async function resolvePlantMeta(ids: number[], year: number): Promise<{ items: PlantMeta[]; errors: string[] }> {
+export async function resolvePlantMeta(
+  ids: number[],
+  year: number,
+  lastYear: number = year
+): Promise<{ items: PlantMeta[]; errors: string[] }> {
   const errors: string[] = [];
-  const [owners, yekdem] = await Promise.all([
+  const [owners, yekdem, yekdemNext] = await Promise.all([
     plantOwnerIndex(year)
       .then((idx) => {
         if (idx.pending > 0 && ids.some((id) => !idx.owners.has(id))) {
@@ -257,6 +265,8 @@ export async function resolvePlantMeta(ids: number[], year: number): Promise<{ i
       errors.push(e instanceof Error ? e.message : "YEKDEM listesi alınamadı.");
       return null;
     }),
+    // Sonraki yılın listesi henüz yayımlanmamış olabilir: hata sayılmaz, durum "bilinmiyor" kalır
+    listYekdemPlantIds(lastYear + 1).catch(() => null),
   ]);
   return {
     items: ids.map((id) => ({
@@ -264,7 +274,28 @@ export async function resolvePlantMeta(ids: number[], year: number): Promise<{ i
       organizationId: owners?.get(id)?.organizationId ?? null,
       organizationName: owners?.get(id)?.organizationName ?? null,
       yekdem: yekdem ? yekdem.has(id) : null,
+      yekdemNextYear: yekdemNext ? yekdemNext.has(id) : null,
     })),
     errors,
   };
+}
+
+/**
+ * Diskteki santral → şirket dizininden bir şirketin tüm santral kimlikleri (EPİAŞ'a bağlanmaz). Dizin yoksa veya
+ * tamamlanmamışsa null: rapor portföy eksikliği uyarısını atlar.
+ */
+export async function companyPlantIdsFromCache(year: number): Promise<Map<number, number[]> | null> {
+  try {
+    const saved: OwnerIndexFile = JSON.parse(await fs.readFile(indexFile(year), "utf8"));
+    if (saved.pending > 0) return null;
+    const byOrg = new Map<number, number[]>();
+    for (const [plantId, owner] of saved.entries) {
+      const list = byOrg.get(owner.organizationId) ?? [];
+      list.push(plantId);
+      byOrg.set(owner.organizationId, list);
+    }
+    return byOrg;
+  } catch {
+    return null;
+  }
 }

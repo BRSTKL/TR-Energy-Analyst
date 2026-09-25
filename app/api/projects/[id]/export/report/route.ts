@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadProjectHourly } from "@/lib/services/project-hourly";
 import { buildPlantReport } from "@/lib/report/plant-report";
+import { buildReportContext } from "@/lib/services/report-context";
 import { exportPlantReportPptx, type ReportAuthor } from "@/lib/export/plant-report-pptx";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,10 @@ export async function GET(request: Request, { params }: { params: { id: string }
       phone: field("phone"),
       linkedin: field("linkedin"),
     };
-    const buffer = await exportPlantReportPptx(buildPlantReport(data), author);
+    const withData = data.plants.filter((p) => p.hourly.length > 0);
+    const year = withData.length ? new Date(withData[0].hourly[0].timestamp).getUTCFullYear() : new Date().getUTCFullYear();
+    const { context } = await buildReportContext(withData, year);
+    const buffer = await exportPlantReportPptx(buildPlantReport(data, context), author);
     const filename = encodeURIComponent(`Dengesizlik_Karnesi_${data.project.name.replace(/\s+/g, "_")}.pptx`);
     return new NextResponse(buffer as any, {
       status: 200,

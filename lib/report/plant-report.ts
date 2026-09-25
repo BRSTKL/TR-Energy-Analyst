@@ -25,6 +25,8 @@ export interface ReportPlantRow {
   organizationName: string | null;
   /** Veri döneminde YEKDEM'de (null: bilinmiyor) */
   yekdem: boolean | null;
+  /** Sonraki yıl YEKDEM'de (null: bilinmiyor) */
+  yekdemNextYear: boolean | null;
   actualMwh: number;
   revenueTl: number;
   /** Santral tek başına uzlaştırılsaydı dengesizlik maliyeti */
@@ -53,6 +55,14 @@ export interface ReportCompany {
   plantNames: string[];
 }
 
+/** Rapor dışından gelen bağlam (EPİAŞ şirket dizini); saf hesaplama ağ bağlantısı gerektirmesin diye ayrı verilir */
+export interface ReportContext {
+  /** Şirketin EPİAŞ'ta kayıtlı ama projede olmayan santralleri: organizationId → santral adları */
+  missingCompanyPlants?: Map<number, string[]>;
+  /** Şirketin EPİAŞ'ta kayıtlı toplam santral sayısı: organizationId → sayı */
+  companyPlantTotals?: Map<number, number>;
+}
+
 export interface PlantReportData {
   projectName: string;
   period: { start: string; end: string; months: number; hours: number };
@@ -61,7 +71,7 @@ export interface PlantReportData {
    * Portföy toplamı, şirket bazında uzlaştırmayla (aynı şirketin santralleri netleşmiş). imbalanceCostTl ana rakamdır.
    * costShareOfRevenuePct: portföyde YEKDEM santrali varsa null.
    */
-  totals: Omit<ReportPlantRow, "name" | "type" | "organizationName" | "yekdem" | "biasPct" | "sameDirectionPct"> & { plantCount: number };
+  totals: Omit<ReportPlantRow, "name" | "type" | "organizationName" | "yekdem" | "yekdemNextYear" | "biasPct" | "sameDirectionPct"> & { plantCount: number };
   settlement: {
     /** Santraller tek tek uzlaştırılsaydı */
     plantLevelCostTl: number;
@@ -75,6 +85,30 @@ export interface PlantReportData {
   };
   /** Veri döneminde YEKDEM'de olan santraller (yoksa null) */
   yekdem: { plantNames: string[] } | null;
+  /**
+   * Portföyde YEKDEM santrali varsa riskin kime yansıdığına göre ayrımı. YEKDEM'deki santrallerin dengesizliği şirkete
+   * değil YEKDEM portföyüne yansıyor olabilir (doğrulanmalı); bu yüzden "doğrudan" kapsam YEKDEM dışı santrallerdir.
+   * Tüm tutarlar şirket bazında netleşmiş. 2026 alanları yalnızca veri 2026 öncesiyse doludur.
+   */
+  exposure: {
+    /** YEKDEM dışı santrallerin riski: şirkete doğrudan yansır */
+    directCostTl: number;
+    directPlants: string[];
+    /** YEKDEM santrallerinin kendi aralarında netleşmiş riski */
+    yekdemCostTl: number;
+    /** Tüm santraller birlikte netleşseydi (totals.imbalanceCostTl ile aynı) */
+    allCostTl: number;
+    /** Sonraki yıl YEKDEM'den çıkan / devam eden / durumu bilinmeyen santraller */
+    exitingPlants: string[];
+    stayingPlants: string[];
+    unknownExitPlants: string[];
+    /** YEKDEM dışı santraller 2026 katsayılarıyla */
+    direct2026Tl: number | null;
+    /** 2026'da şirkete yansıyacak risk: YEKDEM dışı + YEKDEM'den çıkan santraller, 2026 katsayılarıyla */
+    exposure2026Tl: number | null;
+  } | null;
+  /** Şirketin EPİAŞ'taki santrallerinden projede olmayanlar (bilgi yoksa boş) */
+  coverage: Array<{ company: string; inProject: number; total: number; missing: string[] }>;
   /**
    * Şirket bazında net sapmanın sistemle aynı yöndeki payı. 2026'dan itibaren %6'lık katsayı yalnızca bu sapmalara
    * uygulanır; maliyetin de büyük kısmı bu saatlerde oluşur.
@@ -141,7 +175,9 @@ const sumCost = (hours: HourlyResult[]) => hours.reduce((s, h) => s + h.imbalanc
 const sameDirection = (h: HourlyResult) =>
   (h.imbalanceMwh > 0 && h.systemDirection === "SURPLUS") || (h.imbalanceMwh < 0 && h.systemDirection === "DEFICIT");
 
-function plantRow(p: ProjectHourly["plants"][number]): ReportPlantRow {
+type Plant = ProjectHourly["plants"][number];
+
+function plantRow(p: Plant): ReportPlantRow {
   let actual = 0;
   let forecast = 0;
   let revenue = 0;
@@ -162,6 +198,7 @@ function plantRow(p: ProjectHourly["plants"][number]): ReportPlantRow {
     capacityMw: p.capacityMw,
     organizationName: p.organizationName,
     yekdem: p.yekdem,
+    yekdemNextYear: p.yekdemNextYear,
     actualMwh: actual,
     revenueTl: revenue,
     imbalanceCostTl: cost,
@@ -173,7 +210,7 @@ function plantRow(p: ProjectHourly["plants"][number]): ReportPlantRow {
   };
 }
 
-export function buildPlantReport(data: ProjectHourly): PlantReportData {
+export function buildPlantReport(data: ProjectHourly, context: ReportContext = {}): PlantReportData {
   const withData = data.plants.filter((p) => p.hourly.length > 0);
   const all = withData.flatMap((p) => p.hourly);
   if (all.length === 0) throw new Error("Projede piyasa fiyatı eşleşmiş saatlik veri yok; rapor üretilemez.");
@@ -201,6 +238,16 @@ export function buildPlantReport(data: ProjectHourly): PlantReportData {
   }
   const groupList = Array.from(groups.values());
   const settle = (profile: ImbalancePricingProfile) => groupList.flatMap((g) => settleGroup(g.plants.map((p) => p.hourly), profile));
+  /** Verilen santralleri şirketlerine göre netleştirip fiyatlar */
+  const settleSubset = (subset: Plant[], profile: ImbalancePricingProfile) => {
+    const byOrg = new Map<string, Plant[]>();
+    for (const p of subset) {
+      const key = p.organizationId !== null ? `org:${p.organizationId}` : `plant:${p.plantId}`;
+      byOrg.set(key, [...(byOrg.get(key) ?? []), p]);
+    }
+    return sumCost(Array.from(byOrg.values()).flatMap((ps) => settleGroup(ps.map((p) => p.hourly), profile)));
+  };
+  const profile2026: ImbalancePricingProfile = { mode: "CUSTOM", ...COEF_2026 };
 
   const companyHours = settle(data.profile);
   const companyCost = sumCost(companyHours);
@@ -249,7 +296,7 @@ export function buildPlantReport(data: ProjectHourly): PlantReportData {
   // 2026 katsayıları: yalnızca 2026 öncesi saat varsa anlamlı (aksi halde maliyet zaten bu kurallarla)
   let coefficients2026: PlantReportData["coefficients2026"] = null;
   if (start < REGIME_2026_START) {
-    const cost2026 = sumCost(settle({ mode: "CUSTOM", ...COEF_2026 }));
+    const cost2026 = sumCost(settle(profile2026));
     coefficients2026 = {
       baseCostTl: companyCost,
       cost2026Tl: cost2026,
@@ -300,6 +347,35 @@ export function buildPlantReport(data: ProjectHourly): PlantReportData {
     };
   }
 
+  let exposure: PlantReportData["exposure"] = null;
+  if (hasYekdem) {
+    const direct = withData.filter((p) => !p.yekdem);
+    const yek = withData.filter((p) => p.yekdem);
+    const exiting = yek.filter((p) => p.yekdemNextYear === false);
+    const pre2026 = start < REGIME_2026_START;
+    exposure = {
+      directCostTl: settleSubset(direct, data.profile),
+      directPlants: direct.map((p) => p.plantName),
+      yekdemCostTl: settleSubset(yek, data.profile),
+      allCostTl: companyCost,
+      exitingPlants: exiting.map((p) => p.plantName),
+      stayingPlants: yek.filter((p) => p.yekdemNextYear === true).map((p) => p.plantName),
+      unknownExitPlants: yek.filter((p) => p.yekdemNextYear === null).map((p) => p.plantName),
+      direct2026Tl: pre2026 ? settleSubset(direct, profile2026) : null,
+      exposure2026Tl: pre2026 ? settleSubset([...direct, ...exiting], profile2026) : null,
+    };
+  }
+
+  const coverage: PlantReportData["coverage"] = [];
+  for (const g of groupList) {
+    const orgId = g.plants[0].organizationId;
+    if (orgId === null) continue;
+    const missing = context.missingCompanyPlants?.get(orgId) ?? [];
+    const total = context.companyPlantTotals?.get(orgId);
+    if (total === undefined) continue;
+    coverage.push({ company: g.name ?? "", inProject: g.plants.length, total, missing });
+  }
+
   return {
     projectName: data.project.name,
     period: { start: iso(start), end: iso(end), months: monthly.length, hours: hourSet.size },
@@ -322,6 +398,8 @@ export function buildPlantReport(data: ProjectHourly): PlantReportData {
       unknownOwnerCount: withData.filter((p) => p.organizationId === null).length,
     },
     yekdem: hasYekdem ? { plantNames: withData.filter((p) => p.yekdem).map((p) => p.plantName) } : null,
+    exposure,
+    coverage,
     alignment: { sameDirectionMwhPct: pct(netSame, netAbs), sameDirectionCostPct: pct(sameCost, companyCost) },
     monthly,
     heatmap: { cells, hourTotals },

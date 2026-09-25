@@ -9,19 +9,21 @@ export const dynamic = "force-dynamic";
  * POST /api/projects/[id]/epias-meta
  * Projedeki santrallerin EPİAŞ kimliğini, sahibini (şirket) ve YEKDEM durumunu doldurur.
  * EPİAŞ kimliği yoksa önce proje açıklamasındaki "EPİAŞ: <ad>: ... Santral kimliği N" notundan, sonra
- * EPİAŞ santral listesinde birebir ad eşleşmesinden bulunur. Yıl, projedeki verinin ilk yılıdır.
+ * EPİAŞ santral listesinde birebir ad eşleşmesinden bulunur. YEKDEM durumu verinin ilk yılı ve son yılından sonraki
+ * yıl için alınır (sonraki yıl YEKDEM'de değilse santral YEKDEM'den çıkıyor demektir).
  */
 export async function POST(_request: Request, { params }: { params: { id: string } }) {
   try {
     const project = await prisma.project.findUnique({ where: { id: params.id }, include: { plants: true } });
     if (!project) return NextResponse.json({ success: false, error: "Proje bulunamadı." }, { status: 404 });
 
-    const first = await prisma.generationRecord.findFirst({
-      where: { plantId: { in: project.plants.map((p) => p.id) } },
-      orderBy: { timestamp: "asc" },
-      select: { timestamp: true },
-    });
+    const plantIds = project.plants.map((p) => p.id);
+    const [first, last] = await Promise.all([
+      prisma.generationRecord.findFirst({ where: { plantId: { in: plantIds } }, orderBy: { timestamp: "asc" }, select: { timestamp: true } }),
+      prisma.generationRecord.findFirst({ where: { plantId: { in: plantIds } }, orderBy: { timestamp: "desc" }, select: { timestamp: true } }),
+    ]);
     const year = (first?.timestamp ?? new Date()).getUTCFullYear();
+    const lastYear = (last?.timestamp ?? new Date()).getUTCFullYear();
 
     const fromNotes = new Map<string, number>();
     for (const m of (project.description ?? "").matchAll(/EPİAŞ: (.+?): .*?Santral kimliği (\d+)/g)) {
@@ -41,7 +43,7 @@ export async function POST(_request: Request, { params }: { params: { id: string
       else unmatched.push(p.name);
     }
 
-    const { items, errors } = await resolvePlantMeta(Array.from(new Set(ids.values())), year);
+    const { items, errors } = await resolvePlantMeta(Array.from(new Set(ids.values())), year, lastYear);
     const metaById = new Map(items.map((m) => [m.epiasPlantId, m]));
     const updated = [];
     for (const p of project.plants) {
@@ -54,9 +56,16 @@ export async function POST(_request: Request, { params }: { params: { id: string
           epiasPlantId: id,
           ...(m.organizationId !== null ? { organizationId: m.organizationId, organizationName: m.organizationName } : {}),
           ...(m.yekdem !== null ? { yekdem: m.yekdem } : {}),
+          ...(m.yekdemNextYear !== null ? { yekdemNextYear: m.yekdemNextYear } : {}),
         },
       });
-      updated.push({ name: plant.name, epiasPlantId: id, organizationName: plant.organizationName, yekdem: plant.yekdem });
+      updated.push({
+        name: plant.name,
+        epiasPlantId: id,
+        organizationName: plant.organizationName,
+        yekdem: plant.yekdem,
+        yekdemNextYear: plant.yekdemNextYear,
+      });
     }
     return NextResponse.json({ success: true, year, updated, unmatched, errors });
   } catch (error) {

@@ -16,7 +16,7 @@ interface PlantPayload {
   capacityMw: unknown;
   source?: { powerPlantId?: number; uevcbIds?: number[]; kgupVersion?: string };
   /** EPİAŞ'tan bulunan sahip şirket ve YEKDEM durumu (bulunamadıysa null) */
-  meta?: { organizationId?: number | null; organizationName?: string | null; yekdem?: boolean | null };
+  meta?: { organizationId?: number | null; organizationName?: string | null; yekdem?: boolean | null; yekdemNextYear?: boolean | null };
   rows: unknown;
 }
 
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
 
     // 1. Doğrulama: ad (proje ve istek içinde benzersiz), tür, güç ve saatlik veri
     const taken = new Set((target?.plants ?? []).map((p) => plantNameKey(p.name)));
-    type EpiasFields = { epiasPlantId?: number; organizationId?: number; organizationName?: string; yekdem?: boolean };
+    type EpiasFields = { epiasPlantId?: number; organizationId?: number; organizationName?: string; yekdem?: boolean; yekdemNextYear?: boolean };
     const plants: Array<{ input: PlantInput & EpiasFields; rows: ParsedGenerationRow[]; source: PlantPayload["source"] }> = [];
     for (const p of payloads) {
       const v = validatePlantInput({ name: p.plantName, type: p.type, capacityMw: p.capacityMw }, taken);
@@ -86,6 +86,7 @@ export async function POST(request: Request) {
         epias.organizationName = String(p.meta!.organizationName ?? "");
       }
       if (typeof p.meta?.yekdem === "boolean") epias.yekdem = p.meta.yekdem;
+      if (typeof p.meta?.yekdemNextYear === "boolean") epias.yekdemNextYear = p.meta.yekdemNextYear;
       plants.push({ input: { ...v.value, ...epias }, rows, source: p.source });
     }
 

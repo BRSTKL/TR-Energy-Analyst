@@ -8,7 +8,7 @@ const hour = (t: Date, forecastMwh: number, actualMwh: number, ptf: number, smf:
   processHourlyRecord({ timestamp: t, forecastMwh, actualMwh }, { timestamp: t, ptf, smf, systemDirection: dir }, DEFAULT_IMBALANCE_PROFILE);
 
 const project = (
-  plants: Array<{ name: string; type: string; hourly: ReturnType<typeof hour>[]; org?: number; yekdem?: boolean }>
+  plants: Array<{ name: string; type: string; hourly: ReturnType<typeof hour>[]; org?: number; yekdem?: boolean; yekdemNextYear?: boolean }>
 ) => ({
   project: { id: "p", name: "Deneme" },
   profile: DEFAULT_IMBALANCE_PROFILE,
@@ -20,6 +20,8 @@ const project = (
     organizationId: p.org ?? null,
     organizationName: p.org ? `Şirket ${p.org}` : null,
     yekdem: p.yekdem ?? null,
+    yekdemNextYear: p.yekdemNextYear ?? null,
+    epiasPlantId: null,
     hourly: p.hourly,
   })),
 });
@@ -100,6 +102,30 @@ describe("Santral raporu verisi", () => {
     expect(r.totals.costShareOfRevenuePct).toBeNull();
     expect(r.plants.find((p) => p.name === "A")!.costShareOfRevenuePct).toBeNull();
     expect(r.plants.find((p) => p.name === "B")!.costShareOfRevenuePct).not.toBeNull();
+  });
+
+  it("YEKDEM varsa riski doğrudan / YEKDEM olarak ayırır; 2026'da yalnızca YEKDEM'den çıkanları ekler", () => {
+    const t = at(2025, 5, 1, 12);
+    const r = buildPlantReport(
+      project([
+        { name: "D", type: "RES", hourly: [hour(t, 10, 12, 2000, 1800, "SURPLUS")], org: 1, yekdem: false },
+        { name: "Çıkan", type: "RES", hourly: [hour(t, 10, 13, 2000, 1800, "SURPLUS")], org: 1, yekdem: true, yekdemNextYear: false },
+        { name: "Kalan", type: "RES", hourly: [hour(t, 10, 14, 2000, 1800, "SURPLUS")], org: 1, yekdem: true, yekdemNextYear: true },
+      ]),
+      { companyPlantTotals: new Map([[1, 4]]), missingCompanyPlants: new Map([[1, ["Eksik RES"]]]) }
+    );
+    const e = r.exposure!;
+    // Sistem fazlasında fazla üretim: MWh başına PTF − MIN(PTF,SMF)×(1−l)
+    const per25 = 2000 - 1800 * 0.97;
+    const per26 = 2000 - 1800 * 0.94;
+    expect(e.directCostTl).toBeCloseTo(2 * per25, 6);
+    expect(e.yekdemCostTl).toBeCloseTo((3 + 4) * per25, 6);
+    expect(e.direct2026Tl).toBeCloseTo(2 * per26, 6);
+    // 2026: D + Çıkan birlikte (aynı şirket), Kalan hariç
+    expect(e.exposure2026Tl).toBeCloseTo((2 + 3) * per26, 6);
+    expect(e.exitingPlants).toEqual(["Çıkan"]);
+    expect(e.stayingPlants).toEqual(["Kalan"]);
+    expect(r.coverage).toEqual([{ company: "Şirket 1", inProject: 3, total: 4, missing: ["Eksik RES"] }]);
   });
 
   it("veri tamamen 2026 ve sonrasındaysa katsayı karşılaştırması yapmaz; tek santralde DSG yoktur", () => {

@@ -15,6 +15,10 @@ export interface ProjectHourly {
     organizationName: string | null;
     /** Veri döneminde YEKDEM'de mi (bilinmiyorsa null) */
     yekdem: boolean | null;
+    /** Verinin son yılından sonraki yıl YEKDEM'de mi (bilinmiyorsa null) */
+    yekdemNextYear: boolean | null;
+    /** EPİAŞ santral kimliği (EPİAŞ'tan eklenmediyse null) */
+    epiasPlantId: number | null;
     hourly: HourlyResult[];
   }>;
 }
@@ -48,6 +52,8 @@ export async function loadProjectHourly(projectId: string): Promise<ProjectHourl
       organizationId: plant.organizationId,
       organizationName: plant.organizationName,
       yekdem: plant.yekdem,
+      yekdemNextYear: plant.yekdemNextYear,
+      epiasPlantId: plant.epiasPlantId,
       hourly: plant.records.flatMap((r): HourlyResult[] =>
         r.marketData
           ? [

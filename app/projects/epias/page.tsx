@@ -33,6 +33,7 @@ interface PlantMeta {
   organizationId: number | null;
   organizationName: string | null;
   yekdem: boolean | null;
+  yekdemNextYear: boolean | null;
 }
 
 interface ProjectOption {
@@ -218,6 +219,7 @@ function EpiasPlantImport() {
       const d = await postJson<{ items: PlantMeta[]; errors: string[] }>("/api/epias/plants/meta", {
         ids: missing,
         year: Number(startDay.slice(0, 4)),
+        lastYear: Number(endDay.slice(0, 4)),
       });
       setMeta((prev) => ({ ...prev, ...Object.fromEntries(d.items.map((m) => [m.epiasPlantId, m])) }));
       setMetaError(d.errors.length ? d.errors.join(" ") : null);

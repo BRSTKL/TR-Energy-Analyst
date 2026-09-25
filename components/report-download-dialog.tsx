@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Presentation } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, Presentation, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,6 +25,12 @@ interface Author {
 }
 
 const EMPTY: Author = { name: "", title: "", email: "", phone: "", linkedin: "" };
+
+interface ReportCheck {
+  unknownOwner: string[];
+  yekdemNextUnknown: string[];
+  missing: Array<{ company: string; plants: string[] }>;
+}
 
 const FIELDS: Array<{ key: keyof Author; label: string; placeholder: string; type?: string }> = [
   { key: "name", label: "Ad soyad", placeholder: "Ad Soyad" },
@@ -53,6 +59,50 @@ export function ReportDownloadDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [author, setAuthor] = useState<Author>(EMPTY);
+  const [check, setCheck] = useState<ReportCheck | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+
+  // Pencere açılınca raporun dayandığı EPİAŞ bilgilerini kontrol et
+  const runCheck = () => {
+    setChecking(true);
+    fetch(`/api/projects/${projectId}/report-check`)
+      .then((r) => r.json())
+      .then((d) => d.success && setCheck({ unknownOwner: d.unknownOwner, yekdemNextUnknown: d.yekdemNextUnknown, missing: d.missing }))
+      .catch(() => {})
+      .finally(() => setChecking(false));
+  };
+  useEffect(() => {
+    if (open) runCheck();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, projectId]);
+
+  const updateEpias = async () => {
+    setUpdating(true);
+    setUpdateError(null);
+    try {
+      const d = await fetch(`/api/projects/${projectId}/epias-meta`, { method: "POST" }).then((r) => r.json());
+      if (!d.success) throw new Error(d.error);
+      if (d.errors?.length) setUpdateError(d.errors.join(" "));
+      runCheck();
+    } catch (e) {
+      setUpdateError(e instanceof Error ? e.message : "EPİAŞ bilgileri güncellenemedi.");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const warnings: string[] = [];
+  if (check) {
+    for (const m of check.missing) warnings.push(`${m.company} şirketinin ${m.plants.length} santrali projede yok: ${m.plants.join(", ")}.`);
+    if (check.unknownOwner.length)
+      warnings.push(`Sahibi bilinmeyen santral: ${check.unknownOwner.join(", ")}. Rapor bunları ayrı şirket sayar; aynı şirketin santralleriyse risk olduğundan yüksek görünür.`);
+    if (check.yekdemNextUnknown.length)
+      warnings.push(`YEKDEM'den çıkış yılı bilinmeyen santral: ${check.yekdemNextUnknown.join(", ")}.`);
+  }
+  const nameWords = author.name.trim().split(/\s+/).filter(Boolean).length;
+  const preview = [author.name, author.title, author.email, author.phone, author.linkedin].map((v) => v.trim()).filter(Boolean);
 
   useEffect(() => {
     try {
@@ -116,9 +166,46 @@ export function ReportDownloadDialog({
             </label>
           ))}
         </div>
+        {author.name.trim() && nameWords < 2 && (
+          <p className="text-xs text-amber-700">Ad soyad alanına adınızı ve soyadınızı birlikte yazın (ör. Barış Yılmaz); unvanı ayrı alana.</p>
+        )}
+        {preview.length > 0 && (
+          <div className="rounded-md bg-slate-900 px-3 py-2 text-xs text-slate-200">
+            <span className="font-semibold text-teal-300">Kapakta: </span>
+            <span className="font-semibold text-white">{author.name.trim() || "—"}</span>
+            {preview.length > 1 && <span> · {preview.slice(1).join(" · ")}</span>}
+          </div>
+        )}
+
+        <div className="space-y-1.5 rounded-md border border-slate-200 p-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-slate-700">Rapor kontrolü</p>
+            <Button type="button" size="sm" variant="outline" onClick={updateEpias} disabled={updating} className="h-7 gap-1 px-2 text-xs">
+              {updating ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+              EPİAŞ bilgilerini güncelle
+            </Button>
+          </div>
+          {checking && !check && <p className="text-xs text-slate-500">Kontrol ediliyor…</p>}
+          {check && warnings.length === 0 && (
+            <p className="flex items-center gap-1.5 text-xs text-emerald-700">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Santral sahipleri ve YEKDEM durumu tamam; şirketin eksik santrali yok.
+            </p>
+          )}
+          {warnings.map((w, i) => (
+            <p key={i} className="flex items-start gap-1.5 text-xs text-amber-800">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {w}
+            </p>
+          ))}
+          {updateError && <p className="text-xs text-rose-700">{updateError}</p>}
+          <p className="text-2xs text-slate-500">
+            Güncelleme santral sahiplerini ve YEKDEM durumunu EPİAŞ&apos;tan alır (VPN açık olmalı). Eksik santralleri Santraller
+            sayfasındaki &ldquo;EPİAŞ&apos;tan santral ekle&rdquo; ile ekleyebilirsiniz.
+          </p>
+        </div>
+
         <p className="text-xs text-slate-500">
-          Göndermeden önce rakamları gözden geçirin: rapor, santralin gün içi işlemlerini ve ikili anlaşmalarını
-          içermeyen açık veriye dayanır.
+          Göndermeden önce rakamları gözden geçirin: rapor, şirketin gün içi işlemlerini ve ikili anlaşmalarını içermeyen
+          açık veriye dayanır.
         </p>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>

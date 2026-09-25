@@ -37,6 +37,9 @@ model PowerPlant {
   organizationName String?
   /// Verinin dönemi içinde YEKDEM'den yararlanıyor mu (EPİAŞ YEKDEM santral listesine göre)
   yekdem           Boolean?
+  /// Verinin son yılından sonraki yıl YEKDEM'de mi: yekdem=true ve bu alan false ise santral YEKDEM'den çıkıyor
+  /// (piyasa fiyatına ve dengesizliğe doğrudan maruz kalıyor); null ise sonraki yılın listesi alınamadı
+  yekdemNextYear   Boolean?
   projectId   String?
   project     Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
   records     GenerationRecord[]
