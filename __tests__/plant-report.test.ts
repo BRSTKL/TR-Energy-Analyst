@@ -124,6 +124,12 @@ describe("Santral raporu verisi", () => {
     // 2026: D + Çıkan birlikte (aynı şirket), Kalan hariç
     expect(e.exposure2026Tl).toBeCloseTo((2 + 3) * per26, 6);
     expect(e.exitingPlants).toEqual(["Çıkan"]);
+    // KÜPST (RES %17, plan 10 → tolerans 1,7 MWh): D sapma 2 → 0,3; Çıkan 3 → 1,3; Kalan 4 → 2,3; fiyat max(2000,1800) × 0,03
+    const k = (excess: number) => excess * 2000 * 0.03;
+    expect(e.kupstDirectTl).toBeCloseTo(k(0.3), 6);
+    expect(e.kupstYekdemTl).toBeCloseTo(k(1.3) + k(2.3), 6);
+    expect(e.kupstExposure2026Tl).toBeCloseTo(k(0.3) + k(1.3), 6);
+    expect(r.kupst.totalTl).toBeCloseTo(k(0.3) + k(1.3) + k(2.3), 6);
     expect(e.stayingPlants).toEqual(["Kalan"]);
     expect(r.coverage).toEqual([{ company: "Şirket 1", inProject: 3, total: 4, missing: ["Eksik RES"] }]);
   });

@@ -51,7 +51,11 @@ const C = {
   exactTx: "0B6358",
   scenBg: "FBEBD2",
   scenTx: "8A5300",
+  assumBg: "E4E8F5",
+  assumTx: "36457A",
 };
+
+type TagKind = "exact" | "scenario" | "assumption";
 
 const W = 13.333;
 const M = 0.6; // kenar boşluğu
@@ -135,40 +139,33 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       rectRadius: 0.08,
     });
 
-  const tag = (s: Slide, kind: "exact" | "scenario", x: number, y: number) => {
-    const exact = kind === "exact";
-    const w = exact ? 1.15 : 0.95;
+  const TAGS: Record<TagKind, { label: string; w: number; bg: string; tx: string }> = {
+    exact: { label: "KESİN HESAP", w: 1.15, bg: C.exactBg, tx: C.exactTx },
+    scenario: { label: "SENARYO", w: 0.95, bg: C.scenBg, tx: C.scenTx },
+    assumption: { label: "VARSAYIMA BAĞLI", w: 1.45, bg: C.assumBg, tx: C.assumTx },
+  };
+  const tag = (s: Slide, kind: TagKind, x: number, y: number) => {
+    const g = TAGS[kind];
     s.addShape(pptx.ShapeType.roundRect, {
       x,
       y,
-      w,
+      w: g.w,
       h: 0.26,
-      fill: { color: exact ? C.exactBg : C.scenBg },
-      line: { color: exact ? C.exactBg : C.scenBg, width: 0 },
+      fill: { color: g.bg },
+      line: { color: g.bg, width: 0 },
       rectRadius: 0.13,
     });
-    text(s, exact ? "KESİN HESAP" : "SENARYO", {
-      x,
-      y,
-      w,
-      h: 0.26,
-      fontSize: 8,
-      bold: true,
-      charSpacing: 1,
-      color: exact ? C.exactTx : C.scenTx,
-      align: "center",
-      valign: "middle",
-    });
+    text(s, g.label, { x, y, w: g.w, h: 0.26, fontSize: 8, bold: true, charSpacing: 1, color: g.tx, align: "center", valign: "middle" });
   };
 
   /** Açık zeminli içerik slaytı: bölüm etiketi + mesaj başlığı (+ isteğe bağlı etiket) ve alt bilgi */
-  const contentSlide = (section: string, title: string, kind?: "exact" | "scenario") => {
+  const contentSlide = (section: string, title: string, kind?: TagKind) => {
     const s = pptx.addSlide();
     page++;
     s.background = { color: C.white };
     text(s, section.toLocaleUpperCase("tr-TR"), { x: M, y: 0.42, w: 8, h: 0.25, fontSize: 10, bold: true, charSpacing: 2, color: C.gain });
     text(s, title, { x: M, y: 0.72, w: kind ? CW - 1.5 : CW, h: 0.95, fontSize: 26, bold: true, fontFace: FONT_HEAD, valign: "top" });
-    if (kind) tag(s, kind, W - M - (kind === "exact" ? 1.15 : 0.95), 0.42);
+    if (kind) tag(s, kind, W - M - TAGS[kind].w, 0.42);
     const credit = author.name ? ` · Hazırlayan: ${author.name}` : "";
     text(s, `${r.projectName} · Dengesizlik Karnesi · ${periodLabel(r)} · Kaynak: EPİAŞ Şeffaflık Platformu${credit}`, {
       x: M,
@@ -202,7 +199,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       `${periodLabel(r)} · ${t.plantCount} santral · ${nf(t.capacityMw, 0)} MW${singleCompany ? ` · ${singleCompany}` : ""}`,
       { x: M + 0.1, y: 3.05, w: CW - 0.2, h: 0.45, fontSize: 16, color: "C9D6E3" }
     );
-    text(s, "Gün öncesi plan ile gerçekleşen üretim arasındaki farkın maliyeti, 2026 katsayılarının etkisi ve azaltma fırsatları", {
+    text(s, "Gün öncesi plandan sapmanın yükü (dengesizlik riski ve KÜPST), 2026 katsayılarının etkisi ve azaltma fırsatları", {
       x: M + 0.1,
       y: 3.6,
       w: 9.5,
@@ -235,42 +232,59 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
   // ---------------------------------------------------------------------------------------------
   // 2. YÖNETİCİ ÖZETİ
   // ---------------------------------------------------------------------------------------------
+  // YEKDEM varsa iki varsayım: A = YEKDEM santrallerinin dengesizliği şirkete değil YEKDEM portföyüne yansır;
+  // B = şirkete yansır. Her rakam "dengesizlik riski + tahmini KÜPST" toplamıdır (toplam sapma yükü).
+  const k2026 = r.kupst.next2026Tl ?? r.kupst.totalTl;
+  const load = {
+    a2025: ex ? ex.directCostTl + ex.kupstDirectTl : cost + r.kupst.totalTl,
+    a2026: ex && ex.exposure2026Tl !== null ? ex.exposure2026Tl + (ex.kupstExposure2026Tl ?? 0) : s2026 ? s2026.cost2026Tl + k2026 : null,
+    b2025: cost + r.kupst.totalTl,
+    b2026: s2026 ? s2026.cost2026Tl + k2026 : null,
+  };
   {
+    const exiting = ex?.exitingPlants ?? [];
     const title = ex
-      ? ex.exposure2026Tl !== null && ex.exitingPlants.length > 0
-        ? `YEKDEM dışı santrallerin dengesizlik riski ${formatTlShort(ex.directCostTl)}; YEKDEM'den çıkışlar ve 2026 katsayılarıyla ${formatTlShort(ex.exposure2026Tl)} olacak`
-        : `YEKDEM dışı santrallerin dengesizlik riski ${formatTlShort(ex.directCostTl)}; YEKDEM santralleriyle birlikte ${formatTlShort(ex.allCostTl)}`
-      : s2026
-        ? `${yearOf(r)} dengesizlik riski ${formatTlShort(cost)}; aynı üretimle 2026 katsayılarında ${formatTlShort(s2026.cost2026Tl)}`
-        : `Portföyün dengesizlik riski ${formatTlShort(cost)}: üretilen MWh başına ${nf(t.unitCostTl, 0)} TL`;
+      ? load.a2026 !== null && load.b2026 !== null
+        ? `2026'da ${exiting.length ? `${exiting.length} santral YEKDEM'den çıkıyor ve ` : ""}katsayı %6'ya çıkıyor: şirketin sapma yükü ${nf(
+            Math.min(load.a2026, load.b2026) / 1e6,
+            1
+          )}–${nf(Math.max(load.a2026, load.b2026) / 1e6, 1)} milyon TL olacak`
+        : `YEKDEM dışı santrallerin sapma yükü ${formatTlShort(load.a2025)}; YEKDEM santralleriyle birlikte ${formatTlShort(load.b2025)}`
+      : s2026 && load.b2026 !== null
+        ? `${yearOf(r)} sapma yükü ${formatTlShort(load.b2025)}; aynı üretimle 2026 kurallarında ${formatTlShort(load.b2026)}`
+        : `Portföyün sapma yükü ${formatTlShort(load.b2025)}: dengesizlik riski ve KÜPST`;
     const s = contentSlide("Yönetici özeti", title);
     s.addNotes(
-      `Ana mesaj: ${title}. ` +
-        "Dengesizlik riski, gün öncesi planın hatasının dengesizlik fiyatıyla değeridir; şirketin gün içi işlemleri öncesidir. " +
-        "Gelebilecek itiraz: 'Biz bu kadar ödemiyoruz, gün içinde kapatıyoruz.' Cevap: Olabilir; gün içi işlemleriniz açık veride yok. " +
-        "Bu yüzden rakam 'kapatılması gereken risk'tir ve önerdiğim ikinci adım analizi sizin verinizle doğrulamak." +
-        (ex ? " YEKDEM santrallerinin dengesizliğinin kime yansıdığını karşı tarafa sorun; cevap rakamı netleştirir." : "")
+      `Ana mesaj: ${title}. Sapma yükü iki kalemden oluşur: dengesizlik riski (gün öncesi plan hatasının dengesizlik fiyatıyla değeri, gün içi işlemler öncesi) ve KÜPST (toleransı aşan sapmanın bedeli, santral bazında). ` +
+        "Gelebilecek itiraz: 'Biz bu kadar ödemiyoruz, gün içinde kapatıyoruz.' Cevap: Olabilir; gün içi işlemleriniz açık veride yok. Rakam kapatılması gereken risktir; ikinci adım sizin verinizle doğrulamak." +
+        (ex
+          ? " YEKDEM için iki varsayım var: A'da YEKDEM santrallerinin dengesizliği YEKDEM portföyüne, B'de şirkete yansır. Karşı tarafa hangisinin geçerli olduğunu sorun; cevap aralığı tek rakama indirir."
+          : "")
     );
 
     const stats: Array<{ value: string; label: string; color: string }> = [];
     if (ex) {
-      stats.push({ value: formatTlShort(ex.directCostTl), label: `${yearOf(r)} · YEKDEM dışı ${ex.directPlants.length} santral: şirkete doğrudan yansıyan risk`, color: C.cost });
-      if (ex.exposure2026Tl !== null) {
+      stats.push({
+        value: formatTlShort(load.a2025),
+        label: `${yearOf(r)} · YEKDEM dışı ${ex.directPlants.length} santral: dengesizlik ${formatTlShort(ex.directCostTl)} + KÜPST ${formatTlShort(ex.kupstDirectTl)}`,
+        color: C.cost,
+      });
+      if (load.a2026 !== null)
         stats.push({
-          value: formatTlShort(ex.exposure2026Tl),
-          label: `2026 · şirkete yansıyacak risk (YEKDEM'den çıkan ${ex.exitingPlants.length} santral dahil, 2026 katsayılarıyla)`,
+          value: formatTlShort(load.a2026),
+          label: `2026 · varsayım A: YEKDEM dışı + YEKDEM'den çıkan ${exiting.length} santral, 2026 katsayılarıyla`,
           color: C.risk,
         });
-      }
-      stats.push({ value: formatTlShort(ex.yekdemCostTl), label: `${yearOf(r)} · YEKDEM'deki ${r.yekdem!.plantNames.length} santralin riski (kime yansıdığı doğrulanmalı)`, color: C.sub });
+      if (load.b2026 !== null)
+        stats.push({ value: formatTlShort(load.b2026), label: "2026 · varsayım B: YEKDEM santralleri de şirkete yansıyorsa (tüm portföy)", color: C.sub });
     } else {
-      stats.push({ value: formatTlShort(cost), label: `${yearOf(r)} dengesizlik riski (şirket bazında uzlaştırma)`, color: C.cost });
-      stats.push({ value: `${nf(t.unitCostTl, 0)} TL`, label: "Üretilen MWh başına risk", color: C.ink });
-      if (s2026) {
-        stats.push({ value: `${s2026.deltaTl >= 0 ? "+" : ""}${formatTlShort(s2026.deltaTl)}`, label: `2026 katsayılarının ek yükü (%${nf(s2026.deltaPct, 0)} artış)`, color: C.risk });
-      } else if (t.costShareOfRevenuePct !== null) {
-        stats.push({ value: `%${nf(t.costShareOfRevenuePct, 1)}`, label: "Satış gelirine oranı", color: C.ink });
-      }
+      stats.push({
+        value: formatTlShort(load.b2025),
+        label: `${yearOf(r)} sapma yükü: dengesizlik ${formatTlShort(cost)} + KÜPST ${formatTlShort(r.kupst.totalTl)}`,
+        color: C.cost,
+      });
+      stats.push({ value: `${nf(t.actualMwh > 0 ? load.b2025 / t.actualMwh : 0, 0)} TL`, label: "Üretilen MWh başına sapma yükü", color: C.ink });
+      if (load.b2026 !== null) stats.push({ value: formatTlShort(load.b2026), label: "2026 · aynı üretim, 2026 katsayılarıyla", color: C.risk });
     }
     stats.forEach((st, i) => {
       const y = 1.95 + i * 1.55;
@@ -283,41 +297,37 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     round(s, px, 1.9, pw, 4.7, C.panel);
     text(s, "Öne çıkanlar", { x: px + 0.35, y: 2.1, w: pw - 0.7, h: 0.4, fontSize: 16, bold: true, fontFace: FONT_HEAD });
 
-    const points: Array<{ kind: "exact" | "scenario"; text: string }> = [];
-    if (ex && ex.exitingPlants.length > 0) {
+    const points: Array<{ kind: TagKind; text: string }> = [];
+    if (ex && exiting.length > 0) {
       points.push({
         kind: "exact",
-        text: `YEKDEM'den çıkan ${ex.exitingPlants.length} santral (${ex.exitingPlants.join(", ")}) 2026'dan itibaren piyasa fiyatına ve dengesizliğe doğrudan maruz kalıyor` +
+        text:
+          `YEKDEM'den çıkan ${exiting.length} santral (${exiting.join(", ")}) 2026'dan itibaren piyasa fiyatına maruz kalıyor` +
           (ex.stayingPlants.length ? `; ${ex.stayingPlants.join(", ")} YEKDEM'de devam ediyor.` : "."),
       });
     }
+    points.push({
+      kind: "exact",
+      text: `Dengesizlik tutarına ek olarak tolerans dışı sapmalar için tahmini ${formatTlShort(r.kupst.totalTl)} KÜPST ödeniyor; santral bazında hesaplandığı için şirket içinde netleşmez.`,
+    });
     if (netted) {
       points.push({
         kind: "exact",
         text: `Aynı şirketin santralleri her saat birbirini dengeliyor: santral santral hesaplanan ${formatTlShort(
           r.settlement.plantLevelCostTl
-        )} riskin ${formatTlShort(r.settlement.sameCompanyNettingTl)} kadarı uzlaştırmada zaten netleşiyor.`,
+        )} dengesizlik riskinin ${formatTlShort(r.settlement.sameCompanyNettingTl)} kadarı uzlaştırmada zaten netleşiyor.`,
       });
     }
-    if (s2026) {
+    if (s2026 && points.length < 4) {
       points.push({
         kind: "exact",
-        text: `2026'dan itibaren sistemle aynı yöndeki sapmanın katsayısı %3'ten %6'ya çıktı; riskin %${nf(
-          r.alignment.sameDirectionCostPct,
-          0
-        )} kadarı zaten bu sapmalardan geliyor.`,
+        text: `2026'dan itibaren sistemle aynı yöndeki sapmanın katsayısı %3'ten %6'ya çıktı; riskin %${nf(r.alignment.sameDirectionCostPct, 0)} kadarı bu sapmalardan geliyor.`,
       });
     }
-    if (intradayOn) {
+    if (intradayOn && points.length < 4) {
       points.push({
         kind: "scenario",
-        text: `Tahmin hatası 1 saat önceden görülüp kısmen gün içi piyasada kapatılırsa risk en fazla %${nf(r.intraday!.savingPct, 0)} kadar azalır (üst sınır; gün içinde zaten işlem yapılıyorsa bir kısmı alınıyordur).`,
-      });
-    }
-    if (r.dsg && r.dsg.benefitTl > 0) {
-      points.push({
-        kind: "scenario",
-        text: `Farklı şirketlerdeki santraller tek dengeden sorumlu grupta netleşseydi risk ${formatTlShort(r.dsg.benefitTl)} daha azalırdı.`,
+        text: `Tahmin hatası 1 saat önceden görülüp kısmen gün içi piyasada kapatılırsa dengesizlik riski en fazla %${nf(r.intraday!.savingPct, 0)} azalır (üst sınır).`,
       });
     }
     const shown = points.slice(0, 4);
@@ -327,79 +337,73 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       tag(s, p.kind, px + 0.35, y + 0.04);
       text(s, p.text, { x: px + 1.7, y, w: pw - 2.05, h: step - 0.12, fontSize: 12.5, valign: "top" });
     });
-    // Kapsam ve tanım dipnotu
     const cov = r.coverage.filter((c) => c.missing.length > 0);
     const scope =
       (cov.length
         ? `Kapsam: ${cov.map((c) => `${c.company} şirketinin EPİAŞ'ta üretimi yayımlanan ${c.total} santralinden ${c.total - c.missing.length} tanesi (eksik: ${c.missing.join(", ")})`).join("; ")}. `
-        : "") + "Dengesizlik riski: gün öncesi plan hatasının dengesizlik fiyatıyla değeri, gün içi işlemler öncesi.";
+        : "") + "Sapma yükü = dengesizlik riski (gün içi işlemler öncesi) + tahmini KÜPST.";
     text(s, scope, { x: M, y: 6.68, w: CW, h: 0.32, fontSize: 9, color: cov.length ? C.scenTx : C.sub, valign: "top" });
   }
 
   // ---------------------------------------------------------------------------------------------
-  // 3. RİSK KÖPRÜSÜ (şelale)
+  // 3. SAPMA YÜKÜ KÖPRÜSÜ (şelale)
   // ---------------------------------------------------------------------------------------------
   {
-    type Step = { label: string; value: number; kind: "total" | "down" | "up" | "scenario" | "target" };
+    type Step = { label: string; value: number; kind: "total" | "down" | "up" | "assumption" | "kupst" | "scenario" | "target" };
     const steps: Step[] = [];
-    let end: number;
+    let imb2026: number;
     if (ex) {
-      // Tüm portföy → YEKDEM santralleri → doğrudan risk → 2026 katsayısı → YEKDEM'den çıkanlar → 2026'da şirkete yansıyan
-      steps.push({ label: `Tüm santraller (${yearOf(r)}, şirket bazında)`, value: ex.allCostTl, kind: "total" });
-      steps.push({ label: "YEKDEM santralleri (kime yansıdığı doğrulanmalı)", value: ex.directCostTl - ex.allCostTl, kind: "down" });
-      steps.push({ label: `Şirkete doğrudan yansıyan (${yearOf(r)})`, value: ex.directCostTl, kind: "total" });
-      end = ex.directCostTl;
+      // Varsayım A yolu: YEKDEM dışı dengesizlik → 2026 katsayısı → YEKDEM'den çıkanlar → + KÜPST
+      steps.push({ label: `Dengesizlik riski ${yearOf(r)} (YEKDEM dışı)`, value: ex.directCostTl, kind: "total" });
+      imb2026 = ex.directCostTl;
       if (ex.direct2026Tl !== null && ex.exposure2026Tl !== null) {
         steps.push({ label: "2026 katsayı etkisi", value: ex.direct2026Tl - ex.directCostTl, kind: "up" });
         if (ex.exitingPlants.length) {
-          steps.push({ label: `YEKDEM'den çıkan ${ex.exitingPlants.length} santral`, value: ex.exposure2026Tl - ex.direct2026Tl, kind: "up" });
+          steps.push({ label: `YEKDEM'den çıkan ${ex.exitingPlants.length} santral (varsayım A)`, value: ex.exposure2026Tl - ex.direct2026Tl, kind: "assumption" });
         }
-        end = ex.exposure2026Tl;
-        steps.push({ label: "2026'da şirkete yansıyacak", value: end, kind: "total" });
+        imb2026 = ex.exposure2026Tl;
+        steps.push({ label: "Dengesizlik riski 2026", value: imb2026, kind: "total" });
       }
+      steps.push({ label: "KÜPST (tahmini)", value: ex.kupstExposure2026Tl ?? ex.kupstDirectTl, kind: "kupst" });
     } else {
       if (netted) {
         steps.push({ label: "Santraller tek tek uzlaştırılsaydı", value: r.settlement.plantLevelCostTl, kind: "total" });
         steps.push({ label: "Şirket içi netleşme", value: -r.settlement.sameCompanyNettingTl, kind: "down" });
       }
-      steps.push({ label: `${yearOf(r)} riski (şirket bazında)`, value: cost, kind: "total" });
-      end = cost;
+      steps.push({ label: `Dengesizlik riski ${yearOf(r)}`, value: cost, kind: "total" });
+      imb2026 = cost;
       if (s2026) {
         steps.push({ label: "2026 katsayı etkisi", value: s2026.deltaTl, kind: "up" });
-        end = s2026.cost2026Tl;
-        steps.push({ label: "2026 beklenen risk", value: end, kind: "total" });
+        imb2026 = s2026.cost2026Tl;
+        steps.push({ label: "Dengesizlik riski 2026", value: imb2026, kind: "total" });
       }
+      steps.push({ label: "KÜPST (tahmini)", value: k2026, kind: "kupst" });
     }
-    const intradaySaving = intradayOn ? (r.intraday!.savingPct / 100) * end : 0;
+    const loadEnd = steps.reduce((lvl, st) => (st.kind === "total" ? st.value : lvl + st.value), 0);
+    steps.push({ label: s2026 ? "Sapma yükü 2026" : "Sapma yükü", value: loadEnd, kind: "total" });
+    const intradaySaving = intradayOn ? (r.intraday!.savingPct / 100) * imb2026 : 0;
     if (intradayOn) {
       steps.push({ label: `Gün içi güncelleme, üst sınır (%${nf(r.intraday!.savingPct, 0)})`, value: -intradaySaving, kind: "scenario" });
-      steps.push({ label: "Ulaşılabilir risk", value: end - intradaySaving, kind: "target" });
+      steps.push({ label: "Ulaşılabilir", value: loadEnd - intradaySaving, kind: "target" });
     }
 
-    const rise = steps.filter((st) => st.kind === "up").reduce((a, st) => a + st.value, 0);
-    const title =
-      rise > 0
-        ? `2026'da şirkete yansıyacak risk ${formatTlShort(rise)} artıyor${
-            intradayOn ? `; gün içi pozisyon güncellemesi en fazla ${formatTlShort(intradaySaving)} azaltabilir` : ""
-          }`
-        : ex
-          ? `Riskin ${formatTlShort(ex.directCostTl)} kadarı doğrudan şirkete yansıyor`
-          : "Risk köprüsü: santral bazından şirket bazına";
-    const s = contentSlide("Risk köprüsü", title);
+    const title = s2026
+      ? `2026'da ${ex ? "şirkete yansıyacak " : ""}sapma yükü ${formatTlShort(loadEnd)}${
+          intradayOn ? `; gün içi pozisyon güncellemesi en fazla ${formatTlShort(intradaySaving)} azaltabilir` : ""
+        }`
+      : `Sapma yükü ${formatTlShort(loadEnd)}: dengesizlik riski ve KÜPST`;
+    const s = contentSlide("Sapma yükü köprüsü", title);
     s.addNotes(
       "Köprüyü soldan sağa okuyun. " +
         (ex
-          ? `İlk sütun tüm santrallerin şirket bazında riski. YEKDEM'deki santrallerin dengesizliği şirkete değil YEKDEM portföyüne yansıyor olabilir; bu yüzden şirkete doğrudan yansıyan risk ${formatTlShort(
-              ex.directCostTl
-            )}. ` +
-            (ex.exitingPlants.length ? `2026'da YEKDEM'den çıkan santraller bu riske ekleniyor. ` : "")
+          ? `Başlangıç YEKDEM dışı santrallerin dengesizlik riski. 2026 katsayısı ve (varsayım A'da) YEKDEM'den çıkan santraller ekleniyor; kesikli turuncu adım varsayıma bağlıdır. `
           : netted
             ? `İlk sütun santraller tek tek uzlaştırılsaydı oluşacak risk; aynı şirketin santralleri birbirini dengelediği için ${formatTlShort(
                 r.settlement.sameCompanyNettingTl
               )} zaten netleşiyor. `
             : "") +
-        "2026 adımları 2025'in fiyatları ve sistem yönleri tekrar ederse geçerlidir. " +
-        (intradayOn ? "Son iki sütun senaryodur ve üst sınırdır: şirket gün içinde zaten işlem yapıyorsa kazancın bir kısmı hâlihazırda alınıyordur." : "")
+        "KÜPST santral bazında hesaplanır, netleşmez ve 2026 oranları doğrulanmadığı için 2025 oranlarıyla tahmin edildi. 2026 adımları 2025 fiyatları ve sistem yönleri tekrar ederse geçerlidir. " +
+        (intradayOn ? "Gün içi adımı senaryodur ve üst sınırdır; yalnızca dengesizlik riskine uygulanmıştır." : "")
     );
 
     // Her adımın başlangıç ve bitiş seviyesi
@@ -423,7 +427,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     const slot = CW / steps.length;
     const barW = Math.min(1.05, slot * 0.58);
 
-    text(s, "Milyon TL · koyu sütunlar ve gri/turuncu adımlar kesin hesap; kesikli yeşil adımlar senaryodur · 2026 adımları 2025 fiyatları ve sistem yönleri tekrar ederse", {
+    text(s, "Milyon TL · düz sütunlar kesin hesap · kesikli turuncu: varsayıma bağlı · kesikli yeşil: senaryo · 2026 adımları 2025 fiyatları ve sistem yönleri tekrar ederse", {
       x: M,
       y: 1.8,
       w: CW,
@@ -437,17 +441,17 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       const y0 = yOf(b.hi);
       const h = Math.max(yOf(b.lo) - y0, 0.02);
       const scenario = st.kind === "scenario" || st.kind === "target";
-      if (scenario) {
+      if (scenario || st.kind === "assumption") {
         s.addShape(pptx.ShapeType.rect, {
           x: cx - barW / 2,
           y: y0,
           w: barW,
           h,
-          fill: { color: C.gainSoft },
-          line: { color: C.gain, width: 1.25, dashType: "dash" },
+          fill: { color: scenario ? C.gainSoft : C.riskSoft },
+          line: { color: scenario ? C.gain : C.risk, width: 1.25, dashType: "dash" },
         });
       } else {
-        rect(s, cx - barW / 2, y0, barW, h, st.kind === "total" ? C.navy : st.kind === "up" ? C.risk : "A7B4C2");
+        rect(s, cx - barW / 2, y0, barW, h, st.kind === "total" ? C.navy : st.kind === "up" ? C.risk : st.kind === "kupst" ? C.cost : "A7B4C2");
       }
       if (i < steps.length - 1) {
         const endLevel = st.kind === "total" || st.kind === "target" ? st.value : st.value >= 0 ? b.hi : b.lo;
@@ -468,7 +472,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
         fontSize: 15,
         bold: true,
         align: "center",
-        color: st.kind === "up" ? C.risk : scenario ? C.gain : st.kind === "down" ? C.sub : C.ink,
+        color: st.kind === "up" || st.kind === "assumption" ? C.risk : st.kind === "kupst" ? C.cost : scenario ? C.gain : st.kind === "down" ? C.sub : C.ink,
       });
       text(s, st.label, { x: cx - slot / 2 + 0.05, y: bottom + 0.12, w: slot - 0.1, h: 0.6, fontSize: 11, color: C.sub, align: "center", valign: "top" });
     });
@@ -542,7 +546,13 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       text(s, p.name, { x: M, y, w: nameW, h: rowH, fontSize: 11, valign: "middle" });
       const w = Math.max((p.unitCostTl / maxU) * barMaxW, 0.03);
       rect(s, barX, y + rowH * 0.2, w, rowH * 0.6, above ? C.cost : "A7B4C2");
-      const tagText = p.yekdem ? (p.yekdemNextYear === false ? "  · YEKDEM, çıkıyor" : "  · YEKDEM") : "";
+      const tagText = p.yekdem
+        ? p.yekdemNextYear === false
+          ? "  · YEKDEM'den çıkıyor"
+          : p.yekdemNextYear === true
+            ? "  · YEKDEM (devam)"
+            : "  · YEKDEM"
+        : "";
       text(s, `${nf(p.unitCostTl, 0)}${tagText}`, {
         x: barX + w + 0.08,
         y,
@@ -718,80 +728,82 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
   // ---------------------------------------------------------------------------------------------
   if (s2026) {
     const exiting = ex?.exitingPlants ?? [];
-    const title =
-      ex && ex.exposure2026Tl !== null && exiting.length
-        ? `2026'da iki etki birleşiyor: katsayı %6'ya çıkıyor ve ${exiting.length} santral YEKDEM'den çıkıyor; şirkete yansıyacak risk ${formatTlShort(
-            ex.exposure2026Tl
-          )}`
-        : `2026 katsayılarıyla aynı üretim ${formatTlShort(s2026.deltaTl)} daha fazla risk yaratıyor (%${nf(s2026.deltaPct, 0)})`;
-    const s = contentSlide("2026 riski", title, "exact");
+    const title = ex
+      ? `2026 sapma yükü YEKDEM varsayımına göre ${nf(Math.min(load.a2026!, load.b2026!) / 1e6, 1)}–${nf(Math.max(load.a2026!, load.b2026!) / 1e6, 1)} milyon TL; artışın büyüklüğü tek bir soruya bağlı`
+      : `2026 katsayılarıyla aynı üretim ${formatTlShort(s2026.deltaTl)} daha fazla dengesizlik riski yaratıyor (%${nf(s2026.deltaPct, 0)})`;
+    const s = contentSlide("2026 riski", title, ex ? "assumption" : "exact");
     s.addNotes(
       "1 Ocak 2026'dan itibaren sistemle aynı yöndeki sapmada katsayı %3'ten %6'ya çıktı; aynı tahmin kalitesiyle risk artıyor. Hesap, 2025'in fiyatları ve sistem yönleri tekrar ederse geçerlidir. " +
         (ex
-          ? "YEKDEM kısmında karşı tarafa sorun: 'YEKDEM döneminde dengesizlik size mi yansıyordu, YEKDEM portföyüne mi?' Cevap ikincisiyse YEKDEM'den çıkan santrallerin dengesizliği 2026'da ilk kez sizin riskiniz olur. Bu, görüşmenin en güçlü sorusudur."
+          ? "Bu slaytın sorusu: 'YEKDEM döneminde dengesizlik ve KÜPST size mi yansıyordu, YEKDEM portföyüne mi?' A'da YEKDEM'den çıkan santraller 2026'da yeni bir yük getirir; B'de yük zaten vardı ve artış yalnızca katsayıdan gelir. Bu, görüşmenin en güçlü sorusudur."
           : "")
     );
-    const leftW = ex ? 6.3 : CW;
+    const leftW = ex ? 7.2 : CW;
     text(
       s,
-      "1 Ocak 2026'dan itibaren sapma sistemle aynı yöndeyse (sistem fazlasındayken fazla, açığındayken eksik üretim) dengesizlik fiyatındaki pay %3'ten %6'ya çıktı. Ters yöndeki sapmada %3 devam ediyor.",
-      { x: M, y: 1.85, w: leftW, h: 0.85, fontSize: 13, color: C.sub, valign: "top" }
+      "1 Ocak 2026'dan itibaren sapma sistemle aynı yöndeyse (sistem fazlasındayken fazla, açığındayken eksik üretim) dengesizlik fiyatındaki pay %3'ten %6'ya çıktı. Ters yöndeki sapmada %3 devam ediyor. Tutarlar dengesizlik riski + tahmini KÜPST.",
+      { x: M, y: 1.85, w: leftW, h: 0.85, fontSize: 12.5, color: C.sub, valign: "top" }
     );
-    // Sütunlar: YEKDEM varsa doğrudan risk (2025) ve 2026'da şirkete yansıyacak risk (katsayı + YEKDEM çıkışı üst üste)
-    const segs2025 = ex ? [{ v: ex.directCostTl, color: C.navy }] : [{ v: s2026.baseCostTl, color: C.navy }];
-    const segs2026 =
-      ex && ex.direct2026Tl !== null && ex.exposure2026Tl !== null
-        ? [
-            { v: ex.direct2026Tl, color: C.risk },
-            { v: ex.exposure2026Tl - ex.direct2026Tl, color: "A8660F" },
-          ]
-        : [{ v: s2026.cost2026Tl, color: C.risk }];
-    const total = (segs: Array<{ v: number }>) => segs.reduce((a, g) => a + g.v, 0);
-    const maxV = Math.max(total(segs2025), total(segs2026), 1);
-    const bx = M + 0.3;
-    const bottom = 6.15;
-    const plotH = 2.7;
-    const bw = 1.2;
-    const gapBars = 0.6;
-    [
-      { label: ex ? `${yearOf(r)}: YEKDEM dışı` : `${yearOf(r)} kurallarıyla`, segs: segs2025, color: C.navy },
-      { label: ex ? "2026: şirkete yansıyacak" : "2026 kurallarıyla", segs: segs2026, color: C.risk },
-    ].forEach((b, i) => {
-      const x = bx + i * (bw + gapBars);
-      let yTop = bottom;
-      for (const g of b.segs) {
-        const h = (Math.max(g.v, 0) / maxV) * plotH;
-        yTop -= h;
-        rect(s, x, yTop, bw, h, g.color);
+    const pairs = ex
+      ? [
+          { head: "Varsayım A", sub: "YEKDEM portföyüne yansır", v25: load.a2025, v26: load.a2026! },
+          { head: "Varsayım B", sub: "Şirkete yansır", v25: load.b2025, v26: load.b2026! },
+        ]
+      : [{ head: "", sub: "", v25: load.b2025, v26: load.b2026! }];
+    const maxV = Math.max(...pairs.flatMap((p) => [p.v25, p.v26]), 1);
+    const bottom = 6.05;
+    const plotH = 2.45;
+    const bw = 0.95;
+    const pairW = leftW / pairs.length;
+    pairs.forEach((p, pi) => {
+      const x0 = M + pi * pairW + 0.2;
+      if (p.head) {
+        text(s, p.head, { x: x0, y: 2.8, w: pairW - 0.4, h: 0.3, fontSize: 13, bold: true, fontFace: FONT_HEAD });
+        text(s, p.sub, { x: x0, y: 3.08, w: pairW - 0.4, h: 0.28, fontSize: 10.5, color: C.sub });
       }
-      text(s, `${nf(total(b.segs) / 1e6, 1)} M`, { x: x - 0.3, y: yTop - 0.44, w: bw + 0.6, h: 0.38, fontSize: 17, bold: true, align: "center", color: b.color });
-      text(s, b.label, { x: x - 0.4, y: bottom + 0.1, w: bw + 0.8, h: 0.3, fontSize: 10.5, align: "center", color: C.sub });
+      [
+        { v: p.v25, color: C.navy, label: yearOf(r) },
+        { v: p.v26, color: C.risk, label: "2026" },
+      ].forEach((b, bi) => {
+        const x = x0 + bi * (bw + 0.35);
+        const h = (b.v / maxV) * plotH;
+        rect(s, x, bottom - h, bw, h, b.color);
+        text(s, `${nf(b.v / 1e6, 1)} M`, { x: x - 0.25, y: bottom - h - 0.38, w: bw + 0.5, h: 0.32, fontSize: 14, bold: true, align: "center", color: b.color });
+        text(s, b.label, { x: x - 0.25, y: bottom + 0.08, w: bw + 0.5, h: 0.26, fontSize: 10.5, align: "center", color: C.sub });
+      });
+      const d = p.v26 - p.v25;
+      text(s, `${d >= 0 ? "+" : "−"}${formatTlShort(Math.abs(d))}`, {
+        x: x0 + 2 * (bw + 0.35) - 0.2,
+        y: bottom - plotH * 0.55,
+        w: pairW - 2 * (bw + 0.35),
+        h: 0.4,
+        fontSize: 15,
+        bold: true,
+        color: C.risk,
+      });
     });
-    const dx = bx + 2 * (bw + gapBars);
-    const dw = M + leftW - dx;
-    const delta = total(segs2026) - total(segs2025);
-    text(s, `+${formatTlShort(delta)}`, { x: dx, y: 3.5, w: dw, h: 0.5, fontSize: 22, bold: true, color: C.risk });
-    const parts =
-      ex && segs2026.length === 2
-        ? `katsayı etkisi ${formatTlShort(segs2026[0].v - segs2025[0].v)}\nYEKDEM'den çıkanlar ${formatTlShort(segs2026[1].v)}`
-        : `%${nf(s2026.deltaPct, 1)} artış`;
-    text(s, `${parts}\n(tahmin kalitesi ve 2025 fiyatları aynı kalırsa)`, { x: dx, y: 4.02, w: dw, h: 1.1, fontSize: 11, color: C.sub, valign: "top" });
 
     if (ex) {
-      const px = M + leftW + 0.4;
+      const px = M + leftW + 0.35;
       const pw = W - M - px;
-      round(s, px, 1.85, pw, 4.3, C.riskSoft);
-      text(s, "YEKDEM durumu", { x: px + 0.3, y: 2.05, w: pw - 0.6, h: 0.4, fontSize: 16, bold: true, fontFace: FONT_HEAD });
+      round(s, px, 1.85, pw, 4.55, C.assumBg);
+      text(s, "Tek soru", { x: px + 0.3, y: 2.05, w: pw - 0.6, h: 0.4, fontSize: 16, bold: true, fontFace: FONT_HEAD });
+      text(s, "YEKDEM döneminde dengesizlik ve KÜPST şirkete mi, YEKDEM portföyüne mi yansıyordu?", {
+        x: px + 0.3,
+        y: 2.5,
+        w: pw - 0.6,
+        h: 0.8,
+        fontSize: 12.5,
+        bold: true,
+        color: C.assumTx,
+        valign: "top",
+      });
       const lines: string[] = [];
-      if (ex.exitingPlants.length) lines.push(`2026'da çıkıyor: ${ex.exitingPlants.join(", ")}`);
+      if (exiting.length) lines.push(`2026'da YEKDEM'den çıkıyor: ${exiting.join(", ")}`);
       if (ex.stayingPlants.length) lines.push(`YEKDEM'de devam ediyor: ${ex.stayingPlants.join(", ")}`);
       if (ex.unknownExitPlants.length) lines.push(`Çıkış yılı bilinmiyor: ${ex.unknownExitPlants.join(", ")}`);
-      text(s, lines.join("\n\n"), { x: px + 0.3, y: 2.55, w: pw - 0.6, h: 1.8, fontSize: 12, valign: "top" });
-      text(
-        s,
-        "Doğrulanmalı: YEKDEM döneminde dengesizliğin santrale mi, YEKDEM portföyüne mi yansıdığı. İkincisi geçerliyse YEKDEM'den çıkan santrallerin dengesizliği şirket için 2026'da yeni bir kalemdir.",
-        { x: px + 0.3, y: 4.45, w: pw - 0.6, h: 1.5, fontSize: 11, color: C.scenTx, valign: "top" }
-      );
+      text(s, lines.join("\n\n"), { x: px + 0.3, y: 3.4, w: pw - 0.6, h: 2.0, fontSize: 11, valign: "top" });
+      text(s, "Kaynak: EPİAŞ YEKDEM santral listeleri (veri yılı ve sonraki yıl).", { x: px + 0.3, y: 5.85, w: pw - 0.6, h: 0.4, fontSize: 9, color: C.sub, valign: "top" });
     }
   }
 
@@ -799,9 +811,10 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
   // 8. FIRSATLAR
   // ---------------------------------------------------------------------------------------------
   {
-    type Item = { title: string; impact: string; body: string; kind: "exact" | "scenario"; effort: string };
+    type Item = { title: string; impact: string; body: string; kind: TagKind; effort: string };
     const items: Item[] = [];
     if (r.intraday) {
+      // Gün içi güncelleme dengesizlik riskini azaltır (KÜPST'e uygulanmaz); köprüdeki 2026 dengesizlik riskiyle aynı dayanak
       const basis = ex ? (ex.exposure2026Tl ?? ex.directCostTl) : (s2026?.cost2026Tl ?? cost);
       items.push({
         title: "Gün içi piyasada pozisyon güncelleme",
@@ -901,7 +914,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     });
     const nextSteps = [
       { n: "1", t: "Görüşme", b: "30 dakikada bulguların ve yöntemin üzerinden geçilmesi" },
-      { n: "2", t: "Doğrulama", b: "Kendi tahmin, gün içi işlem ve uzlaştırma verinizle maliyetin netleştirilmesi" },
+      { n: "2", t: "Doğrulama", b: "Kendi tahmin, gün içi işlem ve uzlaştırma verinizle sapma yükünün netleştirilmesi" },
       { n: "3", t: "Pilot", b: "3 ay boyunca en pahalı saatlere odaklı günlük izleme ve aylık sonuç raporu" },
     ];
     const cw = (CW - 0.2 - 2 * 0.3) / 3;
@@ -929,7 +942,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     const MAX_ROWS = 14;
     const shown = r.plants.slice(0, MAX_ROWS);
     const rest = r.plants.slice(MAX_ROWS);
-    const head = ["Santral", "Tür", "MW", "Üretim", "Risk (tek başına)", "TL/MWh", "Gelir payı", "Plan farkı"];
+    const head = ["Santral", "Tür", "MW", "Üretim", "Dengesizlik (tek başına)", "TL/MWh", "KÜPST (tahmini)", "Plan farkı"];
     const cell = (v: string, o: Record<string, unknown> = {}) => ({ text: v, options: { fontSize: 10, fontFace: FONT_BODY, color: C.ink, ...o } });
     const rows: ReturnType<typeof cell>[][] = [
       head.map((h, i) => cell(h, { bold: true, color: C.white, fill: { color: C.navy }, align: i < 2 ? "left" : "right" })),
@@ -942,7 +955,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
           cell(formatEnergy(p.actualMwh), { ...fill, align: "right" }),
           cell(formatTlShort(p.imbalanceCostTl, 2), { ...fill, align: "right" }),
           cell(nf(p.unitCostTl, 0), { ...fill, align: "right" }),
-          cell(p.costShareOfRevenuePct !== null ? `%${nf(p.costShareOfRevenuePct, 1)}` : "—", { ...fill, align: "right" }),
+          cell(formatTlShort(p.kupstTl, 2), { ...fill, align: "right" }),
           cell(`%${nf(p.deviationPct, 1)}`, { ...fill, align: "right" }),
         ];
       }),
@@ -956,7 +969,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
         cell(formatEnergy(sum((p) => p.actualMwh)), { align: "right" }),
         cell(formatTlShort(sum((p) => p.imbalanceCostTl), 2), { align: "right" }),
         cell(""),
-        cell(""),
+        cell(formatTlShort(sum((p) => p.kupstTl), 2), { align: "right" }),
         cell(""),
       ]);
     }
@@ -968,7 +981,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       cell(formatEnergy(t.actualMwh), { ...bold, align: "right" }),
       cell(formatTlShort(r.settlement.plantLevelCostTl, 2), { ...bold, align: "right" }),
       cell(nf(plantLevelUnit, 0), { ...bold, align: "right" }),
-      cell("", bold),
+      cell(formatTlShort(r.kupst.totalTl, 2), { ...bold, align: "right" }),
       cell(`%${nf(t.deviationPct, 1)}`, { ...bold, align: "right" }),
     ]);
     if (netted) {
@@ -979,7 +992,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
         cell("", bold),
         cell(formatTlShort(cost, 2), { ...bold, align: "right", color: C.cost }),
         cell(nf(t.unitCostTl, 0), { ...bold, align: "right" }),
-        cell(t.costShareOfRevenuePct !== null ? `%${nf(t.costShareOfRevenuePct, 1)}` : "", { ...bold, align: "right" }),
+        cell("", bold),
         cell("", bold),
       ]);
     }
@@ -1004,7 +1017,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       : `Şirketler: ${r.settlement.companies.map((c) => `${c.name ?? "sahibi bulunamadı"} (${c.plantNames.join(", ")})`).join("; ")}.${missingNote}`;
     text(
       s,
-      `${owners} Gelir payı: maliyetin gün öncesi satış ve dengesizlik tutarları toplamına oranı (YEKDEM santrallerinde verilmedi). Plan farkı: saatlik |gerçekleşen − plan| toplamının gerçekleşen üretime oranı.`,
+      `${owners} KÜPST santral bazındadır ve şirket içinde netleşmez. Plan farkı: saatlik |gerçekleşen − plan| toplamının gerçekleşen üretime oranı.`,
       { x: M, y: Math.min(tableBottom + 0.2, 6.3), w: CW, h: 0.6, fontSize: 9.5, color: C.sub, valign: "top" }
     );
   }
@@ -1043,16 +1056,24 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
             ? " YEKDEM santrallerinin geliri YEKDEM fiyatından oluşur; YEKDEM döneminde dengesizliğin santrale mi YEKDEM portföyüne mi yansıdığı ayrıca doğrulanmalıdır."
             : ""),
       ],
-      ["Senaryolar", "SENARYO etiketli tutarlar bir davranış varsayımına dayanır; kesin tasarruf taahhüdü değildir."],
+      [
+        "KÜPST (tahmini)",
+        "Saatlik |gerçekleşen − plan| sapmanın tolerans payını aşan kısmı × max(PTF, SMF) × 0,03. Tolerans plana oranlandı: 2025'ten itibaren rüzgâr %17, güneş %10, diğer %5 (EPDK 21.11.2024 / 13025); öncesinde rüzgâr %21, güneş %12. 2026 oranları doğrulanmadığından 2025 oranları kullanıldı. Arıza sayısına bağlı katsayı artışı kapsam dışı.",
+      ],
+      [
+        "Etiketler",
+        "KESİN HESAP: veriden doğrudan. VARSAYIMA BAĞLI: YEKDEM santrallerinin dengesizliğinin kime yansıdığına göre değişir (A: YEKDEM portföyüne, B: şirkete). SENARYO: davranış varsayımı; taahhüt değildir.",
+      ],
     ];
     const colW = (CW - 0.5) / 2;
+    const rowStep = blocks.length > 6 ? 1.28 : 1.68;
     blocks.forEach(([h, b], i) => {
       const col = i % 2;
       const row = Math.floor(i / 2);
       const x = M + col * (colW + 0.5);
-      const y = 1.85 + row * 1.68;
-      text(s, h, { x, y, w: colW, h: 0.35, fontSize: 14, bold: true, fontFace: FONT_HEAD, color: C.navy });
-      text(s, b, { x, y: y + 0.4, w: colW, h: 1.2, fontSize: 11.5, color: C.sub, valign: "top" });
+      const y = 1.75 + row * rowStep;
+      text(s, h, { x, y, w: colW, h: 0.3, fontSize: 13, bold: true, fontFace: FONT_HEAD, color: C.navy });
+      text(s, b, { x, y: y + 0.32, w: colW, h: rowStep - 0.38, fontSize: blocks.length > 6 ? 10 : 11.5, color: C.sub, valign: "top" });
     });
   }
 

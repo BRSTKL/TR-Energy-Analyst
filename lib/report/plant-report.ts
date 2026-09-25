@@ -16,6 +16,7 @@ import { processHourlyRecord } from "@/lib/calculations/engine";
 import { aggregateMonthly } from "@/lib/calculations/aggregate";
 import { HourlyResult, ImbalancePricingProfile, REGULATORY_IMBALANCE_REGIMES } from "@/lib/calculations/types";
 import { combineBacktests, persistenceStrategy, runBacktest } from "@/lib/analysis/backtest";
+import { KUPST_REGIMES, kupstTotal } from "@/lib/calculations/kupst";
 import type { ProjectHourly } from "@/lib/services/project-hourly";
 
 export interface ReportPlantRow {
@@ -31,6 +32,8 @@ export interface ReportPlantRow {
   revenueTl: number;
   /** Santral tek başına uzlaştırılsaydı dengesizlik maliyeti */
   imbalanceCostTl: number;
+  /** Tahmini KÜPST (sapma bedeli, santral bazında; netleşmez) */
+  kupstTl: number;
   /** TL / MWh (gerçekleşen üretim başına) */
   unitCostTl: number;
   /** Dengesizlik maliyetinin gelire oranı (%); YEKDEM santralinde gelir PTF'den oluşmadığı için null */
@@ -72,6 +75,11 @@ export interface PlantReportData {
    * costShareOfRevenuePct: portföyde YEKDEM santrali varsa null.
    */
   totals: Omit<ReportPlantRow, "name" | "type" | "organizationName" | "yekdem" | "yekdemNextYear" | "biasPct" | "sameDirectionPct"> & { plantCount: number };
+  /**
+   * Tahmini KÜPST (tüm santraller). next2026Tl: aynı saatlik veri, en güncel yürürlükteki oranlarla (2026 oranları
+   * doğrulanmadığından 2025 oranları); veri zaten 2026+ ise null.
+   */
+  kupst: { totalTl: number; next2026Tl: number | null };
   settlement: {
     /** Santraller tek tek uzlaştırılsaydı */
     plantLevelCostTl: number;
@@ -106,6 +114,10 @@ export interface PlantReportData {
     direct2026Tl: number | null;
     /** 2026'da şirkete yansıyacak risk: YEKDEM dışı + YEKDEM'den çıkan santraller, 2026 katsayılarıyla */
     exposure2026Tl: number | null;
+    /** Tahmini KÜPST aynı kapsamlarla (2026: en güncel oranlarla) */
+    kupstDirectTl: number;
+    kupstYekdemTl: number;
+    kupstExposure2026Tl: number | null;
   } | null;
   /** Şirketin EPİAŞ'taki santrallerinden projede olmayanlar (bilgi yoksa boş) */
   coverage: Array<{ company: string; inProject: number; total: number; missing: string[] }>;
@@ -202,6 +214,7 @@ function plantRow(p: Plant): ReportPlantRow {
     actualMwh: actual,
     revenueTl: revenue,
     imbalanceCostTl: cost,
+    kupstTl: kupstTotal(p.hourly, p.plantType),
     unitCostTl: actual > 0 ? cost / actual : 0,
     costShareOfRevenuePct: p.yekdem ? null : pct(cost, revenue),
     deviationPct: pct(absDev, actual),
@@ -347,12 +360,18 @@ export function buildPlantReport(data: ProjectHourly, context: ReportContext = {
     };
   }
 
+  // KÜPST: santral bazında; 2026 projeksiyonu en güncel yürürlükteki oranlarla
+  const latestKupst = KUPST_REGIMES[KUPST_REGIMES.length - 1];
+  const kupstOf = (ps: Plant[]) => ps.reduce((sum, p) => sum + kupstTotal(p.hourly, p.plantType), 0);
+  const kupstNextOf = (ps: Plant[]) => ps.reduce((sum, p) => sum + kupstTotal(p.hourly, p.plantType, latestKupst), 0);
+  const pre2026 = start < REGIME_2026_START;
+  const kupst = { totalTl: kupstOf(withData), next2026Tl: pre2026 ? kupstNextOf(withData) : null };
+
   let exposure: PlantReportData["exposure"] = null;
   if (hasYekdem) {
     const direct = withData.filter((p) => !p.yekdem);
     const yek = withData.filter((p) => p.yekdem);
     const exiting = yek.filter((p) => p.yekdemNextYear === false);
-    const pre2026 = start < REGIME_2026_START;
     exposure = {
       directCostTl: settleSubset(direct, data.profile),
       directPlants: direct.map((p) => p.plantName),
@@ -363,6 +382,9 @@ export function buildPlantReport(data: ProjectHourly, context: ReportContext = {
       unknownExitPlants: yek.filter((p) => p.yekdemNextYear === null).map((p) => p.plantName),
       direct2026Tl: pre2026 ? settleSubset(direct, profile2026) : null,
       exposure2026Tl: pre2026 ? settleSubset([...direct, ...exiting], profile2026) : null,
+      kupstDirectTl: kupstOf(direct),
+      kupstYekdemTl: kupstOf(yek),
+      kupstExposure2026Tl: pre2026 ? kupstNextOf([...direct, ...exiting]) : null,
     };
   }
 
@@ -385,6 +407,7 @@ export function buildPlantReport(data: ProjectHourly, context: ReportContext = {
       actualMwh: actual,
       revenueTl: revenue,
       imbalanceCostTl: companyCost,
+      kupstTl: kupst.totalTl,
       unitCostTl: actual > 0 ? companyCost / actual : 0,
       costShareOfRevenuePct: hasYekdem ? null : pct(companyCost, revenue),
       deviationPct: pct(absDev, actual),
@@ -400,6 +423,7 @@ export function buildPlantReport(data: ProjectHourly, context: ReportContext = {
     yekdem: hasYekdem ? { plantNames: withData.filter((p) => p.yekdem).map((p) => p.plantName) } : null,
     exposure,
     coverage,
+    kupst,
     alignment: { sameDirectionMwhPct: pct(netSame, netAbs), sameDirectionCostPct: pct(sameCost, companyCost) },
     monthly,
     heatmap: { cells, hourTotals },
