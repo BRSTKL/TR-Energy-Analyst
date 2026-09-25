@@ -12,7 +12,8 @@
  * Dayanak ve belirsizlikler:
  *   - 01.01.2025'ten itibaren: rüzgâr 0,17, güneş 0,10, diğer 0,05; katsayı 0,03 (EPDK 21.11.2024 / 13025 sayılı karar).
  *   - 2025 öncesi: rüzgâr 0,21, güneş 0,12 (basında değişiklik öncesi oranlar olarak geçer).
- *   - 2026 için rüzgâr 0,15 / güneş 0,08 bir karar taslağında geçiyor; yürürlüğü doğrulanmadı, bu yüzden tabloda yok.
+ *   - 01.01.2026'dan itibaren: rüzgâr 0,15, güneş 0,08, diğer 0,05 (basında yürürlük tarihiyle ve EPDK taslak
+ *     metninde geçer; kurul kararının resmi metni görülmedi).
  *   - Formülün resmi metni görsel olarak yayımlandığından toleransın plan (KÜP) miktarına oranlandığı varsayılmıştır.
  *   - Arıza sayısına bağlı olarak 0,05'e çıkan katsayı ve toplayıcı portföyleri kapsam dışıdır.
  * Bu nedenle rapor KÜPST'ü "tahmini" olarak etiketler.
@@ -30,6 +31,7 @@ export interface KupstRegime {
 export const KUPST_REGIMES: KupstRegime[] = [
   { from: "0000-01-01", label: "Rüzgâr %21, güneş %12, diğer %5 (2025 öncesi)", tolerance: { RES: 0.21, GES: 0.12, other: 0.05 }, priceCoef: 0.03 },
   { from: "2025-01-01", label: "Rüzgâr %17, güneş %10, diğer %5 (EPDK 13025)", tolerance: { RES: 0.17, GES: 0.1, other: 0.05 }, priceCoef: 0.03 },
+  { from: "2026-01-01", label: "Rüzgâr %15, güneş %8, diğer %5 (2026)", tolerance: { RES: 0.15, GES: 0.08, other: 0.05 }, priceCoef: 0.03 },
 ];
 
 const STARTS = KUPST_REGIMES.map((r) => Date.parse(`${r.from}T00:00:00Z`));

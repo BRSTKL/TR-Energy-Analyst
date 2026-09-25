@@ -139,11 +139,12 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh }: { sapma: SapmaSum
         {ex && (
           <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-3">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-semibold text-slate-900">YEKDEM: riskin kime yansıdığına göre iki varsayım</p>
+              <p className="text-sm font-semibold text-slate-900">YEKDEM: ana senaryo ve duyarlılık</p>
               <Chip kind="assumption" />
             </div>
             <p className="mt-1 text-xs text-slate-600">
-              YEKDEM döneminde dengesizliğin ve KÜPST&apos;ün şirkete mi, YEKDEM portföyüne mi yansıdığı doğrulanmalı.
+              Mevzuatın yapısına göre (YEK Yön. md. 15–17) YEKDEM santrallerinin dengesizliği YEKDEM portföyünde uzlaştırılır;
+              KÜPST tüm santraller için şirkete aittir. Resmi teyit için doğrulanmalı.
               {ex.exitingPlants.length > 0 && ` 2026'da YEKDEM'den çıkan: ${ex.exitingPlants.join(", ")}.`}
               {ex.stayingPlants.length > 0 && ` Devam eden: ${ex.stayingPlants.join(", ")}.`}
               {ex.unknownExitPlants.length > 0 && ` Çıkış yılı bilinmeyen: ${ex.unknownExitPlants.join(", ")}.`}
@@ -152,21 +153,21 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh }: { sapma: SapmaSum
               <table className="w-full min-w-[420px] text-xs">
                 <thead>
                   <tr className="text-left text-slate-500">
-                    <th className="py-1 font-medium">Varsayım</th>
+                    <th className="py-1 font-medium">Senaryo</th>
                     <th className="py-1 text-right font-medium">2025 sapma yükü</th>
                     <th className="py-1 text-right font-medium">2026 sapma yükü</th>
                   </tr>
                 </thead>
                 <tbody className="text-slate-800">
                   <tr className="border-t border-indigo-100">
-                    <td className="py-1.5">A · YEKDEM portföyüne yansır (şirkete: YEKDEM dışı{ex.exitingPlants.length ? " + 2026'da çıkanlar" : ""})</td>
-                    <td className="py-1.5 text-right font-semibold">{tl(ex.directCostTl + ex.kupstDirectTl)}</td>
-                    <td className="py-1.5 text-right font-semibold">
-                      {ex.exposure2026Tl !== null ? tl(ex.exposure2026Tl + (ex.kupstExposure2026Tl ?? 0)) : "—"}
+                    <td className="py-1.5">
+                      Ana senaryo · dengesizlik: YEKDEM dışı{ex.exitingPlants.length ? " (2026'da + YEKDEM'den çıkanlar)" : ""}; KÜPST: tüm santraller
                     </td>
+                    <td className="py-1.5 text-right font-semibold">{tl(ex.directCostTl + sapma.kupst.totalTl)}</td>
+                    <td className="py-1.5 text-right font-semibold">{ex.exposure2026Tl !== null ? tl(ex.exposure2026Tl + k26) : "—"}</td>
                   </tr>
                   <tr className="border-t border-indigo-100">
-                    <td className="py-1.5">B · Şirkete yansır (tüm portföy)</td>
+                    <td className="py-1.5">Duyarlılık · YEKDEM santrallerinin dengesizliği de şirkete yansısaydı</td>
                     <td className="py-1.5 text-right font-semibold">{tl(companyCost + sapma.kupst.totalTl)}</td>
                     <td className="py-1.5 text-right font-semibold">{c26 ? tl(c26.cost2026Tl + k26) : "—"}</td>
                   </tr>
@@ -192,8 +193,8 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh }: { sapma: SapmaSum
 
         <p className="flex items-start gap-1.5 text-2xs text-slate-500">
           <Info className="mt-0.5 h-3 w-3 shrink-0" />
-          KÜPST tahminidir: tolerans plana oranlandı (2025&apos;ten itibaren rüzgâr %17, güneş %10, diğer %5; EPDK 13025). 2026
-          oranları doğrulanmadığından 2025 oranları kullanıldı. Aşağıdaki santral grafikleri ve tablo santral bazındadır; portföy
+          KÜPST tahminidir: tolerans plana oranlandı (2025: rüzgâr %17, güneş %10, diğer %5, EPDK 13025; 2026&apos;dan itibaren
+          rüzgâr %15, güneş %8). Kısıntı talimatları santral bazında yayımlanmadığından ayrılamadı. Aşağıdaki santral grafikleri ve tablo santral bazındadır; portföy
           toplamları şirket bazındadır.
         </p>
       </CardContent>

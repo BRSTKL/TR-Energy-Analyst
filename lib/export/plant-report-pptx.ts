@@ -232,12 +232,14 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
   // ---------------------------------------------------------------------------------------------
   // 2. YÖNETİCİ ÖZETİ
   // ---------------------------------------------------------------------------------------------
-  // YEKDEM varsa iki varsayım: A = YEKDEM santrallerinin dengesizliği şirkete değil YEKDEM portföyüne yansır;
-  // B = şirkete yansır. Her rakam "dengesizlik riski + tahmini KÜPST" toplamıdır (toplam sapma yükü).
+  // YEKDEM varsa iki varsayım. A (ana senaryo): YEKDEM santrallerinin dengesizliği YEKDEM portföyünde uzlaştırılır
+  // (YEK Yönetmeliği md. 15-17'deki portföy uzlaştırması ve EPİAŞ'ın ayrı yayımladığı YEKDEM dengesizlik maliyeti bunu
+  // destekler), KÜPST ise tüm santraller için şirkete aittir. B (duyarlılık): YEKDEM santrallerinin dengesizliği de
+  // şirkete yansır. Her rakam "dengesizlik riski + tahmini KÜPST" toplamıdır (sapma yükü).
   const k2026 = r.kupst.next2026Tl ?? r.kupst.totalTl;
   const load = {
-    a2025: ex ? ex.directCostTl + ex.kupstDirectTl : cost + r.kupst.totalTl,
-    a2026: ex && ex.exposure2026Tl !== null ? ex.exposure2026Tl + (ex.kupstExposure2026Tl ?? 0) : s2026 ? s2026.cost2026Tl + k2026 : null,
+    a2025: ex ? ex.directCostTl + r.kupst.totalTl : cost + r.kupst.totalTl,
+    a2026: ex && ex.exposure2026Tl !== null ? ex.exposure2026Tl + k2026 : s2026 ? s2026.cost2026Tl + k2026 : null,
     b2025: cost + r.kupst.totalTl,
     b2026: s2026 ? s2026.cost2026Tl + k2026 : null,
   };
@@ -245,10 +247,9 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     const exiting = ex?.exitingPlants ?? [];
     const title = ex
       ? load.a2026 !== null && load.b2026 !== null
-        ? `2026'da ${exiting.length ? `${exiting.length} santral YEKDEM'den çıkıyor ve ` : ""}katsayı %6'ya çıkıyor: şirketin sapma yükü ${nf(
-            Math.min(load.a2026, load.b2026) / 1e6,
-            1
-          )}–${nf(Math.max(load.a2026, load.b2026) / 1e6, 1)} milyon TL olacak`
+        ? `2026'da ${exiting.length ? `${exiting.length} santral YEKDEM'den çıkıyor ve ` : ""}katsayı %6'ya çıkıyor: şirketin sapma yükü ${formatTlShort(
+            load.a2025
+          )} → ${formatTlShort(load.a2026)}`
         : `YEKDEM dışı santrallerin sapma yükü ${formatTlShort(load.a2025)}; YEKDEM santralleriyle birlikte ${formatTlShort(load.b2025)}`
       : s2026 && load.b2026 !== null
         ? `${yearOf(r)} sapma yükü ${formatTlShort(load.b2025)}; aynı üretimle 2026 kurallarında ${formatTlShort(load.b2026)}`
@@ -266,17 +267,17 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     if (ex) {
       stats.push({
         value: formatTlShort(load.a2025),
-        label: `${yearOf(r)} · YEKDEM dışı ${ex.directPlants.length} santral: dengesizlik ${formatTlShort(ex.directCostTl)} + KÜPST ${formatTlShort(ex.kupstDirectTl)}`,
+        label: `${yearOf(r)} · YEKDEM dışı ${ex.directPlants.length} santralin dengesizliği ${formatTlShort(ex.directCostTl)} + tüm santrallerin KÜPST'ü ${formatTlShort(r.kupst.totalTl)}`,
         color: C.cost,
       });
       if (load.a2026 !== null)
         stats.push({
           value: formatTlShort(load.a2026),
-          label: `2026 · varsayım A: YEKDEM dışı + YEKDEM'den çıkan ${exiting.length} santral, 2026 katsayılarıyla`,
+          label: `2026 · YEKDEM'den çıkan ${exiting.length} santralin dengesizliği de şirkete geçiyor; 2026 katsayıları ve KÜPST oranlarıyla`,
           color: C.risk,
         });
       if (load.b2026 !== null)
-        stats.push({ value: formatTlShort(load.b2026), label: "2026 · varsayım B: YEKDEM santralleri de şirkete yansıyorsa (tüm portföy)", color: C.sub });
+        stats.push({ value: formatTlShort(load.b2026), label: "2026 · duyarlılık: YEKDEM santrallerinin dengesizliği de şirkete yansısaydı", color: C.sub });
     } else {
       stats.push({
         value: formatTlShort(load.b2025),
@@ -353,18 +354,18 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     const steps: Step[] = [];
     let imb2026: number;
     if (ex) {
-      // Varsayım A yolu: YEKDEM dışı dengesizlik → 2026 katsayısı → YEKDEM'den çıkanlar → + KÜPST
+      // Ana senaryo (A): YEKDEM dışı dengesizlik → 2026 katsayısı → YEKDEM'den çıkanlar → + tüm santrallerin KÜPST'ü
       steps.push({ label: `Dengesizlik riski ${yearOf(r)} (YEKDEM dışı)`, value: ex.directCostTl, kind: "total" });
       imb2026 = ex.directCostTl;
       if (ex.direct2026Tl !== null && ex.exposure2026Tl !== null) {
         steps.push({ label: "2026 katsayı etkisi", value: ex.direct2026Tl - ex.directCostTl, kind: "up" });
         if (ex.exitingPlants.length) {
-          steps.push({ label: `YEKDEM'den çıkan ${ex.exitingPlants.length} santral (varsayım A)`, value: ex.exposure2026Tl - ex.direct2026Tl, kind: "assumption" });
+          steps.push({ label: `YEKDEM'den çıkan ${ex.exitingPlants.length} santral`, value: ex.exposure2026Tl - ex.direct2026Tl, kind: "assumption" });
         }
         imb2026 = ex.exposure2026Tl;
         steps.push({ label: "Dengesizlik riski 2026", value: imb2026, kind: "total" });
       }
-      steps.push({ label: "KÜPST (tahmini)", value: ex.kupstExposure2026Tl ?? ex.kupstDirectTl, kind: "kupst" });
+      steps.push({ label: "KÜPST, tüm santraller (tahmini)", value: k2026, kind: "kupst" });
     } else {
       if (netted) {
         steps.push({ label: "Santraller tek tek uzlaştırılsaydı", value: r.settlement.plantLevelCostTl, kind: "total" });
@@ -396,13 +397,13 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     s.addNotes(
       "Köprüyü soldan sağa okuyun. " +
         (ex
-          ? `Başlangıç YEKDEM dışı santrallerin dengesizlik riski. 2026 katsayısı ve (varsayım A'da) YEKDEM'den çıkan santraller ekleniyor; kesikli turuncu adım varsayıma bağlıdır. `
+          ? `Başlangıç YEKDEM dışı santrallerin dengesizlik riski; YEKDEM santrallerinin dengesizliği YEKDEM portföyünde uzlaştırılır (mevzuatın yapısına dayanan çıkarım). 2026 katsayısı ve YEKDEM'den çıkan santraller ekleniyor; kesikli turuncu adım bu çıkarıma bağlıdır. KÜPST tüm santraller için şirkete aittir. `
           : netted
             ? `İlk sütun santraller tek tek uzlaştırılsaydı oluşacak risk; aynı şirketin santralleri birbirini dengelediği için ${formatTlShort(
                 r.settlement.sameCompanyNettingTl
               )} zaten netleşiyor. `
             : "") +
-        "KÜPST santral bazında hesaplanır, netleşmez ve 2026 oranları doğrulanmadığı için 2025 oranlarıyla tahmin edildi. 2026 adımları 2025 fiyatları ve sistem yönleri tekrar ederse geçerlidir. " +
+        "KÜPST santral bazında hesaplanır, netleşmez; 2026 projeksiyonu 2026 tolerans oranlarıyla (rüzgâr %15, güneş %8) yapıldı. 2026 adımları 2025 fiyatları ve sistem yönleri tekrar ederse geçerlidir. " +
         (intradayOn ? "Gün içi adımı senaryodur ve üst sınırdır; yalnızca dengesizlik riskine uygulanmıştır." : "")
     );
 
@@ -729,7 +730,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
   if (s2026) {
     const exiting = ex?.exitingPlants ?? [];
     const title = ex
-      ? `2026 sapma yükü YEKDEM varsayımına göre ${nf(Math.min(load.a2026!, load.b2026!) / 1e6, 1)}–${nf(Math.max(load.a2026!, load.b2026!) / 1e6, 1)} milyon TL; artışın büyüklüğü tek bir soruya bağlı`
+      ? `2026'da şirketin sapma yükü ${formatTlShort(load.a2026!)}; YEKDEM dengesizliği şirkete yansısaydı ${formatTlShort(load.b2026!)}`
       : `2026 katsayılarıyla aynı üretim ${formatTlShort(s2026.deltaTl)} daha fazla dengesizlik riski yaratıyor (%${nf(s2026.deltaPct, 0)})`;
     const s = contentSlide("2026 riski", title, ex ? "assumption" : "exact");
     s.addNotes(
@@ -746,8 +747,8 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     );
     const pairs = ex
       ? [
-          { head: "Varsayım A", sub: "YEKDEM portföyüne yansır", v25: load.a2025, v26: load.a2026! },
-          { head: "Varsayım B", sub: "Şirkete yansır", v25: load.b2025, v26: load.b2026! },
+          { head: "Ana senaryo", sub: "YEKDEM dengesizliği havuza yansır", v25: load.a2025, v26: load.a2026! },
+          { head: "Duyarlılık", sub: "YEKDEM dengesizliği şirkete yansır", v25: load.b2025, v26: load.b2026! },
         ]
       : [{ head: "", sub: "", v25: load.b2025, v26: load.b2026! }];
     const maxV = Math.max(...pairs.flatMap((p) => [p.v25, p.v26]), 1);
@@ -787,8 +788,8 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       const px = M + leftW + 0.35;
       const pw = W - M - px;
       round(s, px, 1.85, pw, 4.55, C.assumBg);
-      text(s, "Tek soru", { x: px + 0.3, y: 2.05, w: pw - 0.6, h: 0.4, fontSize: 16, bold: true, fontFace: FONT_HEAD });
-      text(s, "YEKDEM döneminde dengesizlik ve KÜPST şirkete mi, YEKDEM portföyüne mi yansıyordu?", {
+      text(s, "Doğrulanacak tek soru", { x: px + 0.3, y: 2.05, w: pw - 0.6, h: 0.4, fontSize: 16, bold: true, fontFace: FONT_HEAD });
+      text(s, "YEKDEM döneminde santralin dengesizliği YEKDEM portföyünde mi uzlaştırılıyordu? Mevzuatın yapısı (YEK Yön. md. 15–17) bunu destekliyor.", {
         x: px + 0.3,
         y: 2.5,
         w: pw - 0.6,
@@ -803,7 +804,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       if (ex.stayingPlants.length) lines.push(`YEKDEM'de devam ediyor: ${ex.stayingPlants.join(", ")}`);
       if (ex.unknownExitPlants.length) lines.push(`Çıkış yılı bilinmiyor: ${ex.unknownExitPlants.join(", ")}`);
       text(s, lines.join("\n\n"), { x: px + 0.3, y: 3.4, w: pw - 0.6, h: 2.0, fontSize: 11, valign: "top" });
-      text(s, "Kaynak: EPİAŞ YEKDEM santral listeleri (veri yılı ve sonraki yıl).", { x: px + 0.3, y: 5.85, w: pw - 0.6, h: 0.4, fontSize: 9, color: C.sub, valign: "top" });
+      text(s, "Kaynak: EPİAŞ YEKDEM santral listeleri (veri yılı ve sonraki yıl); YEK Yönetmeliği md. 15–17.", { x: px + 0.3, y: 5.85, w: pw - 0.6, h: 0.4, fontSize: 9, color: C.sub, valign: "top" });
     }
   }
 
@@ -1051,18 +1052,18 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       ],
       [
         "Sınırlar",
-        "Santralin gün içi piyasa işlemleri ve ikili anlaşmaları açık veride yok; gün içinde kapatılan sapmalar varsa gerçek maliyet daha düşüktür." +
+        "Santralin gün içi piyasa işlemleri ve ikili anlaşmaları açık veride yok; gün içinde kapatılan sapmalar varsa gerçek maliyet daha düşüktür. TEİAŞ yük atma/alma talimatları (kısıntı) santral bazında yayımlanmadığından ayrılamadı; talimatla düşen üretim dengesizlik sayılmaz, bu yüzden kısıntı yaşayan santrallerde risk olduğundan yüksek görünebilir." +
           (r.yekdem
             ? " YEKDEM santrallerinin geliri YEKDEM fiyatından oluşur; YEKDEM döneminde dengesizliğin santrale mi YEKDEM portföyüne mi yansıdığı ayrıca doğrulanmalıdır."
             : ""),
       ],
       [
         "KÜPST (tahmini)",
-        "Saatlik |gerçekleşen − plan| sapmanın tolerans payını aşan kısmı × max(PTF, SMF) × 0,03. Tolerans plana oranlandı: 2025'ten itibaren rüzgâr %17, güneş %10, diğer %5 (EPDK 21.11.2024 / 13025); öncesinde rüzgâr %21, güneş %12. 2026 oranları doğrulanmadığından 2025 oranları kullanıldı. Arıza sayısına bağlı katsayı artışı kapsam dışı.",
+        "Saatlik |gerçekleşen − plan| sapmanın tolerans payını aşan kısmı × max(PTF, SMF) × 0,03; santral bazında, YEKDEM santralleri dahil şirkete ait. Tolerans plana oranlandı: 2025'te rüzgâr %17, güneş %10, diğer %5 (EPDK 13025); 2026'dan itibaren rüzgâr %15, güneş %8 (resmi karar metni görülmedi); öncesinde %21 / %12. Arıza sayısına bağlı katsayı artışı kapsam dışı.",
       ],
       [
         "Etiketler",
-        "KESİN HESAP: veriden doğrudan. VARSAYIMA BAĞLI: YEKDEM santrallerinin dengesizliğinin kime yansıdığına göre değişir (A: YEKDEM portföyüne, B: şirkete). SENARYO: davranış varsayımı; taahhüt değildir.",
+        "KESİN HESAP: veriden doğrudan. VARSAYIMA BAĞLI: YEKDEM santrallerinin dengesizliğinin YEKDEM portföyünde uzlaştırıldığı çıkarımına dayanır (YEK Yön. md. 15–17; ana senaryo); duyarlılık olarak şirkete yansıdığı durum da verilir. SENARYO: davranış varsayımı; taahhüt değildir.",
       ],
     ];
     const colW = (CW - 0.5) / 2;

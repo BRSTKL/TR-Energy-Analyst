@@ -24,10 +24,13 @@ describe("KÜPST (sapma tutarı)", () => {
   it("oranları tarihe göre seçer: 2025 öncesi rüzgâr %21, 2025'ten itibaren %17", () => {
     expect(kupstRegimeAt(new Date(Date.UTC(2024, 11, 31, 23))).tolerance.RES).toBe(0.21);
     expect(kupstRegimeAt(new Date(Date.UTC(2025, 0, 1, 0))).tolerance.RES).toBe(0.17);
+    expect(kupstRegimeAt(new Date(Date.UTC(2026, 0, 1, 0))).tolerance.RES).toBe(0.15);
     const t2024 = new Date(Date.UTC(2024, 5, 1, 12));
     // 2024: sapma 30, tolerans 21 → 9 MWh
     expect(kupstForHour(hour(t2024, 100, 70), "RES")).toBeCloseTo(9 * 2400 * 0.03, 6);
     // Rejim açıkça verilirse o kullanılır
     expect(kupstForHour(hour(t2024, 100, 70), "RES", KUPST_REGIMES[1])).toBeCloseTo(13 * 2400 * 0.03, 6);
+    // 2026: tolerans 15 → 15 MWh
+    expect(kupstForHour(hour(new Date(Date.UTC(2026, 5, 1, 12)), 100, 70), "RES")).toBeCloseTo(15 * 2400 * 0.03, 6);
   });
 });

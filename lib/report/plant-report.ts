@@ -76,8 +76,8 @@ export interface PlantReportData {
    */
   totals: Omit<ReportPlantRow, "name" | "type" | "organizationName" | "yekdem" | "yekdemNextYear" | "biasPct" | "sameDirectionPct"> & { plantCount: number };
   /**
-   * Tahmini KÜPST (tüm santraller). next2026Tl: aynı saatlik veri, en güncel yürürlükteki oranlarla (2026 oranları
-   * doğrulanmadığından 2025 oranları); veri zaten 2026+ ise null.
+   * Tahmini KÜPST (tüm santraller; YEKDEM santralleri dahil şirkete aittir). next2026Tl: aynı saatlik veri, en güncel
+   * oran tablosuyla (2026: rüzgâr %15, güneş %8); veri zaten 2026+ ise null.
    */
   kupst: { totalTl: number; next2026Tl: number | null };
   settlement: {

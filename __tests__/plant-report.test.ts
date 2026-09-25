@@ -128,7 +128,9 @@ describe("Santral raporu verisi", () => {
     const k = (excess: number) => excess * 2000 * 0.03;
     expect(e.kupstDirectTl).toBeCloseTo(k(0.3), 6);
     expect(e.kupstYekdemTl).toBeCloseTo(k(1.3) + k(2.3), 6);
-    expect(e.kupstExposure2026Tl).toBeCloseTo(k(0.3) + k(1.3), 6);
+    // 2026 projeksiyonu 2026 oranlarıyla (RES %15 → tolerans 1,5 MWh): D 0,5; Çıkan 1,5; Kalan 2,5
+    expect(e.kupstExposure2026Tl).toBeCloseTo(k(0.5) + k(1.5), 6);
+    expect(r.kupst.next2026Tl).toBeCloseTo(k(0.5) + k(1.5) + k(2.5), 6);
     expect(r.kupst.totalTl).toBeCloseTo(k(0.3) + k(1.3) + k(2.3), 6);
     expect(e.stayingPlants).toEqual(["Kalan"]);
     expect(r.coverage).toEqual([{ company: "Şirket 1", inProject: 3, total: 4, missing: ["Eksik RES"] }]);
