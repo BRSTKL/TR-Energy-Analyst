@@ -22,6 +22,7 @@ export interface SapmaSummary {
     plants: Array<Omit<NonNullable<PlantReportData["riskPremium"]>["plants"][number], "months">>;
   } | null;
   sector: PlantReportData["sector"];
+  aggregator?: PlantReportData["aggregator"];
   check: { unknownOwner: string[]; yekdemNextUnknown: string[]; missing: Array<{ company: string; plants: string[] }> };
 }
 

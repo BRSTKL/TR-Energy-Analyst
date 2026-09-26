@@ -21,6 +21,8 @@ model Project {
   plants          PowerPlant[]
   pricingProfiles ImbalancePricingProfile[]
   importTemplate  String?                   // Son onaylanan kolon eşleştirmesi (JSON: santral id → PlantImportMapping)
+  /// Doluysa proje bir toplayıcı portföyüdür: tüm santraller bu adla tek dengede uzlaştırılır (sahip şirketler santralde kalır)
+  aggregatorName  String?
   createdAt       DateTime                  @default(now())
   updatedAt       DateTime                  @updatedAt
 }

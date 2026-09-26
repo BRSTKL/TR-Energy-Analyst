@@ -47,6 +47,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
       name: project.name,
       description: displayDescription(project.description),
       hasImportTemplate: !!project.importTemplate,
+      aggregatorName: project.aggregatorName,
       dataRange,
       plants: project.plants.map((p) => ({
         id: p.id,
@@ -57,6 +58,27 @@ export async function GET(_request: Request, { params }: { params: { id: string 
       })),
     },
   });
+}
+
+/**
+ * PATCH /api/projects/[id] { aggregatorName: string | null }
+ * Toplayıcı portföyü ayarı: dolu ise projedeki tüm santraller bu adla tek dengede uzlaştırılır; null ise her santral
+ * sahibinin dengesinde (varsayılan).
+ */
+export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+  const body = await request.json().catch(() => null);
+  if (!body || !("aggregatorName" in body)) {
+    return NextResponse.json({ success: false, error: "aggregatorName alanı gerekli." }, { status: 400 });
+  }
+  const raw = body.aggregatorName;
+  if (raw !== null && typeof raw !== "string") {
+    return NextResponse.json({ success: false, error: "aggregatorName metin ya da null olmalı." }, { status: 400 });
+  }
+  const aggregatorName = raw?.trim().slice(0, 160) || null;
+  const exists = await prisma.project.findUnique({ where: { id: params.id }, select: { id: true } });
+  if (!exists) return NextResponse.json({ success: false, error: "Proje bulunamadı." }, { status: 404 });
+  await prisma.project.update({ where: { id: params.id }, data: { aggregatorName } });
+  return NextResponse.json({ success: true, aggregatorName });
 }
 
 /**

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildPlantReport } from "@/lib/report/plant-report";
+import { settlementIdentity } from "@/lib/projects/aggregator";
 import { processHourlyRecord } from "@/lib/calculations/engine";
 import { DEFAULT_IMBALANCE_PROFILE, SystemDirection } from "@/lib/calculations/types";
 
@@ -165,4 +166,35 @@ describe("Santral raporu verisi", () => {
   it("piyasa verisi eşleşmemiş projede anlaşılır hata verir", () => {
     expect(() => buildPlantReport(project([{ name: "A", type: "RES", hourly: [] }]))).toThrow(/rapor üretilemez/);
   });
+
+  it("toplayıcı portföyü: santraller tek dengede netleşir, portföy değeri sahiplerin kendi dengesine göre", () => {
+    const t = at(2025, 5, 1, 12);
+    // Sistem fazlasında: A 2 MWh fazla (aynı yön), B 2 MWh eksik (ters yön); portföyde net sapma 0
+    const a = hour(t, 10, 12, 2000, 1800, "SURPLUS");
+    const b = hour(t, 10, 8, 2000, 1800, "SURPLUS");
+    const base = project([
+      { name: "A", type: "RES", hourly: [a], org: 1 },
+      { name: "B", type: "RES", hourly: [b], org: 2 },
+    ]);
+    const data = {
+      ...base,
+      aggregator: { name: "Toplayıcı X" },
+      plants: base.plants.map((p) => ({ ...p, ...settlementIdentity(p, "Toplayıcı X") })),
+    };
+    const r = buildPlantReport(data);
+    // Tek başına: A 2 × (2000 − 1800×0,97) = 508; B 2 × (2000×1,03 − 2000) = 120. Portföyde net 0 → 0
+    expect(r.aggregator).toMatchObject({ name: "Toplayıcı X", ownerCount: 2 });
+    expect(r.aggregator!.standaloneCostTl).toBeCloseTo(628, 6);
+    expect(r.aggregator!.portfolioCostTl).toBeCloseTo(0, 6);
+    expect(r.aggregator!.benefitPct).toBeCloseTo(100, 6);
+    expect(r.aggregator!.offsettingHourSharePct).toBe(100);
+    expect(r.totals.imbalanceCostTl).toBeCloseTo(0, 6);
+    // Uzlaştırma birimi tek (toplayıcı): şirketler arası DSG senaryosu yok; santral satırında lisans sahibi kalır
+    expect(r.dsg).toBeNull();
+    expect(r.settlement.companies.map((c) => c.name)).toEqual(["Toplayıcı X"]);
+    expect(r.plants.map((p) => p.organizationName).sort()).toEqual(["Şirket 1", "Şirket 2"]);
+    // Toplayıcı yoksa alan boş
+    expect(buildPlantReport(base).aggregator).toBeNull();
+  });
 });
+

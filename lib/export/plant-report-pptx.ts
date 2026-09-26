@@ -57,7 +57,7 @@ const C = {
   assumTx: "36457A",
 };
 
-type TagKind = "exact" | "scenario" | "assumption";
+type TagKind = "exact" | "scenario" | "assumption" | "estimate";
 
 const W = 13.333;
 const M = 0.6; // kenar boşluğu
@@ -119,6 +119,11 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
   const singleCompany = r.settlement.companies.length === 1 ? r.settlement.companies[0].name : null;
   const intradayOn = !!r.intraday && r.intraday.savingTl > 0;
   const ex = r.exposure;
+  // Toplayıcı portföyünde uzlaştırma birimi portföydür; metinlerde "şirket" yerine "portföy"
+  const agg = r.aggregator;
+  const unit = agg
+    ? { gen: "portföyün", dat: "portföye", loc: "portföy içinde", self: "Toplayıcı portföyündeki santraller", netting: "portföy içi netleşme" }
+    : { gen: "şirketin", dat: "şirkete", loc: "şirket içinde", self: "Aynı şirketin santralleri", netting: "şirket içi netleşme" };
   let page = 0;
 
   // ---------------------------------------------------------------------------------------------
@@ -145,6 +150,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     exact: { label: "KESİN HESAP", w: 1.15, bg: C.exactBg, tx: C.exactTx },
     scenario: { label: "SENARYO", w: 0.95, bg: C.scenBg, tx: C.scenTx },
     assumption: { label: "VARSAYIMA BAĞLI", w: 1.45, bg: C.assumBg, tx: C.assumTx },
+    estimate: { label: "TAHMİNİ", w: 0.95, bg: C.scenBg, tx: C.scenTx },
   };
   const tag = (s: Slide, kind: TagKind, x: number, y: number) => {
     const g = TAGS[kind];
@@ -198,7 +204,9 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     text(s, r.projectName, { x: M + 0.1, y: 1.7, w: CW - 0.2, h: 1.3, fontSize: 44, bold: true, fontFace: FONT_HEAD, color: C.white, valign: "top" });
     text(
       s,
-      `${periodLabel(r)} · ${t.plantCount} santral · ${nf(t.capacityMw, 0)} MW${singleCompany ? ` · ${singleCompany}` : ""}`,
+      `${periodLabel(r)} · ${t.plantCount} santral · ${nf(t.capacityMw, 0)} MW${
+        agg ? ` · Toplayıcı portföyü: ${agg.name}` : singleCompany ? ` · ${singleCompany}` : ""
+      }`,
       { x: M + 0.1, y: 3.05, w: CW - 0.2, h: 0.45, fontSize: 16, color: "C9D6E3" }
     );
     text(s, "Gün öncesi plandan sapmanın yükü (dengesizlik riski ve KÜPST), 2026 katsayılarının etkisi ve azaltma fırsatları", {
@@ -242,9 +250,11 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
   const load = deviationLoad(r);
   {
     const exiting = ex?.exitingPlants ?? [];
-    const title = ex
+    const title = agg && agg.benefitTl > 0 && load.a2026 !== null
+      ? `${agg.name} portföyünde netleşme riski %${nf(agg.benefitPct, 0)} azaltıyor; sapma yükü 2026'da ${formatTlShort(load.a2026)}`
+      : ex
       ? load.a2026 !== null && load.b2026 !== null
-        ? `2026'da ${exiting.length ? `${exiting.length} santral YEKDEM'den çıkıyor ve ` : ""}katsayı %6'ya çıkıyor: şirketin sapma yükü ${formatTlShort(
+        ? `2026'da ${exiting.length ? `${exiting.length} santral YEKDEM'den çıkıyor ve ` : ""}katsayı %6'ya çıkıyor: ${unit.gen} sapma yükü ${formatTlShort(
             load.a2025
           )} → ${formatTlShort(load.a2026)}`
         : `YEKDEM dışı santrallerin sapma yükü ${formatTlShort(load.a2025)}; YEKDEM santralleriyle birlikte ${formatTlShort(load.b2025)}`
@@ -270,11 +280,13 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       if (load.a2026 !== null)
         stats.push({
           value: formatTlShort(load.a2026),
-          label: `2026 · YEKDEM'den çıkan ${exiting.length} santralin dengesizliği de şirkete geçiyor; 2026 katsayıları ve KÜPST oranlarıyla`,
+          label: exiting.length
+            ? `2026 · YEKDEM'den çıkan ${exiting.length} santralin dengesizliği de ${unit.dat} geçiyor; 2026 katsayıları ve KÜPST oranlarıyla`
+            : `2026 · aynı üretim, 2026 katsayıları ve KÜPST oranlarıyla (YEKDEM'den çıkan santral yok)`,
           color: C.risk,
         });
       if (load.b2026 !== null)
-        stats.push({ value: formatTlShort(load.b2026), label: "2026 · duyarlılık: YEKDEM santrallerinin dengesizliği de şirkete yansısaydı", color: C.sub });
+        stats.push({ value: formatTlShort(load.b2026), label: `2026 · duyarlılık: YEKDEM santrallerinin dengesizliği de ${unit.dat} yansısaydı`, color: C.sub });
     } else {
       stats.push({
         value: formatTlShort(load.b2025),
@@ -296,6 +308,14 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     text(s, "Öne çıkanlar", { x: px + 0.35, y: 2.1, w: pw - 0.7, h: 0.4, fontSize: 16, bold: true, fontFace: FONT_HEAD });
 
     const points: Array<{ kind: TagKind; text: string }> = [];
+    if (agg && agg.benefitTl > 0) {
+      points.push({
+        kind: "exact",
+        text: `Santraller sahiplerinin kendi dengesinde ${formatTlShort(agg.standaloneCostTl)} dengesizlik riski taşırdı; ${agg.name} portföyünde saat saat netleşince ${formatTlShort(
+          agg.portfolioCostTl
+        )}. Portföyün değeri ${formatTlShort(agg.benefitTl)} (%${nf(agg.benefitPct, 0)}; tüm santraller, ${yearOf(r)} katsayıları).`,
+      });
+    }
     if (ex && exiting.length > 0) {
       points.push({
         kind: "exact",
@@ -305,10 +325,10 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       });
     }
     points.push({
-      kind: "exact",
-      text: `Dengesizlik tutarına ek olarak tolerans dışı sapmalar için tahmini ${formatTlShort(r.kupst.totalTl)} KÜPST ödeniyor; santral bazında hesaplandığı için şirket içinde netleşmez.`,
+      kind: "estimate",
+      text: `Dengesizlik tutarına ek olarak tolerans dışı sapmalar için tahmini ${formatTlShort(r.kupst.totalTl)} KÜPST ödeniyor; santral bazında hesaplandığı için ${unit.loc} netleşmez.`,
     });
-    if (netted) {
+    if (netted && !agg) {
       points.push({
         kind: "exact",
         text: `Aynı şirketin santralleri her saat birbirini dengeliyor: santral santral hesaplanan ${formatTlShort(
@@ -366,7 +386,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     } else {
       if (netted) {
         steps.push({ label: "Santraller tek tek uzlaştırılsaydı", value: r.settlement.plantLevelCostTl, kind: "total" });
-        steps.push({ label: "Şirket içi netleşme", value: -r.settlement.sameCompanyNettingTl, kind: "down" });
+        steps.push({ label: agg ? "Portföy içi netleşme" : "Şirket içi netleşme", value: -r.settlement.sameCompanyNettingTl, kind: "down" });
       }
       steps.push({ label: `Dengesizlik riski ${yearOf(r)}`, value: cost, kind: "total" });
       imb2026 = cost;
@@ -386,7 +406,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     }
 
     const title = s2026
-      ? `2026'da ${ex ? "şirkete yansıyacak " : ""}sapma yükü ${formatTlShort(loadEnd)}${
+      ? `2026'da ${ex ? `${unit.dat} yansıyacak ` : ""}sapma yükü ${formatTlShort(loadEnd)}${
           intradayOn ? `; gün içi pozisyon güncellemesi en fazla ${formatTlShort(intradaySaving)} azaltabilir` : ""
         }`
       : `Sapma yükü ${formatTlShort(loadEnd)}: dengesizlik riski ve KÜPST`;
@@ -396,7 +416,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
         (ex
           ? `Başlangıç YEKDEM dışı santrallerin dengesizlik riski; YEKDEM santrallerinin dengesizliği YEKDEM portföyünde uzlaştırılır (mevzuatın yapısına dayanan çıkarım). 2026 katsayısı ve YEKDEM'den çıkan santraller ekleniyor; kesikli turuncu adım bu çıkarıma bağlıdır. KÜPST tüm santraller için şirkete aittir. `
           : netted
-            ? `İlk sütun santraller tek tek uzlaştırılsaydı oluşacak risk; aynı şirketin santralleri birbirini dengelediği için ${formatTlShort(
+            ? `İlk sütun santraller tek tek uzlaştırılsaydı oluşacak risk; ${unit.self.toLocaleLowerCase("tr-TR")} birbirini dengelediği için ${formatTlShort(
                 r.settlement.sameCompanyNettingTl
               )} zaten netleşiyor. `
             : "") +
@@ -501,7 +521,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     s.addNotes(
       "Çubuklar santralin MWh başına riskini, yani tahmin kalitesini karşılaştırır; santraller teknolojilerine göre gruplandı çünkü rüzgârın tahmini hidroelektrikten zordur. " +
         "Kırmızı santraller kendi teknolojisinin ortalamasından %10'dan fazla yüksek; önceliklidir. Rakam santral tek başına uzlaştırılsaydı oluşacak risktir; " +
-        "şirket içi netleşme toplamı düşürür ama santraller arası sıralamayı değiştirmez."
+        `${unit.netting} toplamı düşürür ama santraller arası sıralamayı değiştirmez.`
     );
     type Row = { kind: "head"; type: string; avg: number; count: number } | { kind: "plant"; p: (typeof r.plants)[number]; avg: number };
     const rowsAll: Row[] = [];
@@ -568,7 +588,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     if (hidden > 0) text(s, `+${hidden} santral daha (Ek A)`, { x: M, y: y1 + 0.1, w: 3, h: 0.28, fontSize: 10, color: C.sub });
     text(
       s,
-      "Kırmızı: kendi teknolojisinin ortalamasından %10'dan fazla yüksek. Santral tek başına uzlaştırılsaydı oluşacak risktir; şirket içi netleşmeyle toplam daha düşüktür.",
+      `Kırmızı: kendi teknolojisinin ortalamasından %10'dan fazla yüksek. Santral tek başına uzlaştırılsaydı oluşacak risktir; ${unit.netting}yle toplam daha düşüktür.`,
       { x: M, y: 6.45, w: CW, h: 0.45, fontSize: 10, color: C.sub, valign: "top" }
     );
   }
@@ -582,8 +602,13 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     const main = [...sec.types].sort((a, b) => b.plants.length - a.plants.length)[0];
     const diffPct = ((main.portfolioUnitTl - main.unitImbalanceTl.median) / main.unitImbalanceTl.median) * 100;
     const better = 100 - main.portfolioRankPct;
-    const title =
-      diffPct >= 0
+    // Portföy ikiye ayrılıyorsa (hem en iyi hem en kötü çeyrekte santral var) ortalama yerine dağılımı anlat
+    const topQ = main.plants.filter((p) => p.rankPct <= 25).length;
+    const bottomQ = main.plants.filter((p) => p.rankPct >= 75).length;
+    const split = main.plants.length >= 3 && topQ > 0 && bottomQ > 0;
+    const title = split
+      ? `Portföy ikiye ayrılıyor: ${topQ} santral sektörün en iyi çeyreğinde, ${bottomQ} santral en kötü çeyreğinde`
+      : diffPct >= 0
         ? `${TECH_TR[main.type] ?? main.type} santralleriniz MWh başına ${nf(main.portfolioUnitTl, 0)} TL ile sektör medyanının %${nf(diffPct, 0)} üstünde; sektörün yalnızca %${nf(better, 0)} kadarından iyi`
         : `${TECH_TR[main.type] ?? main.type} santralleriniz MWh başına ${nf(main.portfolioUnitTl, 0)} TL ile sektör medyanının %${nf(-diffPct, 0)} altında; sektörün %${nf(better, 0)} kadarından iyi`;
     const s = contentSlide("Sektörle kıyaslama", title, "exact");
@@ -814,7 +839,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
   if (s2026) {
     const exiting = ex?.exitingPlants ?? [];
     const title = ex
-      ? `2026'da şirketin sapma yükü ${formatTlShort(load.a2026!)}; YEKDEM dengesizliği şirkete yansısaydı ${formatTlShort(load.b2026!)}`
+      ? `2026'da ${unit.gen} sapma yükü ${formatTlShort(load.a2026!)}; YEKDEM dengesizliği ${unit.dat} yansısaydı ${formatTlShort(load.b2026!)}`
       : `2026 katsayılarıyla aynı üretim ${formatTlShort(s2026.deltaTl)} daha fazla dengesizlik riski yaratıyor (%${nf(s2026.deltaPct, 0)})`;
     const s = contentSlide("2026 riski", title, ex ? "assumption" : "exact");
     s.addNotes(
@@ -832,7 +857,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     const pairs = ex
       ? [
           { head: "Ana senaryo", sub: "YEKDEM dengesizliği havuza yansır", v25: load.a2025, v26: load.a2026! },
-          { head: "Duyarlılık", sub: "YEKDEM dengesizliği şirkete yansır", v25: load.b2025, v26: load.b2026! },
+          { head: "Duyarlılık", sub: `YEKDEM dengesizliği ${unit.dat} yansır`, v25: load.b2025, v26: load.b2026! },
         ]
       : [{ head: "", sub: "", v25: load.b2025, v26: load.b2026! }];
     const maxV = Math.max(...pairs.flatMap((p) => [p.v25, p.v26]), 1);
@@ -902,7 +927,8 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       pf.p90MonthTlPerMwh,
       0
     )} TL ihtiyatlı`;
-    const s = contentSlide("Risk primi", title, "exact");
+    // 2026 kuralları ve piyasaya açık portföy varsayımıyla: veri kesin, çerçeve varsayım
+    const s = contentSlide("Risk primi", title, "assumption");
     s.addNotes(
       "Risk primi, bu portföyün (ya da bir santralin) üretimini satarken veya bir toplayıcıya devrederken fiyata eklenmesi gereken MWh başına sapma yüküdür: dengesizlik + KÜPST, 2026 kurallarıyla, piyasaya açık bir portföy varsayımıyla (YEKDEM yok). " +
         "Beklenen değer yıllık ortalamadır; ihtiyatlı değer ayların %90'ının altında kaldığı seviyedir. Toplayıcılar teklif verirken bu iki rakam arasında bir prim seçer. " +
@@ -969,7 +995,12 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     });
     text(
       s,
-      `${rp.rules}. Piyasaya açık portföy varsayımı (YEKDEM yok); gün içi işlemler öncesi. Portföy primi şirket bazında netleşmiş dengesizlikle hesaplandığı için santral primlerinden düşüktür.`,
+      `${rp.rules}. Piyasaya açık portföy varsayımı (YEKDEM yok); gün içi işlemler öncesi. ` +
+        (agg && netted
+          ? `Portföy primi ${agg.name} portföyünde netleşmiş dengesizlikle hesaplandı; santral primleriyle arasındaki fark, toplayıcının santrallere sunabileceği indirim payıdır.`
+          : netted
+            ? "Portföy primi şirket bazında netleşmiş dengesizlikle hesaplandığı için santral primlerinden düşüktür."
+            : "Santraller ayrı dengelerde uzlaştırıldığı için portföy primi, santral primlerinin üretim ağırlıklı ortalamasıdır."),
       { x: M, y: 6.45, w: CW, h: 0.45, fontSize: 9, color: C.sub, valign: "top" }
     );
   }
@@ -978,13 +1009,15 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
   // 8. FIRSATLAR
   // ---------------------------------------------------------------------------------------------
   {
-    type Item = { title: string; impact: string; body: string; kind: TagKind; effort: string };
+    /** value: TL etkisi (başlıkta en büyük eyleme dönük kalem seçilir); realised: zaten alınan fayda, başlığa aday değil */
+    type Item = { title: string; impact: string; body: string; kind: TagKind; effort: string; value?: number; realised?: boolean };
     const items: Item[] = [];
     if (r.intraday) {
       // Gün içi güncelleme dengesizlik riskini azaltır (KÜPST'e uygulanmaz); köprüdeki 2026 dengesizlik riskiyle aynı dayanak
       const basis = ex ? (ex.exposure2026Tl ?? ex.directCostTl) : (s2026?.cost2026Tl ?? cost);
       items.push({
         title: "Gün içi piyasada pozisyon güncelleme",
+        value: r.intraday.savingTl > 0 ? (r.intraday.savingPct / 100) * basis : 0,
         impact:
           r.intraday.savingTl > 0
             ? `en fazla %${nf(r.intraday.savingPct, 0)} · ≈ ${formatTlShort((r.intraday.savingPct / 100) * basis)}`
@@ -992,18 +1025,33 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
         body:
           `1 saat önce görülen hatanın bir kısmı gün içi piyasada kapatılır; oran önceki 4 aydan öğrenilip sonraki ayda test edildi ` +
           `(${monthLabel(r.intraday.firstTestMonth)} – ${monthLabel(r.intraday.lastTestMonth)}). İşlem fiyatı gerçek eşleşme fiyatlarından, zor saatlerde daha kötü alındı. ` +
-          `Üst sınırdır: şirket gün içinde zaten işlem yapıyorsa kazancın bir kısmı hâlihazırda alınıyordur.`,
+          `Üst sınırdır: ${agg ? "portföy" : "şirket"} gün içinde zaten işlem yapıyorsa kazancın bir kısmı hâlihazırda alınıyordur.`,
         kind: "scenario",
         effort: "Orta · gün içi operasyon",
       });
     }
+    // Sektör medyanının üstündeki santraller medyana inseydi (santral tek başına; netleşme öncesi, üst sınır)
+    const weak = (r.sector?.types ?? []).flatMap((t) =>
+      t.plants
+        .filter((sp) => sp.unitTl > t.unitImbalanceTl.median)
+        .map((sp) => {
+          const row = r.plants.find((p) => p.name === sp.name);
+          return { name: sp.name, gain: row ? (sp.unitTl - t.unitImbalanceTl.median) * row.actualMwh : 0 };
+        })
+    );
+    const weakGain = weak.reduce((a, w) => a + w.gain, 0);
     items.push({
-      title: "En pahalı saatlere odaklı tahmin iyileştirme",
-      impact: "Hesaplanmadı",
+      title: weak.length ? "Zayıf santrallerde tahmin iyileştirme" : "En pahalı saatlere odaklı tahmin iyileştirme",
+      impact: weak.length && weakGain > 0 ? `≈ ${formatTlShort(weakGain)} · üst sınır` : "Hesaplanmadı",
+      value: weakGain,
       body:
-        `Riskin %${nf(r.alignment.sameDirectionCostPct, 0)} kadarı sistemle aynı yöndeki sapmalardan geliyor. ` +
+        (weak.length
+          ? `${weak.length} santral (${weak.map((w) => w.name).join(", ")}) sektör medyanının üstünde; medyana inmeleri santral tek başına ${formatTlShort(
+              weakGain
+            )} eder (netleşme öncesi). `
+          : `Riskin %${nf(r.alignment.sameDirectionCostPct, 0)} kadarı sistemle aynı yöndeki sapmalardan geliyor. `) +
         (r.plants.filter((p) => p.biasPct > 1).length > r.plants.length / 2 ? "Planlar sistematik olarak yüksek: kalibrasyon ilk adım. " : "") +
-        "En pahalı saatlerde tahmin sağlayıcıyla hedefli iyileştirme ve güncel meteoroloji verisiyle gün içi düzeltme.",
+        "En pahalı saatlerde tahmin sağlayıcıyla hedefli iyileştirme.",
       kind: "scenario",
       effort: "Düşük–orta · tahmin sağlayıcı",
     });
@@ -1011,9 +1059,19 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       items.push({
         title: "Başka şirketlerle dengeden sorumlu grup",
         impact: r.dsg.benefitTl > 0 ? `${formatTlShort(r.dsg.benefitTl)} · %${nf(r.dsg.benefitPct, 0)}` : "Belirgin fayda yok",
-        body: `Farklı şirketlerin sapmaları saatlerin %${nf(r.dsg.offsettingHourSharePct, 0)} kadarında ters yönde. Varsayım: grubun dengesizliği saatlik net toplamdan fiyatlanır; paylaşım ayrıca kararlaştırılır.`,
+        value: r.dsg.benefitTl,
+        body: `Saatlerin %${nf(r.dsg.offsettingHourSharePct, 0)} kadarında bir şirket fazla, bir diğeri eksik üretiyor; grup bu saatlerde kendi içinde dengelenir. Varsayım: grubun dengesizliği saatlik net toplamdan fiyatlanır; paylaşım ayrıca kararlaştırılır.`,
         kind: "scenario",
         effort: "Orta · sözleşme",
+      });
+    } else if (agg && agg.benefitTl > 0) {
+      items.push({
+        title: `${agg.name} portföyünde netleşme (zaten alınıyor)`,
+        impact: `${formatTlShort(agg.benefitTl)} · %${nf(agg.benefitPct, 0)}`,
+        body: `Saatlerin %${nf(agg.offsettingHourSharePct, 0)} kadarında bir sahibin santrali fazla, diğerininki eksik üretiyor; portföy bu saatlerde kendi içinde dengelenir. Portföye ters yönde sapan yeni santraller eklendikçe fayda büyür.`,
+        kind: "exact",
+        effort: "—",
+        realised: true,
       });
     } else if (netted) {
       items.push({
@@ -1022,10 +1080,13 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
         body: "Santraller aynı şirkette olduğu için birbirini dengeleme faydası uzlaştırmada zaten alınıyor. Ek fayda ancak başka şirketlerin ters yönde sapan santralleriyle grup kurularak sağlanabilir.",
         kind: "exact",
         effort: "—",
+        realised: true,
       });
     }
-    const title = intradayOn
-      ? `En büyük kaldıraç gün içi pozisyon güncelleme: riskin en fazla %${nf(r.intraday!.savingPct, 0)} kadarı`
+    // Başlık: TL etkisi en büyük eyleme dönük kalem (zaten alınan fayda aday değil)
+    const best = items.filter((it) => !it.realised && (it.value ?? 0) > 0).sort((a, b) => (b.value ?? 0) - (a.value ?? 0))[0];
+    const title = best
+      ? `En büyük kaldıraç: ${best.title.charAt(0).toLocaleLowerCase("tr-TR")}${best.title.slice(1)} (≈ ${formatTlShort(best.value!)})`
       : "Riski azaltmanın yolları";
     const s = contentSlide("Fırsatlar", title);
     s.addNotes(
@@ -1153,7 +1214,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     ]);
     if (netted) {
       rows.push([
-        cell("Şirket bazında uzlaştırma", bold),
+        cell(agg ? "Portföy bazında uzlaştırma" : "Şirket bazında uzlaştırma", bold),
         cell("", bold),
         cell("", bold),
         cell("", bold),
@@ -1179,12 +1240,18 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       .filter((c) => c.missing.length)
       .map((c) => ` Şirketin EPİAŞ'ta üretimi yayımlanan ${c.total} santralinden projede olmayanlar: ${c.missing.join(", ")}.`)
       .join("");
-    const owners = singleCompany
+    const ownerGroups = new Map<string, string[]>();
+    for (const p of r.plants) ownerGroups.set(p.organizationName ?? "sahibi bulunamadı", [...(ownerGroups.get(p.organizationName ?? "sahibi bulunamadı") ?? []), p.name]);
+    const owners = agg
+      ? `Santraller ${agg.name} portföyünde tek dengede uzlaştırıldı. Lisans sahipleri: ${Array.from(ownerGroups.entries())
+          .map(([o, ps]) => `${o} (${ps.join(", ")})`)
+          .join("; ")}.`
+      : singleCompany
       ? `Tüm santraller ${singleCompany} şirketine ait; uzlaştırmada birlikte netleşir.${missingNote}`
       : `Şirketler: ${r.settlement.companies.map((c) => `${c.name ?? "sahibi bulunamadı"} (${c.plantNames.join(", ")})`).join("; ")}.${missingNote}`;
     text(
       s,
-      `${owners} KÜPST santral bazındadır ve şirket içinde netleşmez. Plan farkı: saatlik |gerçekleşen − plan| toplamının gerçekleşen üretime oranı.`,
+      `${owners} KÜPST santral bazındadır ve ${unit.loc} netleşmez. Plan farkı: saatlik |gerçekleşen − plan| toplamının gerçekleşen üretime oranı.`,
       { x: M, y: Math.min(tableBottom + 0.2, 6.3), w: CW, h: 0.6, fontSize: 9.5, color: C.sub, valign: "top" }
     );
   }
@@ -1212,9 +1279,12 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       ],
       [
         "Uzlaştırma",
-        "Şirket bazındadır: aynı şirketin santralleri saat saat birlikte netleştirildi. Santral sahipleri EPİAŞ katılımcı kayıtlarından alındı" +
-          (r.settlement.unknownOwnerCount > 0 ? `; sahibi bulunamayan ${r.settlement.unknownOwnerCount} santral ayrı şirket sayıldı.` : ".") +
-          " Şirket zaten bir dengeden sorumlu grubun üyesiyse grup içi netleşme ve paylaşım bu rapora yansımaz.",
+        agg
+          ? `Toplayıcı portföyü: tüm santraller ${agg.name} portföyünde saat saat tek dengede netleştirildi (santraller dönem boyunca portföydeymiş gibi). ` +
+            "Portföyün değeri, santrallerin lisans sahiplerinin kendi dengesinde uzlaştırılmasıyla karşılaştırılarak hesaplandı; toplayıcı ile üreticiler arasındaki paylaşım rapora yansımaz."
+          : "Şirket bazındadır: aynı şirketin santralleri saat saat birlikte netleştirildi. Santral sahipleri EPİAŞ katılımcı kayıtlarından alındı" +
+            (r.settlement.unknownOwnerCount > 0 ? `; sahibi bulunamayan ${r.settlement.unknownOwnerCount} santral ayrı şirket sayıldı.` : ".") +
+            " Şirket zaten bir dengeden sorumlu grubun üyesiyse grup içi netleşme ve paylaşım bu rapora yansımaz.",
       ],
       [
         "Sınırlar",
@@ -1229,7 +1299,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       ],
       [
         "Etiketler",
-        "KESİN HESAP: veriden doğrudan. VARSAYIMA BAĞLI: YEKDEM santrallerinin dengesizliğinin YEKDEM portföyünde uzlaştırıldığı çıkarımına dayanır (YEK Yön. md. 15–17; ana senaryo); duyarlılık olarak şirkete yansıdığı durum da verilir. SENARYO: davranış varsayımı; taahhüt değildir.",
+        "KESİN HESAP: veriden doğrudan. TAHMİNİ: tolerans oranı ve dayanağı tam doğrulanmamış hesap (KÜPST). VARSAYIMA BAĞLI: YEKDEM santrallerinin dengesizliğinin YEKDEM portföyünde uzlaştırıldığı çıkarımına dayanır (YEK Yön. md. 15–17; ana senaryo); duyarlılık olarak şirkete yansıdığı durum da verilir. SENARYO: davranış varsayımı; taahhüt değildir.",
       ],
     ];
     const colW = (CW - 0.5) / 2;

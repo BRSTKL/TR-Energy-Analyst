@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { AlertCircle, AlertTriangle, ArrowLeft, CheckCircle2, CloudDownload, Factory, Plus, Save, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { SettlementUnitCard } from "@/components/settlement-unit-card";
 import { PLANT_TYPES } from "@/lib/plants/validation";
 
 interface Plant {
@@ -193,6 +194,8 @@ export default function PlantsPage() {
       <main className="mx-auto max-w-5xl space-y-6 px-4 pt-6 sm:px-6 lg:px-8">
         {loadError && <Notice msg={{ kind: "error", text: loadError }} />}
         {messages.list && <Notice msg={messages.list} />}
+
+        <SettlementUnitCard projectId={projectId} />
 
         <Card className="shadow-sm">
           <CardHeader className="pb-3">

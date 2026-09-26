@@ -211,6 +211,23 @@ export interface PlantReportData {
     offsettingHourSharePct: number;
   } | null;
   /**
+   * Toplayıcı portföyü (projede toplayıcı tanımlıysa): santraller sahiplerinin kendi dengesinde (her sahip ayrı) ile
+   * toplayıcı portföyünde tek dengede uzlaştırılması arasındaki fark, yani portföyün yarattığı netleşme değeri.
+   * Tüm santraller birlikte (YEKDEM ayrımı yapılmadan), veri döneminin katsayılarıyla.
+   */
+  aggregator: {
+    name: string;
+    ownerCount: number;
+    /** Her sahip kendi dengesinde (sahip içi netleşme dahil) */
+    standaloneCostTl: number;
+    /** Toplayıcı portföyünde tek dengede */
+    portfolioCostTl: number;
+    benefitTl: number;
+    benefitPct: number;
+    /** Farklı sahiplerden en az birinin fazla, birinin eksik ürettiği saatlerin oranı (%) */
+    offsettingHourSharePct: number;
+  } | null;
+  /**
    * SENARYO: 1 saat önce görülen hatanın bir kısmı GİP'te kapatılsaydı (santral bazında, önceki aylardan öğrenerek
    * test). savingTl, test edilen oranın şirket bazındaki maliyete uygulanmasıyla bulunan yaklaşık tutardır.
    */
@@ -309,7 +326,8 @@ function plantRow(p: Plant): ReportPlantRow {
     name: p.plantName,
     type: p.plantType,
     capacityMw: p.capacityMw,
-    organizationName: p.organizationName,
+    // Toplayıcı portföyünde uzlaştırma birimi toplayıcıdır; santral satırında lisans sahibi gösterilir
+    organizationName: p.ownerName !== undefined ? p.ownerName : p.organizationName,
     yekdem: p.yekdem,
     yekdemNextYear: p.yekdemNextYear,
     actualMwh: actual,
@@ -419,14 +437,16 @@ export function buildPlantReport(
     };
   }
 
-  // DSG: farklı şirketler tek grupta. Aynı şirket içi netleşme zaten tabanda olduğundan fayda yalnızca şirketler arası
-  let dsg: PlantReportData["dsg"] = null;
-  if (groupList.length >= 2) {
-    const nettedCost = sumCost(settleGroup(withData.map((p) => p.hourly), data.profile));
-    // Şirketlerin saatlik net sapmaları ters yönde mi
-    const groupDeltas = groupList.map((g) => {
+  /**
+   * Gruplar (şirketler ya da sahipler) tek dengede netleşseydi: grupların kendi dengelerindeki toplam maliyet ile hepsinin
+   * birlikte netleşmiş maliyeti ve farklı grupların ters yönde saptığı saatlerin oranı
+   */
+  const crossGroup = (groupPlants: Plant[][]) => {
+    const standalone = groupPlants.reduce((sum, g) => sum + sumCost(settleGroup(g.map((p) => p.hourly), data.profile)), 0);
+    const netted = sumCost(settleGroup(withData.map((p) => p.hourly), data.profile));
+    const deltas = groupPlants.map((g) => {
       const m = new Map<number, number>();
-      for (const p of g.plants) for (const h of p.hourly) {
+      for (const p of g) for (const h of p.hourly) {
         const t = new Date(h.timestamp).getTime();
         m.set(t, (m.get(t) ?? 0) + h.actualMwh - h.forecastMwh);
       }
@@ -434,15 +454,49 @@ export function buildPlantReport(
     });
     let offsetting = 0;
     for (const t of hourSet) {
-      const ds = groupDeltas.map((m) => m.get(t) ?? 0);
+      const ds = deltas.map((m) => m.get(t) ?? 0);
       if (ds.some((d) => d > 0) && ds.some((d) => d < 0)) offsetting++;
     }
+    return {
+      standalone,
+      netted,
+      benefit: standalone - netted,
+      benefitPct: pct(standalone - netted, standalone),
+      offsettingPct: pct(offsetting, hourSet.size),
+    };
+  };
+
+  // DSG: farklı şirketler tek grupta. Aynı şirket içi netleşme zaten tabanda olduğundan fayda yalnızca şirketler arası
+  let dsg: PlantReportData["dsg"] = null;
+  if (groupList.length >= 2) {
+    const x = crossGroup(groupList.map((g) => g.plants));
     dsg = {
-      companyLevelCostTl: companyCost,
-      nettedCostTl: nettedCost,
-      benefitTl: companyCost - nettedCost,
-      benefitPct: pct(companyCost - nettedCost, companyCost),
-      offsettingHourSharePct: pct(offsetting, hourSet.size),
+      companyLevelCostTl: x.standalone,
+      nettedCostTl: x.netted,
+      benefitTl: x.benefit,
+      benefitPct: x.benefitPct,
+      offsettingHourSharePct: x.offsettingPct,
+    };
+  }
+
+  // Toplayıcı portföyü: sahipler kendi dengesinde (sahibi bilinmeyen santral kendi başına) → portföyde tek denge
+  let aggregator: PlantReportData["aggregator"] = null;
+  if (data.aggregator) {
+    const owners = new Map<string, Plant[]>();
+    for (const p of withData) {
+      const ownerId = p.ownerOrganizationId !== undefined ? p.ownerOrganizationId : p.organizationId;
+      const key = ownerId !== null ? `org:${ownerId}` : `plant:${p.plantId}`;
+      owners.set(key, [...(owners.get(key) ?? []), p]);
+    }
+    const x = crossGroup(Array.from(owners.values()));
+    aggregator = {
+      name: data.aggregator.name,
+      ownerCount: owners.size,
+      standaloneCostTl: x.standalone,
+      portfolioCostTl: x.netted,
+      benefitTl: x.benefit,
+      benefitPct: x.benefitPct,
+      offsettingHourSharePct: x.offsettingPct,
     };
   }
 
@@ -584,6 +638,7 @@ export function buildPlantReport(
     heatmap: { cells, hourTotals },
     coefficients2026,
     dsg,
+    aggregator,
     intraday,
   };
 }

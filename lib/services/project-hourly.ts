@@ -1,18 +1,27 @@
 import { prisma } from "@/lib/prisma";
 import { processHourlyRecord } from "@/lib/calculations/engine";
 import { HourlyResult, ImbalancePricingProfile, SystemDirection, toPricingProfile } from "@/lib/calculations/types";
+import { settlementIdentity } from "@/lib/projects/aggregator";
 
 export interface ProjectHourly {
   project: { id: string; name: string };
   profile: ImbalancePricingProfile;
+  /** Proje bir toplayıcı portföyüyse: santraller bu adla tek dengede uzlaştırılır (organizationId = AGGREGATOR_ORG_ID) */
+  aggregator?: { name: string } | null;
   plants: Array<{
     plantId: string;
     plantName: string;
     plantType: string;
     capacityMw: number;
-    /** Sahip şirket (EPİAŞ): dengesizlik şirket bazında uzlaştırıldığından aynı şirketin santralleri birlikte netleşir */
+    /**
+     * Uzlaştırma birimi: santralin sahibi (EPİAŞ); dengesizlik şirket bazında uzlaştırıldığından aynı şirketin santralleri
+     * birlikte netleşir. Toplayıcı portföyünde tüm santraller için toplayıcı (AGGREGATOR_ORG_ID).
+     */
     organizationId: number | null;
     organizationName: string | null;
+    /** Santralin lisans sahibi (toplayıcı modunda da gerçek sahip); verilmezse organizationId ile aynı kabul edilir */
+    ownerOrganizationId?: number | null;
+    ownerName?: string | null;
     /** Veri döneminde YEKDEM'de mi (bilinmiyorsa null) */
     yekdem: boolean | null;
     /** Verinin son yılından sonraki yıl YEKDEM'de mi (bilinmiyorsa null) */
@@ -44,13 +53,13 @@ export async function loadProjectHourly(projectId: string): Promise<ProjectHourl
   return {
     project: { id: project.id, name: project.name },
     profile,
+    aggregator: project.aggregatorName ? { name: project.aggregatorName } : null,
     plants: project.plants.map((plant) => ({
       plantId: plant.id,
       plantName: plant.name,
       plantType: plant.type,
       capacityMw: plant.capacityMw,
-      organizationId: plant.organizationId,
-      organizationName: plant.organizationName,
+      ...settlementIdentity(plant, project.aggregatorName),
       yekdem: plant.yekdem,
       yekdemNextYear: plant.yekdemNextYear,
       epiasPlantId: plant.epiasPlantId,

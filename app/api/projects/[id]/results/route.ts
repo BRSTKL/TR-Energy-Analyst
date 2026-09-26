@@ -18,6 +18,7 @@ import { comparePlants } from "@/lib/analysis/plant-comparison";
 import { analyzePortfolioNetting } from "@/lib/analysis/portfolio-netting";
 import { buildPlantReport, settleByCompany } from "@/lib/report/plant-report";
 import { buildReportContext } from "@/lib/services/report-context";
+import { settlementIdentity } from "@/lib/projects/aggregator";
 
 export const dynamic = "force-dynamic";
 
@@ -107,8 +108,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
         plantName: plant.name,
         plantType: plant.type,
         capacityMw: plant.capacityMw,
-        organizationId: plant.organizationId,
-        organizationName: plant.organizationName,
+        ...settlementIdentity(plant, project.aggregatorName),
         yekdem: plant.yekdem,
         yekdemNextYear: plant.yekdemNextYear,
         epiasPlantId: plant.epiasPlantId,
@@ -135,7 +135,12 @@ export async function GET(_request: Request, { params }: { params: { id: string 
       const year = new Date(withData[0].hourly[0].timestamp).getUTCFullYear();
       const { context, check } = await buildReportContext(withData, year);
       const report = buildPlantReport(
-        { project: { id: project.id, name: project.name }, profile: projectProfile, plants: withData },
+        {
+          project: { id: project.id, name: project.name },
+          profile: projectProfile,
+          aggregator: project.aggregatorName ? { name: project.aggregatorName } : null,
+          plants: withData,
+        },
         context,
         { intraday: false }
       );
@@ -156,6 +161,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
             }
           : null,
         sector: report.sector,
+        aggregator: report.aggregator,
         check,
       };
     }

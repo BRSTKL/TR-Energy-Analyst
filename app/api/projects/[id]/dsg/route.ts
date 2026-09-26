@@ -23,11 +23,14 @@ export async function GET(request: Request, { params }: { params: { id: string }
     type Plant = (typeof data.plants)[number];
     const groups = new Map<string, { id: string; name: string; isCompany: boolean; plants: Plant[] }>();
     for (const p of data.plants) {
-      const id = p.organizationId !== null ? `org:${p.organizationId}` : p.plantId;
+      // Üye lisans sahibidir: toplayıcı portföyünde de sahipler ayrı üye olur, böylece sayfa portföyün netleşme değerini gösterir
+      const ownerId = p.ownerOrganizationId !== undefined ? p.ownerOrganizationId : p.organizationId;
+      const ownerName = p.ownerName !== undefined ? p.ownerName : p.organizationName;
+      const id = ownerId !== null ? `org:${ownerId}` : p.plantId;
       const g = groups.get(id) ?? {
         id,
-        name: p.organizationId !== null ? (p.organizationName ?? `Şirket ${p.organizationId}`) : p.plantName,
-        isCompany: p.organizationId !== null,
+        name: ownerId !== null ? (ownerName ?? `Şirket ${ownerId}`) : p.plantName,
+        isCompany: ownerId !== null,
         plants: [],
       };
       g.plants.push(p);
@@ -42,7 +45,11 @@ export async function GET(request: Request, { params }: { params: { id: string }
         capacityMw: g.plants.reduce((sum, p) => sum + p.capacityMw, 0),
         memberPlants: g.plants.map((p) => p.plantName),
         isCompany: g.isCompany,
-        hourly: settleByCompany(withData, data.profile),
+        // Sahibin santralleri kendi aralarında netleşir (toplayıcı kimliği değil sahip kimliği)
+        hourly: settleByCompany(
+          withData.map((p) => ({ ...p, organizationId: p.ownerOrganizationId !== undefined ? p.ownerOrganizationId : p.organizationId })),
+          data.profile
+        ),
       };
     });
 
@@ -58,7 +65,8 @@ export async function GET(request: Request, { params }: { params: { id: string }
       success: true,
       project: data.project,
       unit: "company",
-      unknownOwnerPlants: data.plants.filter((p) => p.organizationId === null && p.hourly.length > 0).map((p) => p.plantName),
+      aggregator: data.aggregator ?? null,
+      unknownOwnerPlants: data.plants.filter((p) => (p.ownerOrganizationId !== undefined ? p.ownerOrganizationId : p.organizationId) === null && p.hourly.length > 0).map((p) => p.plantName),
       plants: members.map((m) => ({
         plantId: m.plantId,
         plantName: m.plantName,
