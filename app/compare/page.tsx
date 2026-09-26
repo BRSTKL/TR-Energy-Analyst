@@ -33,7 +33,7 @@ interface Metric {
 }
 
 const METRICS: Metric[] = [
-  { section: "Portföy", label: "Şirket", text: (k) => k.companies.join(", ") || "Sahibi bilinmiyor" },
+  { section: "Portföy", label: "Şirket / uzlaştırma birimi", text: (k) => k.companies.join(", ") || "Sahibi bilinmiyor" },
   { label: "Santral · kurulu güç", text: (k) => `${k.plantCount} santral · ${nf(k.capacityMw)} MW` },
   { label: "Teknoloji", text: (k) => k.types.map((t) => TECH[t] ?? t).join(", ") },
   { label: "Dönem", text: (k) => (k.period ? `${k.period.start} – ${k.period.end} (${k.period.months} ay)` : "–") },
@@ -101,7 +101,9 @@ const METRICS: Metric[] = [
     text: (k) =>
       k.yekdem.inYekdem === 0
         ? "YEKDEM santrali yok"
-        : `${k.yekdem.inYekdem} santral; ${k.yekdem.exiting} çıkıyor, ${k.yekdem.staying} kalıyor${k.yekdem.unknown ? `, ${k.yekdem.unknown} bilinmiyor` : ""}`,
+        : k.yekdem.exiting === 0 && k.yekdem.unknown === 0
+          ? `${k.yekdem.inYekdem} santral; hepsi 2026'da YEKDEM'de kalıyor`
+          : `${k.yekdem.inYekdem} santral; ${k.yekdem.exiting} çıkıyor, ${k.yekdem.staying} kalıyor${k.yekdem.unknown ? `, ${k.yekdem.unknown} bilinmiyor` : ""}`,
   },
   {
     label: "En yüksek riskli santral",
