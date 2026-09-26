@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { distribution, percentileRank, plantMetrics, passesQuality, quantile } from "@/lib/sector/benchmark";
+import { companyRollup, distribution, percentileRank, plantMetrics, passesQuality, quantile } from "@/lib/sector/benchmark";
 import { processHourlyRecord } from "@/lib/calculations/engine";
 import { DEFAULT_IMBALANCE_PROFILE } from "@/lib/calculations/types";
 
@@ -25,5 +25,27 @@ describe("Sektör karnesi", () => {
     expect(m.unitImbalanceTl).toBeCloseTo(h.imbalanceCost / 8, 10);
     expect(passesQuality(m, 1)).toBe(true);
     expect(passesQuality(m, 2)).toBe(false); // verinin %50'si
+  });
+
+  it("şirket toplamı üretim ağırlıklı, sıra santral dağılımına göre", () => {
+    const base = { type: "RES" as const, yekdem: false, hours: 8760, peakMw: 10, kupstTl: 0, unitKupstTl: 0, deviationPct: 0, sameDirectionPct: 0, biasPct: 0 };
+    const plant = (id: number, org: number | null, mwh: number, unit: number) => ({
+      ...base,
+      epiasPlantId: id,
+      name: `S${id}`,
+      organizationId: org,
+      organizationName: org === null ? null : `Şirket ${org}`,
+      actualMwh: mwh,
+      imbalanceCostTl: mwh * unit,
+      unitImbalanceTl: unit,
+    });
+    const rows = companyRollup([plant(1, 1, 100, 100), plant(2, 1, 300, 50), plant(3, 2, 100, 150), plant(4, null, 100, 80)]);
+    expect(rows).toHaveLength(2); // sahibi bilinmeyen santral şirket satırı oluşturmaz
+    const a = rows.find((r) => r.organizationId === 1)!;
+    expect(a.plantCount).toBe(2);
+    expect(a.plantIds).toEqual([1, 2]);
+    expect(a.unitImbalanceTl).toBeCloseTo(62.5, 10); // (10 000 + 15 000) / 400
+    expect(a.rankPct).toBeCloseTo(25, 10); // [100, 50, 150, 80] içinde altında 1 değer → 1/4
+    expect(a.peakMw).toBe(20);
   });
 });

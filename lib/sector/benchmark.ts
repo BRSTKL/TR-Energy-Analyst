@@ -152,3 +152,66 @@ export function buildBenchmark(year: number, all: SectorPlantMetrics[], expected
     byType: { RES: dist("RES"), GES: dist("GES") },
   };
 }
+
+export interface SectorCompanyRow {
+  /** EPİAŞ şirket kimliği (dizinde yoksa null; o zaman adla gruplanır) */
+  organizationId: number | null;
+  name: string;
+  type: "RES" | "GES";
+  plantCount: number;
+  plantIds: number[];
+  actualMwh: number;
+  /** Santrallerin en yüksek saatlik üretimleri toplamı (kurulu güç yaklaşığı, MW) */
+  peakMw: number;
+  /** Üretim ağırlıklı MWh başına dengesizlik (santral bazında, şirket içi netleşme hariç) */
+  unitImbalanceTl: number;
+  unitKupstTl: number;
+  /** Ağırlıklı değerin aynı teknolojideki santral dağılımında yüzdelik sırası (düşük = daha iyi) */
+  rankPct: number;
+}
+
+/**
+ * Kıyaslamadaki santralleri şirket × teknoloji olarak toplar. Değerler santral bazındadır (raporun sektör slaytındaki
+ * "portföyünüz" rakamıyla aynı tanım); sıra, aynı teknolojideki santrallerin dağılımına göredir.
+ */
+export function companyRollup(
+  plants: Array<SectorPlantMetrics & { organizationId?: number | null }>
+): SectorCompanyRow[] {
+  const values = { RES: [] as number[], GES: [] as number[] };
+  for (const p of plants) values[p.type].push(p.unitImbalanceTl);
+  const groups = new Map<string, SectorCompanyRow & { cost: number; kupst: number }>();
+  for (const p of plants) {
+    if (!p.organizationName && p.organizationId == null) continue;
+    const key = `${p.organizationId ?? p.organizationName}|${p.type}`;
+    const g = groups.get(key) ?? {
+      organizationId: p.organizationId ?? null,
+      name: p.organizationName ?? `Şirket ${p.organizationId}`,
+      type: p.type,
+      plantCount: 0,
+      plantIds: [],
+      actualMwh: 0,
+      peakMw: 0,
+      unitImbalanceTl: 0,
+      unitKupstTl: 0,
+      rankPct: 0,
+      cost: 0,
+      kupst: 0,
+    };
+    g.plantCount++;
+    g.plantIds.push(p.epiasPlantId);
+    g.actualMwh += p.actualMwh;
+    g.peakMw += p.peakMw;
+    g.cost += p.imbalanceCostTl;
+    g.kupst += p.kupstTl;
+    groups.set(key, g);
+  }
+  return Array.from(groups.values()).map(({ cost, kupst, ...g }) => {
+    const unit = g.actualMwh > 0 ? cost / g.actualMwh : 0;
+    return {
+      ...g,
+      unitImbalanceTl: unit,
+      unitKupstTl: g.actualMwh > 0 ? kupst / g.actualMwh : 0,
+      rankPct: percentileRank(values[g.type], unit),
+    };
+  });
+}

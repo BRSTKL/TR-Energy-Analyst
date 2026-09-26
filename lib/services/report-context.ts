@@ -7,10 +7,8 @@
  * EPİAŞ'a yalnızca santral adları için (önbellekli liste) bağlanır; bağlantı yoksa adlar yerine kimlikler kullanılır.
  */
 
-import { promises as fs } from "node:fs";
-import path from "node:path";
 import { companyPlantIdsFromCache, listUevmPowerPlants } from "@/lib/services/epias-plants";
-import type { SectorBenchmark } from "@/lib/sector/benchmark";
+import { loadSectorBenchmark } from "@/lib/services/sector";
 import type { ReportContext } from "@/lib/report/plant-report";
 
 /** Kontrol için gereken santral bilgisi (saatlik veri gerekmez) */
@@ -73,22 +71,17 @@ export async function buildReportContext(plants: ReportPlantMeta[], year: number
 
 /** Sektör karnesi özeti (scripts/sector-collect.mts ile üretilir); yoksa undefined */
 async function loadSectorContext(year: number): Promise<ReportContext["sector"]> {
-  try {
-    const bench: SectorBenchmark = JSON.parse(
-      await fs.readFile(path.join(process.cwd(), ".cache", "epias", `sector-${year}.json`), "utf8")
-    );
-    const byType: NonNullable<ReportContext["sector"]>["byType"] = {};
-    for (const type of ["RES", "GES"] as const) {
-      const ps = bench.plants.filter((p) => p.type === type);
-      byType[type] = {
-        unitImbalanceTl: bench.byType[type].unitImbalanceTl,
-        unitKupstTl: bench.byType[type].unitKupstTl,
-        values: ps.map((p) => p.unitImbalanceTl),
-        kupstValues: ps.map((p) => p.unitKupstTl),
-      };
-    }
-    return { year: bench.year, byType };
-  } catch {
-    return undefined;
+  const bench = await loadSectorBenchmark(year);
+  if (!bench) return undefined;
+  const byType: NonNullable<ReportContext["sector"]>["byType"] = {};
+  for (const type of ["RES", "GES"] as const) {
+    const ps = bench.plants.filter((p) => p.type === type);
+    byType[type] = {
+      unitImbalanceTl: bench.byType[type].unitImbalanceTl,
+      unitKupstTl: bench.byType[type].unitKupstTl,
+      values: ps.map((p) => p.unitImbalanceTl),
+      kupstValues: ps.map((p) => p.unitKupstTl),
+    };
   }
+  return { year: bench.year, byType };
 }

@@ -23,7 +23,7 @@
  */
 
 import pptxgen from "pptxgenjs";
-import type { PlantReportData } from "@/lib/report/plant-report";
+import { deviationLoad, type PlantReportData } from "@/lib/report/plant-report";
 
 export interface ReportAuthor {
   name?: string;
@@ -239,12 +239,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
   // destekler), KÜPST ise tüm santraller için şirkete aittir. B (duyarlılık): YEKDEM santrallerinin dengesizliği de
   // şirkete yansır. Her rakam "dengesizlik riski + tahmini KÜPST" toplamıdır (sapma yükü).
   const k2026 = r.kupst.next2026Tl ?? r.kupst.totalTl;
-  const load = {
-    a2025: ex ? ex.directCostTl + r.kupst.totalTl : cost + r.kupst.totalTl,
-    a2026: ex && ex.exposure2026Tl !== null ? ex.exposure2026Tl + k2026 : s2026 ? s2026.cost2026Tl + k2026 : null,
-    b2025: cost + r.kupst.totalTl,
-    b2026: s2026 ? s2026.cost2026Tl + k2026 : null,
-  };
+  const load = deviationLoad(r);
   {
     const exiting = ex?.exitingPlants ?? [];
     const title = ex

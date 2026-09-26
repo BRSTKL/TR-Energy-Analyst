@@ -214,7 +214,7 @@ export default function ProjectsPage() {
     <div className="min-h-screen bg-slate-50/60 pb-16">
       {/* Header */}
       <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-6 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-6 sm:px-6 xl:flex-row xl:items-center xl:justify-between lg:px-8">
           <div>
             <div className="flex items-center gap-2">
               <Link
@@ -234,12 +234,20 @@ export default function ProjectsPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 xl:justify-end">
             <EpiasSyncDialog onSyncSuccess={fetchProjects} />
 
             <Button variant="outline" size="sm" onClick={fetchProjects} className="gap-1.5">
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
               Yenile
+            </Button>
+
+            <Button asChild variant="outline" size="sm">
+              <Link href="/compare">Karşılaştır</Link>
+            </Button>
+
+            <Button asChild variant="outline" size="sm">
+              <Link href="/sector">Sektör karnesi</Link>
             </Button>
 
             <Button asChild variant="outline" size="sm" className="gap-1.5 border-sky-300 text-sky-800 hover:bg-sky-50">

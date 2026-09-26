@@ -224,7 +224,19 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button asChild variant="outline" className="gap-2">
+              <Link href="/sector">
+                <Wind className="h-4 w-4" />
+                Sektör karnesi
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="gap-2">
+              <Link href="/compare">
+                <Layers className="h-4 w-4" />
+                Projeleri karşılaştır
+              </Link>
+            </Button>
             {/* Dialog Trigger */}
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
