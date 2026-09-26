@@ -611,6 +611,8 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       const bandY = top + 0.95;
       text(s, TECH_TR[t.type] ?? t.type, { x: M, y: bandY - 0.2, w: 1.5, h: 0.4, fontSize: 15, bold: true, fontFace: FONT_HEAD });
       text(s, `${d.count} santral`, { x: M, y: bandY + 0.18, w: 1.5, h: 0.3, fontSize: 10, color: C.sub });
+      // Bandın dışında kalan santraller (P10 altı / P90 üstü) boşlukta asılı görünmesin diye tüm ölçek boyunca ince eksen
+      s.addShape(pptx.ShapeType.line, { x: left, y: bandY, w: width, h: 0, line: { color: "C9D1DA", width: 0.75 } });
       rect(s, xOf(d.p10), bandY - 0.13, xOf(d.p90) - xOf(d.p10), 0.26, "E6EBF0");
       rect(s, xOf(d.p25), bandY - 0.13, xOf(d.p75) - xOf(d.p25), 0.26, "B9C4D0");
       s.addShape(pptx.ShapeType.line, { x: xOf(d.median), y: bandY - 0.22, w: 0, h: 0.44, line: { color: C.navy, width: 2 } });
