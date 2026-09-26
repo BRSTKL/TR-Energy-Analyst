@@ -108,6 +108,7 @@ describe("Santral türünü addan tahmin", () => {
     expect(guessTechnologyFromName("K3_OSMANGAZİ_RÜZGAR")).toBe("RES");
     expect(guessTechnologyFromName("DOĞANÇAY REG. ve HES(ENERJİSA ENR.)")).toBe("HES");
     expect(guessTechnologyFromName("Karapınar GES")).toBe("GES");
+    expect(guessTechnologyFromName("GÜNEŞ HES(TİMSE ELK.)")).toBe("HES"); // Güneş özel ad, santral hidroelektrik
     expect(guessTechnologyFromName("BANDIRMA II DGKÇS")).toBe("OTHER");
     expect(guessTechnologyFromName("2BZ ÇUBUK BES")).toBe("OTHER");
     expect(guessTechnologyFromName("ENERJISA BANDIRMA SANTRALI")).toBeNull();

@@ -39,12 +39,14 @@ export async function listUevmPowerPlants(forceRefresh = false): Promise<EpiasPo
   return plants;
 }
 
-let orgCache: { at: number; key: string; orgs: EpiasOrganization[] } | null = null;
+/** Dönem başına önbellek (arama son tam yılı ve bu yılı birlikte ister) */
+const orgCache = new Map<string, { at: number; orgs: EpiasOrganization[] }>();
 
 /** Verilen aralıkta tanımlı piyasa katılımcıları (şirketler; 12 saat önbellekli) */
 export async function listOrganizations(startDay: string, endDay: string): Promise<EpiasOrganization[]> {
   const key = `${startDay}|${endDay}`;
-  if (orgCache && orgCache.key === key && Date.now() - orgCache.at < CACHE_TTL_MS) return orgCache.orgs;
+  const cached = orgCache.get(key);
+  if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.orgs;
   const json = await epiasRequest<{ items?: any[] }>("/generation/data/organization-list", {
     startDate: formatToEpiasIso(startDay, false),
     endDate: formatToEpiasIso(endDay, true),
@@ -58,7 +60,7 @@ export async function listOrganizations(startDay: string, endDay: string): Promi
       eic: o.organizationEtsoCode ?? null,
     }));
   if (orgs.length === 0) throw new Error("EPİAŞ şirket listesi boş döndü.");
-  orgCache = { at: Date.now(), key, orgs };
+  orgCache.set(key, { at: Date.now(), orgs });
   return orgs;
 }
 

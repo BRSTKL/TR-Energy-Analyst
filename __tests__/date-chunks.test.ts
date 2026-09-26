@@ -30,3 +30,28 @@ describe("Tarih aralığını aylara bölme", () => {
     expect(formatDay("2025-01-31")).toBe("31.01.2025");
   });
 });
+
+import { searchPeriods } from "@/lib/epias-plant/period";
+
+describe("searchPeriods", () => {
+  it("son tam yıl ve bu yılın dünkü güne kadarki kısmı", () => {
+    expect(searchPeriods(new Date(Date.UTC(2026, 8, 26)))).toEqual([
+      { start: "2025-01-01", end: "2025-12-31" },
+      { start: "2026-01-01", end: "2026-09-25" },
+    ]);
+    // 1 Ocak'ta bu yıldan veri yok
+    expect(searchPeriods(new Date(Date.UTC(2026, 0, 1)))).toEqual([{ start: "2025-01-01", end: "2025-12-31" }]);
+  });
+});
+
+import { plantPeriods } from "@/lib/epias-plant/period";
+
+describe("plantPeriods", () => {
+  it("arama dönemlerine dünün ayını ekler", () => {
+    expect(plantPeriods(new Date(Date.UTC(2026, 8, 26))).at(-1)).toEqual({ start: "2026-09-01", end: "2026-09-25" });
+    expect(plantPeriods(new Date(Date.UTC(2026, 0, 1)))).toEqual([
+      { start: "2025-01-01", end: "2025-12-31" },
+      { start: "2025-12-01", end: "2025-12-31" },
+    ]);
+  });
+});

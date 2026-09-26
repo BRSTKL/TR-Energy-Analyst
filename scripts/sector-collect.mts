@@ -142,8 +142,15 @@ const worker = async () => {
 };
 await Promise.all(Array.from({ length: WORKERS }, worker));
 
+// Özet yalnızca bu turun hedeflerinden kurulur; teknoloji güncel ad tahmininden alınır (tahmin düzeldiyse eski dosyadaki
+// yanlış tür kıyaslamaya girmez, hedef dışına düşen santral dışarıda kalır)
+const targetType = new Map(targets.map((x) => [x.p.id, x.type]));
 const all: SectorPlantMetrics[] = [];
-for (const f of await fs.readdir(dir)) all.push(JSON.parse(await fs.readFile(path.join(dir, f), "utf8")));
+for (const f of await fs.readdir(dir)) {
+  const m: SectorPlantMetrics = JSON.parse(await fs.readFile(path.join(dir, f), "utf8"));
+  const type = targetType.get(m.epiasPlantId);
+  if (type) all.push({ ...m, type });
+}
 const bench = buildBenchmark(year, all, expectedHours);
 await fs.writeFile(path.join(process.cwd(), ".cache", "epias", `sector-${year}.json`), JSON.stringify(bench));
 console.log(`BİTTİ: toplanan ${all.length}, kıyaslamaya alınan ${bench.plants.length}, elenen ${bench.excluded}, bu turda hata ${failed}`);

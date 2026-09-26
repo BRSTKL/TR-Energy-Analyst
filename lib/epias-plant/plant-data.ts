@@ -105,9 +105,12 @@ export function guessTechnologyFromName(name: string): PlantTechnology | "OTHER"
   // Kısa kodlar (RES, HES…) tam kelime olarak, uzun kelimeler (rüzgar, jeotermal…) kelime başı olarak aranır
   const words = normalizePlantName(name).split(" ");
   const has = (...keys: string[]) => keys.some((k) => words.some((w) => (k.length <= 5 ? w === k : w.startsWith(k))));
-  if (has("res", "ruzgar")) return "RES";
-  if (has("ges", "gunes")) return "GES";
+  // Açık kodlar önce: "GÜNEŞ HES" bir hidroelektriktir (Güneş özel ad), "RÜZGAR GES" bir güneş santralidir
+  if (has("res")) return "RES";
+  if (has("ges")) return "GES";
   if (has("hes", "reg", "regulator", "baraj")) return "HES";
+  if (has("ruzgar")) return "RES";
+  if (has("gunes")) return "GES";
   if (has("dgkcs", "dgkc", "dgcs", "tes", "kojen", "kojenerasyon", "dogalgaz", "komur", "linyit", "jes", "jeotermal", "bes", "biyokutle", "biyogaz", "cop", "motorin", "fuel"))
     return "OTHER";
   return null;
