@@ -1295,22 +1295,41 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       ],
       [
         "KÜPST (tahmini)",
-        "Saatlik |gerçekleşen − plan| sapmanın tolerans payını aşan kısmı × max(PTF, SMF) × 0,03; santral bazında, YEKDEM santralleri dahil şirkete ait. Tolerans plana oranlandı: 2025'te rüzgâr %17, güneş %10, diğer %5 (EPDK 13025); 2026'dan itibaren rüzgâr %15, güneş %8 (resmi karar metni görülmedi); öncesinde %21 / %12. Arıza sayısına bağlı katsayı artışı kapsam dışı.",
+        `Saatlik |gerçekleşen − plan| sapmanın tolerans payını aşan kısmı × max(PTF, SMF) × 0,03; santral bazında, YEKDEM santralleri dahil ${unit.dat} ait. Tolerans plana oranlandı: 2025'te rüzgâr %17, güneş %10, diğer %5 (EPDK 13025); 2026'dan itibaren rüzgâr %15, güneş %8 (resmi karar metni görülmedi); öncesinde %21 / %12. Arıza sayısına bağlı katsayı artışı kapsam dışı.`,
       ],
       [
         "Etiketler",
-        "KESİN HESAP: veriden doğrudan. TAHMİNİ: tolerans oranı ve dayanağı tam doğrulanmamış hesap (KÜPST). VARSAYIMA BAĞLI: YEKDEM santrallerinin dengesizliğinin YEKDEM portföyünde uzlaştırıldığı çıkarımına dayanır (YEK Yön. md. 15–17; ana senaryo); duyarlılık olarak şirkete yansıdığı durum da verilir. SENARYO: davranış varsayımı; taahhüt değildir.",
+        `KESİN HESAP: veriden doğrudan. TAHMİNİ: tolerans oranı ve dayanağı tam doğrulanmamış hesap (KÜPST). VARSAYIMA BAĞLI: YEKDEM santrallerinin dengesizliğinin YEKDEM portföyünde uzlaştırıldığı çıkarımına dayanır (YEK Yön. md. 15–17; ana senaryo); duyarlılık olarak ${unit.dat} yansıdığı durum da verilir. SENARYO: davranış varsayımı; taahhüt değildir.`,
       ],
     ];
+    // Satır yüksekliği metin uzunluğuna göre: aynı satırdaki iki bloğun uzun olanı belirler (sabit adım uzun metni
+    // bir alttaki başlığın üstüne taşırıyordu). Sığmazsa yazı küçülür.
     const colW = (CW - 0.5) / 2;
-    const rowStep = blocks.length > 6 ? 1.28 : 1.68;
+    const top = 1.7;
+    const bottomLimit = 6.9;
+    const layout = (fontSize: number) => {
+      const charsPerLine = (colW * 72) / (fontSize * 0.46);
+      const lineH = (fontSize * 1.25) / 72;
+      const rows: number[] = [];
+      for (let i = 0; i < blocks.length; i += 2) {
+        const lines = Math.max(...blocks.slice(i, i + 2).map(([, b]) => Math.ceil(b.length / charsPerLine)));
+        rows.push(0.34 + lines * lineH + 0.22);
+      }
+      return rows;
+    };
+    let fontSize = 11;
+    let rowHs = layout(fontSize);
+    while (fontSize > 8.5 && top + rowHs.reduce((a, b) => a + b, 0) > bottomLimit) {
+      fontSize -= 0.5;
+      rowHs = layout(fontSize);
+    }
     blocks.forEach(([h, b], i) => {
       const col = i % 2;
       const row = Math.floor(i / 2);
       const x = M + col * (colW + 0.5);
-      const y = 1.75 + row * rowStep;
+      const y = top + rowHs.slice(0, row).reduce((a, v) => a + v, 0);
       text(s, h, { x, y, w: colW, h: 0.3, fontSize: 13, bold: true, fontFace: FONT_HEAD, color: C.navy });
-      text(s, b, { x, y: y + 0.32, w: colW, h: rowStep - 0.38, fontSize: blocks.length > 6 ? 10 : 11.5, color: C.sub, valign: "top" });
+      text(s, b, { x, y: y + 0.32, w: colW, h: rowHs[row] - 0.36, fontSize, color: C.sub, valign: "top" });
     });
   }
 
