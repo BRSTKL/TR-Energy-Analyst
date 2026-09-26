@@ -136,7 +136,8 @@ export interface PlantOwner {
   organizationName: string;
 }
 
-const INDEX_TTL_MS = 30 * 24 * 3_600_000;
+// Santral sahipliği nadiren değişir; tam tarama ~1.300 şirket ister (hız sınırıyla ~20 dk). Bu yüzden uzun geçerli
+const INDEX_TTL_MS = 180 * 24 * 3_600_000;
 const indexFile = (year: number) => path.join(process.cwd(), ".cache", "epias", `plant-owners-${year}.json`);
 
 interface OwnerIndexFile {
@@ -155,6 +156,24 @@ export interface PlantOwnerIndex {
 }
 
 const ownerIndexes = new Map<number, Promise<PlantOwnerIndex>>();
+
+/** Diskteki tamamlanmış dizinlerden yıla en yakını (yoksa null) */
+async function nearestOwnerIndex(year: number): Promise<OwnerIndexFile | null> {
+  try {
+    const years = (await fs.readdir(path.join(process.cwd(), ".cache", "epias")))
+      .map((f) => /^plant-owners-(\d{4})\.json$/.exec(f)?.[1])
+      .filter((y): y is string => !!y)
+      .map(Number)
+      .sort((a, b) => Math.abs(a - year) - Math.abs(b - year));
+    for (const y of years) {
+      const saved: OwnerIndexFile = JSON.parse(await fs.readFile(indexFile(y), "utf8"));
+      if (saved.pending === 0) return saved;
+    }
+  } catch {
+    // klasör yok
+  }
+  return null;
+}
 
 /**
  * Santral kimliği → şirket dizini. EPİAŞ'ta santralden şirkete giden bir servis yok; bu yüzden yıl içinde tanımlı
@@ -177,6 +196,12 @@ export function plantOwnerIndex(year: number, forceRefresh = false): Promise<Pla
       }
     }
     if (saved && saved.pending === 0) return { owners: new Map(saved.entries), pending: 0 };
+    // Bu yıl için dizin yoksa en yakın yılın tam dizini kullanılır (sahiplik yıldan yıla nadiren değişir); tarama
+    // yalnızca hiç dizin yokken ya da yarım kalmış bir tarama sürdürülürken yapılır
+    if (!saved && !forceRefresh) {
+      const nearest = await nearestOwnerIndex(year);
+      if (nearest) return { owners: new Map(nearest.entries), pending: 0 };
+    }
 
     const start = `${year}-01-01`;
     const end = `${year}-12-31`;
@@ -219,7 +244,40 @@ export function plantOwnerIndex(year: number, forceRefresh = false): Promise<Pla
  * Yıl içinde YEKDEM'den yararlanan santraller (renewables/data/licensed-powerplant-list, period = yılın ilk günü).
  * Canlı doğrulandı: 2025 için 768 santral; KORU RES ve MUT RES listede, BALABANLI RES yok.
  */
-export async function listYekdemPlantIds(year: number): Promise<Set<number>> {
+const yekdemCache = new Map<number, Promise<Set<number>>>();
+const yekdemFile = (year: number) => path.join(process.cwd(), ".cache", "epias", `yekdem-${year}.json`);
+/** Geçmiş yılların listesi değişmez; içinde bulunulan ve sonraki yılın listesi bir gün geçerli */
+const yekdemTtlMs = (year: number) => (year < new Date().getUTCFullYear() ? Infinity : 24 * 3_600_000);
+
+/**
+ * Yıl içinde YEKDEM'den yararlanan santraller. Her proje kaydında aynı liste istenmesin diye bellekte ve diskte
+ * (.cache/epias/yekdem-<yıl>.json) tutulur; alınamazsa önbellekte kalmaz, sonraki çağrı yeniden dener.
+ */
+export function listYekdemPlantIds(year: number): Promise<Set<number>> {
+  const cached = yekdemCache.get(year);
+  if (cached) return cached;
+  const load = (async () => {
+    try {
+      const stat = await fs.stat(yekdemFile(year));
+      if (Date.now() - stat.mtimeMs < yekdemTtlMs(year)) {
+        return new Set<number>(JSON.parse(await fs.readFile(yekdemFile(year), "utf8")));
+      }
+    } catch {
+      // önbellek yok: EPİAŞ'tan alınır
+    }
+    const ids = await fetchYekdemPlantIds(year);
+    await fs.mkdir(path.dirname(yekdemFile(year)), { recursive: true });
+    await fs.writeFile(yekdemFile(year), JSON.stringify(Array.from(ids)));
+    return ids;
+  })();
+  yekdemCache.set(year, load);
+  load.catch(() => yekdemCache.delete(year));
+  // Bellekteki kopya da diskteki gibi süreyle yenilenir (sunucu günlerce açık kalabilir)
+  if (yekdemTtlMs(year) !== Infinity) setTimeout(() => yekdemCache.delete(year), yekdemTtlMs(year)).unref?.();
+  return load;
+}
+
+async function fetchYekdemPlantIds(year: number): Promise<Set<number>> {
   // Bu servis diğerlerinden farklı olarak { items } değil doğrudan dizi döndürür
   const json = await epiasRequest<any[] | { items?: any[] }>("/renewables/data/licensed-powerplant-list", {
     period: formatToEpiasIso(`${year}-01-01`, false),

@@ -1,3 +1,5 @@
+import { existsSync, rmSync } from "node:fs";
+import path from "node:path";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const calls: Array<{ path: string; body: any }> = [];
@@ -50,11 +52,23 @@ describe("EPİAŞ santral servisi (sahte cevaplarla)", () => {
   });
 
   it("YEKDEM listesini doğrudan dizi cevabından okur; boş listeyi 'bilinmiyor' sayar", async () => {
-    responder = () => [{ powerPlantId: 9083, name: "KORU RES" }, { powerPlantId: 9221, name: "MUT RES" }];
-    const ids = await listYekdemPlantIds(2025);
-    expect(Array.from(ids)).toEqual([9083, 9221]);
-    expect(calls.at(-1)).toEqual({ path: "/renewables/data/licensed-powerplant-list", body: { period: "2025-01-01T00:00:00+03:00" } });
-    responder = () => [];
-    await expect(listYekdemPlantIds(2025)).rejects.toThrow("belirlenemedi");
+    // Liste diskte önbelleğe alınır: diskte dosyası olmayan yıllar kullanılır ve test sonunda silinir
+    const cacheFile = (y: number) => path.join(process.cwd(), ".cache", "epias", `yekdem-${y}.json`);
+    try {
+      responder = () => [{ powerPlantId: 9083, name: "KORU RES" }, { powerPlantId: 9221, name: "MUT RES" }];
+      const ids = await listYekdemPlantIds(1999);
+      expect(Array.from(ids)).toEqual([9083, 9221]);
+      expect(calls.at(-1)).toEqual({ path: "/renewables/data/licensed-powerplant-list", body: { period: "1999-01-01T00:00:00+03:00" } });
+      // İkinci çağrı önbellekten: EPİAŞ'a gitmez
+      const before = calls.length;
+      await listYekdemPlantIds(1999);
+      expect(calls.length).toBe(before);
+      responder = () => [];
+      await expect(listYekdemPlantIds(1998)).rejects.toThrow("belirlenemedi");
+      expect(existsSync(cacheFile(1998))).toBe(false); // alınamayan liste önbelleğe yazılmaz
+    } finally {
+      rmSync(cacheFile(1999), { force: true });
+      rmSync(cacheFile(1998), { force: true });
+    }
   });
 });

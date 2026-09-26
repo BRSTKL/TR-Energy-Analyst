@@ -202,8 +202,42 @@ function toWallClockRange(startDate: string | Date, endDate: string | Date): { g
 }
 
 /**
- * Ağ seviyesindeki geçici hatalarda (bağlantı zaman aşımı, kopan VPN vb.) isteği tekrar dener.
- * HTTP hata yanıtları (4xx/5xx) tekrar denenmez; onları çağıran taraf değerlendirir.
+ * EPİAŞ Şeffaflık ağ geçidi hesap başına dakikada 80 isteğe izin verir; aşılınca HTTP 429 ("Throttling limits
+ * (80 req/min)") döner. Süreç içindeki tüm istekler bu kayan pencereden geçer: son 60 saniyede EPIAS_RATE_PER_MIN
+ * (varsayılan 70, pay bırakmak için) istek varsa sıradaki istek pencere açılana kadar bekler. Ayrı süreçler (ör. sektör
+ * toplama betiği ile uygulama sunucusu) kotayı paylaşır; aynı anda çalıştırılırsa 429 yine görülebilir ve aşağıdaki
+ * tekrar deneme devreye girer.
+ */
+const RATE_PER_MIN = Math.max(1, Number(process.env.EPIAS_RATE_PER_MIN) || 70);
+const RATE_WINDOW_MS = 60_000;
+const sentAt: number[] = [];
+let rateQueue: Promise<void> = Promise.resolve();
+
+export function acquireEpiasSlot(now: () => number = Date.now): Promise<void> {
+  const next = rateQueue.then(async () => {
+    for (;;) {
+      const t = now();
+      while (sentAt.length && t - sentAt[0] >= RATE_WINDOW_MS) sentAt.shift();
+      if (sentAt.length < RATE_PER_MIN) {
+        sentAt.push(t);
+        return;
+      }
+      await new Promise((r) => setTimeout(r, sentAt[0] + RATE_WINDOW_MS - t + 25));
+    }
+  });
+  rateQueue = next.catch(() => {});
+  return next;
+}
+
+/** HTTP 429'da beklenecek süre: Retry-After varsa o, yoksa denemeyle artan (15, 30, 45 sn) */
+function throttleDelayMs(res: Response, attempt: number): number {
+  const ra = Number(res.headers.get("retry-after"));
+  return Number.isFinite(ra) && ra > 0 ? Math.min(ra, 90) * 1000 : 15_000 * attempt;
+}
+
+/**
+ * Ağ seviyesindeki geçici hatalarda (bağlantı zaman aşımı, kopan VPN vb.) ve HTTP 429'da (hız sınırı) isteği tekrar
+ * dener; her istek önce hız sınırı penceresinden geçer. Diğer HTTP hata yanıtları tekrar denenmez.
  * Yıllık senkronda ~50 istekten birinin düşmesi tüm işlemi iptal etmesin diye kullanılır.
  */
 async function fetchWithNetworkRetry(
@@ -211,9 +245,20 @@ async function fetchWithNetworkRetry(
   init: RequestInit,
   attempts = 3
 ): Promise<Response> {
-  for (let attempt = 1; ; attempt++) {
+  for (let attempt = 1, throttled = 0; ; attempt++) {
     try {
-      return await fetch(url, init);
+      await acquireEpiasSlot();
+      const res = await fetch(url, init);
+      // Hız sınırı: bekleyip aynı isteği tekrarla (en fazla 3 kez); sonra 429 çağırana döner
+      if (res.status === 429 && throttled < 3) {
+        throttled++;
+        const wait = throttleDelayMs(res, throttled);
+        console.warn(`EPİAŞ hız sınırı (429); ${Math.round(wait / 1000)} sn sonra tekrar denenecek: ${url}`);
+        await new Promise((r) => setTimeout(r, wait));
+        attempt--;
+        continue;
+      }
+      return res;
     } catch (err) {
       if (attempt >= attempts) throw err;
       console.warn(`EPİAŞ isteği ağ hatası nedeniyle tekrar deneniyor (${attempt}/${attempts - 1}): ${url}`);
