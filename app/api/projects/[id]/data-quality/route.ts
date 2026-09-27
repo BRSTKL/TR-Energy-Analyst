@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { describeGap, findDataGaps } from "@/lib/analysis/data-completeness";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
       where: projectRecords,
       select: {
         timestamp: true,
+        plantId: true,
         marketData: { select: { source: true, syncedAt: true, createdAt: true } },
       },
     });
@@ -94,6 +96,12 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     }
     const months = Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month));
 
+    // Santral × ay üretim verisi bütünlüğü: bir santralin ayı eksikse o ay hesaplardan sessizce düşer
+    const plants = await prisma.powerPlant.findMany({ where: { projectId }, select: { id: true, name: true } });
+    const stampsByPlant = new Map<string, number[]>(plants.map((p) => [p.id, []]));
+    for (const r of rows) stampsByPlant.get(r.plantId)?.push(r.timestamp.getTime());
+    const generationGaps = findDataGaps(plants.map((p) => ({ plantName: p.name, timestamps: stampsByPlant.get(p.id) ?? [] }))).map(describeGap);
+
     return NextResponse.json({
       success: true,
       totalHours,
@@ -110,6 +118,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
       calendarVerifiedHours: calendarVerified,
       months,
       isFullyVerified: totalHours > 0 && verifiedHours === totalHours,
+      generationGaps,
       dateRange: {
         start: range._min.timestamp,
         end: range._max.timestamp,

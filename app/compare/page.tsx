@@ -39,6 +39,11 @@ const METRICS: Metric[] = [
   { label: "Dönem", text: (k) => (k.period ? `${k.period.start} – ${k.period.end} (${k.period.months} ay)` : "–") },
   { label: "Üretim", text: (k) => `${nf(k.actualMwh / 1000)} GWh` },
   {
+    label: "Veri bütünlüğü",
+    hint: "Eksik ay hesaplara girmez; projeleri karşılaştırmadan önce kontrol edin",
+    text: (k) => (k.dataGaps.length ? `Eksik: ${k.dataGaps.join("; ")}` : "Tam"),
+  },
+  {
     section: "Sapma yükü (dengesizlik + KÜPST)",
     label: "Veri yılı, ana senaryo",
     hint: "YEKDEM santrallerinin dengesizliği YEKDEM havuzunda; KÜPST tüm santraller için şirkete",

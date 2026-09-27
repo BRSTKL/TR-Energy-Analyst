@@ -15,7 +15,8 @@
 import { processHourlyRecord } from "@/lib/calculations/engine";
 import { aggregateMonthly } from "@/lib/calculations/aggregate";
 import { HourlyResult, ImbalancePricingProfile, REGULATORY_IMBALANCE_REGIMES } from "@/lib/calculations/types";
-import { combineBacktests, persistenceStrategy, runBacktest } from "@/lib/analysis/backtest";
+import { findDataGaps, type PlantDataGap } from "@/lib/analysis/data-completeness";
+import { combineBacktests, MIN_FEASIBLE_LAG_HOURS, persistenceStrategy, runBacktest } from "@/lib/analysis/backtest";
 import { KUPST_REGIMES, kupstForHour, kupstTotal } from "@/lib/calculations/kupst";
 import { percentileRank, quantile, type Distribution } from "@/lib/sector/benchmark";
 import type { ProjectHourly } from "@/lib/services/project-hourly";
@@ -210,6 +211,8 @@ export interface PlantReportData {
     /** Farklı şirketlerden en az birinin fazla, birinin eksik olduğu saatlerin oranı (%) */
     offsettingHourSharePct: number;
   } | null;
+  /** Veri döneminde ayı eksik olan santraller (ör. EPİAŞ'ta bir ay yayımlanmamış); eksik ay hesaplara girmez */
+  dataGaps: PlantDataGap[];
   /**
    * Toplayıcı portföyü (projede toplayıcı tanımlıysa): santraller sahiplerinin kendi dengesinde (her sahip ayrı) ile
    * toplayıcı portföyünde tek dengede uzlaştırılması arasındaki fark, yani portföyün yarattığı netleşme değeri.
@@ -228,10 +231,11 @@ export interface PlantReportData {
     offsettingHourSharePct: number;
   } | null;
   /**
-   * SENARYO: 1 saat önce görülen hatanın bir kısmı GİP'te kapatılsaydı (santral bazında, önceki aylardan öğrenerek
+   * SENARYO: MIN_FEASIBLE_LAG_HOURS (2) saat önce görülen hatanın bir kısmı GİP'te kapatılsaydı (GİP teslimattan 60 dk
+   * önce kapandığı için 1 saatlik gecikme uygulanamaz) (santral bazında, önceki aylardan öğrenerek
    * test). savingTl, test edilen oranın şirket bazındaki maliyete uygulanmasıyla bulunan yaklaşık tutardır.
    */
-  intraday: { savingTl: number; savingPct: number; testMonths: number; firstTestMonth: string; lastTestMonth: string } | null;
+  intraday: { savingTl: number; savingPct: number; testMonths: number; firstTestMonth: string; lastTestMonth: string; lagHours: number } | null;
 }
 
 const COEF_2026 = REGULATORY_IMBALANCE_REGIMES[REGULATORY_IMBALANCE_REGIMES.length - 1].coefficients;
@@ -500,10 +504,10 @@ export function buildPlantReport(
     };
   }
 
-  // Gün içi: önceki 4 aydan öğrenilen oranla, 1 saat önce görülen hatanın kapatılması (santral bazında test)
+  // Gün içi: önceki 4 aydan öğrenilen oranla, uygulanabilir en kısa gecikmede (2 saat) görülen hatanın kapatılması
   let intraday: PlantReportData["intraday"] = null;
   const backtests =
-    options.intraday === false ? [] : withData.map((p) => runBacktest(p.hourly, data.profile, { strategies: [persistenceStrategy(1)] }));
+    options.intraday === false ? [] : withData.map((p) => runBacktest(p.hourly, data.profile, { strategies: [persistenceStrategy(MIN_FEASIBLE_LAG_HOURS)] }));
   const combined = combineBacktests(backtests.filter((b) => b.testMonths.length > 0));
   const s = combined?.strategies[0];
   if (combined && s && combined.testMonths.length > 0) {
@@ -513,6 +517,7 @@ export function buildPlantReport(
       testMonths: combined.testMonths.length,
       firstTestMonth: combined.testMonths[0],
       lastTestMonth: combined.testMonths[combined.testMonths.length - 1],
+      lagHours: MIN_FEASIBLE_LAG_HOURS,
     };
   }
 
@@ -639,6 +644,7 @@ export function buildPlantReport(
     coefficients2026,
     dsg,
     aggregator,
+    dataGaps: findDataGaps(data.plants.map((p) => ({ plantName: p.plantName, timestamps: p.hourly.map((h) => new Date(h.timestamp).getTime()) }))),
     intraday,
   };
 }

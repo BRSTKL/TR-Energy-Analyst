@@ -427,6 +427,8 @@ export default function PlanningEfficiencyPage() {
       "Pazar",
     ];
 
+    // İlk üç harf Pazartesi/Pazar ve Cuma/Cumartesi'yi ayırt etmez: kısaltmalar açıkça verilir
+    const shortNames = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
     return days.map((dayName, dayIndex) => {
       const cells = currentView.heatmap.filter(
         (c) => c.dayOfWeekIndex === dayIndex
@@ -435,6 +437,7 @@ export default function PlanningEfficiencyPage() {
       cells.sort((a, b) => a.hour - b.hour);
       return {
         dayName,
+        shortName: shortNames[dayIndex],
         dayIndex,
         cells,
       };
@@ -1177,7 +1180,7 @@ export default function PlanningEfficiencyPage() {
                     {heatmapRows.map((row) => (
                       <div key={row.dayIndex} className="flex items-center gap-1.5">
                         <span className="w-16 shrink-0 text-2xs font-medium text-slate-600">
-                          {row.dayName.substring(0, 3)}
+                          {row.shortName}
                         </span>
                         <div className="grid grid-cols-24 flex-1 gap-0.5">
                           {row.cells.map((cell) => (

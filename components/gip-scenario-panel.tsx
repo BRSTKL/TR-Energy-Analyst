@@ -256,7 +256,7 @@ export function GipScenarioPanel({ projectId, scope }: { projectId: string; scop
               <table className="mt-2 w-full text-xs">
                 <tbody>
                   {persistence.strategies.map((st) => (
-                    <tr key={st.id} className={`border-b last:border-0 ${st.id.startsWith("gip-close") ? "text-slate-500" : ""}`}>
+                    <tr key={st.id} className={`border-b last:border-0 ${st.id.startsWith("gip-close") || st.id === "persistence-1h" ? "text-slate-500" : ""}`}>
                       <td className="py-1.5 pr-2">
                         {st.id.startsWith("gip-close") ? "Sabit %25 varsayımı (yönü hep doğru bilir)" : st.label}
                       </td>

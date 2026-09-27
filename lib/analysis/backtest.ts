@@ -196,11 +196,11 @@ export function intradayClosingStrategy(sharePercent = DEFAULT_INTRADAY_REALISM.
   const params = { ...DEFAULT_INTRADAY_REALISM, sharePercent };
   return {
     id: `gip-close-${sharePercent}`,
-    label: `GİP'te %${sharePercent} kapatma`,
+    label: `GİP'te %${sharePercent} kapatma · kusursuz öngörü`,
     description:
       `Her saatte dengesizliğin %${sharePercent} payı GİP'te kapatılır; saatlik GİP hacminin en fazla ` +
       `%${params.volumeCapPercent} payı kadar, zor saatlerde fiyat en kötü eşleşme fiyatına doğru ` +
-      `%${params.stressHaircutPercent} kayar. Öğrenilen parametre yoktur; payın gün içinde öngörülebildiği varsayılır.`,
+      `%${params.stressHaircutPercent} kayar. Öğrenilen parametre yoktur; hatanın yönünün gün içinde hep doğru bilindiği varsayılır, bu yüzden teorik tavandır.`,
     fit: () => ({
       cost: (h) => {
         // Dengesizlik fiyatları seçilen profile göre (ör. 2026 kuralları) yeniden hesaplanmış olanlardır
@@ -223,13 +223,25 @@ const ALPHA_GRID = [0, 0.25, 0.5, 0.75, 1];
  * (persistenceTradeGain; gerçekçi fiyat ve hacim sınırı). α, eğitim döneminde kazancı en yüksek yapan
  * değer olarak 0 / %25 / %50 / %75 / %100 arasından seçilir; hiçbiri kazandırmıyorsa α = 0 (işlem yok).
  */
+/**
+ * Uygulanabilir en kısa gecikme. GİP'te bir teslimat saati için işlemler teslimattan 60 dakika önce kapanır
+ * (EPİAŞ GİP süreçleri): t saati için son işlem anı t−1:00'dır ve o anda t−1 saati henüz başlamamıştır. Bilinen en
+ * yeni tam saat t−2'dir (anlık SCADA ile). 1 saatlik gecikme işlem anında olmayan bilgiyi kullanır; yalnızca teorik
+ * üst sınır olarak gösterilir, rapor ve öneriler bu değerle hesaplanır.
+ */
+export const MIN_FEASIBLE_LAG_HOURS = 2;
+
 export function persistenceStrategy(lagHours: number): Strategy {
+  const theoretical = lagHours < MIN_FEASIBLE_LAG_HOURS;
   return {
     id: `persistence-${lagHours}h`,
-    label: `Gün içi kalıcılık (${lagHours} saat önce)`,
+    label: `Gün içi kalıcılık (${lagHours} saat önce)${theoretical ? " · teorik" : ""}`,
     description:
       `Her saat, ${lagHours} saat önce görülen tahmin hatasının bir kısmı "hata sürecek" varsayımıyla GİP'te ` +
-      `kapatılır; hata yön değiştirirse zarar da sayılır. Kapatılan oran önceki aylardan öğrenilir.`,
+      `kapatılır; hata yön değiştirirse zarar da sayılır. Kapatılan oran önceki aylardan öğrenilir.` +
+      (theoretical
+        ? ` Uygulanamaz: GİP teslimattan 60 dk önce kapandığından işlem anında ${lagHours} saat önceki hata henüz bilinmez; yalnızca üst sınırdır.`
+        : ""),
     fit: (train, profile) => {
       const gain = (h: PricedHour, alpha: number) => persistenceTradeGain(h.source, h.prev(lagHours), alpha, profile).gainTl;
       let bestAlpha = 0;

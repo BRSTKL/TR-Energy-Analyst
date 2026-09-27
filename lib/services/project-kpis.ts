@@ -6,6 +6,7 @@
  */
 
 import { buildPlantReport, deviationLoad } from "@/lib/report/plant-report";
+import { describeGap, findDataGaps } from "@/lib/analysis/data-completeness";
 import { buildReportContext } from "@/lib/services/report-context";
 import { loadProjectHourly } from "@/lib/services/project-hourly";
 
@@ -32,6 +33,8 @@ export interface ProjectKpis {
   sector: Array<{ type: string; unitTl: number; rankPct: number }>;
   yekdem: { inYekdem: number; exiting: number; staying: number; unknown: number };
   worstPlant: { name: string; type: string; unitCostTl: number } | null;
+  /** Ayı eksik santraller ("Boreas 1 Enez RES: Temmuz 2025 yok"); boşsa veri tam */
+  dataGaps: string[];
 }
 
 /** Proje yoksa ya da hiç saatlik verisi yoksa null */
@@ -72,5 +75,9 @@ export async function projectKpis(projectId: string): Promise<ProjectKpis | null
       unknown: ex?.unknownExitPlants.length ?? 0,
     },
     worstPlant: worst ? { name: worst.name, type: worst.type, unitCostTl: worst.unitCostTl } : null,
+    // Verisi hiç olmayan santral de görünsün diye tüm santrallerle
+    dataGaps: findDataGaps(
+      data.plants.map((p) => ({ plantName: p.plantName, timestamps: p.hourly.map((h) => new Date(h.timestamp).getTime()) }))
+    ).map(describeGap),
   };
 }

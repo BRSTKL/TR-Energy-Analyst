@@ -1,5 +1,6 @@
 "use client";
 
+import { planExcessFromActualVsForecast } from "@/lib/conventions";
 import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -46,7 +47,7 @@ function Row({ row }: { row: ComparisonRow }) {
       </TableCell>
       <TableCell className="text-right font-mono">{num(row.totalActualMwh)}</TableCell>
       <TableCell className={`text-right font-mono ${deviationClass}`}>
-        {pct(row.volumeDeviationRatio, 1, true)}
+        {pct(planExcessFromActualVsForecast(row.volumeDeviationRatio), 1, true)}
       </TableCell>
       <TableCell className="text-right font-mono">{num(row.capturePrice, 2)}</TableCell>
       <TableCell
@@ -81,8 +82,8 @@ export function PlantComparisonCard({ comparison }: { comparison: PlantCompariso
         </CardTitle>
         <CardDescription>
           Capture price, santralin üretim ağırlıklı ortalama PTF&apos;sidir; dönemin düz ortalama
-          PTF&apos;si ({num(comparison.baseloadPtf, 2)} ₺/MWh) ile oranı capture rate&apos;tir. Hacim
-          sapması pozitifse santral tahmin ettiğinden fazla üretmiştir (eksik tahmin). Tüm birim
+          PTF&apos;si ({num(comparison.baseloadPtf, 2)} ₺/MWh) ile oranı capture rate&apos;tir. Plan
+          fazlası + ise plan gerçekleşenden fazla (santral eksik üretti), − ise az. Tüm birim
           değerler toplamlar üzerinden ağırlıklı hesaplanır.
         </CardDescription>
       </CardHeader>
@@ -93,7 +94,7 @@ export function PlantComparisonCard({ comparison }: { comparison: PlantCompariso
               <TableRow className="bg-slate-50/80">
                 <TableHead>Santral</TableHead>
                 <TableHead className="text-right">Üretim (MWh)</TableHead>
-                <TableHead className="text-right">Hacim Sapması</TableHead>
+                <TableHead className="text-right">Plan fazlası</TableHead>
                 <TableHead className="text-right">Capture Price (₺/MWh)</TableHead>
                 <TableHead className="text-right">Capture Rate</TableHead>
                 <TableHead className="text-right">Birim Gelir (₺/MWh)</TableHead>

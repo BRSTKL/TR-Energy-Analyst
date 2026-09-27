@@ -1,5 +1,6 @@
 "use client";
 
+import { PLAN_EXCESS_HINT, planExcessFromActualVsForecast } from "@/lib/conventions";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ResponsiveContainer,
@@ -65,7 +66,7 @@ function PlantRow({
       <TableCell
         className={`text-right font-mono ${Math.abs(stats.biasRatio) >= 0.1 ? "text-rose-700 font-semibold" : ""}`}
       >
-        {pct(stats.biasRatio, 1, true)}
+        {pct(planExcessFromActualVsForecast(stats.biasRatio), 1, true)}
       </TableCell>
       <TableCell className="text-right font-mono">{pct(stats.wape)}</TableCell>
       <TableCell className="text-right font-mono">{num(stats.maeMwh, 2)}</TableCell>
@@ -111,7 +112,7 @@ export function ForecastAccuracyCard({ projectId, refreshKey }: { projectId: str
     () =>
       (selected?.monthly ?? []).map((m) => ({
         label: MONTHS_TR[Number(m.key.slice(5, 7)) - 1] ?? m.key,
-        bias: Number((m.biasRatio * 100).toFixed(1)),
+        bias: Number((planExcessFromActualVsForecast(m.biasRatio) * 100).toFixed(1)),
         wape: Number((m.wape * 100).toFixed(1)),
       })),
     [selected]
@@ -134,7 +135,7 @@ export function ForecastAccuracyCard({ projectId, refreshKey }: { projectId: str
         <CardTitle className="text-base font-semibold">Tahmin Doğruluğu (Fiyattan Bağımsız)</CardTitle>
         <CardDescription>
           Yalnızca gün öncesi tahmin ve gerçekleşen üretim kullanılır; piyasa fiyatı eksik olsa da
-          sonuçlar geçerlidir. Bias pozitifse santral tahmininden fazla üretmiştir. WAPE = Σ|hata| /
+          sonuçlar geçerlidir. {PLAN_EXCESS_HINT} WAPE = Σ|hata| /
           Σ gerçekleşen. Sistematik pay = |Σ hata| / Σ |hata|, yani hatanın tek yönlü kısmı.
           Grafikleri görmek için bir santral seçin.
         </CardDescription>
@@ -147,7 +148,7 @@ export function ForecastAccuracyCard({ projectId, refreshKey }: { projectId: str
                 <TableHead>Santral</TableHead>
                 <TableHead className="text-right">Tahmin (MWh)</TableHead>
                 <TableHead className="text-right">Gerçekleşen (MWh)</TableHead>
-                <TableHead className="text-right">Bias</TableHead>
+                <TableHead className="text-right">Plan fazlası</TableHead>
                 <TableHead className="text-right">WAPE</TableHead>
                 <TableHead className="text-right">MAE (MWh/saat)</TableHead>
                 <TableHead className="text-right">Sistematik Pay</TableHead>
@@ -178,7 +179,7 @@ export function ForecastAccuracyCard({ projectId, refreshKey }: { projectId: str
             <div className="grid gap-6 lg:grid-cols-2">
               <div>
                 <h4 className="mb-2 text-xs font-semibold text-slate-700">
-                  Aylık Bias ve WAPE (%) — {selected.plantName}
+                  Aylık Plan Fazlası ve WAPE (%) — {selected.plantName}
                 </h4>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
@@ -189,7 +190,7 @@ export function ForecastAccuracyCard({ projectId, refreshKey }: { projectId: str
                       <Tooltip formatter={(val) => `%${Number(val).toLocaleString("tr-TR")}`} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                       <ReferenceLine y={0} stroke="#94a3b8" />
-                      <Bar dataKey="bias" name="Bias" fill="#0ea5e9" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="bias" name="Plan fazlası" fill="#0ea5e9" radius={[3, 3, 0, 0]} />
                       <Bar dataKey="wape" name="WAPE" fill="#cbd5e1" radius={[3, 3, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>

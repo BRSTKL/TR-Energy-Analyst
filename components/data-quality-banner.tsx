@@ -11,6 +11,8 @@ interface DataQuality {
   syntheticHours: number;
   legacyHours: number;
   isFullyVerified: boolean;
+  /** Ayı eksik santraller ("Boreas 1 Enez RES: Temmuz 2025 yok") */
+  generationGaps?: string[];
 }
 
 interface DataQualityBannerProps {
@@ -45,7 +47,9 @@ export function DataQualityBanner({ projectId, refreshKey }: DataQualityBannerPr
     };
   }, [projectId, refreshKey]);
 
-  if (!quality || quality.totalHours === 0 || quality.isFullyVerified) return null;
+  if (!quality || quality.totalHours === 0) return null;
+  const gapNotice = <GenerationGapNotice gaps={quality.generationGaps ?? []} />;
+  if (quality.isFullyVerified) return gapNotice;
 
   const { totalHours, verifiedHours, missingPriceHours, syntheticHours, legacyHours } = quality;
 
@@ -63,22 +67,50 @@ export function DataQualityBanner({ projectId, refreshKey }: DataQualityBannerPr
   }
 
   return (
+    <>
+      {gapNotice}
+      <div
+        role="alert"
+        className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900 shadow-sm"
+      >
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+        <div className="space-y-1">
+          <p className="text-sm font-semibold">
+            Finansal sonuçlar henüz güvenilir değil: doğrulanmış piyasa fiyatıyla hesaplanan saat{" "}
+            {verifiedHours.toLocaleString("tr-TR")} / {totalHours.toLocaleString("tr-TR")} (
+            {pct(verifiedHours, totalHours)}).
+          </p>
+          <p>{details.join(" · ")}.</p>
+          <p className="text-amber-800">
+            Gelir, dengesizlik maliyeti ve arbitraj rakamlarını paylaşmadan önce ilgili dönem için
+            EPİAŞ Senkronize Et ile fiyatları yeniden çekin. MWh bazlı tahmin sapmaları bu durumdan
+            etkilenmez.
+          </p>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** Santral × ay üretim verisi eksikse (ör. EPİAŞ'ta bir ay yayımlanmamış) uyarı; eksik yoksa hiçbir şey göstermez */
+function GenerationGapNotice({ gaps }: { gaps: string[] }) {
+  if (gaps.length === 0) return null;
+  return (
     <div
       role="alert"
       className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900 shadow-sm"
     >
       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
       <div className="space-y-1">
-        <p className="text-sm font-semibold">
-          Finansal sonuçlar henüz güvenilir değil: doğrulanmış piyasa fiyatıyla hesaplanan saat{" "}
-          {verifiedHours.toLocaleString("tr-TR")} / {totalHours.toLocaleString("tr-TR")} (
-          {pct(verifiedHours, totalHours)}).
-        </p>
-        <p>{details.join(" · ")}.</p>
+        <p className="text-sm font-semibold">Üretim verisi eksik: bu aylar santral ve portföy rakamlarına girmedi.</p>
+        <ul className="list-disc pl-4">
+          {gaps.map((g) => (
+            <li key={g}>{g}</li>
+          ))}
+        </ul>
         <p className="text-amber-800">
-          Gelir, dengesizlik maliyeti ve arbitraj rakamlarını paylaşmadan önce ilgili dönem için
-          EPİAŞ Senkronize Et ile fiyatları yeniden çekin. MWh bazlı tahmin sapmaları bu durumdan
-          etkilenmez.
+          Eksik ay santralin birim maliyetini, portföy netleşmesini ve sektör kıyasını etkiler. Veriyi EPİAŞ&apos;tan yeniden
+          çekin ya da raporda bu santrali ayrıca belirtin.
         </p>
       </div>
     </div>

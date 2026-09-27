@@ -189,7 +189,7 @@ export default function BacktestPage() {
                       </thead>
                       <tbody>
                         {result.strategies.map((s) => (
-                          <tr key={s.id} className="border-b align-top last:border-0">
+                          <tr key={s.id} className={`border-b align-top last:border-0 ${s.id === "persistence-1h" || s.id.startsWith("gip-close") ? "text-slate-500" : ""}`}>
                             <td className="py-3 pr-3">
                               <div className="font-medium text-slate-900">{s.label}</div>
                               <div className="mt-0.5 max-w-md text-xs text-slate-500">{s.description}</div>

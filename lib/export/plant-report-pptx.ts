@@ -24,6 +24,7 @@
 
 import pptxgen from "pptxgenjs";
 import { deviationLoad, type PlantReportData } from "@/lib/report/plant-report";
+import { describeGap } from "@/lib/analysis/data-completeness";
 
 export interface ReportAuthor {
   name?: string;
@@ -345,7 +346,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
     if (intradayOn && points.length < 4) {
       points.push({
         kind: "scenario",
-        text: `Tahmin hatası 1 saat önceden görülüp kısmen gün içi piyasada kapatılırsa dengesizlik riski en fazla %${nf(r.intraday!.savingPct, 0)} azalır (üst sınır).`,
+        text: `Tahmin hatası ${r.intraday!.lagHours} saat önceden görülüp kısmen gün içi piyasada kapatılırsa dengesizlik riski en fazla %${nf(r.intraday!.savingPct, 0)} azalır (üst sınır; GİP teslimattan 60 dk önce kapanır).`,
       });
     }
     const shown = points.slice(0, 4);
@@ -356,11 +357,14 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       text(s, p.text, { x: px + 1.7, y, w: pw - 2.05, h: step - 0.12, fontSize: 12.5, valign: "top" });
     });
     const cov = r.coverage.filter((c) => c.missing.length > 0);
+    // Eksik ay varsa önce o söylenir: rakamlar o ay olmadan hesaplandı
+    const gapNote = r.dataGaps.length ? `Veri eksik (hesaba girmedi): ${r.dataGaps.map(describeGap).join("; ")}. ` : "";
     const scope =
+      gapNote +
       (cov.length
         ? `Kapsam: ${cov.map((c) => `${c.company} şirketinin EPİAŞ'ta üretimi yayımlanan ${c.total} santralinden ${c.total - c.missing.length} tanesi (eksik: ${c.missing.join(", ")})`).join("; ")}. `
         : "") + "Sapma yükü = dengesizlik riski (gün içi işlemler öncesi) + tahmini KÜPST.";
-    text(s, scope, { x: M, y: 6.68, w: CW, h: 0.32, fontSize: 9, color: cov.length ? C.scenTx : C.sub, valign: "top" });
+    text(s, scope, { x: M, y: 6.68, w: CW, h: 0.32, fontSize: 9, color: cov.length || gapNote ? C.scenTx : C.sub, valign: "top" });
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -1023,7 +1027,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
             ? `en fazla %${nf(r.intraday.savingPct, 0)} · ≈ ${formatTlShort((r.intraday.savingPct / 100) * basis)}`
             : "Bu veride kazanç yok",
         body:
-          `1 saat önce görülen hatanın bir kısmı gün içi piyasada kapatılır; oran önceki 4 aydan öğrenilip sonraki ayda test edildi ` +
+          `${r.intraday.lagHours} saat önce görülen hatanın bir kısmı gün içi piyasada kapatılır (GİP teslimattan 60 dk önce kapandığı için en kısa uygulanabilir gecikme); oran önceki 4 aydan öğrenilip sonraki ayda test edildi ` +
           `(${monthLabel(r.intraday.firstTestMonth)} – ${monthLabel(r.intraday.lastTestMonth)}). İşlem fiyatı gerçek eşleşme fiyatlarından, zor saatlerde daha kötü alındı. ` +
           `Üst sınırdır: ${agg ? "portföy" : "şirket"} gün içinde zaten işlem yapıyorsa kazancın bir kısmı hâlihazırda alınıyordur.`,
         kind: "scenario",
@@ -1291,6 +1295,9 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
         "Santralin gün içi piyasa işlemleri ve ikili anlaşmaları açık veride yok; gün içinde kapatılan sapmalar varsa gerçek maliyet daha düşüktür. TEİAŞ yük atma/alma talimatları (kısıntı) santral bazında yayımlanmadığından ayrılamadı; talimatla düşen üretim dengesizlik sayılmaz, bu yüzden kısıntı yaşayan santrallerde risk olduğundan yüksek görünebilir." +
           (r.yekdem
             ? " YEKDEM santrallerinin geliri YEKDEM fiyatından oluşur; YEKDEM döneminde dengesizliğin santrale mi YEKDEM portföyüne mi yansıdığı ayrıca doğrulanmalıdır."
+            : "") +
+          (r.dataGaps.length
+            ? ` Eksik veri: ${r.dataGaps.map(describeGap).join("; ")}; bu aylar santral ve portföy rakamlarına girmedi.`
             : ""),
       ],
       [
