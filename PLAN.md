@@ -2,7 +2,7 @@
 
 **Amaç:** EPİAŞ verisiyle çalışan, enerji ticareti ekiplerinin gerçekten ihtiyaç duyduğu analizleri üreten bir uygulama. Uygulama, enerji ticareti alanında iş bulmak için kanıt ve görüşme aracı olarak kullanılacak.
 
-**Kural:** Var olan özellikler yeniden yazılmaz, genişletilir. Her adım bitince `[x]` ile işaretlenir; tarih ve commit eklenir.
+**Kural:** Var olan özellikler yeniden yazılmaz, genişletilir. Her adım bitince `[x]` ile işaretlenir; tarih ve commit eklenir. Gerçek veri gerektiren madde (veri çekimi, gerçek veriyle kabul kontrolü) veriyle doğrulanmadan `[x]` yapılmaz; `[ ]` kalır ve ne yapılacağı not olarak yazılır.
 
 **Durum:** ▶ Uygulanıyor (onay: 27.09.2026) · Oluşturma: 27.09.2026
 
@@ -71,7 +71,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 - **Teslim:** Sunuma hazır Gain 2025 ve 2026 raporları.
 - **Kabul:** Rapor kendi içinde tutarlı; kapsam, istikrar ve doğrulama bilgisi raporda yer alıyor.
 
-### Aşama 2: Piyasa katmanı ✅ (27.09.2026) (yeni "Piyasa" sayfası)
+### Aşama 2: Piyasa katmanı ✅ (27.09.2026) (yeni "Piyasa" sayfası) · gerçek veri bekleyen: 2.4 ve kabul kontrolü
 - [x] **2.1 Piyasa özeti.** ✅ 27.09.2026 · motor `f8d1972`, sayfa `6b1962b` (`/market`). Seçilen dönem için şunlar gösterilir:
   - PTF ve SMF (ortalama, dağılım, aylık seyir)
   - **SMF–PTF makası** (ortalama, P90, saat profili)
@@ -82,7 +82,8 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
   *Yeniden kullanılan:* `MarketData` tablosu, EPİAŞ senkronu, grafik bileşenleri. Yeni tablo gerekmiyor.
 - [x] **2.2 Yıl karşılaştırması.** ✅ 27.09.2026 · `6b1962b`. Aynı ayların yan yana gösterimi: 2025 ve 2026, Ocak–Ağustos. "Makas %51 açıldı" gibi sonuç cümlesi otomatik üretilir.
 - [x] **2.3 Projeye bağlantı (3.5).** ✅ 27.09.2026 · `86639f2`. Proje sonuçlarına "düşük ve sıfır fiyatlı saat maruziyeti" eklenir: üretimin ne kadarı bu saatlerde gerçekleşti, ne kadar gelir kaybedildi. *Yeniden kullanılan:* capture price hesabı.
-- [x] **2.4 Veri tamamlama.** ✅ 27.09.2026 · kod gerekmedi; mevcut "EPİAŞ Canlı Veri Çek" (30 günlük parçalar, kayıtları `EPIAS` kaynağıyla üzerine yazar) yeterli. Veri çekimi kullanıcıda (aşağıdaki not).
+- [ ] **2.4 Veri tamamlama.** ⏳ Gerçek veri gerekiyor, yapılmadı (aşağıdaki not). Kod gerekmedi: mevcut "EPİAŞ Canlı Veri Çek" (30 günlük parçalar, kayıtları `EPIAS` kaynağıyla üzerine yazar) yeterli.
+- [ ] **Kabul kontrolü.** ⏳ Gerçek veri gerekiyor, yapılmadı (aşağıdaki not).
 - **Teslim:** Piyasa sayfası.
 - **Kabul:** 2026 makas bulgusu sayfada tek bakışta görülüyor.
 
@@ -90,8 +91,9 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 > 1. `git pull`, `npm run dev`.
 > 2. Projelerim → "EPİAŞ Canlı Veri Çek": 01.01.2024–31.12.2024, sonra 01.09.2026–son gün (2024 ve Eylül 2026'daki LEGACY kayıtlar doğrulanmış veriyle değişir).
 > 3. `/market` kontrolü: 2026 (Ocak–Ağustos) görünümünde "Ne değişti?" kutusunda makas cümlesi (kabul); 2025 seçilince 2024 ile karşılaştırma açılır; alt notta "eski formatta" saat kalmaz.
+> 4. Sonuç uygunsa 2.4 ve "Kabul kontrolü" `[x]` olarak işaretlenir.
 
-### Aşama 3: "Maliyet neden değişti?" ayrıştırması ✅ (27.09.2026)
+### Aşama 3: "Maliyet neden değişti?" ayrıştırması ✅ (27.09.2026) · gerçek veri bekleyen: kabul kontrolü
 - [x] **3.1 Ayrıştırma motoru.** ✅ 27.09.2026 · `a6cc546` (`lib/analysis/cost-change.ts`, `/api/compare/change`). İki dönem arasındaki MWh başına maliyet farkı dört kaleme bölünür:
   1. **Tahmin hatası**
   2. **Fiyat makası**
@@ -103,13 +105,15 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
   *Uygulanan:* MWh başına maliyet = netleşmiş sapma / üretim (tahmin hatası) × sapma MWh'ı başına bedel. Bedel; sapmanın saat ve yön dağılımına (hacim ve profil), PTF–SMF–sistem yönüne (fiyat makası) ve katsayı kuralına bağlı. Saatler takvimde eşlenir (29 Şubat hariç); her kalem iki yönde değiştirilip yeniden fiyatlanır, kalan etkileşimdir. Üretim hacmi tek başına birim maliyeti değiştirmez. Makas yalnızca sistemle aynı yöndeki sapmayı fiyatlar.
 - [x] **3.2 Karşılaştırma sayfası.** ✅ 27.09.2026 · `ec679b9` (`/compare`, tam iki proje seçilince). Aynı santrallerden oluşan iki proje seçilince ayrıştırma şelale grafiği gösterilir.
 - [x] **3.3 Rapor slaytı.** ✅ 27.09.2026 · `f5f94cf` (önceki yıl projesi otomatik bulunur: EPİAŞ santrallerinin en az %80'i, verisi bir önceki yıl). "2026'da ne değişti?": şelale grafiği ve sektör desteği ("294 santralin hepsinde arttı, tahmin hatası sabit"). *Yeniden kullanılan:* köprü slaytı çizimi, sektör karnesi.
+- [ ] **Kabul kontrolü (Gain 2025 → 2026).** ⏳ Gerçek veri gerekiyor, yapılmadı (aşağıdaki not).
 - **Teslim:** Ayrıştırma slaytı ve sayfası.
 - **Kabul:** Gain 2025 → 2026 farkının en az %90'ı dört kaleme dağıtılıyor, kalan "etkileşim" olarak gösteriliyor.
 
 > **Not (kullanıcıda, yerel):** Bulut oturumunda sentetik veriyle denendi (4 santral, 2025 → 2026: farkın %99,8'i dört kaleme dağıldı). Gerçek Gain kontrolü yerelde:
 > 1. `git pull`, `npm run dev`.
 > 2. `/compare`: yalnızca GAİN ENERJİ-RES-2025 ve -2026 seçili → "Maliyet neden değişti?" kartında "Dört kalemin açıkladığı pay" en az %90 (kabul); tahmin hatası satırı neredeyse sabit, en büyük kalem fiyat makası beklenir.
-> 3. GAİN 2026 projesinde PPT İndir → 4. slayt "Ne değişti?"; sektör karnesi 2025 ve 2026 toplanmışsa sağ altta sektör desteği görünür.
+> 3. GAİN 2026 projesinde PPT İndir → 4. slayt "Ne değişti?"; sektör karnesi 2025 ve 2026 toplanmışsa sağ altta sektör desteği ("294 santralin hepsinde arttı") görünür, toplanmamışsa okuma notu.
+> 4. Sonuç uygunsa "Kabul kontrolü" `[x]` olarak işaretlenir.
 
 ### Aşama 4: Toplayıcı büyüme analizi
 - [ ] **4.1 Saatlik sektör verisi.** Sektör toplama betiği santral özetine ek olarak saatlik sapma serisini de (sıkıştırılmış) saklar. Bu, aynı zamanda K1'i (arıza saatleri hariç karne) mümkün kılar. *Yeniden kullanılan:* `sector-collect.mts`, önbellek.
@@ -145,6 +149,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 ## 4. İlerleme kaydı
 | Tarih | Adım | Commit | Not |
 |---|---|---|---|
+| 27.09.2026 | İşaretleme kuralı | – | Gerçek veri gerektiren maddeler `[ ]` kalır ve not alır: 2.4 geri alındı; Aşama 2 ve 3'e "Kabul kontrolü" maddesi eklendi. |
 | 27.09.2026 | Aşama 3 (3.1–3.3) | `a6cc546`, `ec679b9`, `f5f94cf` | Ayrıştırma motoru (tahmin hatası, fiyat makası, katsayı kuralı, hacim ve profil, etkileşim), `/compare` şelale kartı, rapora "Ne değişti?" slaytı ve Ek B yöntem notu, `sectorYearChange`. Sentetik veride farkın %99,8'i açıklandı; Gain kabul kontrolü yerelde (Aşama 3 notu). |
 | 27.09.2026 | Aşama 2 kapandı · 2.4 | – | 2.4 için kod gerekmedi. Gerçek veri çekimi (2024 ve Eylül 2026) ve `/market` kabul kontrolü kullanıcıda; adımlar Aşama 2 altındaki notta. |
 | 27.09.2026 | 2.3 Düşük ve sıfır fiyatlı saat maruziyeti | `86639f2` | Sonuç sayfasında yeni kart: santral, teknoloji ve portföy için PTF ≤ 1 TL ve < 1.000 TL saatlerindeki üretim, saat sayısı, baz PTF'ye göre değer kaybı ve capture rate etkisi (puan). Eşikler Piyasa sayfasıyla ortak. Gerçek Gain rakamları yerelde kontrol edilecek. |
