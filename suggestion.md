@@ -26,7 +26,8 @@
 | 4 (kısmi) | ✅ 27.09.2026 | K4 2026 (Ocak–Ağustos) sektör karnesi: 523 santral toplandı, 370 kıyasta (294 RES, 76 GES); toplama betiği dönem sonu alır, EPİAŞ isteklerinde 60 sn zaman aşımı |
 | PLAN Aşama 1 | ✅ 27.09.2026 | E3, D2, I5 tamamlandı (ayrıntı PLAN.md) |
 | PLAN Aşama 2 | ✅ 27.09.2026 | 2.1–2.2 Piyasa sayfası ve yıl karşılaştırması · 2.3 = 3.5 düşük fiyat maruziyeti (sonuç sayfası kartı) |
-| kalan | ⏳ | K1 (sektör karnesinde arıza saatleri hariç: saatlik veri saklanmalı) · 3.1 2026 gerçek veri · 3.4 aday tarama · PLAN 2.4 veri çekimi (kullanıcıda, yerel) · Tur 5 görünüm |
+| PLAN Aşama 4 | ✅ 27.09.2026 (kod) | K1 arıza saatleri hariç karne · 3.4 aday tarama (Aday Santraller sayfası) · hidro karnesi desteği; veri toplama kullanıcıda |
+| kalan | ⏳ | 3.1 2026 gerçek veri · PLAN 2.4 ve 4.3 veri çekimi (kullanıcıda, yerel) · Tur 5 görünüm |
 
 ---
 

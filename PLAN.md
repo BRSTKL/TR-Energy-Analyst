@@ -115,12 +115,26 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 > 3. GAİN 2026 projesinde PPT İndir → 4. slayt "Ne değişti?"; sektör karnesi 2025 ve 2026 toplanmışsa sağ altta sektör desteği ("294 santralin hepsinde arttı") görünür, toplanmamışsa okuma notu.
 > 4. Sonuç uygunsa "Kabul kontrolü" `[x]` olarak işaretlenir.
 
-### Aşama 4: Toplayıcı büyüme analizi
-- [ ] **4.1 Saatlik sektör verisi.** Sektör toplama betiği santral özetine ek olarak saatlik sapma serisini de (sıkıştırılmış) saklar. Bu, aynı zamanda K1'i (arıza saatleri hariç karne) mümkün kılar. *Yeniden kullanılan:* `sector-collect.mts`, önbellek.
-- [ ] **4.2 Aday santral taraması (3.4).** Portföye eklenince netleşme kazancı en yüksek olan santraller sıralanır; santral başına beklenen Shapley primi de verilir. *Yeniden kullanılan:* `analyzeDsgScenario` (marjinal katkı), Shapley.
-- [ ] **4.3 Hidro karnesi.** HES santralleri için sektör karnesi (nehir tipi / barajlı ayrımıyla). Gain'in 29 hidro santrali bu sayede kıyaslanabilir.
+### Aşama 4: Toplayıcı büyüme analizi ✅ (27.09.2026) · gerçek veri bekleyen: 4.3 karnesi ve kabul kontrolü
+- [x] **4.1 Saatlik sektör verisi.** ✅ 27.09.2026 · `23b5c70`. Sektör toplama betiği santral özetine ek olarak saatlik sapma serisini de (sıkıştırılmış) saklar. Bu, aynı zamanda K1'i (arıza saatleri hariç karne) mümkün kılar. *Yeniden kullanılan:* `sector-collect.mts`, önbellek.
+
+  *Uygulanan:* seriler `.cache/epias/sector-<yıl>-hourly/<kimlik>.json.gz` (yıl başına ~18 MB); `--rebuild` EPİAŞ'a gitmeden diskteki serilerden ve güncel fiyatlardan karneyi yeniden kurar. K1: karnede "arıza / kısıntı saatleri hariç" MWh başına dengesizlik ve sektör sayfasında K1 görünümü.
+- [x] **4.2 Aday santral taraması (3.4).** ✅ 27.09.2026 · `18d6ef6` (`/projects/[id]/candidates`, sonuç sayfasında "Aday Santraller"). Portföye eklenince netleşme kazancı en yüksek olan santraller sıralanır; santral başına beklenen Shapley primi de verilir. *Yeniden kullanılan:* `analyzeDsgScenario` (marjinal katkı), Shapley.
+
+  *Uygulanan:* kazanç = Σ saat [c(portföy) + c(aday) − c(portföy + aday)]; ilk 10 aday için Shapley adil primi (dsg-scenarios ile aynı tanım, testle doğrulandı) + KÜPST. Projede ve toplayıcının EPİAŞ portföyünde olan santraller aday sayılmaz.
+- [ ] **4.3 Hidro karnesi.** ⏳ Gerçek veri gerekiyor, karne toplanmadı (aşağıdaki not). HES santralleri için sektör karnesi (nehir tipi / barajlı ayrımıyla). Gain'in 29 hidro santrali bu sayede kıyaslanabilir.
+
+  *Kod hazır* (`23b5c70`): `--hes` ile toplama; tahmini alt tip (addaki baraj / regülatör, yoksa gün içi üretim esnekliği); sektör sayfasında Hidro sekmesi ve alt tip süzgeci; rapor ve aday taraması HES'i tanır.
+- [ ] **Kabul kontrolü (Gain).** ⏳ Gerçek veri gerekiyor, yapılmadı (aşağıdaki not).
 - **Teslim:** "Portföyünüze en çok değer katacak 10 santral" listesi.
 - **Kabul:** Gain için liste üretiliyor ve her aday için beklenen kazanç veriliyor.
+
+> **Not (kullanıcıda, yerel):** Bulut oturumunda sentetik veriyle denendi (40 aday, 8.760 saat, ~3 sn). Gerçek veriyle:
+> 1. `git pull`. Sektör karnesini saatlik seriyle yeniden toplayın (yıl başına ~1 saat; mevcut santrallerin saatlik serisi olmadığı için yeniden çekilir): `node --env-file=.env node_modules/.bin/tsx scripts/sector-collect.mts 2026` ve aynısı `2025` için.
+> 2. Hidro karnesi (4.3) için komuta `--hes` ekleyin (yaklaşık bir saat ek; karar noktası 2).
+> 3. Piyasa verisi sonradan yeniden çekilirse (2.4) EPİAŞ'a gitmeden: aynı komut `--rebuild` ile.
+> 4. Kontrol: `/sector` sayfasında K1 kutusu (ve `--hes` ile Hidro sekmesi); GAİN 2026 → Sonuçlar → "Aday Santraller": ilk 10 aday, her biri için netleşme kazancı ve adil prim (kabul).
+> 5. Sonuç uygunsa 4.3 ve "Kabul kontrolü" `[x]` olarak işaretlenir.
 
 ### Aşama 5: İş başvurusu paketi
 - [ ] **5.1 Anonim vaka çalışması.** Gain raporunun şirket adları gizlenmiş sürümü ("Toplayıcı A", "Santral 1…"). Portföyde ve mülakatta paylaşılabilir. *Yeniden kullanılan:* PowerPoint üreticisine "anonim" seçeneği eklenir.
@@ -140,7 +154,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 
 ## 3. Karar noktaları (sizin onayınız gerekiyor)
 1. **Aşama sırası:** Önerim 1 → 2 → 3 → 5 → 4 → 6. Aşama 5 (başvuru paketi), 2 ve 3 bittiğinde en güçlü halindedir; 4 büyük bir veri işidir.
-2. **Hidro (4.3):** Gain'in hidro santralleri dahil edilsin mi? Veri çekimi uzun sürer (~1 saat).
+2. **Hidro (4.3):** Gain'in hidro santralleri dahil edilsin mi? Veri çekimi uzun sürer (~1 saat). *Kod hazır; toplama isteğe bağlı (`--hes`), karar ve çekim kullanıcıda.*
 3. **Çevrimiçi demo (5.5):** Yayında bir demo mu, yoksa yalnızca video ve PDF mi?
 4. **Kapsam dışı:** PTF fiyat tahmin modeli bu planda yok. Uygulamanın gücü ölçmek ve açıklamak; tahmin modeli ayrı ve büyük bir iş.
 
@@ -149,6 +163,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 ## 4. İlerleme kaydı
 | Tarih | Adım | Commit | Not |
 |---|---|---|---|
+| 27.09.2026 | Aşama 4 (4.1, 4.2; 4.3 kodu) | `23b5c70`, `18d6ef6` | Saatlik sektör serisi (gzip), `--rebuild`, K1 görünümü; aday santral taraması ve sayfası (Shapley adil prim); hidro karnesi desteği (`--hes`, tahmini alt tip). 4.3 karnesi ve Gain kabul kontrolü gerçek veri bekliyor (Aşama 4 notu). |
 | 27.09.2026 | İşaretleme kuralı | – | Gerçek veri gerektiren maddeler `[ ]` kalır ve not alır: 2.4 geri alındı; Aşama 2 ve 3'e "Kabul kontrolü" maddesi eklendi. |
 | 27.09.2026 | Aşama 3 (3.1–3.3) | `a6cc546`, `ec679b9`, `f5f94cf` | Ayrıştırma motoru (tahmin hatası, fiyat makası, katsayı kuralı, hacim ve profil, etkileşim), `/compare` şelale kartı, rapora "Ne değişti?" slaytı ve Ek B yöntem notu, `sectorYearChange`. Sentetik veride farkın %99,8'i açıklandı; Gain kabul kontrolü yerelde (Aşama 3 notu). |
 | 27.09.2026 | Aşama 2 kapandı · 2.4 | – | 2.4 için kod gerekmedi. Gerçek veri çekimi (2024 ve Eylül 2026) ve `/market` kabul kontrolü kullanıcıda; adımlar Aşama 2 altındaki notta. |
