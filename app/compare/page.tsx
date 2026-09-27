@@ -18,6 +18,8 @@ interface ProjectOption {
 const nf = (v: number, d = 0) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
 const mTl = (v: number | null) => (v === null ? "–" : `${nf(v / 1e6, 1)} M ₺`);
 const TECH: Record<string, string> = { RES: "Rüzgâr", GES: "Güneş", HES: "Hidro" };
+/** Verinin son yılından sonraki yıl (YEKDEM'den çıkış bu yıl için sorulur) */
+const nextYear = (k: ProjectKpis) => (k.period ? Number(k.period.end.slice(0, 4)) + 1 : "");
 
 /**
  * Bir satır: etiket, her proje için gösterilecek metin ve (varsa) kıyas değeri. `better` verilirse en iyi hücre
@@ -53,11 +55,13 @@ const METRICS: Metric[] = [
     label: "2026 kurallarıyla, ana senaryo",
     hint: "YEKDEM'den çıkan santraller şirkete geçer; %3/%6 katsayı ve 2026 KÜPST oranları",
     text: (k) =>
-      k.load.a2026 === null ? "–" : `${mTl(k.load.a2026)} (${k.load.a2026 >= k.load.a2025 ? "+" : ""}%${nf((k.load.a2026 / k.load.a2025 - 1) * 100)})`,
+      k.load.a2026 === null
+        ? "Veri zaten 2026 kurallarıyla (projeksiyon gerekmez)"
+        : `${mTl(k.load.a2026)} (${k.load.a2026 >= k.load.a2025 ? "+" : ""}%${nf((k.load.a2026 / k.load.a2025 - 1) * 100)})`,
   },
   {
     label: "Duyarlılık: tüm santraller şirkete",
-    text: (k) => `${mTl(k.load.b2025)} → ${mTl(k.load.b2026)}`,
+    text: (k) => (k.load.b2026 === null ? `${mTl(k.load.b2025)} (veri yılı)` : `${mTl(k.load.b2025)} → ${mTl(k.load.b2026)}`),
   },
   {
     label: "MWh başına sapma yükü",
@@ -99,7 +103,7 @@ const METRICS: Metric[] = [
     text: (k) =>
       k.sector.length
         ? k.sector.map((s) => `${TECH[s.type] ?? s.type}: ${nf(s.unitTl)} TL/MWh, sektörün %${Math.round(100 - s.rankPct)} kadarından iyi`).join(" · ")
-        : "Sektör verisi yok",
+        : `Sektör karnesi ${k.period ? k.period.start.slice(0, 4) : ""} için henüz toplanmadı`,
   },
   {
     label: "YEKDEM",
@@ -107,7 +111,9 @@ const METRICS: Metric[] = [
       k.yekdem.inYekdem === 0
         ? "YEKDEM santrali yok"
         : k.yekdem.exiting === 0 && k.yekdem.unknown === 0
-          ? `${k.yekdem.inYekdem} santral; hepsi 2026'da YEKDEM'de kalıyor`
+          ? `${k.yekdem.inYekdem} santral; hepsi ${nextYear(k)} yılında da YEKDEM'de kalıyor`
+          : k.yekdem.unknown === k.yekdem.inYekdem
+            ? `${k.yekdem.inYekdem} santral; ${nextYear(k)} YEKDEM listesi henüz yayımlanmadı`
           : `${k.yekdem.inYekdem} santral; ${k.yekdem.exiting} çıkıyor, ${k.yekdem.staying} kalıyor${k.yekdem.unknown ? `, ${k.yekdem.unknown} bilinmiyor` : ""}`,
   },
   {
