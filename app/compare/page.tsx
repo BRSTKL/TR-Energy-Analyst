@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { ProjectKpis } from "@/lib/services/project-kpis";
+import { CostChangeCard, type CostChangeData } from "@/components/cost-change-card";
 
 interface ProjectOption {
   id: string;
@@ -154,6 +155,9 @@ export default function ComparePage() {
   const [rows, setRows] = useState<ProjectKpis[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Tam iki proje: "Maliyet neden değişti?" ayrıştırması
+  const [change, setChange] = useState<CostChangeData | null>(null);
+  const [changeState, setChangeState] = useState<{ loading: boolean; error: string | null }>({ loading: false, error: null });
 
   useEffect(() => {
     const preset = new URLSearchParams(window.location.search).get("ids")?.split(",").filter(Boolean) ?? [];
@@ -183,6 +187,21 @@ export default function ComparePage() {
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Karşılaştırma hesaplanamadı."))
       .finally(() => setLoading(false));
+
+    setChange(null);
+    if (ids.length !== 2) {
+      setChangeState({ loading: false, error: null });
+      return;
+    }
+    setChangeState({ loading: true, error: null });
+    fetch(`/api/compare/change?ids=${ids.join(",")}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.success) throw new Error(d.error);
+        setChange(d);
+        setChangeState({ loading: false, error: null });
+      })
+      .catch((e) => setChangeState({ loading: false, error: e instanceof Error ? e.message : "Ayrıştırma hesaplanamadı." }));
   }
 
   const toggle = (id: string) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id].slice(-8)));
@@ -215,7 +234,10 @@ export default function ComparePage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Karşılaştırılacak projeler</CardTitle>
-            <CardDescription>En fazla 8 proje. Yeni bir şirketi eklemek için Sektör karnesinden ya da EPİAŞ aramasından proje oluşturun.</CardDescription>
+            <CardDescription>
+              En fazla 8 proje. Aynı santrallerin iki dönemini (ör. 2025 ve 2026) seçerseniz maliyet farkı kalemlerine ayrılır. Yeni bir
+              şirketi eklemek için Sektör karnesinden ya da EPİAŞ aramasından proje oluşturun.
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap items-center gap-2">
             {projects.map((p) => (
@@ -239,6 +261,14 @@ export default function ComparePage() {
         </Card>
 
         {error && <p className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{error}</p>}
+
+        {changeState.loading && (
+          <p className="flex items-center gap-2 text-sm text-slate-500">
+            <Loader2 className="h-4 w-4 animate-spin" /> Maliyet değişimi ayrıştırılıyor…
+          </p>
+        )}
+        {changeState.error && <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{changeState.error}</p>}
+        {change && <CostChangeCard data={change} />}
 
         {rows && rows.length > 0 && (
           <Card className={loading ? "opacity-60" : ""}>
