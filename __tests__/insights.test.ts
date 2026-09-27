@@ -252,7 +252,7 @@ describe("Kural Tabanlı Strateji ve İçgörü Motoru Birim Testleri", () => {
   });
 
   describe("3. comparePlantProfitability", () => {
-    it("aynı teknoloji tipindeki santralleri metriklerine göre sıralamalı, skor ve gerekçe üretmelidir", () => {
+    it("santralleri birim dengesizliğe göre sıralar; puan sektör karnesindeki yer (yoksa proje içi sıra)", () => {
       const plants: PlantInfo[] = [
         {
           plantId: "res-a",
@@ -301,19 +301,22 @@ describe("Kural Tabanlı Strateji ve İçgörü Motoru Birim Testleri", () => {
         },
       };
 
+      // Sektör karnesi yoksa proje içi sıra: en düşük birim dengesizlik 100, en yüksek 0
       const comparisons = comparePlantProfitability(plants, mockResults);
-
       expect(comparisons.length).toBe(2);
+      expect(comparisons.map((c) => c.plantId)).toEqual(["res-a", "res-b"]);
+      expect(comparisons[0]).toMatchObject({ score: 100, scoreBasis: "project", assessment: "EXCELLENT", rankInType: 1 });
+      expect(comparisons[1]).toMatchObject({ score: 0, assessment: "HIGH_RISK", rankInType: 2 });
+      expect(comparisons[0].rationale).toContain("sektör karnesi yok");
 
-      // res-a daha düşük dengesizlik maliyetine ve daha yüksek birim gelire sahip olduğu için 1. sırada olmalı
-      expect(comparisons[0].plantId).toBe("res-a");
-      expect(comparisons[0].score).toBeGreaterThan(comparisons[1].score);
-      expect(comparisons[0].assessment).toBe("EXCELLENT");
-      expect(comparisons[0].rationale).toContain("cazip ve düşük riskli");
-
-      // res-b yüksek riskli veya daha düşük skorlu olmalı
-      expect(comparisons[1].plantId).toBe("res-b");
-      expect(comparisons[1].rationale).toContain("risk");
+      // Sektör karnesi varsa puan sektördeki yerdir: [40, 60, 100, 300] içinde 50 → altında 1 değer → %75'ten iyi
+      const withSector = comparePlantProfitability(plants, mockResults, {
+        label: "2026 (Ocak–Ağustos)",
+        byType: { RES: { values: [40, 60, 100, 300], median: 80 } },
+      });
+      expect(withSector[0]).toMatchObject({ score: 75, scoreBasis: "sector", assessment: "EXCELLENT" });
+      expect(withSector[0].rationale).toContain("sektörün %75 kadarından iyi");
+      expect(withSector[1]).toMatchObject({ score: 25, assessment: "MODERATE" });
     });
   });
 });

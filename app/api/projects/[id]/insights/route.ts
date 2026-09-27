@@ -8,7 +8,9 @@ import {
   generateMitigationSuggestions,
   comparePlantProfitability,
   PlantInfo,
+  type SectorScoreContext,
 } from "@/lib/strategy/insights";
+import { buildReportContext } from "@/lib/services/report-context";
 import { loadProjectHourly } from "@/lib/services/project-hourly";
 import { settleByCompany } from "@/lib/report/plant-report";
 
@@ -62,6 +64,21 @@ export async function GET(_request: Request, { params }: { params: { id: string 
       profile
     );
 
+    // Santral karnesi puanı: aynı dönemin sektör karnesindeki yer (varsa)
+    let sector: SectorScoreContext | undefined;
+    if (withData.length) {
+      const year = new Date(withData[0].hourly[0].timestamp).getUTCFullYear();
+      const s = (await buildReportContext(withData, year)).context.sector;
+      if (s) {
+        sector = {
+          label: s.label ?? String(s.year),
+          byType: Object.fromEntries(
+            Object.entries(s.byType).map(([t, v]) => [t, v ? { values: v.values, median: v.unitImbalanceTl.median } : undefined])
+          ),
+        };
+      }
+    }
+
     const plantInsights = data.plants.map((p) => {
       const costAnalysis = findHighestCostHours(p.hourly, 20, p.capacityMw);
       return {
@@ -92,7 +109,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
         settlementUnit: data.aggregator ? `${data.aggregator.name} portföyü` : "şirket bazında",
       },
       plantInsights,
-      profitabilityComparison: comparePlantProfitability(plantsInfo, plantResultsMap),
+      profitabilityComparison: comparePlantProfitability(plantsInfo, plantResultsMap, sector),
     });
   } catch (error) {
     console.error("Insights API error:", error);

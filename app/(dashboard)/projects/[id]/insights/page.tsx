@@ -700,10 +700,12 @@ export default function ProjectInsightsPage() {
                       }`}
                     >
                       {comp.assessment === "EXCELLENT"
-                        ? "Mükemmel Profil"
+                        ? "En iyi çeyrek"
                         : comp.assessment === "GOOD"
-                          ? "Dengeli Profil"
-                          : "Orta Risk"}
+                          ? "Ortalamanın üstü"
+                          : comp.assessment === "MODERATE"
+                            ? "Ortalamanın altı"
+                            : "En kötü çeyrek"}
                     </span>
                   </div>
                   <CardDescription className="text-xs">
@@ -715,7 +717,7 @@ export default function ProjectInsightsPage() {
                   <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
                     <div className="mb-1.5 flex items-center justify-between text-xs">
                       <span className="font-semibold text-slate-700">
-                        Portföy Yönetim Skoru
+                        {comp.scoreBasis === "sector" ? "Sektör skoru (sektörün % kaçından iyi)" : "Proje içi skor"}
                       </span>
                       <span className="text-base font-bold text-slate-900">
                         {comp.score} / 100
@@ -724,11 +726,13 @@ export default function ProjectInsightsPage() {
                     <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
                       <div
                         className={`h-full rounded-full ${
-                          comp.score >= 85
+                          comp.score >= 75
                             ? "bg-emerald-500"
-                            : comp.score >= 70
+                            : comp.score >= 50
                               ? "bg-cyan-500"
-                              : "bg-amber-500"
+                              : comp.score >= 25
+                                ? "bg-amber-500"
+                                : "bg-rose-500"
                         }`}
                         style={{ width: `${comp.score}%` }}
                       />
@@ -744,7 +748,7 @@ export default function ProjectInsightsPage() {
                       </strong>
                     </div>
                     <div className="rounded-md border bg-white p-2">
-                      <span className="text-2xs block text-slate-500">Birim Ceza</span>
+                      <span className="text-2xs block text-slate-500">Birim dengesizlik</span>
                       <strong className="font-mono text-xs text-rose-600">
                         {comp.unitImbalanceCost.toLocaleString("tr-TR")} ₺
                       </strong>

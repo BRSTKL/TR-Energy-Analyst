@@ -17,6 +17,7 @@ import {
 } from "../calculations/types";
 import { intradayImpact, multiplierImpact, percentile, SimulatedImpact } from "./impact-simulation";
 import { volumeRatioBacktestSummary } from "../analysis/backtest";
+import { percentileRank } from "../sector/benchmark";
 
 export type TimeOfDayInterval = "NIGHT" | "MORNING" | "AFTERNOON" | "EVENING";
 
@@ -96,6 +97,8 @@ export interface PlantComparisonResult {
   unitImbalanceCost: number;
   imbalanceCostRatio: number; // (unitImbalanceCost / unitRevenue) * 100
   score: number; // 0 - 100
+  /** Puanın dayanağı: sektör karnesindeki yer ya da (karne yoksa) proje içi sıra */
+  scoreBasis: "sector" | "project";
   rankInType: number;
   totalInType: number;
   assessment: "EXCELLENT" | "GOOD" | "MODERATE" | "HIGH_RISK";
@@ -591,13 +594,22 @@ export function generateMitigationSuggestions(
     .slice(0, 5);
 }
 
+/** Sektör karnesi (aynı dönem): teknoloji başına santrallerin MWh başına dengesizlik değerleri ve medyanı */
+export interface SectorScoreContext {
+  label: string;
+  byType: Partial<Record<string, { values: number[]; median: number }>>;
+}
+
+const TECH_TR: Record<string, string> = { RES: "rüzgâr", GES: "güneş", HES: "hidro" };
+
 /**
- * 3. comparePlantProfitability(plants, results)
+ * 3. comparePlantProfitability(plants, results, sector?)
  *
- * Aynı teknoloji tipindeki santralleri (RES-RES, HES-HES, GES-GES)
- * birim gelir ve birim dengesizlik maliyeti üzerinden sıralayıp,
- * bir "portföy yönetim hizmeti" için hangisinin daha karlı ve az riskli olduğunu
- * puanlayan skor (0-100) ve gerekçe metni üretir.
+ * Santral karnesi: MWh başına dengesizlik maliyeti (tahmin kalitesi) üzerinden puan (0–100) ve kısa gerekçe.
+ * Sektör karnesi varsa puan santralin sektördeki yeridir ("sektörün %X kadarından iyi"): kamu verisinden, aynı dönem
+ * ve aynı yöntemle; bir yıldan ötekine tutarlı olduğu (rüzgârda korelasyon 0,71) için kalıcı bir kalite ölçüsüdür.
+ * Sektör karnesi yoksa (ör. hidro) puan proje içi sıradır. Birim gelir yalnızca bilgi içindir: capture price'a,
+ * YEKDEM santrallerinde YEKDEM fiyatına bağlıdır, puana girmez.
  */
 export function comparePlantProfitability(
   plants: PlantInfo[],
@@ -608,121 +620,73 @@ export function comparePlantProfitability(
       monthly: MonthlyAggregate[];
       yearly: YearlyAggregate;
     }
-  >
+  >,
+  sector?: SectorScoreContext
 ): PlantComparisonResult[] {
-  // Santralleri teknoloji tipine göre grupla
   const byType = new Map<string, PlantInfo[]>();
-  plants.forEach((p) => {
-    const list = byType.get(p.plantType) || [];
-    list.push(p);
-    byType.set(p.plantType, list);
-  });
+  plants.forEach((p) => byType.set(p.plantType, [...(byType.get(p.plantType) ?? []), p]));
 
   const comparisons: PlantComparisonResult[] = [];
-
   for (const [plantType, groupPlants] of Array.from(byType.entries())) {
-    // Her santralin metriklerini hazırla
-    const plantMetrics = groupPlants.map((plant) => {
-      const plantResult = results[plant.plantId];
-      const yearly = plantResult?.yearly;
+    const metrics = groupPlants
+      .map((plant) => {
+        const r = results[plant.plantId];
+        const unitRevenue = r?.yearly?.unitRevenue || 0;
+        const unitImbalanceCost = r?.yearly?.unitImbalanceCost || 0;
+        const hourly = r?.hourly ?? [];
+        const forecast = hourly.reduce((s, h) => s + h.forecastMwh, 0);
+        const actual = hourly.reduce((s, h) => s + h.actualMwh, 0);
+        return {
+          plant,
+          unitRevenue,
+          unitImbalanceCost,
+          imbalanceCostRatio: unitRevenue > 0 ? (unitImbalanceCost / unitRevenue) * 100 : 0,
+          planExcessPct: actual > 0 ? ((forecast - actual) / actual) * 100 : null,
+        };
+      })
+      // Proje içinde MWh başına dengesizliğe göre (düşük = iyi)
+      .sort((a, b) => a.unitImbalanceCost - b.unitImbalanceCost);
 
-      const unitRevenue = yearly?.unitRevenue || 0;
-      const unitImbalanceCost = yearly?.unitImbalanceCost || 0;
-      const imbalanceCostRatio =
-        unitRevenue > 0 ? (unitImbalanceCost / unitRevenue) * 100 : 0;
-
-      // Net birim marj (₺/MWh)
-      const netUnitMargin = unitRevenue - unitImbalanceCost;
-
-      return {
-        plant,
-        unitRevenue,
-        unitImbalanceCost,
-        imbalanceCostRatio,
-        netUnitMargin,
-      };
-    });
-
-    // MWh başına dengesizlik maliyetine göre sırala (tahmin kalitesi). Net marj capture price'a, YEKDEM santrallerinde
-    // de YEKDEM fiyatına bağlı olduğundan sıralama ölçütü değildir.
-    plantMetrics.sort((a, b) => a.unitImbalanceCost - b.unitImbalanceCost);
-
-    // Skor ve gerekçe üret
-    plantMetrics.forEach((item, index) => {
-      const { plant, unitRevenue, unitImbalanceCost, imbalanceCostRatio, netUnitMargin } =
-        item;
+    const sec = sector?.byType[plantType];
+    metrics.forEach((item, index) => {
       const rankInType = index + 1;
-      const totalInType = plantMetrics.length;
-
-      // Skor Hesaplama (0-100)
-      // Dengesizlik maliyet oranı ne kadar düşük ve birim gelir ne kadar yüksekse puan o kadar artar
-      let score = 85;
-      if (imbalanceCostRatio <= 2.5) {
-        score += 10;
-      } else if (imbalanceCostRatio <= 5.0) {
-        score += 5;
-      } else if (imbalanceCostRatio > 10.0) {
-        score -= 20;
-      } else if (imbalanceCostRatio > 7.0) {
-        score -= 10;
-      }
-
-      // Sıralama bonusu
-      if (rankInType === 1 && totalInType > 1) {
-        score += 5;
-      }
-
-      score = Math.max(10, Math.min(100, Math.round(score)));
-
-      let assessment: "EXCELLENT" | "GOOD" | "MODERATE" | "HIGH_RISK" = "GOOD";
-      if (score >= 90) assessment = "EXCELLENT";
-      else if (score >= 75) assessment = "GOOD";
-      else if (score >= 60) assessment = "MODERATE";
-      else assessment = "HIGH_RISK";
-
-      // Açıklayıcı gerekçe metni
-      let rationale = "";
-      if (assessment === "EXCELLENT") {
-        rationale = `${plant.plantName} (${plantType}), MWh başına ${unitRevenue.toFixed(
-          2
-        )} ₺ birim gelir elde ederken, birim dengesizlik maliyeti yalnızca ${unitImbalanceCost.toFixed(
-          2
-        )} ₺/MWh (gelirin %${imbalanceCostRatio.toFixed(
-          1
-)} payı) seviyesinde kalmıştır. Yüksek tahmin doğruluğu ve düşük ceza oranıyla portföy yönetim hizmeti için son derece cazip ve düşük riskli bir profildir.`;
-      } else if (assessment === "GOOD") {
-        rationale = `${plant.plantName} (${plantType}), ${unitRevenue.toFixed(
-          2
-        )} ₺/MWh birim gelir ve ${unitImbalanceCost.toFixed(
-          2
-        )} ₺/MWh dengesizlik maliyeti ile dengeli bir performans sunmaktadır. Dengesizlik maliyetinin toplam gelire oranı (%${imbalanceCostRatio.toFixed(
-          1
-        )}) makul düzeydedir; dengesizlik sonrası net birim marj ${netUnitMargin.toFixed(2)} ₺/MWh.`;
-      } else if (assessment === "MODERATE") {
-        rationale = `${plant.plantName} (${plantType}), ${unitImbalanceCost.toFixed(
-          2
-        )} ₺/MWh seviyesindeki dengesizlik maliyetiyle birim gelirin %${imbalanceCostRatio.toFixed(
-          1
-)} payını kaybetmektedir. Benzer teknolojiye sahip santrallere kıyasla operasyonel risk orta seviyededir; portföye alınmadan önce tahmin modelleri kalibre edilmelidir.`;
-      } else {
-        rationale = `${plant.plantName} (${plantType}), yüksek tahmin sapmaları ve ${unitImbalanceCost.toFixed(
-          2
-        )} ₺/MWh birim maliyetle yüksek risk taşımaktadır. Portföy yönetiminde net marjı baskılayan bu santral için acil tolerans ve GİP koruma önlemleri alınmalıdır.`;
-      }
+      const total = metrics.length;
+      const score = sec && sec.values.length
+        ? Math.round(100 - percentileRank(sec.values, item.unitImbalanceCost))
+        : total > 1
+          ? Math.round((100 * (total - rankInType)) / (total - 1))
+          : 50;
+      const assessment: PlantComparisonResult["assessment"] =
+        score >= 75 ? "EXCELLENT" : score >= 50 ? "GOOD" : score >= 25 ? "MODERATE" : "HIGH_RISK";
+      const cost = Math.round(item.unitImbalanceCost).toLocaleString("tr-TR");
+      const where = sec
+        ? `${sector!.label} ${TECH_TR[plantType] ?? plantType} sektör medyanı ${Math.round(sec.median).toLocaleString("tr-TR")} TL; santral sektörün %${score} kadarından iyi.`
+        : `Bu teknoloji için sektör karnesi yok; proje içinde ${total} santralin ${rankInType}. sırasında.`;
+      const bias =
+        item.planExcessPct !== null && Math.abs(item.planExcessPct) >= 2
+          ? ` Plan ${item.planExcessPct > 0 ? "fazlası" : "eksiği"} %${Math.abs(item.planExcessPct).toFixed(1).replace(".", ",")}: kalibrasyonla hızlı kazanç.`
+          : "";
+      const action = {
+        EXCELLENT: " Tahmin kalitesi yüksek; portföye alınırken sapma primi indirimli teklif edilebilir.",
+        GOOD: " Ortalamanın üstünde; mevcut tahmin düzeni korunmalı.",
+        MODERATE: " Ortalamanın altında; pahalı saatlere odaklı tahmin iyileştirmesi önerilir.",
+        HIGH_RISK: " En kötü çeyrekte; tahmin sağlayıcıyla görüşme ve kalibrasyon öncelikli, teklif priminde bu risk fiyatlanmalı.",
+      }[assessment];
 
       comparisons.push({
-        plantId: plant.plantId,
-        plantName: plant.plantName,
-        plantType: plant.plantType,
-        capacityMw: plant.capacityMw,
-        unitRevenue: Number(unitRevenue.toFixed(2)),
-        unitImbalanceCost: Number(unitImbalanceCost.toFixed(2)),
-        imbalanceCostRatio: Number(imbalanceCostRatio.toFixed(2)),
+        plantId: item.plant.plantId,
+        plantName: item.plant.plantName,
+        plantType: item.plant.plantType,
+        capacityMw: item.plant.capacityMw,
+        unitRevenue: Number(item.unitRevenue.toFixed(2)),
+        unitImbalanceCost: Number(item.unitImbalanceCost.toFixed(2)),
+        imbalanceCostRatio: Number(item.imbalanceCostRatio.toFixed(2)),
         score,
+        scoreBasis: sec ? "sector" : "project",
         rankInType,
-        totalInType,
+        totalInType: total,
         assessment,
-        rationale,
+        rationale: `MWh başına ${cost} TL dengesizlik; ${where}${bias}${action}`,
       });
     });
   }
