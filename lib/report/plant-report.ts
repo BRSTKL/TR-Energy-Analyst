@@ -271,6 +271,11 @@ export interface PlantReportData {
     /** Ay ay fayda oranı (%): portföy değerinin her ay tekrarlanıp tekrarlanmadığı */
     monthlyBenefit: Array<{ month: string; benefitPct: number }>;
     /**
+     * Ana senaryo: YEKDEM santrallerinin dengesizliği YEKDEM havuzunda kaldığından portföyün fiilen netleştirebildiği
+     * yalnızca YEKDEM dışı santrallerdir. Portföyde YEKDEM santrali ve en az iki YEKDEM dışı sahip varsa dolu.
+     */
+    merchantOnly: { plantCount: number; benefitTl: number; benefitPct: number } | null;
+    /**
      * Kapsam cümlesi (toplayıcının EPİAŞ portföyü kayıtlıysa): "Kapsam: Gain Toplayıcı portföyündeki 40 santralin 6
      * tanesi (portföy: 29 hidro, 6 rüzgâr, 5 diğer; EPİAŞ, Eylül 2026)"
      */
@@ -505,7 +510,8 @@ export function buildPlantReport(
    */
   const crossGroup = (groupPlants: Plant[][]) => {
     const groupHours = groupPlants.map((g) => settleGroup(g.map((p) => p.hourly), data.profile));
-    const nettedHours = settleGroup(withData.map((p) => p.hourly), data.profile);
+    // Yalnızca verilen grupların santralleri birlikte netleşir (alt grup hesabında diğer santraller karışmasın)
+    const nettedHours = settleGroup(groupPlants.flat().map((p) => p.hourly), data.profile);
     const standalone = groupHours.reduce((sum, hours) => sum + sumCost(hours), 0);
     const netted = sumCost(nettedHours);
     // Aylık fayda oranı: faydanın her ay tekrarlanıp tekrarlanmadığı (tek yıllık verinin istikrar kanıtı)
@@ -568,6 +574,12 @@ export function buildPlantReport(
       owners.set(key, [...(owners.get(key) ?? []), p]);
     }
     const x = crossGroup(Array.from(owners.values()));
+    // YEKDEM dışı santraller arasında (ana senaryo)
+    const merchantGroups = Array.from(owners.values())
+      .map((g) => g.filter((p) => p.yekdem !== true))
+      .filter((g) => g.length > 0);
+    const hasYekdem = withData.some((p) => p.yekdem === true);
+    const m = hasYekdem && merchantGroups.length >= 2 ? crossGroup(merchantGroups) : null;
     aggregator = {
       name: data.aggregator.name,
       ownerCount: owners.size,
@@ -577,6 +589,7 @@ export function buildPlantReport(
       benefitPct: x.benefitPct,
       offsettingHourSharePct: x.offsettingPct,
       monthlyBenefit: x.monthly,
+      merchantOnly: m ? { plantCount: merchantGroups.flat().length, benefitTl: m.benefit, benefitPct: m.benefitPct } : null,
       scope: (() => {
         const pf = data.aggregator!.portfolio;
         if (!pf) return null;

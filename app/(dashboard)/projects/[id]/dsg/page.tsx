@@ -27,6 +27,9 @@ interface DsgResponse extends DsgScenarioResult {
   /** Grup üyeleri şirketlerdir (sahibi bilinmeyen santral kendi başına üye) */
   plants: PlantOption[];
   unknownOwnerPlants: string[];
+  /** Veri döneminde YEKDEM'de olan santraller ve bu hesapta hariç tutulup tutulmadıkları */
+  yekdemPlants: string[];
+  yekdemExcluded: boolean;
 }
 
 const MONTHS_TR = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
@@ -43,6 +46,7 @@ export default function DsgScenarioPage() {
   const [selected, setSelected] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [excludeYekdem, setExcludeYekdem] = useState(false);
   // Hızlı art arda seçimlerde yalnızca son isteğin sonucu gösterilsin
   const requestId = useRef(0);
 
@@ -51,7 +55,10 @@ export default function DsgScenarioPage() {
       const id = ++requestId.current;
       setLoading(true);
       try {
-        const query = ids ? `?plants=${encodeURIComponent(ids.join(","))}` : "";
+        const params = new URLSearchParams();
+        if (ids) params.set("plants", ids.join(","));
+        if (excludeYekdem) params.set("yekdem", "exclude");
+        const query = params.size ? `?${params}` : "";
         const res = await fetch(`/api/projects/${projectId}/dsg${query}`, { cache: "no-store" });
         const d: DsgResponse = await res.json();
         if (id !== requestId.current) return;
@@ -65,9 +72,10 @@ export default function DsgScenarioPage() {
         if (id === requestId.current) setLoading(false);
       }
     },
-    [projectId]
+    [projectId, excludeYekdem]
   );
 
+  // İlk açılış ve YEKDEM seçimi değişince tüm üyelerle yeniden hesapla (hariç tutulan santralin sahibi listeden düşebilir)
   useEffect(() => {
     load(null);
   }, [load]);
@@ -120,6 +128,21 @@ export default function DsgScenarioPage() {
                 <CardDescription>
                   En az iki üye (şirket) seçin. {loading && "Hesaplanıyor..."}
                 </CardDescription>
+                {data.yekdemPlants.length > 0 && (
+                  <label className="mt-2 flex items-start gap-2 text-xs text-slate-700">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={excludeYekdem}
+                      onChange={(e) => setExcludeYekdem(e.target.checked)}
+                    />
+                    <span>
+                      <b>YEKDEM santrallerini hariç tut</b> ({data.yekdemPlants.join(", ")}). Raporun ana senaryosunda YEKDEM
+                      santrallerinin dengesizliği YEKDEM havuzunda uzlaştırılır; grubun gerçekten netleştirebileceği yalnızca
+                      piyasadaki santrallerdir.
+                    </span>
+                  </label>
+                )}
               </CardHeader>
               <CardContent className="flex flex-wrap gap-2">
                 {data.plants.map((p) => {

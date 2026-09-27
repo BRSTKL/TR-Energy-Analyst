@@ -321,7 +321,12 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
           (() => {
             const mr = monthlyRange(agg.monthlyBenefit);
             return mr ? `; fayda ${mr.months} ayın her birinde %${nf(mr.min, 0)}–${nf(mr.max, 0)}.` : ".";
-          })(),
+          })() +
+          (agg.merchantOnly
+            ? ` Ana senaryoda (YEKDEM dengesizliği havuzda) yalnızca YEKDEM dışı ${agg.merchantOnly.plantCount} santral netleşir: ${formatTlShort(
+                agg.merchantOnly.benefitTl
+              )} (%${nf(agg.merchantOnly.benefitPct, 0)}).`
+            : ""),
       });
     }
     if (ex && exiting.length > 0) {

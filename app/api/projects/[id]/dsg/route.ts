@@ -12,6 +12,8 @@ export const dynamic = "force-dynamic";
  * santralleri her saat birlikte netleşir. Bu yüzden grubun üyeleri şirketlerdir: her şirketin santralleri şirket
  * bazında netleşmiş saatlik veriyle tek üye olur (sahibi bilinmeyen santral kendi başına üye sayılır). Fayda böylece
  * yalnızca şirketler arasındaki ek netleşmedir. `plants` üye kimlikleridir; verilmezse tüm üyeler seçilir.
+ * `yekdem=exclude`: veri döneminde YEKDEM'de olan santraller dışarıda bırakılır. Raporun ana senaryosunda YEKDEM
+ * santrallerinin dengesizliği YEKDEM havuzunda uzlaştırıldığı için grubun netleştirebileceği yalnızca piyasadaki santrallerdir.
  */
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
@@ -20,6 +22,9 @@ export async function GET(request: Request, { params }: { params: { id: string }
       return NextResponse.json({ success: false, error: `ID'si '${params.id}' olan proje bulunamadı.` }, { status: 404 });
     }
 
+    const excludeYekdem = new URL(request.url).searchParams.get("yekdem") === "exclude";
+    const yekdemPlants = data.plants.filter((p) => p.yekdem === true && p.hourly.length > 0).map((p) => p.plantName);
+    if (excludeYekdem) data.plants = data.plants.filter((p) => p.yekdem !== true);
     type Plant = (typeof data.plants)[number];
     const groups = new Map<string, { id: string; name: string; isCompany: boolean; plants: Plant[] }>();
     for (const p of data.plants) {
@@ -66,6 +71,8 @@ export async function GET(request: Request, { params }: { params: { id: string }
       project: data.project,
       unit: "company",
       aggregator: data.aggregator ?? null,
+      yekdemPlants,
+      yekdemExcluded: excludeYekdem,
       unknownOwnerPlants: data.plants.filter((p) => (p.ownerOrganizationId !== undefined ? p.ownerOrganizationId : p.organizationId) === null && p.hourly.length > 0).map((p) => p.plantName),
       plants: members.map((m) => ({
         plantId: m.plantId,

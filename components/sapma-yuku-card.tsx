@@ -117,6 +117,13 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh }: { sapma: SapmaSum
                 : "Dengesizlik şirket bazında uzlaştırılır: aynı şirketin santralleri her saat birbirini dengeler."}{" "}
               KÜPST santral bazındadır, netleşmez. Rakamlar PowerPoint raporuyla aynıdır.
               {agg?.scope && <span className="mt-1 block font-medium text-slate-700">{agg.scope}.</span>}
+              {agg?.merchantOnly && (
+                <span className="mt-1 block text-slate-700">
+                  Portföy değeri tüm santrallerle {tl(agg.benefitTl)} (%{Math.round(agg.benefitPct)}); ana senaryoda (YEKDEM dengesizliği
+                  havuzda) yalnızca YEKDEM dışı {agg.merchantOnly.plantCount} santral netleşir: {tl(agg.merchantOnly.benefitTl)} (%
+                  {Math.round(agg.merchantOnly.benefitPct)}).
+                </span>
+              )}
             </CardDescription>
           </div>
           <Button size="sm" variant="outline" onClick={updateEpias} disabled={updating} className="h-8 gap-1 text-xs">
