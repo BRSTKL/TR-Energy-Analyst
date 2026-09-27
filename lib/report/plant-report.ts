@@ -16,6 +16,7 @@ import { processHourlyRecord } from "@/lib/calculations/engine";
 import { aggregateMonthly } from "@/lib/calculations/aggregate";
 import { HourlyResult, ImbalancePricingProfile, REGULATORY_IMBALANCE_REGIMES } from "@/lib/calculations/types";
 import { findDataGaps, type PlantDataGap } from "@/lib/analysis/data-completeness";
+import { describeAggregatorScope } from "@/lib/projects/aggregator";
 import { detectOutages, markConcurrent, type PlantOutages } from "@/lib/analysis/outage-detection";
 import { analyzeDsgScenario, MAX_EXACT_PLANTS } from "@/lib/analysis/dsg-scenarios";
 import { combineBacktests, MIN_FEASIBLE_LAG_HOURS, persistenceStrategy, runBacktest } from "@/lib/analysis/backtest";
@@ -265,6 +266,11 @@ export interface PlantReportData {
     benefitPct: number;
     /** Farklı sahiplerden en az birinin fazla, birinin eksik ürettiği saatlerin oranı (%) */
     offsettingHourSharePct: number;
+    /**
+     * Kapsam cümlesi (toplayıcının EPİAŞ portföyü kayıtlıysa): "Kapsam: Gain Toplayıcı portföyündeki 40 santralin 6
+     * tanesi (portföy: 29 hidro, 6 rüzgâr, 5 diğer; EPİAŞ, Eylül 2026)"
+     */
+    scope: string | null;
   } | null;
   /**
    * SENARYO: MIN_FEASIBLE_LAG_HOURS (2) saat önce görülen hatanın bir kısmı GİP'te kapatılsaydı (GİP teslimattan 60 dk
@@ -549,6 +555,13 @@ export function buildPlantReport(
       benefitTl: x.benefit,
       benefitPct: x.benefitPct,
       offsettingHourSharePct: x.offsettingPct,
+      scope: (() => {
+        const pf = data.aggregator!.portfolio;
+        if (!pf) return null;
+        const ids = new Set(pf.plantIds);
+        const inPortfolio = data.plants.filter((p) => p.epiasPlantId !== null && ids.has(p.epiasPlantId)).length;
+        return describeAggregatorScope(data.aggregator!.name, pf, inPortfolio, data.plants.length - inPortfolio);
+      })(),
     };
   }
 

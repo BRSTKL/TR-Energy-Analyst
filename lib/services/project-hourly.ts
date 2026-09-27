@@ -1,13 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { processHourlyRecord } from "@/lib/calculations/engine";
 import { HourlyResult, ImbalancePricingProfile, SystemDirection, toPricingProfile } from "@/lib/calculations/types";
-import { settlementIdentity } from "@/lib/projects/aggregator";
+import { parseAggregatorPortfolio, settlementIdentity, type AggregatorPortfolio } from "@/lib/projects/aggregator";
 
 export interface ProjectHourly {
   project: { id: string; name: string };
   profile: ImbalancePricingProfile;
   /** Proje bir toplayıcı portföyüyse: santraller bu adla tek dengede uzlaştırılır (organizationId = AGGREGATOR_ORG_ID) */
-  aggregator?: { name: string } | null;
+  aggregator?: { name: string; portfolio?: AggregatorPortfolio | null } | null;
   plants: Array<{
     plantId: string;
     plantName: string;
@@ -53,7 +53,9 @@ export async function loadProjectHourly(projectId: string): Promise<ProjectHourl
   return {
     project: { id: project.id, name: project.name },
     profile,
-    aggregator: project.aggregatorName ? { name: project.aggregatorName } : null,
+    aggregator: project.aggregatorName
+      ? { name: project.aggregatorName, portfolio: parseAggregatorPortfolio(project.aggregatorPortfolio) }
+      : null,
     plants: project.plants.map((plant) => ({
       plantId: plant.id,
       plantName: plant.name,

@@ -208,3 +208,17 @@ describe("Santral raporu verisi", () => {
   });
 });
 
+
+import { describeAggregatorScope, describePortfolioMix } from "@/lib/projects/aggregator";
+
+describe("Toplayıcı kapsam cümlesi", () => {
+  const p = { orgId: 1, orgName: "X (TOPLAYICI)", asOf: "2026-09-27", plantCount: 40, byType: { RES: 6, HES: 29, OTHER: 5 }, plantIds: [] };
+  it("portföy dağılımı çoktan aza, kapsam ve kaynak ayı", () => {
+    expect(describePortfolioMix(p.byType)).toBe("29 hidro, 6 rüzgâr, 5 diğer");
+    expect(describeAggregatorScope("Gain Toplayıcı", p, 6)).toBe(
+      "Kapsam: Gain Toplayıcı portföyündeki 40 santralin 6 tanesi (portföy: 29 hidro, 6 rüzgâr, 5 diğer; EPİAŞ, Eylül 2026)"
+    );
+    expect(describeAggregatorScope("G", { ...p, plantCount: 6 }, 6, 1)).toContain("santralin tamamı");
+    expect(describeAggregatorScope("G", { ...p, plantCount: 6 }, 6, 1)).toContain("projedeki 1 santral bu listede yok");
+  });
+});

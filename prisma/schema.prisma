@@ -23,6 +23,8 @@ model Project {
   importTemplate  String?                   // Son onaylanan kolon eşleştirmesi (JSON: santral id → PlantImportMapping)
   /// Doluysa proje bir toplayıcı portföyüdür: tüm santraller bu adla tek dengede uzlaştırılır (sahip şirketler santralde kalır)
   aggregatorName  String?
+  /// Toplayıcının EPİAŞ portföy özeti (JSON: orgId, orgName, asOf, plantCount, byType, plantIds); kapsam cümlesi için
+  aggregatorPortfolio String?
   createdAt       DateTime                  @default(now())
   updatedAt       DateTime                  @updatedAt
 }

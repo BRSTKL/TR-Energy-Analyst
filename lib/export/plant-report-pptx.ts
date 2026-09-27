@@ -218,6 +218,8 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       fontSize: 14,
       color: "9FB3C8",
     });
+    // Toplayıcı portföyünde raporun kapsamı: "portföyün 40 santralinin 6 tanesi"
+    if (agg?.scope) text(s, agg.scope, { x: M + 0.1, y: 4.3, w: CW - 0.2, h: 0.5, fontSize: 12, color: "7FD1C7", valign: "top" });
 
     round(s, M + 0.1, 5.05, 6.2, 1.55, C.navySoft, C.navyLine);
     if (author.name) {
@@ -1374,7 +1376,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       [
         "Uzlaştırma",
         agg
-          ? `Toplayıcı portföyü: tüm santraller ${agg.name} portföyünde saat saat tek dengede netleştirildi (santraller dönem boyunca portföydeymiş gibi). ` +
+          ? `${agg.scope ? `${agg.scope}. ` : ""}Toplayıcı portföyü: tüm santraller ${agg.name} portföyünde saat saat tek dengede netleştirildi (santraller dönem boyunca portföydeymiş gibi). ` +
             "Portföyün değeri, santrallerin lisans sahiplerinin kendi dengesinde uzlaştırılmasıyla karşılaştırılarak hesaplandı; toplayıcı ile üreticiler arasındaki paylaşım rapora yansımaz."
           : "Şirket bazındadır: aynı şirketin santralleri saat saat birlikte netleştirildi. Santral sahipleri EPİAŞ katılımcı kayıtlarından alındı" +
             (r.settlement.unknownOwnerCount > 0 ? `; sahibi bulunamayan ${r.settlement.unknownOwnerCount} santral ayrı şirket sayıldı.` : ".") +

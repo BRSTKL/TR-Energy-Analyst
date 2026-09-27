@@ -31,3 +31,55 @@ export function settlementIdentity(
 
 /** EPİAŞ katılımcı adı toplayıcı mı ("… A.Ş. (TOPLAYICI)") */
 export const isAggregatorName = (name: string | null | undefined) => !!name && /\(TOPLAYICI\)\s*$/i.test(name.trim());
+
+/**
+ * Toplayıcının EPİAŞ'taki portföyü (toplayıcı seçildiğinde kaydedilir). Rapordaki kapsam cümlesinin dayanağıdır:
+ * "Gain Toplayıcı portföyündeki 40 santralden 6'sı".
+ */
+export interface AggregatorPortfolio {
+  orgId: number;
+  /** EPİAŞ'taki unvan ("… A.Ş. (TOPLAYICI)") */
+  orgName: string;
+  /** Listenin alındığı gün (YYYY-AA-GG) */
+  asOf: string;
+  plantCount: number;
+  /** Teknoloji → santral sayısı (RES, GES, HES, OTHER; adından anlaşılmayan OTHER sayılır) */
+  byType: Record<string, number>;
+  plantIds: number[];
+}
+
+export function parseAggregatorPortfolio(raw: string | null | undefined): AggregatorPortfolio | null {
+  if (!raw) return null;
+  try {
+    const p = JSON.parse(raw);
+    return p && typeof p.orgId === "number" && Array.isArray(p.plantIds) ? (p as AggregatorPortfolio) : null;
+  } catch {
+    return null;
+  }
+}
+
+const TYPE_TR: Record<string, string> = { HES: "hidro", RES: "rüzgâr", GES: "güneş", OTHER: "diğer" };
+const MONTHS_TR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+
+/** "29 hidro, 6 rüzgâr, 5 diğer" (çoktan aza) */
+export function describePortfolioMix(byType: Record<string, number>): string {
+  return Object.entries(byType)
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([t, n]) => `${n} ${TYPE_TR[t] ?? t.toLocaleLowerCase("tr-TR")}`)
+    .join(", ");
+}
+
+/**
+ * Kapsam cümlesi: "Kapsam: Gain Toplayıcı portföyündeki 40 santralin 6 tanesi (portföy: 29 hidro, 6 rüzgâr, 5 diğer;
+ * EPİAŞ, Eylül 2026)". inProject: projedeki santrallerden portföy listesinde olanlar; outside: listede olmayanlar.
+ */
+export function describeAggregatorScope(name: string, p: AggregatorPortfolio, inProject: number, outside = 0): string {
+  const [y, m] = p.asOf.split("-").map(Number);
+  const all = inProject >= p.plantCount;
+  return (
+    `Kapsam: ${name} portföyündeki ${p.plantCount} santralin ${all ? "tamamı" : `${inProject} tanesi`} ` +
+    `(portföy: ${describePortfolioMix(p.byType)}; EPİAŞ, ${MONTHS_TR[m - 1]} ${y})` +
+    (outside > 0 ? `; projedeki ${outside} santral bu listede yok` : "")
+  );
+}

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { displayDescription } from "@/lib/projects/description";
 import { prisma } from "@/lib/prisma";
 import { backupDatabase } from "@/lib/db-backup";
+import { parseAggregatorPortfolio } from "@/lib/projects/aggregator";
+import { fetchAggregatorPortfolio } from "@/lib/services/epias-plants";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +50,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
       description: displayDescription(project.description),
       hasImportTemplate: !!project.importTemplate,
       aggregatorName: project.aggregatorName,
+      aggregatorPortfolio: parseAggregatorPortfolio(project.aggregatorPortfolio),
       dataRange,
       plants: project.plants.map((p) => ({
         id: p.id,
@@ -61,9 +64,10 @@ export async function GET(_request: Request, { params }: { params: { id: string 
 }
 
 /**
- * PATCH /api/projects/[id] { aggregatorName: string | null }
+ * PATCH /api/projects/[id] { aggregatorName: string | null, aggregatorOrgId?: number, aggregatorOrgName?: string }
  * Toplayıcı portföyü ayarı: dolu ise projedeki tüm santraller bu adla tek dengede uzlaştırılır; null ise her santral
- * sahibinin dengesinde (varsayılan).
+ * sahibinin dengesinde (varsayılan). aggregatorOrgId verilirse toplayıcının EPİAŞ portföyü (santral sayısı ve
+ * teknoloji dağılımı) çekilip kaydedilir; rapordaki kapsam cümlesi buna dayanır. EPİAŞ'a ulaşılamazsa ad yine kaydedilir.
  */
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   const body = await request.json().catch(() => null);
@@ -75,10 +79,23 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     return NextResponse.json({ success: false, error: "aggregatorName metin ya da null olmalı." }, { status: 400 });
   }
   const aggregatorName = raw?.trim().slice(0, 160) || null;
-  const exists = await prisma.project.findUnique({ where: { id: params.id }, select: { id: true } });
+  const exists = await prisma.project.findUnique({ where: { id: params.id }, select: { id: true, aggregatorPortfolio: true } });
   if (!exists) return NextResponse.json({ success: false, error: "Proje bulunamadı." }, { status: 404 });
-  await prisma.project.update({ where: { id: params.id }, data: { aggregatorName } });
-  return NextResponse.json({ success: true, aggregatorName });
+
+  // Toplayıcı kapatılırsa portföy özeti de silinir; yeni toplayıcı seçildiyse EPİAŞ'tan yeniden çekilir
+  let aggregatorPortfolio: string | null = aggregatorName ? exists.aggregatorPortfolio : null;
+  let warning: string | null = null;
+  const orgId = Number(body.aggregatorOrgId);
+  if (aggregatorName && Number.isInteger(orgId) && orgId > 0) {
+    try {
+      const portfolio = await fetchAggregatorPortfolio(orgId, String(body.aggregatorOrgName ?? aggregatorName).slice(0, 200));
+      aggregatorPortfolio = JSON.stringify(portfolio);
+    } catch (e) {
+      warning = `Toplayıcının EPİAŞ portföyü alınamadı; ad kaydedildi. (${e instanceof Error ? e.message : "bağlantı"})`;
+    }
+  }
+  await prisma.project.update({ where: { id: params.id }, data: { aggregatorName, aggregatorPortfolio } });
+  return NextResponse.json({ success: true, aggregatorName, aggregatorPortfolio: parseAggregatorPortfolio(aggregatorPortfolio), warning });
 }
 
 /**

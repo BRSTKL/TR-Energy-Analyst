@@ -17,6 +17,9 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { epiasRequest, formatToEpiasIso } from "@/lib/services/epias-service";
 import type { EpiasOrganization, EpiasPowerPlant, KgupVersion } from "@/lib/epias-plant/plant-data";
+import { guessTechnologyFromName } from "@/lib/epias-plant/plant-data";
+import { plantPeriods } from "@/lib/epias-plant/period";
+import type { AggregatorPortfolio } from "@/lib/projects/aggregator";
 
 export interface EpiasUevcb {
   id: number;
@@ -358,4 +361,26 @@ export async function companyPlantIdsFromCache(year: number): Promise<Map<number
   } catch {
     return null;
   }
+}
+
+/**
+ * Toplayıcının EPİAŞ'taki güncel portföyü: son tam yıl, bu yıl ve son ayın santral listelerinin birleşimi (toplayıcı
+ * portföyleri yıl içinde değişir). Teknoloji santral adından tahmin edilir.
+ */
+export async function fetchAggregatorPortfolio(orgId: number, orgName: string): Promise<AggregatorPortfolio> {
+  const lists = await Promise.all(plantPeriods().map(({ start, end }) => listPlantsByOrganization(orgId, start, end)));
+  const plants = Array.from(new Map(lists.flat().map((p) => [p.id, p])).values());
+  const byType: Record<string, number> = {};
+  for (const p of plants) {
+    const t = guessTechnologyFromName(p.name) ?? "OTHER";
+    byType[t] = (byType[t] ?? 0) + 1;
+  }
+  return {
+    orgId,
+    orgName,
+    asOf: new Date().toISOString().slice(0, 10),
+    plantCount: plants.length,
+    byType,
+    plantIds: plants.map((p) => p.id),
+  };
 }
