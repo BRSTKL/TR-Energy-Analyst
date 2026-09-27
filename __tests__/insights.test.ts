@@ -224,19 +224,18 @@ describe("Kural Tabanlı Strateji ve İçgörü Motoru Birim Testleri", () => {
       expect(suggestions.find((s) => s.id === "suggestion-intraday-timing")).toBeUndefined();
     });
 
-    it("Geçmiş veride maliyeti artıran öneri 'önerilmez' işaretlenir ve sona alınır", () => {
-      // Tüm saatler enerji açığında ama santral eksik tahmin ediyor (fazla üretim).
-      // Pahalı saatlerde tahmini %5 düşürmek fazla üretimi büyütür → maliyet artar.
+    it("Enerji açığı kuralı bilinçli düşük bildirim önermez; eksik üretimi GİP'te kapatmayı önerir", () => {
+      // Tüm saatler enerji açığında ve santral eksik üretiyor: maliyetin tamamı açık saatlerinde
       const rows: HourlyResult[] = [];
-      for (let h = 0; h < 24; h++) rows.push(hr(1, h, 30, 40, h >= 18 ? 5000 : 2000, 5500, "DEFICIT"));
+      for (let h = 0; h < 24; h++) rows.push(hr(1, h, 40, 30, h >= 18 ? 5000 : 2000, 5500, "DEFICIT"));
       const suggestions = suggest(res, rows);
 
       const deficit = suggestions.find((s) => s.id === "suggestion-deficit-protection");
-      expect(deficit?.impact?.savingTl).toBeLessThan(0);
-      expect(deficit?.recommended).toBe(false);
-      expect(deficit?.priority).toBe("LOW");
-      expect(deficit?.expectedImpact).toContain("önerilmez");
-      expect(suggestions[suggestions.length - 1].id).toBe("suggestion-deficit-protection");
+      expect(deficit?.title).toContain("GİP");
+      // Planı bilerek düşük bildirmek piyasa gözetimi ve KÜPST riski taşır: hiçbir öneride yer almaz
+      for (const s of suggestions) {
+        expect([s.title, s.description, ...s.actionItems].join(" ")).not.toMatch(/düşük bildir/i);
+      }
     });
 
     it("GİP verisi yoksa GİP'e dayalı önerinin etkisi hesaplanmaz", () => {

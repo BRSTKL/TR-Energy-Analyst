@@ -63,13 +63,13 @@ describe("Santral Üretim Verisi Ayrıştırıcı (Generation Parser) Testleri",
 
   describe("3. detectColumnMapping", () => {
     it("Tipik EPİAŞ / EYS Türkçe sütun başlıklarını tanımalıdır", () => {
-      const headers = ["Tarih", "Saat", "KGÖP (MWh)", "Gerçekleşen (MWh)", "Santral Adı"];
+      const headers = ["Tarih", "Saat", "KGÜP (MWh)", "Gerçekleşen (MWh)", "Santral Adı"];
       const { mapping, missingRequired } = detectColumnMapping(headers);
 
       expect(missingRequired).toHaveLength(0);
       expect(mapping.date).toBe("Tarih");
       expect(mapping.hour).toBe("Saat");
-      expect(mapping.forecast).toBe("KGÖP (MWh)");
+      expect(mapping.forecast).toBe("KGÜP (MWh)");
       expect(mapping.actual).toBe("Gerçekleşen (MWh)");
       expect(mapping.plant).toBe("Santral Adı");
     });
@@ -107,21 +107,21 @@ describe("Santral Üretim Verisi Ayrıştırıcı (Generation Parser) Testleri",
       const headers = ["Tarih", "Fiyat", "Sıcaklık"];
       const { missingRequired } = detectColumnMapping(headers);
 
-      expect(missingRequired).toContain("Tahmin / KGÖP MWh");
+      expect(missingRequired).toContain("Tahmin / KGÜP MWh");
       expect(missingRequired).toContain("Gerçekleşen / Üretim MWh");
     });
   });
 
   describe("4. parseCsvText", () => {
     it("Noktalı virgüllü ve tırnaklı CSV metnini doğru ayrıştırmalıdır", () => {
-      const csv = `Tarih;Saat;KGÖP;Gerçekleşen
+      const csv = `Tarih;Saat;KGÜP;Gerçekleşen
 01.01.2025;00:00;45,0;42,5
 01.01.2025;01:00;40,0;48,0`;
 
       const rows = parseCsvText(csv);
       expect(rows).toHaveLength(2);
       expect(rows[0]["Tarih"]).toBe("01.01.2025");
-      expect(rows[0]["KGÖP"]).toBe("45,0");
+      expect(rows[0]["KGÜP"]).toBe("45,0");
       expect(rows[0]["Gerçekleşen"]).toBe("42,5");
     });
 
@@ -138,7 +138,7 @@ describe("Santral Üretim Verisi Ayrıştırıcı (Generation Parser) Testleri",
 
   describe("5. parseGenerationFile (Uçtan Uca)", () => {
     it("CSV buffer'ından geçerli ve sıralı ParsedGenerationRow kayıtları üretmelidir", async () => {
-      const csv = `Tarih;Saat;KGÖP;Gerçekleşen
+      const csv = `Tarih;Saat;KGÜP;Gerçekleşen
 01.01.2025;01:00;40;45
 01.01.2025;00:00;30;25`;
 
@@ -161,7 +161,7 @@ describe("Santral Üretim Verisi Ayrıştırıcı (Generation Parser) Testleri",
       const workbook = new ExcelJS.Workbook();
       const sheet = workbook.addWorksheet("Üretim Verisi");
 
-      sheet.addRow(["Tarih", "Saat", "KGÖP (MWh)", "Gerçekleşen (MWh)", "Santral"]);
+      sheet.addRow(["Tarih", "Saat", "KGÜP (MWh)", "Gerçekleşen (MWh)", "Santral"]);
       sheet.addRow(["2025-05-10", "10:00", 35.5, 32.0, "Ege RES"]);
       sheet.addRow(["2025-05-10", "11:00", 40.0, 44.5, "Ege RES"]);
 
@@ -221,7 +221,7 @@ describe("Santral Üretim Verisi Ayrıştırıcı (Generation Parser) Testleri",
     });
 
     it("1-24 formatındaki dosyada 1. saati 00:00, 24. saati 23:00 olarak eşlemelidir", async () => {
-      const lines = ["Tarih;Saat;KGÖP;Gerçekleşen"];
+      const lines = ["Tarih;Saat;KGÜP;Gerçekleşen"];
       for (let h = 1; h <= 24; h++) lines.push(`01.01.2025;${h};${h};${h}`);
 
       const result = await parseGenerationFile(Buffer.from(lines.join("\n"), "utf-8"), "saat.csv");
@@ -252,5 +252,12 @@ describe("Santral Üretim Verisi Ayrıştırıcı (Generation Parser) Testleri",
       expect(result.rows[0].forecastMwh).toBe(0); // -10 -> 0
       expect(result.warnings.length).toBeGreaterThan(0);
     });
+  });
+
+  it("Tahmin sütunu hem resmi KGÜP hem eski KGÖP yazımıyla tanınır", () => {
+    for (const header of ["KGÜP (MWh)", "KGÖP (MWh)", "kgup"]) {
+      const { missingRequired } = detectColumnMapping(["Tarih", header, "Gerçekleşen (MWh)"]);
+      expect(missingRequired).toEqual([]);
+    }
   });
 });

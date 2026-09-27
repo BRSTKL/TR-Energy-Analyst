@@ -21,7 +21,8 @@
 | Tur | Durum | Tamamlanan maddeler |
 |---|---|---|
 | 1 | ✅ 27.09.2026 | B1/T1 gün içi gecikmesi 2 saat (1 saat "teorik", %25 kapatma "kusursuz öngörü" etiketli; rapor %18 → %4) · M3/R9/T2/C2 veri bütünlüğü (`lib/analysis/data-completeness.ts`; uyarı bandı, rapor özeti ve Ek B, karşılaştırma satırı) · M2/R5/L3 tek işaret kuralı (`lib/conventions.ts`; sonuç sayfası rapor ve planlamayla aynı) · L1 gün etiketleri |
-| 1 (kalan) | ⏳ | E3: EPİAŞ ekranında kayıttan önce santral × ay bütünlük tablosu |
+| 2 | ✅ 27.09.2026 | M1/L2/I1/I3/B3 tek uzlaştırma tabanı: İçgörüler, Planlama, Geriye dönük test ve GİP paneli portföyü şirket/toplayıcı netleşmiş seriyle hesaplar (`settleByCompanyGroups`); netleştirme GİP fiyat alanlarını artık taşıyor (önceden düşüyordu) · R1–R4 sonuç kartı raporla aynı tanım (`lib/report/deviation-load.ts`), etiketler (senaryo / varsayıma bağlı), toplayıcı dili, profil kutusu mevzuat rejimini yazıyor · I4 bilinçli düşük bildirim önerisi kaldırıldı (yerine açıkta eksik üretimi GİP'te kapatma) · I2 hata kurulu güce oranlanıyor · I5 (kısmi) sıralama birim maliyete göre, gösterim sırası tutarlı · R6 YEKDEM santralleri işaretli, gelir kartı "piyasa değeri" · KGÖP → KGÜP (ayrıştırıcı iki yazımı da tanır) |
+| kalan | ⏳ | E3 (EPİAŞ ekranında bütünlük tablosu) · D2 (DSG'de YEKDEM hariç/dahil seçeneği) · I5 tam (sektör yüzdeliği + Shapley skoru, Tur 3) |
 
 ---
 

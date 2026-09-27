@@ -269,8 +269,8 @@ export default function BacktestPage() {
                   <CardContent className="space-y-1.5 p-4 text-xs leading-relaxed text-slate-600">
                     <p>
                       <strong>Sınırlamalar.</strong> Tek yıllık veriyle yalnızca {result.testMonths.length} ay test
-                      edilebiliyor; mevsimsel örüntüler (özellikle HES) öğrenilemez. Portföy satırı santral sonuçlarının
-                      toplamıdır, DSG netleştirmesi uygulanmaz.
+                      edilebiliyor; mevsimsel örüntüler (özellikle HES) öğrenilemez. Portföy, uzlaştırma biriminde (şirket ya da
+                      toplayıcı) saat saat netleşmiş seriyle test edilir; sonuç sayfası ve raporla aynı tabandır.
                     </p>
                     <p>
                       Teklif ayarı, santralin en iyi tahmininden bilerek sapmak demektir; lisanslı santrallerde KÜPST

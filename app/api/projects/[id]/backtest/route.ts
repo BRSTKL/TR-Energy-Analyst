@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ImbalancePricingProfile, REGULATORY_IMBALANCE_REGIMES } from "@/lib/calculations/types";
 import { BacktestResult, combineBacktests, runBacktest } from "@/lib/analysis/backtest";
 import { loadProjectHourly } from "@/lib/services/project-hourly";
+import { settleByCompanyGroups } from "@/lib/report/plant-report";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,8 @@ const TRAIN_MONTHS = 4;
  * Her santral için kaydırmalı geriye dönük testi iki fiyat rejiminde çalıştırır:
  * - "project": projenin fiyat profili (mevzuat modunda her saat kendi tarihinin kuralıyla)
  * - "rules2026": tüm veri 2026 kurallarıyla (sistem yönüne bağlı %3 / %6) yeniden fiyatlanır
- * Portföy sonucu santral sonuçlarının toplamıdır (DSG netleştirmesi uygulanmaz).
+ * Portföy sonucu sonuç sayfası ve raporla aynı tabanda: her uzlaştırma biriminin (şirket ya da toplayıcı) saat saat
+ * netleşmiş serisi test edilir ve birimler toplanır. Santral satırları santralin kendi serisiyledir.
  */
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
   try {
@@ -33,8 +35,9 @@ export async function GET(_request: Request, { params }: { params: { id: string 
         plantType: p.plantType,
         result: runBacktest(p.hourly, profile, { trainMonths: TRAIN_MONTHS }),
       }));
+      const units = settleByCompanyGroups(data.plants, profile).map((g) => runBacktest(g.hourly, profile, { trainMonths: TRAIN_MONTHS }));
       return {
-        portfolio: combineBacktests(plants.map((p) => p.result)) as BacktestResult | null,
+        portfolio: combineBacktests(units) as BacktestResult | null,
         plants,
       };
     };

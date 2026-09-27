@@ -519,7 +519,7 @@ export default function ImportPage() {
                               (v) => updateMapping(plant.id, { hourColumn: v || null }),
                               true
                             )}
-                            {columnSelect("Tahmin (KGÖP)", m.forecastColumn, (v) =>
+                            {columnSelect("Tahmin (KGÜP)", m.forecastColumn, (v) =>
                               updateMapping(plant.id, { forecastColumn: v })
                             )}
                             {columnSelect("Gerçekleşen", m.actualColumn, (v) =>

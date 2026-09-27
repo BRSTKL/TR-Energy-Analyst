@@ -232,8 +232,8 @@ export interface PlantReportData {
   } | null;
   /**
    * SENARYO: MIN_FEASIBLE_LAG_HOURS (2) saat önce görülen hatanın bir kısmı GİP'te kapatılsaydı (GİP teslimattan 60 dk
-   * önce kapandığı için 1 saatlik gecikme uygulanamaz) (santral bazında, önceki aylardan öğrenerek
-   * test). savingTl, test edilen oranın şirket bazındaki maliyete uygulanmasıyla bulunan yaklaşık tutardır.
+   * önce kapandığı için 1 saatlik gecikme uygulanamaz); uzlaştırma biriminin netleşmiş serisinde, önceki aylardan
+   * öğrenerek test. savingTl, test edilen oranın şirket bazındaki maliyete uygulanmasıyla bulunan yaklaşık tutardır.
    */
   intraday: { savingTl: number; savingPct: number; testMonths: number; firstTestMonth: string; lastTestMonth: string; lagHours: number } | null;
 }
@@ -259,34 +259,31 @@ function settleGroup(plants: HourlyResult[][], profile: ImbalancePricingProfile)
       buckets.set(t, b);
     }
   }
-  return Array.from(buckets.values()).map((b) =>
-    processHourlyRecord(
-      { timestamp: b.sample.timestamp, actualMwh: b.actualMwh, forecastMwh: b.forecastMwh },
-      { timestamp: b.sample.timestamp, ptf: b.sample.ptf, smf: b.sample.smf, systemDirection: b.sample.systemDirection },
-      profile
-    )
-  );
+  // Zaman sırasıyla (ilk santralin eksik ayı sonradan eklenmiş olabilir); GİP alanları taşınır, yoksa gün içi analizleri
+  // netleşmiş seride çalışamaz
+  return Array.from(buckets.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([, b]) =>
+      processHourlyRecord(
+        { timestamp: b.sample.timestamp, actualMwh: b.actualMwh, forecastMwh: b.forecastMwh },
+        {
+          timestamp: b.sample.timestamp,
+          ptf: b.sample.ptf,
+          smf: b.sample.smf,
+          systemDirection: b.sample.systemDirection,
+          gipPrice: b.sample.gipPrice,
+          gipVolumeMwh: b.sample.gipVolumeMwh,
+          gipMinPrice: b.sample.gipMinPrice,
+          gipMaxPrice: b.sample.gipMaxPrice,
+        },
+        profile
+      )
+    );
 }
 
 const sumCost = (hours: HourlyResult[]) => hours.reduce((s, h) => s + h.imbalanceCost, 0);
 
-/**
- * Sapma yükü (dengesizlik riski + tahmini KÜPST), raporun özetiyle aynı tanım. YEKDEM varsa iki varsayım:
- * A (ana senaryo): YEKDEM santrallerinin dengesizliği YEKDEM portföyünde kalır, KÜPST tüm santraller için şirkete aittir.
- * B (duyarlılık): YEKDEM santrallerinin dengesizliği de şirkete yansır. 2026 alanları veri 2026 öncesiyse doludur.
- */
-export function deviationLoad(r: PlantReportData): { a2025: number; a2026: number | null; b2025: number; b2026: number | null } {
-  const ex = r.exposure;
-  const s2026 = r.coefficients2026;
-  const cost = r.totals.imbalanceCostTl;
-  const k2026 = r.kupst.next2026Tl ?? r.kupst.totalTl;
-  return {
-    a2025: ex ? ex.directCostTl + r.kupst.totalTl : cost + r.kupst.totalTl,
-    a2026: ex && ex.exposure2026Tl !== null ? ex.exposure2026Tl + k2026 : s2026 ? s2026.cost2026Tl + k2026 : null,
-    b2025: cost + r.kupst.totalTl,
-    b2026: s2026 ? s2026.cost2026Tl + k2026 : null,
-  };
-}
+export { deviationLoad } from "@/lib/report/deviation-load";
 
 /**
  * Santralleri şirketlerine göre gruplayıp her şirketi saatlik net dengesizlik üzerinden fiyatlar (şirket bazında
@@ -296,13 +293,28 @@ export function settleByCompany(
   plants: Array<Pick<ProjectHourly["plants"][number], "plantId" | "organizationId" | "hourly">>,
   profile: ImbalancePricingProfile
 ): HourlyResult[] {
+  // Birim etiketi (plantId) taşınmaz: aylık toplama gibi yerler plantId'ye göre gruplar ve portföyü birimlere bölerdi
+  return settleByCompanyGroups(plants, profile).flatMap((g) => g.hourly.map((h) => ({ ...h, plantId: undefined })));
+}
+
+/**
+ * settleByCompany'nin uzlaştırma birimi başına ayrı serisi. Her saatin `plantId`'si birimin anahtarıdır; zaman serisi
+ * işleyen analizler (geriye dönük test, gün içi kalıcılık) bir birimin saatlerini diğerininkiyle karıştırmaz.
+ */
+export function settleByCompanyGroups(
+  plants: Array<Pick<ProjectHourly["plants"][number], "plantId" | "organizationId" | "hourly">>,
+  profile: ImbalancePricingProfile
+): Array<{ key: string; hourly: HourlyResult[] }> {
   const byOrg = new Map<string, HourlyResult[][]>();
   for (const p of plants) {
     if (p.hourly.length === 0) continue;
     const key = p.organizationId !== null ? `org:${p.organizationId}` : `plant:${p.plantId}`;
     byOrg.set(key, [...(byOrg.get(key) ?? []), p.hourly]);
   }
-  return Array.from(byOrg.values()).flatMap((group) => settleGroup(group, profile));
+  return Array.from(byOrg.entries()).map(([key, group]) => ({
+    key,
+    hourly: settleGroup(group, profile).map((h) => ({ ...h, plantId: key })),
+  }));
 }
 
 /** Sapma sistemle aynı yönde mi: sistem fazlasındayken fazla üretim ya da sistem açığındayken eksik üretim */
@@ -507,7 +519,12 @@ export function buildPlantReport(
   // Gün içi: önceki 4 aydan öğrenilen oranla, uygulanabilir en kısa gecikmede (2 saat) görülen hatanın kapatılması
   let intraday: PlantReportData["intraday"] = null;
   const backtests =
-    options.intraday === false ? [] : withData.map((p) => runBacktest(p.hourly, data.profile, { strategies: [persistenceStrategy(MIN_FEASIBLE_LAG_HOURS)] }));
+    // Uzlaştırma biriminin netleşmiş serisiyle: portföyde zaten netleşen hatayı ayrıca "kapatılmış" saymamak için
+    options.intraday === false
+      ? []
+      : settleByCompanyGroups(withData, data.profile).map((g) =>
+          runBacktest(g.hourly, data.profile, { strategies: [persistenceStrategy(MIN_FEASIBLE_LAG_HOURS)] })
+        );
   const combined = combineBacktests(backtests.filter((b) => b.testMonths.length > 0));
   const s = combined?.strategies[0];
   if (combined && s && combined.testMonths.length > 0) {

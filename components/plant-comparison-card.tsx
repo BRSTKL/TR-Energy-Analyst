@@ -20,7 +20,7 @@ const num = (v: number, digits = 0) =>
 const pct = (v: number, digits = 1, signed = false) =>
   `${v < 0 ? "−" : signed && v > 0 ? "+" : ""}%${num(Math.abs(v) * 100, digits)}`;
 
-function Row({ row }: { row: ComparisonRow }) {
+function Row({ row, yekdem = false }: { row: ComparisonRow; yekdem?: boolean }) {
   const isGroup = row.level !== "plant";
   const deviationClass =
     Math.abs(row.volumeDeviationRatio) >= 0.1
@@ -41,6 +41,7 @@ function Row({ row }: { row: ComparisonRow }) {
     >
       <TableCell className={isGroup ? "text-slate-900" : "pl-6 text-slate-800"}>
         {row.label}
+        {yekdem && <span className="ml-1 rounded bg-indigo-50 px-1 text-2xs font-medium text-indigo-700">YEKDEM</span>}
         {isGroup && row.plantCount > 1 && (
           <span className="ml-1 text-2xs font-normal text-slate-500">({row.plantCount} santral)</span>
         )}
@@ -65,7 +66,11 @@ function Row({ row }: { row: ComparisonRow }) {
 /**
  * Santralleri, teknoloji gruplarını (RES / HES / GES) ve portföyü aynı birim metriklerle yan yana gösterir.
  */
-export function PlantComparisonCard({ comparison }: { comparison: PlantComparisonResult }) {
+/**
+ * @param yekdemPlants veri döneminde YEKDEM'de olan santraller: gelirleri YEKDEM fiyatından oluşur; tablodaki PTF'ye
+ * dayalı gelir ve capture değerleri bu santraller için piyasa değeridir, fiili gelir değildir
+ */
+export function PlantComparisonCard({ comparison, yekdemPlants = [] }: { comparison: PlantComparisonResult; yekdemPlants?: string[] }) {
   if (!comparison.portfolio) return null;
 
   const rows: ComparisonRow[] = [];
@@ -83,7 +88,10 @@ export function PlantComparisonCard({ comparison }: { comparison: PlantCompariso
         <CardDescription>
           Capture price, santralin üretim ağırlıklı ortalama PTF&apos;sidir; dönemin düz ortalama
           PTF&apos;si ({num(comparison.baseloadPtf, 2)} ₺/MWh) ile oranı capture rate&apos;tir. Plan
-          fazlası + ise plan gerçekleşenden fazla (santral eksik üretti), − ise az. Tüm birim
+          fazlası + ise plan gerçekleşenden fazla (santral eksik üretti), − ise az.
+          {yekdemPlants.length > 0 &&
+            " YEKDEM etiketli santrallerin geliri YEKDEM fiyatından oluşur; bu satırlardaki gelir ve capture değerleri üretimin piyasa (PTF) değeridir, fiili gelir değildir."}{" "}
+          Tüm birim
           değerler toplamlar üzerinden ağırlıklı hesaplanır.
         </CardDescription>
       </CardHeader>
@@ -104,7 +112,7 @@ export function PlantComparisonCard({ comparison }: { comparison: PlantCompariso
             </TableHeader>
             <TableBody>
               {rows.map((row) => (
-                <Row key={row.key} row={row} />
+                <Row key={row.key} row={row} yekdem={row.level === "plant" && yekdemPlants.includes(row.label)} />
               ))}
               <Row row={comparison.portfolio} />
             </TableBody>

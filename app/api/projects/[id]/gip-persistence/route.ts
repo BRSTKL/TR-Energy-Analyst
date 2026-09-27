@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadProjectHourly } from "@/lib/services/project-hourly";
+import { settleByCompanyGroups } from "@/lib/report/plant-report";
 import { combineBacktests, intradayClosingStrategy, persistenceStrategy, runBacktest } from "@/lib/analysis/backtest";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +30,11 @@ export async function GET(request: Request, { params }: { params: { id: string }
       plantName: p.plantName,
       result: runBacktest(p.hourly, data.profile, { strategies: STRATEGIES }),
     }));
-    const combined = combineBacktests(perPlant.map((p) => p.result));
+    // Portföy: uzlaştırma biriminin netleşmiş serisi (raporla aynı taban); tek santral: santralin kendi serisi
+    const combined =
+      scope === "portfolio"
+        ? combineBacktests(settleByCompanyGroups(plants, data.profile).map((g) => runBacktest(g.hourly, data.profile, { strategies: STRATEGIES })))
+        : combineBacktests(perPlant.map((p) => p.result));
     if (!combined || combined.testMonths.length === 0) {
       return NextResponse.json({ success: true, available: false });
     }

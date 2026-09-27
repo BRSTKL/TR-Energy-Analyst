@@ -72,6 +72,9 @@ interface InsightsApiResponse {
   };
   portfolioAnalysis: {
     highestCostHours: HighestCostHoursAnalysis;
+    /** Uzlaştırma biriminde netleşmiş portföy saatlerinden çıkan öneriler */
+    suggestions: MitigationSuggestion[];
+    settlementUnit: string;
   };
   plantInsights: PlantInsight[];
   profitabilityComparison: PlantComparisonResult[];
@@ -128,17 +131,8 @@ export default function ProjectInsightsPage() {
   // Aktif filtrelenmiş aksiyon önerileri
   const currentSuggestions = useMemo(() => {
     if (!data) return [];
-    if (selectedPlantId === "all") {
-      // Tüm santrallerin önerilerini birleştirip tekilleştir
-      const all = data.plantInsights.flatMap((p) => p.suggestions);
-      const uniqueMap = new Map<string, MitigationSuggestion>();
-      all.forEach((s) => {
-        if (!uniqueMap.has(s.id)) {
-          uniqueMap.set(s.id, s);
-        }
-      });
-      return Array.from(uniqueMap.values());
-    }
+    // Tüm Portföy: netleşmiş portföy serisinden hesaplanan öneriler (santral önerilerinin kopyası değil)
+    if (selectedPlantId === "all") return data.portfolioAnalysis.suggestions;
     const plant = data.plantInsights.find((p) => p.plantId === selectedPlantId);
     return plant ? plant.suggestions : [];
   }, [data, selectedPlantId]);
@@ -320,7 +314,7 @@ export default function ProjectInsightsPage() {
             Filtre:{" "}
             <strong className="text-slate-800">
               {selectedPlantId === "all"
-                ? "Tüm Proje Portföyü"
+                ? `Tüm Portföy (netleşmiş, ${data.portfolioAnalysis.settlementUnit})`
                 : data.plantInsights.find((p) => p.plantId === selectedPlantId)
                     ?.plantName}
             </strong>
@@ -341,7 +335,7 @@ export default function ProjectInsightsPage() {
                 </h2>
                 <p className="text-xs text-slate-500">
                   Toplam maliyetin %{currentCostAnalysis.percentageOfTotalCost.toFixed(0)}
-                  &apos;si bu {currentCostAnalysis.topNHours} saatte gerçekleşti (
+                  {" "}kadarı bu {currentCostAnalysis.topNHours} saatte gerçekleşti (
                   {currentCostAnalysis.totalTopNCost.toLocaleString("tr-TR")} ₺ kayıp).
                 </p>
               </div>
@@ -380,7 +374,7 @@ export default function ProjectInsightsPage() {
                         ].percentage
                       }
                     </strong>
-                    &apos;si bu sistem yönünde.
+                    {" "}kadarı bu sistem yönünde.
                   </p>
                   <div className="mt-2 flex h-2 w-full overflow-hidden rounded-full bg-slate-100">
                     <div
@@ -425,7 +419,7 @@ export default function ProjectInsightsPage() {
                   <p className="mt-1 text-xs text-slate-600">
                     Maliyetlerin{" "}
                     <strong>%{currentCostAnalysis.dominantInterval.percentage}</strong>
-                    &apos;si bu zaman aralığında kümeleniyor.
+                    {" "}kadarı bu zaman aralığında kümeleniyor.
                   </p>
                   <div className="text-2xs mt-2 font-mono text-slate-400">
                     {currentCostAnalysis.dominantInterval.label}
@@ -448,11 +442,10 @@ export default function ProjectInsightsPage() {
                     {currentCostAnalysis.errorRateRatio}x Kat
                   </div>
                   <p className="mt-1 text-xs text-slate-600">
-                    Top saatlerdeki hata (%
-                    {(currentCostAnalysis.topNMeanErrorRate * 100).toFixed(0)}), genel
-                    ortalamadan (%
-                    {(currentCostAnalysis.overallMeanErrorRate * 100).toFixed(0)})
-                    belirgin biçimde yüksek.
+                    En pahalı saatlerdeki hata kurulu gücün %
+                    {(currentCostAnalysis.topNMeanErrorRate * 100).toFixed(0)} kadarı; tüm
+                    saatlerin ortalaması %
+                    {(currentCostAnalysis.overallMeanErrorRate * 100).toFixed(0)}.
                   </p>
                 </CardContent>
               </Card>
@@ -510,7 +503,7 @@ export default function ProjectInsightsPage() {
                       <TableHead>Sistem Yönü</TableHead>
                       <TableHead className="text-right">Tahmin (MWh)</TableHead>
                       <TableHead className="text-right">Gerçekleşen (MWh)</TableHead>
-                      <TableHead className="text-right">Hata Oranı</TableHead>
+                      <TableHead className="text-right">Hata / kurulu güç</TableHead>
                       <TableHead className="text-right font-bold text-rose-600">
                         Kayıp (₺)
                       </TableHead>

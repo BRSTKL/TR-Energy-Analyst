@@ -75,6 +75,12 @@ export const GENERATION_COLUMN_ALIASES: Record<keyof GenerationColumnMapping, st
     "uzlastirma saati",
   ],
   forecast: [
+    // Resmi terim KGÜP (kesinleşmiş günlük üretim programı); eski dosyalarda KGÖP yazımı da görülür
+    "kgüp",
+    "kgup",
+    "kgüp (mwh)",
+    "kgup (mwh)",
+    "kgüp mwh",
     "kgöp",
     "kgop",
     "tahmin",
@@ -137,6 +143,8 @@ export const GENERATION_COLUMN_ALIASES: Record<keyof GenerationColumnMapping, st
 const FORECAST_HEADER_MARKERS = [
   "tahmin",
   "forecast",
+  "kgüp",
+  "kgup",
   "kgöp",
   "kgop",
   "planlanan",
@@ -329,7 +337,7 @@ export function detectColumnMapping(headers: string[]): {
 
   const missingRequired: string[] = [];
   if (!dateCol) missingRequired.push("Tarih (Date)");
-  if (!forecastCol) missingRequired.push("Tahmin / KGÖP MWh");
+  if (!forecastCol) missingRequired.push("Tahmin / KGÜP MWh");
   if (!actualCol) missingRequired.push("Gerçekleşen / Üretim MWh");
 
   return {

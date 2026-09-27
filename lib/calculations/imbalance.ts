@@ -6,7 +6,7 @@ export type SystemDirection = "ENERGY_DEFICIT" | "ENERGY_SURPLUS" | "IN_BALANCE"
 
 export interface ImbalanceInput {
   actualMwh: number; // Gerçekleşen Üretim (MWh)
-  forecastMwh: number; // Gün Öncesi Tahmini (KGÖP) (MWh)
+  forecastMwh: number; // Gün Öncesi Tahmini (KGÜP) (MWh)
   ptf: number; // Piyasa Takas Fiyatı (TL/MWh)
   smf: number; // Sistem Marjinal Fiyatı (TL/MWh)
   kFactor?: number; // Dengesizlik ceza katsayısı (varsayılan: %3 yani 0.03)

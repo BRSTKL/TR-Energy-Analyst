@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { settleByCompany } from "@/lib/report/plant-report";
+import { settlementIdentity } from "@/lib/projects/aggregator";
 import { displayDescription } from "@/lib/projects/description";
 import { prisma } from "@/lib/prisma";
 import {
@@ -159,7 +161,6 @@ export async function GET(
 
     const projectProfile = toPricingProfile(project.pricingProfiles?.[0]);
 
-    const allHourlyResults: HourlyResult[] = [];
     const plantResultsMap = new Map<
       string,
       {
@@ -206,7 +207,6 @@ export async function GET(
         result.plantName = plant.name;
 
         plantHourly.push(result);
-        allHourlyResults.push(result);
       }
 
       plantResultsMap.set(plant.id, {
@@ -218,9 +218,20 @@ export async function GET(
       });
     }
 
+    // Portföy görünümü sonuç sayfası ve raporla aynı tabanda: uzlaştırma biriminde (şirket ya da toplayıcı) saat saat
+    // netleşmiş dengesizlik. Santral kartları santralin kendi saatleriyle kalır.
+    const portfolioHourly = settleByCompany(
+      project.plants.map((plant) => ({
+        plantId: plant.id,
+        organizationId: settlementIdentity(plant, project.aggregatorName).organizationId,
+        hourly: plantResultsMap.get(plant.id)?.hourly ?? [],
+      })),
+      projectProfile
+    );
+
     // Tarihe göre saatlik harita (en verimsiz günlerin 24 saatlik detayını hızlı çekmek için)
     const hourlyByDatePortfolio = new Map<string, HourlyResult[]>();
-    for (const r of allHourlyResults) {
+    for (const r of portfolioHourly) {
       const dStr = new Date(r.timestamp).toISOString().substring(0, 10);
       const arr = hourlyByDatePortfolio.get(dStr) || [];
       arr.push(r);
@@ -330,30 +341,30 @@ export async function GET(
     };
 
     // 2. Portföy Geneli Hesaplamalar
-    const portfolioTotalRevenue = allHourlyResults.reduce((s, r) => s + r.totalRevenue, 0);
-    const portfolioFictiveRevenue = allHourlyResults.reduce((s, r) => s + r.fictiveRevenue, 0);
-    const portfolioTotalActual = allHourlyResults.reduce((s, r) => s + r.actualMwh, 0);
-    const portfolioTotalForecast = allHourlyResults.reduce((s, r) => s + r.forecastMwh, 0);
+    const portfolioTotalRevenue = portfolioHourly.reduce((s, r) => s + r.totalRevenue, 0);
+    const portfolioFictiveRevenue = portfolioHourly.reduce((s, r) => s + r.fictiveRevenue, 0);
+    const portfolioTotalActual = portfolioHourly.reduce((s, r) => s + r.actualMwh, 0);
+    const portfolioTotalForecast = portfolioHourly.reduce((s, r) => s + r.forecastMwh, 0);
     const portfolioLossTl = portfolioFictiveRevenue - portfolioTotalRevenue;
     const portfolioEfficiencyRatio = calculateEfficiencyRatio(
       portfolioTotalRevenue,
       portfolioFictiveRevenue
     );
 
-    const portfolioBias = detectForecastBias(allHourlyResults);
+    const portfolioBias = detectForecastBias(portfolioHourly);
     const portfolioSimulatedHourly = simulateBiasCorrectedForecast(
-      allHourlyResults,
+      portfolioHourly,
       portfolioBias,
       projectProfile
     );
     const portfolioUplift = calculatePotentialUplift(
-      allHourlyResults,
+      portfolioHourly,
       portfolioSimulatedHourly
     );
 
     // Portföy Aylık Trend (Kronolojik: Ocak - Aralık)
     const portfolioMonthlyEfficiency = rankPeriodsByEfficiency(
-      allHourlyResults,
+      portfolioHourly,
       "month"
     )
       .sort((a, b) => a.period.localeCompare(b.period))
@@ -373,17 +384,17 @@ export async function GET(
       });
 
     // Portföy En Verimsiz 10 Gün
-    const portfolioRankedDays = rankPeriodsByEfficiency(allHourlyResults, "day");
+    const portfolioRankedDays = rankPeriodsByEfficiency(portfolioHourly, "day");
     const portfolioWorst10Days = attachHourlyDetails(
       portfolioRankedDays.slice(0, 10),
       hourlyByDatePortfolio
     );
 
     // Portföy Isı Haritası
-    const portfolioHeatmap = buildHeatmapMatrix(allHourlyResults);
+    const portfolioHeatmap = buildHeatmapMatrix(portfolioHourly);
 
     // Portföy GİP Arbitraj Analizi
-    const portfolioArbitrage = evaluateIntradayArbitrage(allHourlyResults);
+    const portfolioArbitrage = evaluateIntradayArbitrage(portfolioHourly);
 
     // 3. Santral Bazlı Hesaplamalar
     const plantsData = project.plants.map((plant) => {
@@ -482,7 +493,7 @@ export async function GET(
         },
         bias: portfolioBias,
         uplift: portfolioUplift,
-        upliftBacktest: volumeRatioBacktestSummary(allHourlyResults, projectProfile),
+        upliftBacktest: volumeRatioBacktestSummary(portfolioHourly, projectProfile),
         monthlyEfficiency: portfolioMonthlyEfficiency,
         worst10Days: portfolioWorst10Days,
         heatmap: portfolioHeatmap,

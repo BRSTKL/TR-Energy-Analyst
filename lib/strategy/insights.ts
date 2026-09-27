@@ -129,9 +129,14 @@ export function getTimeOfDayInterval(hour: number): {
  * - Hangi saat aralıklarında yoğunlaşıyor (sabah/öğle/akşam/gece)
  * - Ortalama tahmin hatası (|actual-forecast|/forecast) bu saatlerde genel ortalamadan ne kadar yüksek
  */
+/**
+ * @param capacityMw verilirse saatlik hata kurulu güce oranlanır (|gerçekleşen − tahmin| / kurulu güç). Tahmine
+ * oranlamak düşük üretimli saatlerde %300–400 gibi anlamsız değerler üretir; kurulu güç yoksa tahmine oranlanır.
+ */
 export function findHighestCostHours(
   hourlyResults: HourlyResult[],
-  topN = 20
+  topN = 20,
+  capacityMw?: number
 ): HighestCostHoursAnalysis {
   if (hourlyResults.length === 0) {
     return {
@@ -177,11 +182,13 @@ export function findHighestCostHours(
     const { interval } = getTimeOfDayInterval(hour);
 
     const errorRate =
-      rec.forecastMwh > 0
-        ? Math.abs(rec.actualMwh - rec.forecastMwh) / rec.forecastMwh
-        : rec.actualMwh > 0
-          ? 1
-          : 0;
+      capacityMw && capacityMw > 0
+        ? Math.abs(rec.actualMwh - rec.forecastMwh) / capacityMw
+        : rec.forecastMwh > 0
+          ? Math.abs(rec.actualMwh - rec.forecastMwh) / rec.forecastMwh
+          : rec.actualMwh > 0
+            ? 1
+            : 0;
 
     totalOverallCost += rec.imbalanceCost;
     totalOverallErrorRate += errorRate;
@@ -415,7 +422,7 @@ export function generateMitigationSuggestions(
       priority: "HIGH",
       triggerRule: `Dengesizlik maliyetinin ${pct(concentrated.costShare)} payı ${label} diliminde; bu dilim saatlerin yalnızca ${pct(concentrated.hourShare)} payını oluşturuyor.`,
       description:
-        "Maliyetin belirli bir zaman diliminde yoğunlaşması, gün öncesi tahminin (KGÖP) bu saatlerde daha fazla saptığını gösterir. Bu saatlere yaklaşırken güncel üretim tahminiyle GİP'te pozisyon güncellenmelidir.",
+        "Maliyetin belirli bir zaman diliminde yoğunlaşması, gün öncesi tahminin (KGÜP) bu saatlerde daha fazla saptığını gösterir. Bu saatlere yaklaşırken güncel üretim tahminiyle GİP'te pozisyon güncellenmelidir.",
       actionItems: [
         "Dilim başlamadan 2-3 saat önce güncel üretim tahminini ve gerçekleşmeleri kontrol edin.",
         "Beklenen sapmayı kapı kapanışına kadar GİP'te ters yönlü işlemle kapatın.",
@@ -430,30 +437,21 @@ export function generateMitigationSuggestions(
   const surplus = byDirection.find((d) => d.key === "SURPLUS");
 
   if (deficit && deficit.costShare >= 0.5) {
-    const ptfP75 = percentile(
-      hourly.map((h) => h.ptf),
-      0.75
-    );
+    // Eskiden "pahalı saatlerde KGÜP'ü bilinçli düşük bildir" öneriliyordu: bilinçli yanlış bildirim piyasa gözetimi ve
+    // KÜPST riski taşır. Meşru karşılığı, öngörülen eksik üretimi kapı kapanışından önce GİP'te almaktır.
     add({
       id: "suggestion-deficit-protection",
-      title: "Yüksek Fiyatlı Saatlerde Muhafazakâr KGÖP",
+      title: "Enerji Açığı Saatlerinde Eksik Üretimi GİP'te Kapatma",
       category: "MARKET_TIMING",
       priority: "HIGH",
       triggerRule: `Dengesizlik maliyetinin ${pct(deficit.costShare)} payı sistemin enerji açığında olduğu saatlerde oluştu (saatlerin ${pct(deficit.hourShare)} payı).`,
       description:
-        "Enerji açığında eksik üretim MAX(PTF, SMF) × (1 + k) üzerinden, fazla üretim ise MIN(PTF, SMF) × (1 − l) üzerinden uzlaşır. Açık saatlerinde eksik kalmanın maliyeti fazla kalmanınkinden yüksek olduğundan, pahalı saatlerde teklifi biraz düşük tutmak bu asimetriden yararlanabilir.",
+        "Enerji açığında eksik üretim MAX(PTF, SMF) × (1 + k) üzerinden, yani primli uzlaşır. Güncel tahmin eksik üretim gösterdiğinde açığı GİP'te almak bu primden kaçınmayı sağlar; plan her zaman en iyi tahminle bildirilir.",
       actionItems: [
-        "PTF'nin üst çeyrekte beklendiği saatlerde KGÖP'ü %5 düşük bildirmeyi değerlendirin.",
-        "Bilinçli düşük bildirim KÜPST ve piyasa gözetimi kuralları açısından ayrıca değerlendirilmelidir.",
+        "Eksik üretim öngörüldüğünde açığı kapı kapanışından (teslimattan 60 dk önce) önce GİP'te alın.",
+        "Enerji açığı beklenen saatlerde güncel tahmini daha sık yenileyin.",
       ],
-      impact: multiplierImpact(
-        hourly,
-        (h) => h.ptf >= ptfP75,
-        0.95,
-        profile,
-        `PTF'nin üst çeyrekte olduğu saatlerde (≥ ${Math.round(ptfP75).toLocaleString("tr-TR")} ₺/MWh) tahmin %5 düşürüldü.`,
-        "Gerçekleşen PTF kullanıldı; teklif anında PTF bilinmez, fiyat tahmini gerektirir."
-      ),
+      impact: intradayImpact(hourly, (h) => h.systemDirection === "DEFICIT" && h.imbalanceMwh < 0, "Sistemin enerji açığında olduğu ve santralin eksik ürettiği"),
     });
   } else if (surplus && surplus.costShare >= 0.5) {
     add({
@@ -645,13 +643,9 @@ export function comparePlantProfitability(
       };
     });
 
-    // Net marj ve düşük maliyet oranına göre sırala
-    plantMetrics.sort((a, b) => {
-      if (b.netUnitMargin !== a.netUnitMargin) {
-        return b.netUnitMargin - a.netUnitMargin;
-      }
-      return a.imbalanceCostRatio - b.imbalanceCostRatio;
-    });
+    // MWh başına dengesizlik maliyetine göre sırala (tahmin kalitesi). Net marj capture price'a, YEKDEM santrallerinde
+    // de YEKDEM fiyatına bağlı olduğundan sıralama ölçütü değildir.
+    plantMetrics.sort((a, b) => a.unitImbalanceCost - b.unitImbalanceCost);
 
     // Skor ve gerekçe üret
     plantMetrics.forEach((item, index) => {
@@ -733,5 +727,6 @@ export function comparePlantProfitability(
     });
   }
 
-  return comparisons.sort((a, b) => b.score - a.score);
+  // Gösterim sırası sıra numarasıyla aynı: teknoloji içinde en düşük birim maliyetten yükseğe
+  return comparisons.sort((a, b) => a.plantType.localeCompare(b.plantType) || a.rankInType - b.rankInType);
 }

@@ -580,6 +580,13 @@ export default function ProjectResultsPage() {
                 Piyasa Profili: {data.pricingProfile.name}
               </span>
               <span className="hidden sm:inline text-slate-300">|</span>
+              {data.pricingProfile.mode !== "CUSTOM" ? (
+                <span className="text-slate-600">
+                  Mevzuat: her saat kendi tarihinin kuralıyla · 2026 öncesi sabit %3 · 2026&apos;dan itibaren sistemle aynı
+                  yönde %6, ters yönde %3
+                </span>
+              ) : (
+              <>
               <span className="text-slate-600">
                 Pozitif Dengesizlik (SURPLUS / Diğer):{" "}
                 <strong className="text-emerald-700 font-mono">{data.pricingProfile.positiveSurplusCoef}</strong> /{" "}
@@ -591,6 +598,8 @@ export default function ProjectResultsPage() {
                 <strong className="text-rose-700 font-mono">{data.pricingProfile.negativeDeficitCoef}</strong> /{" "}
                 <strong className="text-rose-700 font-mono">{data.pricingProfile.negativeOtherCoef}</strong>
               </span>
+              </>
+              )}
             </div>
             <PricingProfileDialog
               projectId={projectId}
@@ -685,16 +694,13 @@ export default function ProjectResultsPage() {
             <Card className="border-slate-200 shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                  Toplam Gelir
+                  {(data.sapma?.yekdem?.plantNames.length ?? 0) > 0 ? "Piyasa değeri (PTF)" : "Toplam Gelir"}
                 </CardTitle>
                 <ArrowDownRight className="h-4 w-4 text-emerald-500" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-slate-900">
-                  {currentKPI.totalRevenue.toLocaleString("tr-TR", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}{" "}
+                  {currentKPI.totalRevenue.toLocaleString("tr-TR", { maximumFractionDigits: 0 })}{" "}
                   <span className="text-sm font-normal text-slate-500">₺</span>
                 </div>
                 <p className="mt-1 flex items-center gap-1 text-xs font-medium text-emerald-600">
@@ -704,6 +710,11 @@ export default function ProjectResultsPage() {
                   })}{" "}
                   ₺/MWh
                 </p>
+                {(data.sapma?.yekdem?.plantNames.length ?? 0) > 0 && (
+                  <p className="mt-1 text-2xs text-slate-500">
+                    YEKDEM santrallerinin fiili geliri YEKDEM fiyatındandır; burada üretimin PTF değeri gösterilir.
+                  </p>
+                )}
               </CardContent>
             </Card>
 
@@ -934,7 +945,9 @@ export default function ProjectResultsPage() {
         </Card>
 
         {/* Santral ve Teknoloji Karşılaştırması (Capture Price) */}
-        {data.comparison && <PlantComparisonCard comparison={data.comparison} />}
+        {data.comparison && (
+          <PlantComparisonCard comparison={data.comparison} yekdemPlants={data.sapma?.yekdem?.plantNames ?? []} />
+        )}
 
         {/* DSG Netleştirme Analizi */}
         {data.netting && (
@@ -943,6 +956,7 @@ export default function ProjectResultsPage() {
             projectId={projectId}
             companies={data.sapma?.settlement.companies}
             crossCompanyBenefitTl={data.sapma?.dsg?.benefitTl ?? null}
+            aggregatorName={data.sapma?.aggregator?.name ?? null}
           />
         )}
 

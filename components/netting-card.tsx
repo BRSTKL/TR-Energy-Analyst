@@ -55,6 +55,7 @@ export function NettingCard({
   projectId,
   companies,
   crossCompanyBenefitTl = null,
+  aggregatorName = null,
 }: {
   netting: NettingResult;
   projectId?: string;
@@ -62,6 +63,8 @@ export function NettingCard({
   companies?: Array<{ name: string | null; plantNames: string[] }>;
   /** Yalnızca farklı şirketler arasındaki ek netleşme faydası (en az iki şirket varsa) */
   crossCompanyBenefitTl?: number | null;
+  /** Proje bir toplayıcı portföyüyse: netleşme toplayıcının yarattığı değerdir */
+  aggregatorName?: string | null;
 }) {
   const portfolio = netting.portfolio;
   if (!portfolio) return null;
@@ -93,7 +96,14 @@ export function NettingCard({
       <CardContent className="space-y-5">
         {sameCompanyGroups.length > 0 && (
           <div className="rounded-md border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-900">
-            {allOneCompany ? (
+            {aggregatorName ? (
+              <>
+                <span className="font-semibold">Tüm santraller {aggregatorName} portföyünde.</span> Toplayıcı portföyü tek
+                dengede uzlaştırıldığı için aşağıdaki netleşme uzlaştırmada zaten gerçekleşiyor: bu, portföyün farklı
+                sahiplerin santrallerini bir araya getirerek yarattığı değerdir. Sahiplere göre paylaştırma için DSG
+                Senaryoları sayfasına bakın.
+              </>
+            ) : allOneCompany ? (
               <>
                 <span className="font-semibold">Tüm santraller aynı şirkette ({companies![0].name}).</span> Dengesizlik şirket
                 bazında uzlaştırıldığı için aşağıdaki netleşme uzlaştırmada zaten gerçekleşiyor; bu, yeni bir DSG faydası

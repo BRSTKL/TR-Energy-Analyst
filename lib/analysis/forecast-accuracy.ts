@@ -1,7 +1,7 @@
 /**
  * TR-Energy Analyst - Fiyattan Bağımsız Tahmin Doğruluğu Analizi
  *
- * Yalnızca gün öncesi tahmin (KGÖP) ve gerçekleşen üretimi (MWh) kullanır; piyasa fiyatı gerektirmez.
+ * Yalnızca gün öncesi tahmin (KGÜP) ve gerçekleşen üretimi (MWh) kullanır; piyasa fiyatı gerektirmez.
  * Bu yüzden EPİAŞ fiyatları eksik veya doğrulanmamış olsa bile sonuçları güvenilirdir.
  *
  * Hata işareti: hata = gerçekleşen − tahmin. Pozitif hata = eksik tahmin (santral fazla üretmiş).

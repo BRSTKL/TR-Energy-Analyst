@@ -395,7 +395,7 @@ export default function HomePage() {
               <CardHeader>
                 <CardTitle>Saatlik Tahmin vs. Gerçekleşen Üretim Analizi</CardTitle>
                 <CardDescription>
-                  RES, HES ve GES santrallerinin gün öncesi KGÖP bildirimleri ile EPİAŞ
+                  RES, HES ve GES santrallerinin gün öncesi KGÜP bildirimleri ile EPİAŞ
                   uzlaştırma simülasyonu.
                 </CardDescription>
               </CardHeader>

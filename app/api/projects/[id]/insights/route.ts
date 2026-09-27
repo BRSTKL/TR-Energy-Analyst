@@ -1,181 +1,98 @@
 import { NextResponse } from "next/server";
 import { displayDescription } from "@/lib/projects/description";
 import { prisma } from "@/lib/prisma";
-import {
-  processHourlyRecord,
-  aggregateMonthly,
-  aggregateYearly,
-} from "@/lib/calculations";
-import {
-  DEFAULT_IMBALANCE_PROFILE,
-  HourlyRecord,
-  HourlyResult,
-  MarketPriceRecord,
-  MonthlyAggregate,
-  SystemDirection,
-  YearlyAggregate,
-  toPricingProfile,
-} from "@/lib/calculations/types";
+import { aggregateMonthly, aggregateYearly } from "@/lib/calculations";
+import { HourlyResult, MonthlyAggregate, YearlyAggregate } from "@/lib/calculations/types";
 import {
   findHighestCostHours,
   generateMitigationSuggestions,
   comparePlantProfitability,
   PlantInfo,
 } from "@/lib/strategy/insights";
+import { loadProjectHourly } from "@/lib/services/project-hourly";
+import { settleByCompany } from "@/lib/report/plant-report";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * GET /api/projects/[id]/insights
+ *
+ * Santral görünümleri santralin kendi saatleriyle; "Tüm Portföy" görünümü ise sonuç sayfası ve raporla aynı tabanla,
+ * yani uzlaştırma biriminde (şirket ya da toplayıcı) saat saat netleşmiş dengesizlikle hesaplanır. Böylece portföyün
+ * en pahalı saatleri ve önerileri tek tek santral saatlerinden değil, fiilen uzlaştırılan net sapmadan çıkar.
+ */
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
   try {
     const projectId = params.id;
+    const data = await loadProjectHourly(projectId);
+    if (!data) {
+      return NextResponse.json({ success: false, error: `ID'si '${projectId}' olan proje bulunamadı.` }, { status: 404 });
+    }
+    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { description: true } });
+    const profile = data.profile;
 
-    // 1. Projeyi, santralleri, fiyat profilini ve verilerini çek
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        pricingProfiles: true,
-        plants: {
-          include: {
-            records: {
-              include: {
-                marketData: true,
-              },
-              orderBy: {
-                timestamp: "asc",
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!project) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `ID'si '${projectId}' olan proje bulunamadı.`,
-        },
-        { status: 404 }
-      );
+    const plantsInfo: PlantInfo[] = data.plants.map((p) => ({
+      plantId: p.plantId,
+      plantName: p.plantName,
+      plantType: p.plantType,
+      capacityMw: p.capacityMw,
+    }));
+    const plantResultsMap: Record<string, { hourly: HourlyResult[]; monthly: MonthlyAggregate[]; yearly: YearlyAggregate }> = {};
+    for (const p of data.plants) {
+      const monthly = aggregateMonthly(p.hourly);
+      plantResultsMap[p.plantId] = { hourly: p.hourly, monthly, yearly: aggregateYearly(monthly) };
     }
 
-    const allHourlyResults: HourlyResult[] = [];
-    const plantResultsMap: Record<
-      string,
+    // Tüm Portföy: uzlaştırma biriminde netleşmiş saatler (birden çok şirket varsa her şirketin net saati ayrı satırdır)
+    const withData = data.plants.filter((p) => p.hourly.length > 0);
+    const portfolioHourly = settleByCompany(withData, profile);
+    const portfolioCapacity = withData.reduce((sum, p) => sum + p.capacityMw, 0);
+    const portfolioCost = findHighestCostHours(portfolioHourly, 20, portfolioCapacity);
+    const types = Array.from(new Set(withData.map((p) => p.plantType)));
+    const portfolioSuggestions = generateMitigationSuggestions(
       {
-        hourly: HourlyResult[];
-        monthly: MonthlyAggregate[];
-        yearly: YearlyAggregate;
-      }
-    > = {};
+        plantId: "portfolio",
+        plantName: "Tüm Portföy",
+        // Teknolojiye özgü kural yalnızca portföy tek teknolojiyse uygulanır
+        plantType: types.length === 1 ? types[0] : "MIXED",
+        capacityMw: portfolioCapacity,
+      },
+      portfolioCost,
+      portfolioHourly,
+      profile
+    );
 
-    const projectProfile = toPricingProfile(project.pricingProfiles?.[0]);
-
-    const plantsInfo: PlantInfo[] = [];
-
-    // 2. Santral bazlı saatlik hesaplamaları yap
-    for (const plant of project.plants) {
-      plantsInfo.push({
-        plantId: plant.id,
-        plantName: plant.name,
-        plantType: plant.type,
-        capacityMw: plant.capacityMw,
-      });
-
-      const plantHourly: HourlyResult[] = [];
-
-      for (const record of plant.records) {
-        if (!record.marketData) continue;
-
-        const hourlyRecord: HourlyRecord = {
-          timestamp: record.timestamp,
-          actualMwh: record.actualMwh,
-          forecastMwh: record.forecastMwh,
-          plantId: plant.id,
-          plantName: plant.name,
-        };
-
-        const marketPriceRecord: MarketPriceRecord = {
-          timestamp: record.marketData.timestamp,
-          ptf: record.marketData.ptf,
-          smf: record.marketData.smf,
-          systemDirection: record.marketData.systemDirection as SystemDirection,
-          gipPrice: record.marketData.gipPrice,
-          gipVolumeMwh: record.marketData.gipVolumeMwh,
-          gipMinPrice: record.marketData.gipMinPrice,
-          gipMaxPrice: record.marketData.gipMaxPrice,
-        };
-
-        const result = processHourlyRecord(
-          hourlyRecord,
-          marketPriceRecord,
-          projectProfile
-        );
-        result.plantId = plant.id;
-        result.plantName = plant.name;
-
-        plantHourly.push(result);
-        allHourlyResults.push(result);
-      }
-
-      const monthly = aggregateMonthly(plantHourly);
-      const yearly = aggregateYearly(monthly);
-
-      plantResultsMap[plant.id] = {
-        hourly: plantHourly,
-        monthly,
-        yearly,
-      };
-    }
-
-    // 3. Kural Tabanlı Analiz Fonksiyonlarını Çalıştır
-    // A. Portföy Geneli En Maliyetli Saatler
-    const portfolioHighestCostHours = findHighestCostHours(allHourlyResults, 20);
-
-    // B. Santral Bazlı En Maliyetli Saatler ve Aksiyon Önerileri
-    const plantInsights = project.plants.map((plant) => {
-      const plantHourly = plantResultsMap[plant.id]?.hourly || [];
-      const costAnalysis = findHighestCostHours(plantHourly, 20);
-      const suggestions = generateMitigationSuggestions(
-        {
-          plantId: plant.id,
-          plantName: plant.name,
-          plantType: plant.type,
-          capacityMw: plant.capacityMw,
-        },
-        costAnalysis,
-        plantHourly,
-        projectProfile
-      );
-
+    const plantInsights = data.plants.map((p) => {
+      const costAnalysis = findHighestCostHours(p.hourly, 20, p.capacityMw);
       return {
-        plantId: plant.id,
-        plantName: plant.name,
-        plantType: plant.type,
-        capacityMw: plant.capacityMw,
+        plantId: p.plantId,
+        plantName: p.plantName,
+        plantType: p.plantType,
+        capacityMw: p.capacityMw,
         highestCostHours: costAnalysis,
-        suggestions,
+        suggestions: generateMitigationSuggestions(
+          { plantId: p.plantId, plantName: p.plantName, plantType: p.plantType, capacityMw: p.capacityMw },
+          costAnalysis,
+          p.hourly,
+          profile
+        ),
       };
     });
-
-    // C. Santral Karlılık ve Portföy Yönetim Riski Karşılaştırması
-    const profitabilityComparison = comparePlantProfitability(
-      plantsInfo,
-      plantResultsMap
-    );
 
     return NextResponse.json({
       success: true,
       project: {
-        id: project.id,
-        name: project.name,
-        description: displayDescription(project.description),
+        id: data.project.id,
+        name: data.project.name,
+        description: displayDescription(project?.description ?? null),
       },
       portfolioAnalysis: {
-        highestCostHours: portfolioHighestCostHours,
+        highestCostHours: portfolioCost,
+        suggestions: portfolioSuggestions,
+        settlementUnit: data.aggregator ? `${data.aggregator.name} portföyü` : "şirket bazında",
       },
       plantInsights,
-      profitabilityComparison,
+      profitabilityComparison: comparePlantProfitability(plantsInfo, plantResultsMap),
     });
   } catch (error) {
     console.error("Insights API error:", error);

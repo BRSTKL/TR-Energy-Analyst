@@ -131,7 +131,7 @@ export async function exportToExcel(
     { header: "Saat", key: "hour", width: 10 }, // C (3)
     { header: "Santral", key: "plant", width: 20 }, // D (4)
     { header: "Tür", key: "type", width: 10 }, // E (5)
-    { header: "Tahmin (KGÖP) [MWh]", key: "forecast", width: 22 }, // F (6)
+    { header: "Tahmin (KGÜP) [MWh]", key: "forecast", width: 22 }, // F (6)
     { header: "Gerçekleşen [MWh]", key: "actual", width: 20 }, // G (7)
     { header: "PTF [₺/MWh]", key: "ptf", width: 16 }, // H (8)
     { header: "SMF [₺/MWh]", key: "smf", width: 16 }, // I (9)
