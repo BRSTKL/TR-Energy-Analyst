@@ -6,11 +6,11 @@ import { ArrowLeft, Download, Loader2, PlusCircle, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { Distribution, SectorCompanyRow } from "@/lib/sector/benchmark";
+import { SECTOR_TECHS, type Distribution, type HydroKind, type SectorBenchmark, type SectorCompanyRow, type SectorTech } from "@/lib/sector/benchmark";
 import type { SectorPlant } from "@/lib/services/sector";
 
-type Tech = "RES" | "GES";
-type TypeDists = Record<Tech, { unitImbalanceTl: Distribution; unitKupstTl: Distribution; deviationPct: Distribution; sameDirectionPct: Distribution }>;
+type Tech = SectorTech;
+type HydroFilter = "all" | HydroKind | "unknown";
 
 interface SectorResponse {
   years: number[];
@@ -19,12 +19,16 @@ interface SectorResponse {
   label: string;
   generatedAt: string;
   excluded: number;
-  byType: TypeDists;
+  /** "k1": arıza / kısıntı saatleri hariç */
+  view: "all" | "k1";
+  k1Available: boolean;
+  byType: SectorBenchmark["byType"];
   plants: SectorPlant[];
   companies: SectorCompanyRow[];
 }
 
-const TECH_LABEL: Record<Tech, string> = { RES: "Rüzgâr", GES: "Güneş" };
+const TECH_LABEL: Record<Tech, string> = { RES: "Rüzgâr", GES: "Güneş", HES: "Hidro" };
+const HYDRO_LABEL: Record<HydroKind, string> = { RESERVOIR: "Barajlı", RUN_OF_RIVER: "Nehir tipi" };
 const nf = (v: number, d = 0) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
 const gwh = (mwh: number) => `${nf(mwh / 1000, 0)} GWh`;
 /** Yüzdelik sıra düşük = iyi; ekranda "sektörün %X kadarından iyi" */
@@ -46,6 +50,8 @@ interface Row {
   deviationPct: number | null;
   sameDirectionPct: number | null;
   yekdem: boolean | null;
+  /** Yalnızca hidro santral satırında (tahmini) */
+  hydroKind?: HydroKind | null;
 }
 
 type SortKey = "name" | "mw" | "actualMwh" | "unitTl" | "unitKupstTl" | "rankPct";
@@ -88,6 +94,7 @@ function toRows(data: SectorResponse, tech: Tech, view: "company" | "plant"): Ro
       deviationPct: p.deviationPct,
       sameDirectionPct: p.sameDirectionPct,
       yekdem: p.yekdem,
+      hydroKind: p.type === "HES" ? p.hydroKind ?? null : undefined,
     }));
 }
 
@@ -180,7 +187,9 @@ export default function SectorPage() {
   const [data, setData] = useState<SectorResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [year, setYear] = useState<number | null>(null);
+  const [k1, setK1] = useState(false);
   const [tech, setTech] = useState<Tech>("RES");
+  const [hydro, setHydro] = useState<HydroFilter>("all");
   const [view, setView] = useState<"company" | "plant">("company");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: "unitTl", asc: true });
@@ -188,26 +197,31 @@ export default function SectorPage() {
 
   useEffect(() => {
     setError(null);
-    fetch(`/api/sector${year ? `?year=${year}` : ""}`)
+    const q = new URLSearchParams({ ...(year ? { year: String(year) } : {}), ...(k1 ? { view: "k1" } : {}) });
+    fetch(`/api/sector?${q}`)
       .then((r) => r.json())
       .then((d) => {
         if (!d.success) throw new Error(d.error);
         setData(d);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Sektör karnesi yüklenemedi."));
-  }, [year]);
+  }, [year, k1]);
 
   const allRows = useMemo(() => (data ? toRows(data, tech, view) : []), [data, tech, view]);
   const rows = useMemo(() => {
     const q = query.trim().toLocaleLowerCase("tr-TR");
+    const byHydro =
+      tech === "HES" && view === "plant" && hydro !== "all"
+        ? allRows.filter((r) => (hydro === "unknown" ? !r.hydroKind : r.hydroKind === hydro))
+        : allRows;
     const filtered = q
-      ? allRows.filter((r) => r.name.toLocaleLowerCase("tr-TR").includes(q) || r.sub.toLocaleLowerCase("tr-TR").includes(q))
-      : allRows;
+      ? byHydro.filter((r) => r.name.toLocaleLowerCase("tr-TR").includes(q) || r.sub.toLocaleLowerCase("tr-TR").includes(q))
+      : byHydro;
     const dir = sort.asc ? 1 : -1;
     return [...filtered].sort((a, b) =>
       sort.key === "name" ? a.name.localeCompare(b.name, "tr-TR") * dir : ((a[sort.key] as number) - (b[sort.key] as number)) * dir
     );
-  }, [allRows, query, sort]);
+  }, [allRows, query, sort, tech, view, hydro]);
 
   if (error) {
     return (
@@ -224,7 +238,9 @@ export default function SectorPage() {
     );
   }
 
-  const dist = data.byType[tech];
+  const techs = SECTOR_TECHS.filter((t) => data.byType[t]);
+  // Seçili teknoloji bu yılın karnesinde yoksa (ör. hidro toplanmamış) rüzgâra dön
+  const dist = data.byType[tech] ?? data.byType.RES;
   const techValues = data.plants.filter((p) => p.type === tech).map((p) => p.unitImbalanceTl);
   const selectedRows = allRows.filter((r) => selected.includes(r.key));
   const toggle = (key: string) => setSelected((s) => (s.includes(key) ? s.filter((k) => k !== key) : [...s, key].slice(-5)));
@@ -252,9 +268,10 @@ export default function SectorPage() {
             </div>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Sektör karnesi {data.label}</h1>
             <p className="mt-1 max-w-3xl text-xs text-slate-600 sm:text-sm">
-              EPİAŞ&apos;ta üretimi yayımlanan lisanslı rüzgâr ve güneş santrallerinin MWh başına dengesizlik riski, aynı motorla ve
-              santral tek başına uzlaştırılmış varsayımıyla (tahmin kalitesi kıyası). Dönemin en az %90&apos;ında verisi olan{" "}
-              {nf(data.plants.length)} santral; {nf(data.excluded)} santral eksik veri nedeniyle dışarıda.
+              EPİAŞ&apos;ta üretimi yayımlanan lisanslı {techs.map((t) => TECH_LABEL[t].toLocaleLowerCase("tr-TR")).join(", ")} santrallerinin
+              MWh başına dengesizlik riski, aynı motorla ve santral tek başına uzlaştırılmış varsayımıyla (tahmin kalitesi kıyası). Dönemin en
+              az %90&apos;ında verisi olan {nf(data.plants.length)} santral; {nf(data.excluded)} santral eksik veri nedeniyle dışarıda.
+              {data.view === "k1" && " Olası arıza / kısıntı saatleri hariç (K1)."}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -280,7 +297,7 @@ export default function SectorPage() {
 
       <main className="mx-auto max-w-7xl space-y-6 px-4 pt-6 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-center gap-2">
-          {(["RES", "GES"] as Tech[]).map((t) => (
+          {techs.map((t) => (
             <Button
               key={t}
               size="sm"
@@ -288,12 +305,30 @@ export default function SectorPage() {
               onClick={() => {
                 setTech(t);
                 setSelected([]);
+                setHydro("all");
               }}
             >
-              {TECH_LABEL[t]} · {data.byType[t].unitImbalanceTl.count}
+              {TECH_LABEL[t]} · {data.byType[t]!.unitImbalanceTl.count}
             </Button>
           ))}
+          {data.k1Available && (
+            <label className="ml-auto flex cursor-pointer items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700">
+              <input type="checkbox" checked={k1} onChange={(e) => setK1(e.target.checked)} />
+              Arıza / kısıntı saatleri hariç (K1)
+            </label>
+          )}
         </div>
+        {tech === "HES" && (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-slate-500">Alt tip (tahmini):</span>
+            {(["all", "RESERVOIR", "RUN_OF_RIVER", "unknown"] as HydroFilter[]).map((h) => (
+              <Button key={h} size="sm" variant={hydro === h ? "default" : "outline"} onClick={() => setHydro(h)}>
+                {h === "all" ? "Tümü" : h === "unknown" ? "Belirsiz" : HYDRO_LABEL[h]}
+              </Button>
+            ))}
+            <span className="text-xs text-slate-500">Santral görünümünde süzer; addaki baraj / regülatör, yoksa gün içi üretim esnekliği.</span>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {[
@@ -404,6 +439,7 @@ export default function SectorPage() {
                         <p className="text-xs text-slate-500">
                           {r.sub}
                           {r.yekdem ? " · YEKDEM" : ""}
+                          {r.hydroKind ? ` · ${HYDRO_LABEL[r.hydroKind]} (tahmini)` : ""}
                         </p>
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{nf(r.mw)}</TableCell>

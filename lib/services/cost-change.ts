@@ -10,7 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { decomposeCostChange, type CostChangePeriodInput, type CostChangeResult } from "@/lib/analysis/cost-change";
 import { loadProjectHourly, type ProjectHourly } from "@/lib/services/project-hourly";
 import { loadSectorBenchmark } from "@/lib/services/sector";
-import { sectorPeriodLabel, sectorYearChange, type SectorTypeChange } from "@/lib/sector/benchmark";
+import { sectorPeriodLabel, sectorYearChange, type SectorTech, type SectorTypeChange } from "@/lib/sector/benchmark";
 
 export function toCostChangeInput(data: ProjectHourly, label: string): CostChangePeriodInput {
   return {
@@ -85,7 +85,7 @@ export interface ReportCostChange {
   previousProject: string;
   result: CostChangeResult;
   /** Sektör karnesinde iki yılda da kıyaslanan santrallerin değişimi (karneler toplanmışsa) */
-  sector: { prevLabel: string; curLabel: string; byType: Partial<Record<"RES" | "GES", SectorTypeChange>> } | null;
+  sector: { prevLabel: string; curLabel: string; byType: Partial<Record<SectorTech, SectorTypeChange>> } | null;
 }
 
 /** Rapordaki "Ne değişti?" slaytı için: önceki yıl projesi yoksa null */

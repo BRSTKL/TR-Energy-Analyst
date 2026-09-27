@@ -9,7 +9,7 @@
 
 import { companyPlantIdsFromCache, listUevmPowerPlants } from "@/lib/services/epias-plants";
 import { loadSectorBenchmark } from "@/lib/services/sector";
-import { sectorPeriodLabel } from "@/lib/sector/benchmark";
+import { SECTOR_TECHS, sectorPeriodLabel } from "@/lib/sector/benchmark";
 import type { ReportContext } from "@/lib/report/plant-report";
 
 /** Kontrol için gereken santral bilgisi (saatlik veri gerekmez) */
@@ -75,11 +75,13 @@ async function loadSectorContext(year: number): Promise<ReportContext["sector"]>
   const bench = await loadSectorBenchmark(year);
   if (!bench) return undefined;
   const byType: NonNullable<ReportContext["sector"]>["byType"] = {};
-  for (const type of ["RES", "GES"] as const) {
+  for (const type of SECTOR_TECHS) {
+    const dist = bench.byType[type];
+    if (!dist) continue;
     const ps = bench.plants.filter((p) => p.type === type);
     byType[type] = {
-      unitImbalanceTl: bench.byType[type].unitImbalanceTl,
-      unitKupstTl: bench.byType[type].unitKupstTl,
+      unitImbalanceTl: dist.unitImbalanceTl,
+      unitKupstTl: dist.unitKupstTl,
       values: ps.map((p) => p.unitImbalanceTl),
       kupstValues: ps.map((p) => p.unitKupstTl),
     };

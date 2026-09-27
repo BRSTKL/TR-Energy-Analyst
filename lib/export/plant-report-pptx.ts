@@ -629,9 +629,9 @@ export async function exportPlantReportPptx(
       text(s, value, { x: px + pw * 0.55, y, w: pw * 0.45, h: 0.4, fontSize: 12, bold: true, align: "right", valign: "middle" });
       s.addShape(pptx.ShapeType.line, { x: px, y: y + 0.45, w: pw, h: 0, line: { color: C.line, width: 0.75 } });
     });
-    const TECH_TR: Record<string, string> = { RES: "Rüzgâr", GES: "Güneş" };
+    const TECH_TR: Record<string, string> = { RES: "Rüzgâr", GES: "Güneş", HES: "Hidro" };
     const sectorLines = sector
-      ? (["RES", "GES"] as const)
+      ? (["RES", "GES", "HES"] as const)
           .filter((type) => sector.byType[type])
           .map((type) => {
             const x = sector.byType[type]!;

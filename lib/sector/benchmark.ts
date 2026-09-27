@@ -10,11 +10,20 @@
 
 import type { HourlyResult } from "@/lib/calculations/types";
 import { kupstTotal } from "@/lib/calculations/kupst";
+import { detectOutages } from "@/lib/analysis/outage-detection";
+import { normalizePlantName } from "@/lib/epias-plant/plant-data";
+
+/** Karnedeki teknolojiler; HES isteğe bağlı toplanır (eski karnelerde yoktur) */
+export type SectorTech = "RES" | "GES" | "HES";
+export const SECTOR_TECHS: SectorTech[] = ["RES", "GES", "HES"];
+
+/** Hidro alt tipi (tahmini): barajlı (üretimini fiyata göre kaydırabilen) ya da nehir tipi (akışa bağlı) */
+export type HydroKind = "RESERVOIR" | "RUN_OF_RIVER";
 
 export interface SectorPlantMetrics {
   epiasPlantId: number;
   name: string;
-  type: "RES" | "GES";
+  type: SectorTech;
   organizationName: string | null;
   yekdem: boolean | null;
   hours: number;
@@ -32,6 +41,42 @@ export interface SectorPlantMetrics {
   sameDirectionPct: number;
   /** (Σ plan − Σ gerçekleşen) / Σ gerçekleşen (%) */
   biasPct: number;
+  /** K1: olası arıza / kısıntı bloklarındaki saat sayısı (outage-detection kuralı, kurulu güç yerine en yüksek üretim) */
+  outageHours?: number;
+  /** K1: bu saatler hariç MWh başına dengesizlik (tahmin kalitesinin daha adil kıyası); eski karnelerde yok */
+  unitImbalanceExOutageTl?: number;
+  /** Yalnızca HES: tahmini alt tip (ad ve gün içi üretim esnekliğinden); belirlenemezse null */
+  hydroKind?: HydroKind | null;
+}
+
+/** Gün içi esneklik eşiği: günlük (en yüksek − en düşük) / ortalama üretimin medyanı bunun üstündeyse barajlı sayılır */
+export const HYDRO_FLEX_THRESHOLD = 0.6;
+
+/**
+ * Hidro santralin alt tipini tahmin eder. Adında "baraj" geçen barajlı, "regülatör" geçen nehir tipidir. Diğerlerinde
+ * gün içi esneklik ölçülür: barajlı santral suyunu pahalı saatlere kaydırır, nehir tipi akışa bağlı düz üretir.
+ * En az 30 günlük üretim yoksa null.
+ */
+export function classifyHydro(name: string, hourly: Array<{ timestamp: Date | string; actualMwh: number }>): HydroKind | null {
+  const words = normalizePlantName(name).split(" ");
+  if (words.some((w) => w.startsWith("baraj"))) return "RESERVOIR";
+  if (words.some((w) => w === "reg" || w.startsWith("regulator"))) return "RUN_OF_RIVER";
+  const days = new Map<string, number[]>();
+  for (const h of hourly) {
+    const d = new Date(h.timestamp).toISOString().slice(0, 10);
+    const list = days.get(d);
+    if (list) list.push(h.actualMwh);
+    else days.set(d, [h.actualMwh]);
+  }
+  const ratios: number[] = [];
+  for (const v of Array.from(days.values())) {
+    if (v.length < 20) continue;
+    const mean = v.reduce((a, b) => a + b, 0) / v.length;
+    if (mean <= 0) continue;
+    ratios.push((Math.max(...v) - Math.min(...v)) / mean);
+  }
+  if (ratios.length < 30) return null;
+  return quantile(ratios.sort((a, b) => a - b), 0.5) >= HYDRO_FLEX_THRESHOLD ? "RESERVOIR" : "RUN_OF_RIVER";
 }
 
 export function plantMetrics(
@@ -55,6 +100,13 @@ export function plantMetrics(
   }
   const kupst = kupstTotal(hourly, meta.type);
   const per = (v: number) => (actual > 0 ? v / actual : 0);
+  // K1: olası arıza / kısıntı blokları hariç (kurulu güç bilinmediği için en yüksek saatlik üretim)
+  const outages = detectOutages(meta.name, hourly, 0);
+  const inOutage = new Set<number>();
+  for (const e of outages.events) for (let t = Date.parse(e.start); t <= Date.parse(e.end); t += 3_600_000) inOutage.add(t);
+  let outageActual = 0;
+  if (inOutage.size) for (const h of hourly) if (inOutage.has(new Date(h.timestamp).getTime())) outageActual += h.actualMwh;
+  const exActual = actual - outageActual;
   return {
     ...meta,
     hours: hourly.length,
@@ -67,6 +119,9 @@ export function plantMetrics(
     deviationPct: per(absDev) * 100,
     sameDirectionPct: absDev > 0 ? (sameDev / absDev) * 100 : 0,
     biasPct: per(forecast - actual) * 100,
+    outageHours: outages.hours,
+    unitImbalanceExOutageTl: exActual > 0 ? (cost - outages.costTl) / exActual : 0,
+    ...(meta.type === "HES" ? { hydroKind: classifyHydro(meta.name, hourly) } : {}),
   };
 }
 
@@ -133,7 +188,17 @@ export interface SectorBenchmark {
   plants: SectorPlantMetrics[];
   /** Kalite süzgecinde elenen santral sayısı (eksik veri, plan–gerçekleşen tutarsızlığı) */
   excluded: number;
-  byType: Record<"RES" | "GES", { unitImbalanceTl: Distribution; unitKupstTl: Distribution; deviationPct: Distribution; sameDirectionPct: Distribution }>;
+  /** RES ve GES her zaman; HES yalnızca hidro toplandıysa */
+  byType: Record<"RES" | "GES", TypeDistribution> & Partial<Record<"HES", TypeDistribution>>;
+}
+
+export interface TypeDistribution {
+  unitImbalanceTl: Distribution;
+  unitKupstTl: Distribution;
+  deviationPct: Distribution;
+  sameDirectionPct: Distribution;
+  /** K1: arıza / kısıntı saatleri hariç (saatlik veriyle toplanan karnelerde) */
+  unitImbalanceExOutageTl?: Distribution;
 }
 
 /** Kıyaslamaya alınma şartı: yılın en az %90'ı veri, üretim var, yıllık plan/gerçekleşen oranı 0,75–1,33 */
@@ -145,22 +210,27 @@ export function passesQuality(m: SectorPlantMetrics, expectedHours: number): boo
 
 export function buildBenchmark(year: number, all: SectorPlantMetrics[], expectedHours: number): SectorBenchmark {
   const plants = all.filter((m) => passesQuality(m, expectedHours));
-  const dist = (type: "RES" | "GES") => {
+  const dist = (type: SectorTech): TypeDistribution => {
     const ps = plants.filter((p) => p.type === type);
     const w = ps.map((p) => p.actualMwh);
+    const withK1 = ps.filter((p) => p.unitImbalanceExOutageTl !== undefined);
     return {
       unitImbalanceTl: distribution(ps.map((p) => p.unitImbalanceTl), w),
       unitKupstTl: distribution(ps.map((p) => p.unitKupstTl), w),
       deviationPct: distribution(ps.map((p) => p.deviationPct), w),
       sameDirectionPct: distribution(ps.map((p) => p.sameDirectionPct), w),
+      ...(withK1.length === ps.length && ps.length
+        ? { unitImbalanceExOutageTl: distribution(ps.map((p) => p.unitImbalanceExOutageTl!), w) }
+        : {}),
     };
   };
+  const hasHydro = plants.some((p) => p.type === "HES");
   return {
     year,
     generatedAt: new Date().toISOString(),
     plants,
     excluded: all.length - plants.length,
-    byType: { RES: dist("RES"), GES: dist("GES") },
+    byType: { RES: dist("RES"), GES: dist("GES"), ...(hasHydro ? { HES: dist("HES") } : {}) },
   };
 }
 
@@ -168,7 +238,7 @@ export interface SectorCompanyRow {
   /** EPİAŞ şirket kimliği (dizinde yoksa null; o zaman adla gruplanır) */
   organizationId: number | null;
   name: string;
-  type: "RES" | "GES";
+  type: SectorTech;
   plantCount: number;
   plantIds: number[];
   actualMwh: number;
@@ -188,8 +258,8 @@ export interface SectorCompanyRow {
 export function companyRollup(
   plants: Array<SectorPlantMetrics & { organizationId?: number | null }>
 ): SectorCompanyRow[] {
-  const values = { RES: [] as number[], GES: [] as number[] };
-  for (const p of plants) values[p.type].push(p.unitImbalanceTl);
+  const values: Record<string, number[]> = {};
+  for (const p of plants) (values[p.type] ??= []).push(p.unitImbalanceTl);
   const groups = new Map<string, SectorCompanyRow & { cost: number; kupst: number }>();
   for (const p of plants) {
     if (!p.organizationName && p.organizationId == null) continue;
@@ -242,10 +312,10 @@ export interface SectorTypeChange {
  * Sektör karnesinin iki dönemi arasında aynı santrallerin değişimi ("sektörün hepsinde arttı, tahmin hatası sabit"
  * cümlesinin dayanağı). Santraller EPİAŞ kimliğiyle eşlenir; önceki dönemde maliyeti sıfır olanlar oran hesabına girmez.
  */
-export function sectorYearChange(prev: SectorBenchmark, cur: SectorBenchmark): Partial<Record<"RES" | "GES", SectorTypeChange>> {
+export function sectorYearChange(prev: SectorBenchmark, cur: SectorBenchmark): Partial<Record<SectorTech, SectorTypeChange>> {
   const before = new Map(prev.plants.map((p) => [p.epiasPlantId, p]));
-  const out: Partial<Record<"RES" | "GES", SectorTypeChange>> = {};
-  for (const type of ["RES", "GES"] as const) {
+  const out: Partial<Record<SectorTech, SectorTypeChange>> = {};
+  for (const type of SECTOR_TECHS) {
     const pairs = cur.plants
       .filter((p) => p.type === type)
       .map((p) => [before.get(p.epiasPlantId), p] as const)
