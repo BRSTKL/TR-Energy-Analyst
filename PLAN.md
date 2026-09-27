@@ -81,8 +81,8 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 
   *Yeniden kullanılan:* `MarketData` tablosu, EPİAŞ senkronu, grafik bileşenleri. Yeni tablo gerekmiyor.
 - [x] **2.2 Yıl karşılaştırması.** ✅ 27.09.2026 · `6b1962b`. Aynı ayların yan yana gösterimi: 2025 ve 2026, Ocak–Ağustos. "Makas %51 açıldı" gibi sonuç cümlesi otomatik üretilir.
-- [ ] **2.3 Projeye bağlantı (3.5).** Proje sonuçlarına "düşük ve sıfır fiyatlı saat maruziyeti" eklenir: üretimin ne kadarı bu saatlerde gerçekleşti, ne kadar gelir kaybedildi. *Yeniden kullanılan:* capture price hesabı.
-- [ ] **2.4 Veri tamamlama.** 2024 ve Eylül 2026'daki LEGACY piyasa verisi EPİAŞ'tan yeniden çekilir, yıllar arası kıyas güvenilir olur. *Yeniden kullanılan:* "EPİAŞ Canlı Veri Çek".
+- [x] **2.3 Projeye bağlantı (3.5).** ✅ 27.09.2026 · `86639f2`. Proje sonuçlarına "düşük ve sıfır fiyatlı saat maruziyeti" eklenir: üretimin ne kadarı bu saatlerde gerçekleşti, ne kadar gelir kaybedildi. *Yeniden kullanılan:* capture price hesabı.
+- [ ] **2.4 Veri tamamlama.** ⏳ Yerel makinede yapılacak (EPİAŞ şifresi ve `dev.db` yerelde). 2024 ve Eylül 2026'daki LEGACY piyasa verisi EPİAŞ'tan yeniden çekilir, yıllar arası kıyas güvenilir olur. *Yeniden kullanılan:* "EPİAŞ Canlı Veri Çek".
 - **Teslim:** Piyasa sayfası.
 - **Kabul:** 2026 makas bulgusu sayfada tek bakışta görülüyor.
 
@@ -133,6 +133,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 ## 4. İlerleme kaydı
 | Tarih | Adım | Commit | Not |
 |---|---|---|---|
+| 27.09.2026 | 2.3 Düşük ve sıfır fiyatlı saat maruziyeti | `86639f2` | Sonuç sayfasında yeni kart: santral, teknoloji ve portföy için PTF ≤ 1 TL ve < 1.000 TL saatlerindeki üretim, saat sayısı, baz PTF'ye göre değer kaybı ve capture rate etkisi (puan). Eşikler Piyasa sayfasıyla ortak. Gerçek Gain rakamları yerelde kontrol edilecek. |
 | 27.09.2026 | 2.1–2.2 Piyasa sayfası ve yıl karşılaştırması | `6b1962b` | `/market`: "Ne değişti?" cümleleri (makas, ay ay tutarlılık, PTF, sıfır fiyatlı saat, sistem yönü), 6 gösterge, aylık makas önceki yılla yan yana, saat profili, sistem yönü, ay ay tablo ve CSV. Bulut oturumunda sentetik veriyle denendi; gerçek 2025/2026 rakamları yerel veritabanında kontrol edilecek. |
 | 27.09.2026 | 1.4 I5 İçgörüler puanı | `84823c8` | Puan sektördeki yer (2026: Maslaktepe 97, Akkuş 70, Boreas 67, Gündoğdu 15, Alares 13). |
 | 27.09.2026 | 1.4 D2 DSG YEKDEM hariç | `655c243` | Gain 2026 portföy değeri: tüm santraller 13,2 M (%36), ana senaryoda (YEKDEM hariç) 2,6 M (%20); raporda ikisi birlikte. Alt grup netleşme hesabı düzeltildi. |

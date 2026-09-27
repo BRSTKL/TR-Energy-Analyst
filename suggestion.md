@@ -25,7 +25,8 @@
 | 3 | ✅ 27.09.2026 | 3.3 arıza/kısıntı tespiti (`lib/analysis/outage-detection.ts`; birden çok santralde eşzamanlı blok = olası kısıntı; tahmin kalitesi slaytı, Ek B, sonuç kartı) · D1/T5 adil prim slaytı (Shapley; toplayıcıda sahipler, tek şirkette santraller, çok şirkette şirketler) · 3.2/T4 PPA göstergesi (yakalanan fiyat + dengesizlik primi; risk primi slaytı ve sonuç kartı) |
 | 4 (kısmi) | ✅ 27.09.2026 | K4 2026 (Ocak–Ağustos) sektör karnesi: 523 santral toplandı, 370 kıyasta (294 RES, 76 GES); toplama betiği dönem sonu alır, EPİAŞ isteklerinde 60 sn zaman aşımı |
 | PLAN Aşama 1 | ✅ 27.09.2026 | E3, D2, I5 tamamlandı (ayrıntı PLAN.md) |
-| kalan | ⏳ | K1 (sektör karnesinde arıza saatleri hariç: saatlik veri saklanmalı) · 3.1 2026 gerçek veri · 3.4 aday tarama · 3.5 düşük fiyat maruziyeti · Tur 5 görünüm |
+| PLAN Aşama 2 | ✅ 27.09.2026 | 2.1–2.2 Piyasa sayfası ve yıl karşılaştırması · 2.3 = 3.5 düşük fiyat maruziyeti (sonuç sayfası kartı) |
+| kalan | ⏳ | K1 (sektör karnesinde arıza saatleri hariç: saatlik veri saklanmalı) · 3.1 2026 gerçek veri · 3.4 aday tarama · PLAN 2.4 LEGACY verinin yeniden çekimi · Tur 5 görünüm |
 
 ---
 
