@@ -3,13 +3,15 @@ import { loadProjectHourly } from "@/lib/services/project-hourly";
 import { buildPlantReport } from "@/lib/report/plant-report";
 import { buildReportContext } from "@/lib/services/report-context";
 import { exportPlantReportPptx, type ReportAuthor } from "@/lib/export/plant-report-pptx";
+import { reportCostChange } from "@/lib/services/cost-change";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/projects/[id]/export/report?name=&title=&email=&phone=&linkedin=
  * Santral sahibine gönderilecek "Dengesizlik Karnesi" sunumu (PPTX). İletişim alanları kapakta ve kapanışta görünür;
- * hepsi isteğe bağlıdır (eski preparedBy parametresi ad olarak kabul edilir).
+ * hepsi isteğe bağlıdır (eski preparedBy parametresi ad olarak kabul edilir). Aynı santrallerin bir önceki yıl projesi
+ * varsa "Ne değişti?" slaytı eklenir.
  */
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
@@ -28,7 +30,12 @@ export async function GET(request: Request, { params }: { params: { id: string }
     const withData = data.plants.filter((p) => p.hourly.length > 0);
     const year = withData.length ? new Date(withData[0].hourly[0].timestamp).getUTCFullYear() : new Date().getUTCFullYear();
     const { context } = await buildReportContext(withData, year);
-    const buffer = await exportPlantReportPptx(buildPlantReport(data, context), author);
+    // Ayrıştırma isteğe bağlı bir ektir: hata verirse rapor onsuz üretilir
+    const costChange = await reportCostChange(data).catch((e) => {
+      console.error("Report cost change error:", e);
+      return null;
+    });
+    const buffer = await exportPlantReportPptx(buildPlantReport(data, context), author, { costChange });
     const filename = encodeURIComponent(`Dengesizlik_Karnesi_${data.project.name.replace(/\s+/g, "_")}.pptx`);
     return new NextResponse(buffer as any, {
       status: 200,

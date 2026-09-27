@@ -6,6 +6,7 @@
  *   1. Kapak (hazırlayanın adı ve iletişim bilgisi)
  *   2. Yönetici özeti: üç ana rakam ve öne çıkanlar
  *   3. Maliyet köprüsü (şelale): santral bazında → şirket içi netleşme → 2025 → 2026 katsayıları → gün içi fırsat
+ *   3b. Ne değişti? (aynı santrallerin önceki yıl projesi varsa): MWh başına maliyet farkının kalemleri ve sektör desteği
  *   4. Santral karnesi: MWh başına maliyete göre sıralı çubuklar
  *   4b. Sektörle kıyaslama (sektör karnesi varsa): teknoloji başına dağılım bandı ve şirketin santralleri
  *   5. Tahmin kalitesi: sistemle aynı yöndeki sapmanın payı ve santral bazında sistematik sapma
@@ -26,6 +27,8 @@ import pptxgen from "pptxgenjs";
 import { deviationLoad, type PlantReportData } from "@/lib/report/plant-report";
 import { monthlyRange } from "@/lib/report/deviation-load";
 import { describeGap } from "@/lib/analysis/data-completeness";
+import { COST_FACTORS } from "@/lib/analysis/cost-change";
+import type { ReportCostChange } from "@/lib/services/cost-change";
 
 export interface ReportAuthor {
   name?: string;
@@ -92,6 +95,18 @@ const periodLabel = (r: PlantReportData) => {
   return s === e ? s : `${s} – ${e}`;
 };
 const yearOf = (r: PlantReportData) => r.period.start.slice(0, 4);
+/** Yılın bulunma eki: "2025'te", "2026'da", "2030'da" (yılın okunuşundaki son sözcüğe göre) */
+export function yearLocative(label: string): string {
+  if (!/^\d{4}$/.test(label)) return `${label} döneminde`;
+  const y = Number(label);
+  // bir, iki, üç, dört, beş, altı, yedi, sekiz, dokuz
+  const ones = ["", "de", "de", "te", "te", "te", "da", "de", "de", "da"];
+  // on, yirmi, otuz, kırk, elli, altmış, yetmiş, seksen, doksan
+  const tens = ["", "da", "de", "da", "ta", "de", "ta", "te", "de", "da"];
+  // yüz ve bin: "de"
+  const suffix = y % 10 ? ones[y % 10] : y % 100 ? tens[(y % 100) / 10] : "de";
+  return `${label}'${suffix}`;
+}
 const hourRange = (h: number) => `${String(h).padStart(2, "0")}:00–${String((h + 1) % 24).padStart(2, "0")}:00`;
 
 /** İki renk arasında doğrusal ara renk (ısı haritası) */
@@ -107,7 +122,14 @@ function mix(a: string, b: string, t: number): string {
 type Slide = ReturnType<pptxgen["addSlide"]>;
 type TextOpts = Parameters<Slide["addText"]>[1];
 
-export async function exportPlantReportPptx(r: PlantReportData, author: ReportAuthor = {}): Promise<Buffer> {
+/**
+ * @param options.costChange aynı santrallerin önceki yıl projesiyle ayrıştırma (varsa "Ne değişti?" slaytı eklenir)
+ */
+export async function exportPlantReportPptx(
+  r: PlantReportData,
+  author: ReportAuthor = {},
+  options: { costChange?: ReportCostChange | null } = {}
+): Promise<Buffer> {
   const pptx = new pptxgen();
   pptx.layout = "LAYOUT_WIDE";
   pptx.author = author.name || "TR-Energy Analyst";
@@ -511,6 +533,123 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       text(s, st.label, { x: cx - slot / 2 + 0.05, y: bottom + 0.12, w: slot - 0.1, h: 0.6, fontSize: 11, color: C.sub, align: "center", valign: "top" });
     });
     s.addShape(pptx.ShapeType.line, { x: M, y: bottom, w: CW, h: 0, line: { color: C.line, width: 1 } });
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // 3b. NE DEĞİŞTİ? (aynı santrallerin önceki yıl projesi varsa)
+  // ---------------------------------------------------------------------------------------------
+  if (options.costChange) {
+    const { result: cc, previousProject, sector } = options.costChange;
+    const [a, b] = [cc.a, cc.b];
+    const change = a.unitCostTl > 0 ? (cc.totalTlPerMwh / a.unitCostTl) * 100 : 0;
+    const lead = [...cc.effects].sort((x, y) => Math.abs(y.tlPerMwh) - Math.abs(x.tlPerMwh))[0];
+    const errorSame = Math.abs(b.errorPct - a.errorPct) < 1;
+    const signedTl = (v: number) => (Math.abs(v) < 0.05 ? "≈0" : `${v > 0 ? "+" : "−"}${nf(Math.abs(v), 1)}`);
+    const title =
+      `${yearLocative(b.label)} MWh başına dengesizlik maliyeti %${nf(Math.abs(change), 0)} ${change >= 0 ? "arttı" : "azaldı"}: ` +
+      `en büyük kalem ${lead.label.toLocaleLowerCase("tr-TR")} (${signedTl(lead.tlPerMwh)} TL)${errorSame ? ", tahmin hatası neredeyse aynı" : ""}`;
+    const s = contentSlide("Ne değişti?", title, "exact");
+    s.addNotes(
+      `Aynı santrallerin ${a.label} ve ${b.label} verisi aynı takvim saatlerinde eşlendi; MWh başına maliyet farkı dört kaleme ayrıldı. ` +
+        "Her kalem tek başına diğer yılın değeriyle değiştirilip yeniden fiyatlandı; kalemlerin birlikte değişmesinden kalan kısım etkileşimdir. " +
+        `Tahmin hatası netleşmiş sapmanın üretime oranıdır (%${nf(a.errorPct, 1)} → %${nf(b.errorPct, 1)}). Fiyat makası kalemi, aynı sapmaların ${b.label} fiyatları ve sistem yönleriyle fiyatlanmasının farkıdır; ` +
+        "makas yalnızca sistemle aynı yöndeki sapmayı fiyatlar. Katsayı kuralı 2026'da sistemle aynı yöndeki sapmayı %6'dan fiyatlayan kuraldır. " +
+        "Gelebilecek soru: 'Tahminimiz mi kötüleşti?' Cevap: bu kalem ayrı ölçüldü; fark piyasadan ve kuraldan geliyorsa tahmin ekibinin payı küçüktür."
+    );
+    text(
+      s,
+      `TL/MWh · aynı santraller, ${nf(cc.coverage.commonHours)} ortak takvim saati · dört kalemin açıkladığı pay %${nf(cc.explainedPct, 1)} · karşılaştırılan proje: ${previousProject}`,
+      { x: M, y: 1.8, w: CW, h: 0.3, fontSize: 10.5, color: C.sub }
+    );
+
+    // Şelale: başlangıç → dört kalem → etkileşim → bitiş
+    const steps: Array<{ label: string; value: number; kind: "total" | "delta" | "interaction" }> = [
+      { label: a.label, value: a.unitCostTl, kind: "total" },
+      ...COST_FACTORS.map((f) => ({ label: f.label, value: cc.effects.find((e) => e.factor === f.id)!.tlPerMwh, kind: "delta" as const })),
+      { label: "Etkileşim", value: cc.interactionTlPerMwh, kind: "interaction" },
+      { label: b.label, value: b.unitCostTl, kind: "total" },
+    ];
+    const bars: Array<{ lo: number; hi: number }> = [];
+    let level = 0;
+    for (const st of steps) {
+      if (st.kind === "total") {
+        level = st.value;
+        bars.push({ lo: 0, hi: st.value });
+      } else {
+        const next = level + st.value;
+        bars.push({ lo: Math.min(level, next), hi: Math.max(level, next) });
+        level = next;
+      }
+    }
+    const plotW = 7.7;
+    const top = 2.6;
+    const bottom = 5.95;
+    const maxV = Math.max(...bars.map((x) => x.hi), 1e-9);
+    const yOf = (v: number) => bottom - (v / maxV) * (bottom - top);
+    const slot = plotW / steps.length;
+    const barW = Math.min(0.8, slot * 0.6);
+    steps.forEach((st, i) => {
+      const cx = M + slot * i + slot / 2;
+      const bar = bars[i];
+      const y0 = yOf(bar.hi);
+      const h = Math.max(yOf(bar.lo) - y0, 0.02);
+      const color = st.kind === "total" ? C.navy : st.kind === "interaction" ? "A7B4C2" : st.value >= 0 ? C.risk : C.gain;
+      rect(s, cx - barW / 2, y0, barW, h, color);
+      if (i < steps.length - 1) {
+        const endLevel = st.kind === "total" ? st.value : st.value >= 0 ? bar.hi : bar.lo;
+        s.addShape(pptx.ShapeType.line, { x: cx + barW / 2, y: yOf(endLevel), w: slot - barW, h: 0, line: { color: C.muted, width: 0.75, dashType: "dash" } });
+      }
+      text(s, st.kind === "total" ? nf(st.value, 1) : signedTl(st.value), {
+        x: cx - slot / 2,
+        y: y0 - 0.38,
+        w: slot,
+        h: 0.32,
+        fontSize: 14,
+        bold: true,
+        align: "center",
+        color: st.kind === "total" ? C.ink : st.kind === "interaction" ? C.sub : st.value >= 0 ? C.risk : C.gain,
+      });
+      text(s, st.label, { x: cx - slot / 2 + 0.03, y: bottom + 0.1, w: slot - 0.06, h: 0.55, fontSize: 10.5, color: C.sub, align: "center", valign: "top" });
+    });
+    s.addShape(pptx.ShapeType.line, { x: M, y: bottom, w: plotW, h: 0, line: { color: C.line, width: 1 } });
+
+    // Sağ panel: iki yılın göstergeleri ve sektör desteği
+    const px = M + plotW + 0.45;
+    const pw = W - M - px;
+    const rows: Array<[string, string]> = [
+      ["Tahmin hatası (netleşmiş)", `%${nf(a.errorPct, 1)} → %${nf(b.errorPct, 1)}`],
+      ["Sistemle aynı yönde sapma", `%${nf(a.sameDirectionPct, 0)} → %${nf(b.sameDirectionPct, 0)}`],
+      ["Ortalama SMF–PTF makası", `${nf(a.meanSpreadTl, 0)} → ${nf(b.meanSpreadTl, 0)} TL`],
+      ["Sapma MWh'ı başına bedel", `${nf(a.penaltyTlPerMwh, 0)} → ${nf(b.penaltyTlPerMwh, 0)} TL`],
+    ];
+    text(s, `${a.label} → ${b.label}`, { x: px, y: 2.2, w: pw, h: 0.3, fontSize: 12, bold: true, fontFace: FONT_HEAD, color: C.navy });
+    rows.forEach(([label, value], i) => {
+      const y = 2.6 + i * 0.5;
+      text(s, label, { x: px, y, w: pw * 0.55, h: 0.4, fontSize: 11, color: C.sub, valign: "middle" });
+      text(s, value, { x: px + pw * 0.55, y, w: pw * 0.45, h: 0.4, fontSize: 12, bold: true, align: "right", valign: "middle" });
+      s.addShape(pptx.ShapeType.line, { x: px, y: y + 0.45, w: pw, h: 0, line: { color: C.line, width: 0.75 } });
+    });
+    const TECH_TR: Record<string, string> = { RES: "Rüzgâr", GES: "Güneş" };
+    const sectorLines = sector
+      ? (["RES", "GES"] as const)
+          .filter((type) => sector.byType[type])
+          .map((type) => {
+            const x = sector.byType[type]!;
+            return `${TECH_TR[type]}: ${nf(x.plants)} santral · maliyeti artan pay %${nf(x.increasedPct, 0)} · medyan ${x.medianCostChangePct >= 0 ? "+" : "−"}%${nf(Math.abs(x.medianCostChangePct), 0)} · medyan sapma %${nf(x.medianDeviationPct.prev, 1)} → %${nf(x.medianDeviationPct.cur, 1)}`;
+          })
+      : [];
+    // Sektör karnesi iki yıl için toplanmışsa sektör desteği, değilse okuma notu
+    round(s, px, 4.75, pw, 1.55, C.panel);
+    const [panelHead, panelBody] =
+      sector && sectorLines.length
+        ? [`SEKTÖR · ${sector.prevLabel} → ${sector.curLabel}`, sectorLines.join("\n")]
+        : [
+            "NASIL OKUNUR",
+            `Fiyat makası: aynı sapmaların ${b.label} fiyatları ve sistem yönleriyle bedeli; makas yalnızca sistemle aynı yöndeki sapmayı fiyatlar. ` +
+              "Katsayı kuralı: 2026'dan itibaren aynı yöndeki sapma %6'dan. Hacim ve profil: sapmanın saatlere ve sistem yönüne dağılımı.",
+          ];
+    text(s, panelHead, { x: px + 0.15, y: 4.85, w: pw - 0.3, h: 0.25, fontSize: 9, bold: true, charSpacing: 1, color: C.gain });
+    text(s, panelBody, { x: px + 0.15, y: 5.12, w: pw - 0.3, h: 1.1, fontSize: 10.5, color: C.ink, valign: "top" });
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -1423,6 +1562,15 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
         "KÜPST (tahmini)",
         `Saatlik |gerçekleşen − plan| sapmanın tolerans payını aşan kısmı × max(PTF, SMF) × 0,03; santral bazında, YEKDEM santralleri dahil ${unit.dat} ait. Tolerans plana oranlandı: 2025'te rüzgâr %17, güneş %10, diğer %5 (EPDK 13025); 2026'dan itibaren rüzgâr %15, güneş %8 (resmi karar metni görülmedi); öncesinde %21 / %12. Arıza sayısına bağlı katsayı artışı kapsam dışı.`,
       ],
+      ...(options.costChange
+        ? [
+            [
+              "Ne değişti? (ayrıştırma)",
+              `${options.costChange.result.a.label} ve ${options.costChange.result.b.label} verisi aynı santraller ve aynı takvim saatleri için eşlendi (29 Şubat hariç). MWh başına maliyet = netleşmiş sapma / üretim × sapma MWh'ı başına bedel. ` +
+                "Tahmin hatası, fiyat makası (PTF, SMF, sistem yönü), katsayı kuralı ve hacim-profil (sapmanın saat ve yön dağılımı) kalemlerinin her biri tek başına diğer yılın değeriyle değiştirilip yeniden fiyatlandı; etki iki yönde geçişin ortalamasıdır, kalan etkileşimdir.",
+            ] as [string, string],
+          ]
+        : []),
       [
         "Etiketler",
         `KESİN HESAP: veriden doğrudan. TAHMİNİ: tolerans oranı ve dayanağı tam doğrulanmamış hesap (KÜPST). VARSAYIMA BAĞLI: YEKDEM santrallerinin dengesizliğinin YEKDEM portföyünde uzlaştırıldığı çıkarımına dayanır (YEK Yön. md. 15–17; ana senaryo); duyarlılık olarak ${unit.dat} yansıdığı durum da verilir. SENARYO: davranış varsayımı; taahhüt değildir.`,
