@@ -208,6 +208,8 @@ function toWallClockRange(startDate: string | Date, endDate: string | Date): { g
  * toplama betiği ile uygulama sunucusu) kotayı paylaşır; aynı anda çalıştırılırsa 429 yine görülebilir ve aşağıdaki
  * tekrar deneme devreye girer.
  */
+/** Tek isteğin en uzun süresi; aşılırsa istek iptal edilip ağ hatası gibi tekrar denenir */
+const EPIAS_TIMEOUT_MS = Number(process.env.EPIAS_TIMEOUT_MS) || 60_000;
 const RATE_PER_MIN = Math.max(1, Number(process.env.EPIAS_RATE_PER_MIN) || 70);
 const RATE_WINDOW_MS = 60_000;
 const sentAt: number[] = [];
@@ -248,7 +250,8 @@ async function fetchWithNetworkRetry(
   for (let attempt = 1, throttled = 0; ; attempt++) {
     try {
       await acquireEpiasSlot();
-      const res = await fetch(url, init);
+      // VPN değişince kopan bağlantı yanıt vermeden askıda kalabilir: zaman aşımı ağ hatası sayılır ve tekrar denenir
+      const res = await fetch(url, { ...init, signal: init.signal ?? AbortSignal.timeout(EPIAS_TIMEOUT_MS) });
       // Hız sınırı: bekleyip aynı isteği tekrarla (en fazla 3 kez); sonra 429 çağırana döner
       if (res.status === 429 && throttled < 3) {
         throttled++;
