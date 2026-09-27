@@ -24,7 +24,8 @@
 | 2 | ✅ 27.09.2026 | M1/L2/I1/I3/B3 tek uzlaştırma tabanı: İçgörüler, Planlama, Geriye dönük test ve GİP paneli portföyü şirket/toplayıcı netleşmiş seriyle hesaplar (`settleByCompanyGroups`); netleştirme GİP fiyat alanlarını artık taşıyor (önceden düşüyordu) · R1–R4 sonuç kartı raporla aynı tanım (`lib/report/deviation-load.ts`), etiketler (senaryo / varsayıma bağlı), toplayıcı dili, profil kutusu mevzuat rejimini yazıyor · I4 bilinçli düşük bildirim önerisi kaldırıldı (yerine açıkta eksik üretimi GİP'te kapatma) · I2 hata kurulu güce oranlanıyor · I5 (kısmi) sıralama birim maliyete göre, gösterim sırası tutarlı · R6 YEKDEM santralleri işaretli, gelir kartı "piyasa değeri" · KGÖP → KGÜP (ayrıştırıcı iki yazımı da tanır) |
 | 3 | ✅ 27.09.2026 | 3.3 arıza/kısıntı tespiti (`lib/analysis/outage-detection.ts`; birden çok santralde eşzamanlı blok = olası kısıntı; tahmin kalitesi slaytı, Ek B, sonuç kartı) · D1/T5 adil prim slaytı (Shapley; toplayıcıda sahipler, tek şirkette santraller, çok şirkette şirketler) · 3.2/T4 PPA göstergesi (yakalanan fiyat + dengesizlik primi; risk primi slaytı ve sonuç kartı) |
 | 4 (kısmi) | ✅ 27.09.2026 | K4 2026 (Ocak–Ağustos) sektör karnesi: 523 santral toplandı, 370 kıyasta (294 RES, 76 GES); toplama betiği dönem sonu alır, EPİAŞ isteklerinde 60 sn zaman aşımı |
-| kalan | ⏳ | E3 (EPİAŞ ekranında bütünlük tablosu) · D2 (DSG'de YEKDEM hariç/dahil) · I5 tam (İçgörüler skoru: sektör yüzdeliği + Shapley) · K1 (sektör karnesinde arıza saatleri hariç: saatlik veri saklanmalı) · 3.1 2026 gerçek veri · 3.4 aday tarama · 3.5 düşük fiyat maruziyeti · Tur 5 görünüm |
+| PLAN Aşama 1 | ✅ 27.09.2026 | E3, D2, I5 tamamlandı (ayrıntı PLAN.md) |
+| kalan | ⏳ | K1 (sektör karnesinde arıza saatleri hariç: saatlik veri saklanmalı) · 3.1 2026 gerçek veri · 3.4 aday tarama · 3.5 düşük fiyat maruziyeti · Tur 5 görünüm |
 
 ---
 
