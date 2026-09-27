@@ -203,6 +203,8 @@ describe("Santral raporu verisi", () => {
     expect(fa.shapleyCostTl).toBeCloseTo(194, 4);
     expect(fb.shapleyCostTl).toBeCloseTo(-194, 4);
     expect(fa.shapleyCostTl + fb.shapleyCostTl).toBeCloseTo(r.aggregator!.portfolioCostTl, 4);
+    // Aylık fayda: tek ay, %100
+    expect(r.aggregator!.monthlyBenefit).toEqual([{ month: "2025-06", benefitPct: 100 }]);
     // Profil: tek saat, PTF 2000 → yakalanan fiyat = baz PTF
     expect(r.marketProfile).toMatchObject({ baseloadPtfTl: 2000, capturePriceTl: 2000, captureRatePct: 100 });
   });
@@ -220,5 +222,15 @@ describe("Toplayıcı kapsam cümlesi", () => {
     );
     expect(describeAggregatorScope("G", { ...p, plantCount: 6 }, 6, 1)).toContain("santralin tamamı");
     expect(describeAggregatorScope("G", { ...p, plantCount: 6 }, 6, 1)).toContain("projedeki 1 santral bu listede yok");
+  });
+});
+
+import { monthlyRange } from "@/lib/report/deviation-load";
+
+describe("Aylık fayda aralığı", () => {
+  it("en az 3 ay varsa en düşük ve en yüksek oran", () => {
+    expect(monthlyRange([{ benefitPct: 30 }, { benefitPct: 26 }, { benefitPct: 39 }])).toEqual({ min: 26, max: 39, months: 3 });
+    expect(monthlyRange([{ benefitPct: 30 }, { benefitPct: 26 }])).toBeNull();
+    expect(monthlyRange(undefined)).toBeNull();
   });
 });

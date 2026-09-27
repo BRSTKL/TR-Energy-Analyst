@@ -5,6 +5,15 @@
 
 import type { PlantReportData } from "@/lib/report/plant-report";
 
+/**
+ * Aylık fayda oranlarının aralığı: "her ay %26–39". En az 3 ay yoksa null (tek aylık aralık istikrar kanıtı değildir).
+ */
+export function monthlyRange(monthly: Array<{ benefitPct: number }> | undefined): { min: number; max: number; months: number } | null {
+  if (!monthly || monthly.length < 3) return null;
+  const v = monthly.map((m) => m.benefitPct);
+  return { min: Math.min(...v), max: Math.max(...v), months: v.length };
+}
+
 export type DeviationLoadInput = Pick<PlantReportData, "exposure" | "coefficients2026" | "kupst"> & {
   /** Uzlaştırma biriminde netleşmiş, tüm santrallerin dengesizlik riski */
   totals: { imbalanceCostTl: number };

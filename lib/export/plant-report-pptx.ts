@@ -24,6 +24,7 @@
 
 import pptxgen from "pptxgenjs";
 import { deviationLoad, type PlantReportData } from "@/lib/report/plant-report";
+import { monthlyRange } from "@/lib/report/deviation-load";
 import { describeGap } from "@/lib/analysis/data-completeness";
 
 export interface ReportAuthor {
@@ -316,7 +317,11 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
         kind: "exact",
         text: `Santraller sahiplerinin kendi dengesinde ${formatTlShort(agg.standaloneCostTl)} dengesizlik riski taşırdı; ${agg.name} portföyünde saat saat netleşince ${formatTlShort(
           agg.portfolioCostTl
-        )}. Portföyün değeri ${formatTlShort(agg.benefitTl)} (%${nf(agg.benefitPct, 0)}; tüm santraller, ${yearOf(r)} katsayıları).`,
+        )}. Portföyün değeri ${formatTlShort(agg.benefitTl)} (%${nf(agg.benefitPct, 0)}; tüm santraller, ${yearOf(r)} katsayıları)` +
+          (() => {
+            const mr = monthlyRange(agg.monthlyBenefit);
+            return mr ? `; fayda ${mr.months} ayın her birinde %${nf(mr.min, 0)}–${nf(mr.max, 0)}.` : ".";
+          })(),
       });
     }
     if (ex && exiting.length > 0) {
@@ -1156,7 +1161,13 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
         title: "Başka şirketlerle dengeden sorumlu grup",
         impact: r.dsg.benefitTl > 0 ? `${formatTlShort(r.dsg.benefitTl)} · %${nf(r.dsg.benefitPct, 0)}` : "Belirgin fayda yok",
         value: r.dsg.benefitTl,
-        body: `Saatlerin %${nf(r.dsg.offsettingHourSharePct, 0)} kadarında bir şirket fazla, bir diğeri eksik üretiyor; grup bu saatlerde kendi içinde dengelenir. Varsayım: grubun dengesizliği saatlik net toplamdan fiyatlanır; paylaşım ayrıca kararlaştırılır.`,
+        body:
+          `Saatlerin %${nf(r.dsg.offsettingHourSharePct, 0)} kadarında bir şirket fazla, bir diğeri eksik üretiyor; grup bu saatlerde kendi içinde dengelenir. ` +
+          (() => {
+            const mr = monthlyRange(r.dsg.monthlyBenefit);
+            return mr ? `Fayda her ay %${nf(mr.min, 0)}–${nf(mr.max, 0)}. ` : "";
+          })() +
+          "Varsayım: grubun dengesizliği saatlik net toplamdan fiyatlanır; paylaşım ayrıca kararlaştırılır.",
         kind: "scenario",
         effort: "Orta · sözleşme",
       });
@@ -1164,7 +1175,13 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       items.push({
         title: `${agg.name} portföyünde netleşme (zaten alınıyor)`,
         impact: `${formatTlShort(agg.benefitTl)} · %${nf(agg.benefitPct, 0)}`,
-        body: `Saatlerin %${nf(agg.offsettingHourSharePct, 0)} kadarında bir sahibin santrali fazla, diğerininki eksik üretiyor; portföy bu saatlerde kendi içinde dengelenir. Portföye ters yönde sapan yeni santraller eklendikçe fayda büyür.`,
+        body:
+          `Saatlerin %${nf(agg.offsettingHourSharePct, 0)} kadarında bir sahibin santrali fazla, diğerininki eksik üretiyor; portföy bu saatlerde kendi içinde dengelenir. ` +
+          (() => {
+            const mr = monthlyRange(agg.monthlyBenefit);
+            return mr ? `Fayda tek seferlik değil: her ay %${nf(mr.min, 0)}–${nf(mr.max, 0)}. ` : "";
+          })() +
+          "Portföye ters yönde sapan yeni santraller eklendikçe fayda büyür.",
         kind: "exact",
         effort: "—",
         realised: true,

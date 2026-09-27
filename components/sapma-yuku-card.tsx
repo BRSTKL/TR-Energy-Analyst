@@ -5,7 +5,7 @@ import { AlertTriangle, Info, Loader2, RefreshCw, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { PlantReportData } from "@/lib/report/plant-report";
-import { deviationLoad } from "@/lib/report/deviation-load";
+import { deviationLoad, monthlyRange } from "@/lib/report/deviation-load";
 
 /** Sonuç API'sinin `sapma` alanı: Dengesizlik Karnesi ile aynı motordan */
 export interface SapmaSummary {
@@ -151,7 +151,17 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh }: { sapma: SapmaSum
           <Tile
             label="Dengesizlik riski"
             value={tl(companyCost)}
-            sub={netted ? `Santral bazında ${tl(st.plantLevelCostTl)}; ${tl(st.sameCompanyNettingTl)} ${nettingPlace} netleşiyor` : "Şirket bazında"}
+            sub={
+              netted
+                ? `Santral bazında ${tl(st.plantLevelCostTl)}; ${tl(st.sameCompanyNettingTl)} ${nettingPlace} netleşiyor` +
+                  (() => {
+                    const mr = monthlyRange(agg?.monthlyBenefit);
+                    return mr
+                      ? ` (her ay %${mr.min.toLocaleString("tr-TR", { maximumFractionDigits: 0 })}–${mr.max.toLocaleString("tr-TR", { maximumFractionDigits: 0 })})`
+                      : "";
+                  })()
+                : "Şirket bazında"
+            }
             tone="text-rose-600"
             chip={<Chip kind="exact" />}
           />

@@ -217,6 +217,8 @@ export interface PlantReportData {
     benefitPct: number;
     /** Farklı şirketlerden en az birinin fazla, birinin eksik olduğu saatlerin oranı (%) */
     offsettingHourSharePct: number;
+    /** Ay ay fayda oranı (%): faydanın her ay tekrarlanıp tekrarlanmadığı */
+    monthlyBenefit: Array<{ month: string; benefitPct: number }>;
   } | null;
   /** Veri döneminde ayı eksik olan santraller (ör. EPİAŞ'ta bir ay yayımlanmamış); eksik ay hesaplara girmez */
   dataGaps: PlantDataGap[];
@@ -266,6 +268,8 @@ export interface PlantReportData {
     benefitPct: number;
     /** Farklı sahiplerden en az birinin fazla, birinin eksik ürettiği saatlerin oranı (%) */
     offsettingHourSharePct: number;
+    /** Ay ay fayda oranı (%): portföy değerinin her ay tekrarlanıp tekrarlanmadığı */
+    monthlyBenefit: Array<{ month: string; benefitPct: number }>;
     /**
      * Kapsam cümlesi (toplayıcının EPİAŞ portföyü kayıtlıysa): "Kapsam: Gain Toplayıcı portföyündeki 40 santralin 6
      * tanesi (portföy: 29 hidro, 6 rüzgâr, 5 diğer; EPİAŞ, Eylül 2026)"
@@ -500,8 +504,23 @@ export function buildPlantReport(
    * birlikte netleşmiş maliyeti ve farklı grupların ters yönde saptığı saatlerin oranı
    */
   const crossGroup = (groupPlants: Plant[][]) => {
-    const standalone = groupPlants.reduce((sum, g) => sum + sumCost(settleGroup(g.map((p) => p.hourly), data.profile)), 0);
-    const netted = sumCost(settleGroup(withData.map((p) => p.hourly), data.profile));
+    const groupHours = groupPlants.map((g) => settleGroup(g.map((p) => p.hourly), data.profile));
+    const nettedHours = settleGroup(withData.map((p) => p.hourly), data.profile);
+    const standalone = groupHours.reduce((sum, hours) => sum + sumCost(hours), 0);
+    const netted = sumCost(nettedHours);
+    // Aylık fayda oranı: faydanın her ay tekrarlanıp tekrarlanmadığı (tek yıllık verinin istikrar kanıtı)
+    const byMonth = new Map<string, { standalone: number; netted: number }>();
+    const add = (h: HourlyResult, key: "standalone" | "netted") => {
+      const m = new Date(h.timestamp).toISOString().slice(0, 7);
+      const b = byMonth.get(m) ?? { standalone: 0, netted: 0 };
+      b[key] += h.imbalanceCost;
+      byMonth.set(m, b);
+    };
+    for (const hours of groupHours) for (const h of hours) add(h, "standalone");
+    for (const h of nettedHours) add(h, "netted");
+    const monthly = Array.from(byMonth.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, b]) => ({ month, benefitPct: pct(b.standalone - b.netted, b.standalone) }));
     const deltas = groupPlants.map((g) => {
       const m = new Map<number, number>();
       for (const p of g) for (const h of p.hourly) {
@@ -521,6 +540,7 @@ export function buildPlantReport(
       benefit: standalone - netted,
       benefitPct: pct(standalone - netted, standalone),
       offsettingPct: pct(offsetting, hourSet.size),
+      monthly,
     };
   };
 
@@ -534,6 +554,7 @@ export function buildPlantReport(
       benefitTl: x.benefit,
       benefitPct: x.benefitPct,
       offsettingHourSharePct: x.offsettingPct,
+      monthlyBenefit: x.monthly,
     };
   }
 
@@ -555,6 +576,7 @@ export function buildPlantReport(
       benefitTl: x.benefit,
       benefitPct: x.benefitPct,
       offsettingHourSharePct: x.offsettingPct,
+      monthlyBenefit: x.monthly,
       scope: (() => {
         const pf = data.aggregator!.portfolio;
         if (!pf) return null;
