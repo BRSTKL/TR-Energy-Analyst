@@ -617,7 +617,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
         : `${TECH_TR[main.type] ?? main.type} santralleriniz MWh başına ${nf(main.portfolioUnitTl, 0)} TL ile sektör medyanının %${nf(-diffPct, 0)} altında; sektörün %${nf(better, 0)} kadarından iyi`;
     const s = contentSlide("Sektörle kıyaslama", title, "exact");
     s.addNotes(
-      `Kıyaslama, EPİAŞ'ta üretimi yayımlanan tüm lisanslı ${sec.types.map((t) => TECH_TR[t.type] ?? t.type).join(" ve ").toLocaleLowerCase("tr-TR")} santrallerinin ${sec.year} verisiyle, aynı yöntemle yapıldı. ` +
+      `Kıyaslama, EPİAŞ'ta üretimi yayımlanan tüm lisanslı ${sec.types.map((t) => TECH_TR[t.type] ?? t.type).join(" ve ").toLocaleLowerCase("tr-TR")} santrallerinin ${sec.label} verisiyle, aynı yöntemle yapıldı. ` +
         "Santraller tek başına karşılaştırılır; bu, tahmin kalitesinin kıyaslamasıdır. Bant sektörün orta %80'ini, koyu kısım orta %50'sini gösterir. " +
         "Gelebilecek soru: 'Santrallerimiz farklı bölgelerde, kıyas adil mi?' Cevap: Bölge ve rüzgâr rejimi etkiler; bu yüzden tek santrale değil portföy ortalamasına ve dağılımdaki yerine bakın."
     );
@@ -682,7 +682,7 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       `MWh başına dengesizlik riski (santral tek başına, TL). Kırmızı nokta: sektör medyanının üstündeki santral; yeşil: altındaki. KÜPST'te sektör medyanı MWh başına ${nf(
         k.median,
         0
-      )} TL (${TECH_TR[main.type] ?? main.type}). Kaynak: EPİAŞ, ${sec.year}; kalite süzgecinden geçen lisanslı santraller.${
+      )} TL (${TECH_TR[main.type] ?? main.type}). Kaynak: EPİAŞ, ${sec.label}; kalite süzgecinden geçen lisanslı santraller.${
         r.plants.some((p) => !sec.types.some((t) => t.type === p.type)) ? " HES ve diğer türler sektör karnesinin kapsamında değil." : ""
       }`,
       { x: M, y: 6.45, w: CW, h: 0.45, fontSize: 9.5, color: C.sub, valign: "top" }

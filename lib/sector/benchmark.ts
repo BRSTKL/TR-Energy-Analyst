@@ -115,8 +115,19 @@ export function percentileRank(values: number[], v: number): number {
   return ((below + equal / 2) / values.length) * 100;
 }
 
+const MONTHS_TR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+
+/** "2025" ya da yıl içi karnede "2026 (Ocak–Ağustos)" */
+export function sectorPeriodLabel(b: Pick<SectorBenchmark, "year" | "period">): string {
+  if (!b.period || b.period.end.endsWith("-12-31")) return String(b.year);
+  const m = (d: string) => MONTHS_TR[Number(d.slice(5, 7)) - 1];
+  return `${b.year} (${m(b.period.start)}–${m(b.period.end)})`;
+}
+
 export interface SectorBenchmark {
   year: number;
+  /** Veri dönemi (yıl içi karnede ör. 2026-01-01 – 2026-08-31); eski dosyalarda yok: tam yıl */
+  period?: { start: string; end: string };
   generatedAt: string;
   /** Kalite süzgecinden geçen santraller */
   plants: SectorPlantMetrics[];

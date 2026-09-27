@@ -105,6 +105,8 @@ export interface ReportContext {
   /** Sektör karnesi (aynı yıl): teknoloji başına santrallerin MWh başına dengesizlik ve KÜPST değerleri */
   sector?: {
     year: number;
+    /** "2025" ya da "2026 (Ocak–Ağustos)" */
+    label?: string;
     byType: Partial<Record<string, { unitImbalanceTl: Distribution; unitKupstTl: Distribution; values: number[]; kupstValues: number[] }>>;
   };
 }
@@ -168,6 +170,8 @@ export interface PlantReportData {
    */
   sector: {
     year: number;
+    /** Karnenin dönemi: "2025" ya da "2026 (Ocak–Ağustos)" */
+    label: string;
     types: Array<{
       type: string;
       unitImbalanceTl: Distribution;
@@ -725,7 +729,7 @@ export function buildPlantReport(
           .sort((a, b) => a.unitTl - b.unitTl),
       });
     }
-    if (types.length) sector = { year: sectorCtx.year, types };
+    if (types.length) sector = { year: sectorCtx.year, label: sectorCtx.label ?? String(sectorCtx.year), types };
   }
 
   return {

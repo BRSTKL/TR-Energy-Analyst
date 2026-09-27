@@ -218,7 +218,7 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh }: { sapma: SapmaSum
             {sapma.sector && (
               <div className="rounded-lg border border-slate-200 p-3">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-slate-900">Sektörle kıyaslama ({sapma.sector.year})</p>
+                  <p className="text-sm font-semibold text-slate-900">Sektörle kıyaslama ({sapma.sector.label ?? sapma.sector.year})</p>
                   <Chip kind="exact" />
                 </div>
                 <p className="mt-0.5 text-2xs text-slate-500">MWh başına dengesizlik riski, santral tek başına; EPİAŞ&apos;taki lisanslı santraller</p>

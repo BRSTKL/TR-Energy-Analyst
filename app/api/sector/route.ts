@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { companyRollup } from "@/lib/sector/benchmark";
+import { companyRollup, sectorPeriodLabel } from "@/lib/sector/benchmark";
 import { availableSectorYears, loadSectorBenchmark, loadSectorPlants } from "@/lib/services/sector";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +31,7 @@ export async function GET(request: Request) {
     success: true,
     years,
     year,
+    label: sectorPeriodLabel(bench),
     generatedAt: bench.generatedAt,
     excluded: bench.excluded,
     byType: bench.byType,

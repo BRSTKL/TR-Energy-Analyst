@@ -1,7 +1,10 @@
 /**
  * Sektör karnesi verisi: EPİAŞ'ta üretimi yayımlanan lisanslı RES ve GES santrallerinin bir yıllık göstergeleri.
  *
- *   node --env-file=.env node_modules/.bin/tsx scripts/sector-collect.mts [yıl=2025]
+ *   node --env-file=.env node_modules/.bin/tsx scripts/sector-collect.mts [yıl=2025] [dönem sonu, YYYY-AA-GG]
+ *
+ * Dönem sonu verilmezse geçmiş yıllarda 31 Aralık, içinde bulunulan yılda geçen ayın son günüdür (yıl içi karne:
+ * ör. 2026 için Ocak–Ağustos). Kalite süzgeci ve dağılımlar bu döneme göre hesaplanır.
  *
  * Her santral için: uzlaştırma birimleri → KGÜP ilk versiyon (çeyrek parçalar; UEVM servisi en fazla 3 ay kabul eder)
  * → UEVM → veritabanındaki piyasa fiyatlarıyla saatlik hesap → göstergeler. Her santral .cache/epias/sector-<yıl>/
@@ -20,25 +23,36 @@ import { DEFAULT_IMBALANCE_PROFILE, SystemDirection } from "../lib/calculations/
 import { buildBenchmark, plantMetrics, type SectorPlantMetrics } from "../lib/sector/benchmark";
 
 const year = Number(process.argv[2] ?? 2025);
+const now = new Date();
+const periodEnd =
+  process.argv[3] ??
+  (year < now.getUTCFullYear() ? `${year}-12-31` : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0)).toISOString().slice(0, 10));
+if (!periodEnd.startsWith(`${year}-`)) throw new Error(`Dönem sonu ${year} içinde olmalı: ${periodEnd}`);
+const periodStart = `${year}-01-01`;
+const endExclusive = Date.parse(`${periodEnd}T00:00:00Z`) + 86_400_000;
 const dir = path.join(process.cwd(), ".cache", "epias", `sector-${year}`);
 await fs.mkdir(dir, { recursive: true });
+// UEVM servisi en fazla 3 ay kabul eder: çeyrekler dönem sonuna kırpılır
 const quarters = [
   [`${year}-01-01`, `${year}-03-31`],
   [`${year}-04-01`, `${year}-06-30`],
   [`${year}-07-01`, `${year}-09-30`],
   [`${year}-10-01`, `${year}-12-31`],
-];
-const expectedHours = (Date.UTC(year + 1, 0, 1) - Date.UTC(year, 0, 1)) / 3_600_000;
+]
+  .filter(([s]) => s <= periodEnd)
+  .map(([s, e]) => [s, e < periodEnd ? e : periodEnd]);
+const expectedHours = (endExclusive - Date.UTC(year, 0, 1)) / 3_600_000;
+console.log(`dönem ${periodStart} – ${periodEnd} (${expectedHours} saat)`);
 
 const prisma = new PrismaClient();
 const market = new Map(
-  (await prisma.marketData.findMany({ where: { timestamp: { gte: new Date(Date.UTC(year, 0, 1)), lt: new Date(Date.UTC(year + 1, 0, 1)) } } })).map((m) => [
+  (await prisma.marketData.findMany({ where: { timestamp: { gte: new Date(Date.UTC(year, 0, 1)), lt: new Date(endExclusive) } } })).map((m) => [
     m.timestamp.getTime(),
     m,
   ])
 );
 console.log(`piyasa verisi: ${market.size} / ${expectedHours} saat`);
-if (market.size < expectedHours * 0.99) throw new Error("Yılın piyasa verisi eksik; önce EPİAŞ'tan piyasa verisini senkronlayın.");
+if (market.size < expectedHours * 0.99) throw new Error("Dönemin piyasa verisi eksik; önce EPİAŞ'tan piyasa verisini senkronlayın.");
 
 const [plantsAll, owners, yekdem] = await Promise.all([
   listUevmPowerPlants(),
@@ -92,7 +106,7 @@ const worker = async () => {
     try {
       // Yıl içinde devreye giren santralin uzlaştırma birimi yıl başında listelenmez
       let uevcbs = await retry(() => listUevcbsForPlant(p.id, `${year}-01-01`));
-      for (const day of [`${year}-07-01`, `${year}-12-01`]) {
+      for (const day of [`${year}-07-01`, `${year}-12-01`].filter((d) => d <= periodEnd)) {
         if (uevcbs.length) break;
         uevcbs = await retry(() => listUevcbsForPlant(p.id, day));
       }
@@ -104,7 +118,7 @@ const worker = async () => {
       }
       const kgup = sumSeries(kParts);
       const uevm = sumSeries(uParts);
-      const merged = mergePlantSeries(kgup, uevm, `${year}-01-01`, `${year}-12-31`);
+      const merged = mergePlantSeries(kgup, uevm, periodStart, periodEnd);
       const hourly = merged.rows.flatMap((row) => {
         const m = market.get(row.timestamp.getTime());
         return m
@@ -151,7 +165,7 @@ for (const f of await fs.readdir(dir)) {
   const type = targetType.get(m.epiasPlantId);
   if (type) all.push({ ...m, type });
 }
-const bench = buildBenchmark(year, all, expectedHours);
+const bench = { ...buildBenchmark(year, all, expectedHours), period: { start: periodStart, end: periodEnd } };
 await fs.writeFile(path.join(process.cwd(), ".cache", "epias", `sector-${year}.json`), JSON.stringify(bench));
 console.log(`BİTTİ: toplanan ${all.length}, kıyaslamaya alınan ${bench.plants.length}, elenen ${bench.excluded}, bu turda hata ${failed}`);
 for (const t of ["RES", "GES"] as const) {

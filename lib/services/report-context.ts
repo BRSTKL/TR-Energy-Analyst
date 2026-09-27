@@ -9,6 +9,7 @@
 
 import { companyPlantIdsFromCache, listUevmPowerPlants } from "@/lib/services/epias-plants";
 import { loadSectorBenchmark } from "@/lib/services/sector";
+import { sectorPeriodLabel } from "@/lib/sector/benchmark";
 import type { ReportContext } from "@/lib/report/plant-report";
 
 /** Kontrol için gereken santral bilgisi (saatlik veri gerekmez) */
@@ -83,5 +84,5 @@ async function loadSectorContext(year: number): Promise<ReportContext["sector"]>
       kupstValues: ps.map((p) => p.unitKupstTl),
     };
   }
-  return { year: bench.year, byType };
+  return { year: bench.year, label: sectorPeriodLabel(bench), byType };
 }

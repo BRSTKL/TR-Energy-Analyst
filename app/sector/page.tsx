@@ -15,6 +15,8 @@ type TypeDists = Record<Tech, { unitImbalanceTl: Distribution; unitKupstTl: Dist
 interface SectorResponse {
   years: number[];
   year: number;
+  /** "2025" ya da "2026 (Ocak–Ağustos)" */
+  label: string;
   generatedAt: string;
   excluded: number;
   byType: TypeDists;
@@ -248,10 +250,10 @@ export default function SectorPage() {
               <span className="text-slate-300">/</span>
               <span className="font-medium text-slate-700">Sektör karnesi</span>
             </div>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Sektör karnesi {data.year}</h1>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Sektör karnesi {data.label}</h1>
             <p className="mt-1 max-w-3xl text-xs text-slate-600 sm:text-sm">
               EPİAŞ&apos;ta üretimi yayımlanan lisanslı rüzgâr ve güneş santrallerinin MWh başına dengesizlik riski, aynı motorla ve
-              santral tek başına uzlaştırılmış varsayımıyla (tahmin kalitesi kıyası). Yılın en az %90&apos;ında verisi olan{" "}
+              santral tek başına uzlaştırılmış varsayımıyla (tahmin kalitesi kıyası). Dönemin en az %90&apos;ında verisi olan{" "}
               {nf(data.plants.length)} santral; {nf(data.excluded)} santral eksik veri nedeniyle dışarıda.
             </p>
           </div>
@@ -426,7 +428,7 @@ export default function SectorPage() {
         </Card>
 
         <p className="text-xs text-slate-500">
-          Kaynak: EPİAŞ Şeffaflık Platformu, {data.year} saatlik KGÜP (ilk versiyon), UEVM, PTF ve SMF. Değerler santral tek başına
+          Kaynak: EPİAŞ Şeffaflık Platformu, {data.label} saatlik KGÜP (ilk versiyon), UEVM, PTF ve SMF. Değerler santral tek başına
           uzlaştırılmış varsayımıyladır; şirket içi netleşme ve YEKDEM havuzu hariçtir, bu yüzden şirketin ödediği tutar değil tahmin
           kalitesinin kıyasıdır. KÜPST EPDK 13025 tolerans oranlarıyla tahmindir. MW, santralin yıl içindeki en yüksek saatlik
           üretimidir (kurulu güç yaklaşığı). Şirket rakamı, şirketin kıyaslamadaki santrallerinin üretim ağırlıklı ortalamasıdır.
