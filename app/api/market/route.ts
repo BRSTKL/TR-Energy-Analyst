@@ -8,15 +8,27 @@ const VERIFIED = ["EPIAS", "FILE"];
 const MONTHS_TR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
-/** "2026 (Ocak–Ağustos)" ya da tam yıl için "2025" */
+const lastDayOfMonth = (d: string) => new Date(Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)), 0)).getUTCDate();
+const trDate = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}`;
+
+/** "2026 (Ocak–Ağustos)", tam yıl için "2025"; ay başı ya da sonu olmayan dönemde tarih aralığı */
 function periodLabel(start: string, end: string): string {
   const y = start.slice(0, 4);
-  if (start.endsWith("-01-01") && end.endsWith("-12-31") && end.startsWith(y)) return y;
+  const wholeMonths = start.endsWith("-01") && Number(end.slice(8, 10)) === lastDayOfMonth(end);
+  if (!wholeMonths || !end.startsWith(y)) return `${trDate(start)} – ${trDate(end)}`;
+  if (start.endsWith("-01-01") && end.endsWith("-12-31")) return y;
   const m = (d: string) => MONTHS_TR[Number(d.slice(5, 7)) - 1];
-  return end.startsWith(y) ? `${y} (${m(start)}–${m(end)})` : `${start} – ${end}`;
+  return start.slice(5, 7) === end.slice(5, 7) ? `${m(start)} ${y}` : `${y} (${m(start)}–${m(end)})`;
 }
 
-const shiftYear = (d: string, by: number) => `${Number(d.slice(0, 4)) + by}${d.slice(4)}`.replace(/-02-29$/, "-02-28");
+const yearLabel = (start: string, end: string) => (start.slice(0, 4) === end.slice(0, 4) ? start.slice(0, 4) : periodLabel(start, end));
+
+/** Aynı gün bir önceki (sonraki) yılda; ay sonu yine ay sonuna gider (29 Şubat ↔ 28 Şubat) */
+function shiftYear(d: string, by: number): string {
+  const moved = `${Number(d.slice(0, 4)) + by}${d.slice(4, 8)}`;
+  const day = Number(d.slice(8, 10)) === lastDayOfMonth(d) ? lastDayOfMonth(`${moved}01`) : Number(d.slice(8, 10));
+  return `${moved}${String(day).padStart(2, "0")}`;
+}
 
 async function load(start: string, end: string): Promise<MarketHour[]> {
   const rows = await prisma.marketData.findMany({
@@ -54,16 +66,20 @@ export async function GET(request: Request) {
 
   const end = DAY.test(q.get("end") ?? "") ? q.get("end")! : lastFullMonthEnd;
   const start = DAY.test(q.get("start") ?? "") ? q.get("start")! : `${end.slice(0, 4)}-01-01`;
+  if (start > end) return NextResponse.json({ success: false, error: "Başlangıç tarihi bitişten sonra olamaz." }, { status: 400 });
   const prevStart = shiftYear(start, -1);
   const prevEnd = shiftYear(end, -1);
+  const unverified = (from: string, to: string) =>
+    prisma.marketData.count({ where: { source: { notIn: VERIFIED }, timestamp: { gte: new Date(`${from}T00:00:00Z`), lte: new Date(`${to}T23:00:00Z`) } } });
 
-  const [cur, prev, legacy] = await Promise.all([
+  const [cur, prev, curUnverified, prevUnverified] = await Promise.all([
     load(start, end),
     load(prevStart, prevEnd),
-    prisma.marketData.count({ where: { source: { notIn: VERIFIED }, timestamp: { gte: new Date(`${prevStart}T00:00:00Z`), lte: new Date(`${end}T23:00:00Z`) } } }),
+    unverified(start, end),
+    unverified(prevStart, prevEnd),
   ]);
   const current = summarizeMarket(cur);
-  if (!current) return NextResponse.json({ success: false, error: `${start} – ${end} için doğrulanmış piyasa verisi yok.` }, { status: 404 });
+  if (!current) return NextResponse.json({ success: false, error: `${periodLabel(start, end)} için doğrulanmış piyasa verisi yok.` }, { status: 404 });
   // Önceki yıl ancak dönemin en az %90'ı doluysa karşılaştırılır
   const previous = prev.length >= cur.length * 0.9 ? summarizeMarket(prev) : null;
   const label = periodLabel(start, end);
@@ -73,10 +89,12 @@ export async function GET(request: Request) {
     success: true,
     available: { start: first, end: last.toISOString().slice(0, 10), lastFullMonthEnd },
     period: { start, end, label },
-    previousPeriod: previous ? { start: prevStart, end: prevEnd, label: prevLabel } : null,
+    previousPeriod: { start: prevStart, end: prevEnd, label: prevLabel, verifiedHours: prev.length, compared: previous !== null },
     current,
     previous,
-    sentences: previous ? compareMarkets(previous, current, prevLabel, label) : [],
-    unverifiedHours: legacy,
+    // Cümlede yalnızca yıl ("2025 → 2026"); dönem başlıkta yazılı
+    sentences: previous ? compareMarkets(previous, current, yearLabel(prevStart, prevEnd), yearLabel(start, end)) : [],
+    /** Dönemde dışarıda bırakılan doğrulanmamış (LEGACY) saatler */
+    unverifiedHours: { current: curUnverified, previous: prevUnverified },
   });
 }

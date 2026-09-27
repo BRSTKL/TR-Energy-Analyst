@@ -250,6 +250,10 @@ export default function ProjectsPage() {
               <Link href="/sector">Sektör karnesi</Link>
             </Button>
 
+            <Button asChild variant="outline" size="sm">
+              <Link href="/market">Piyasa</Link>
+            </Button>
+
             <Button asChild variant="outline" size="sm" className="gap-1.5 border-sky-300 text-sky-800 hover:bg-sky-50">
               <Link href="/projects/epias">
                 <CloudDownload className="h-4 w-4" />
