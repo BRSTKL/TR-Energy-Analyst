@@ -1380,7 +1380,9 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
         "Veri",
         `EPİAŞ Şeffaflık Platformu. Plan: KGÜP (kesinleşmiş günlük üretim planı); gerçekleşen: UEVM (uzlaştırmaya esas veriş miktarı); fiyat: PTF ve SMF. Kapsam: ${periodLabel(
           r
-        )}, ${nf(r.period.hours, 0)} saat.`,
+        )}, ${nf(r.period.hours, 0)} saat. ` +
+          // Veri çekme yönteminin doğrulaması (bir kez, şirketin kendi dosyasıyla): mülakattaki "veri doğru mu?" sorusunun cevabı
+          "Doğrulama: veri çekme yöntemi bir santralde (BALABANLI RES) şirketin kendi verisiyle karşılaştırıldı; KGÜP ilk versiyonu 5.880 saatin tamamında, UEVM Mayıs–Aralık 2025 saatlerinde birebir aynı.",
       ],
       [
         "Dengesizlik fiyatı",
