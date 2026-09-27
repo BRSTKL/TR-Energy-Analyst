@@ -71,7 +71,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 - **Teslim:** Sunuma hazır Gain 2025 ve 2026 raporları.
 - **Kabul:** Rapor kendi içinde tutarlı; kapsam, istikrar ve doğrulama bilgisi raporda yer alıyor.
 
-### Aşama 2: Piyasa katmanı (yeni "Piyasa" sayfası)
+### Aşama 2: Piyasa katmanı (yeni "Piyasa" sayfası) · 2.1–2.3 ✅ (27.09.2026) · 2.4 yerel veri çekimi bekliyor
 - [x] **2.1 Piyasa özeti.** ✅ 27.09.2026 · motor `f8d1972`, sayfa `6b1962b` (`/market`). Seçilen dönem için şunlar gösterilir:
   - PTF ve SMF (ortalama, dağılım, aylık seyir)
   - **SMF–PTF makası** (ortalama, P90, saat profili)
@@ -82,7 +82,10 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
   *Yeniden kullanılan:* `MarketData` tablosu, EPİAŞ senkronu, grafik bileşenleri. Yeni tablo gerekmiyor.
 - [x] **2.2 Yıl karşılaştırması.** ✅ 27.09.2026 · `6b1962b`. Aynı ayların yan yana gösterimi: 2025 ve 2026, Ocak–Ağustos. "Makas %51 açıldı" gibi sonuç cümlesi otomatik üretilir.
 - [x] **2.3 Projeye bağlantı (3.5).** ✅ 27.09.2026 · `86639f2`. Proje sonuçlarına "düşük ve sıfır fiyatlı saat maruziyeti" eklenir: üretimin ne kadarı bu saatlerde gerçekleşti, ne kadar gelir kaybedildi. *Yeniden kullanılan:* capture price hesabı.
-- [ ] **2.4 Veri tamamlama.** ⏳ Yerel makinede yapılacak (EPİAŞ şifresi ve `dev.db` yerelde). 2024 ve Eylül 2026'daki LEGACY piyasa verisi EPİAŞ'tan yeniden çekilir, yıllar arası kıyas güvenilir olur. *Yeniden kullanılan:* "EPİAŞ Canlı Veri Çek".
+- [ ] **2.4 Veri tamamlama.** ⏳ Kullanıcı yerelde yapacak (EPİAŞ şifresi ve `dev.db` yerelde; bulut oturumu EPİAŞ'a erişemiyor). Kod gerekmiyor. 2024 ve Eylül 2026'daki LEGACY piyasa verisi EPİAŞ'tan yeniden çekilir, yıllar arası kıyas güvenilir olur. *Yeniden kullanılan:* "EPİAŞ Canlı Veri Çek" (30 günlük parçalar; kayıtları `EPIAS` kaynağıyla üzerine yazar).
+  1. Projelerim → "EPİAŞ Canlı Veri Çek": 01.01.2024–31.12.2024, sonra 01.09.2026–son gün.
+  2. `/market`: 2026 (Ocak–Ağustos) görünümünde "Ne değişti?" kutusunda makas cümlesi (Aşama 2 kabulü); 2025 seçilince 2024 ile karşılaştırma açılmalı, alt notta "eski formatta" saat kalmamalı.
+  3. Sonuçla birlikte 2.4 ve Aşama 2 `[x]` olarak kapatılır.
 - **Teslim:** Piyasa sayfası.
 - **Kabul:** 2026 makas bulgusu sayfada tek bakışta görülüyor.
 
