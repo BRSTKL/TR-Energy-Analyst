@@ -162,6 +162,9 @@ export async function GET(_request: Request, { params }: { params: { id: string 
           : null,
         sector: report.sector,
         aggregator: report.aggregator,
+        outages: report.outages,
+        fairShare: report.fairShare,
+        marketProfile: report.marketProfile,
         check,
       };
     }

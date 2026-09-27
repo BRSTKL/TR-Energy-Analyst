@@ -763,8 +763,21 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       overCount > r.plants.length / 2
         ? `${r.plants.length} santralin ${overCount} tanesinde plan sistematik olarak yüksek: plan kalibrasyonu en hızlı kazanç kalemlerinden biri.`
         : "Belirgin bir sistematik sapma yok; maliyet saatlik tahmin hatasından kaynaklanıyor.",
-      { x: px, y: Math.max(yEnd + 0.2, 6.2), w: pw, h: 0.6, fontSize: 11.5, valign: "top" }
+      { x: px, y: Math.max(yEnd + 0.2, 5.75), w: pw, h: 0.5, fontSize: 11.5, valign: "top" }
     );
+    // Olası arıza / kısıntı: tahmin yüksekken üretim ~0 olan bloklar tahmin hatası değildir
+    const ev = r.outages.plants.flatMap((o) => o.events);
+    if (ev.length > 0) {
+      const concurrent = ev.filter((e) => e.concurrent).length;
+      text(
+        s,
+        `Olası arıza/kısıntı: ${ev.length} blok, ${nf(ev.reduce((a, e) => a + e.hours, 0), 0)} saat (tahmin kurulu gücün ≥%30'u, üretim ≤%2, ≥3 saat), ` +
+          `dengesizlik riskinin %${nf(r.outages.sharePct, 1)} kadarı` +
+          (concurrent ? `; ${concurrent} blok birden çok santralde aynı anda (olası kısıntı).` : ".") +
+          " Tahmin hatası değil; arıza mı YAT talimatı mı teyit edilmeli.",
+        { x: px, y: Math.max(yEnd + 0.75, 6.3), w: pw, h: 0.55, fontSize: 9.5, color: C.sub, valign: "top" }
+      );
+    }
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -987,6 +1000,22 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
       ];
     });
     text(s, "Santral bazında (santral tek başına, TL/MWh)", { x: tx, y: 1.9, w: tw, h: 0.28, fontSize: 11, bold: true, fontFace: FONT_HEAD });
+    // PPA göstergesi: profil indirimi (yakalanan fiyat / baz PTF) + beklenen dengesizlik primi
+    const mp = r.marketProfile;
+    if (mp.baseloadPtfTl > 0) {
+      const profileDisc = 100 - mp.captureRatePct;
+      const premiumPct = (pf.expectedTlPerMwh / mp.baseloadPtfTl) * 100;
+      const ppaPct = 100 - profileDisc - premiumPct;
+      const py = 2.25 + (Math.min(rp.plants.length, 11) + 1) * 0.3 + 0.3;
+      round(s, tx, py, tw, 1.2, C.panel);
+      text(s, `PPA göstergesi: baz PTF'nin ~%${nf(ppaPct, 1)} kadarı`, { x: tx + 0.2, y: py + 0.1, w: tw - 0.4, h: 0.32, fontSize: 13, bold: true, fontFace: FONT_HEAD, color: C.navy });
+      text(
+        s,
+        `Baz PTF ${nf(mp.baseloadPtfTl, 0)} TL · yakalanan fiyat ${nf(mp.capturePriceTl, 0)} TL (%${nf(mp.captureRatePct, 1)}) → profil indirimi %${nf(profileDisc, 1)}; ` +
+          `beklenen dengesizlik primi ${nf(pf.expectedTlPerMwh, 0)} TL → %${nf(premiumPct, 1)}. Fiyat riski ve marj hariç; veri yılının fiyatlarıyla.`,
+        { x: tx + 0.2, y: py + 0.45, w: tw - 0.4, h: 0.7, fontSize: 9.5, color: C.sub, valign: "top" }
+      );
+    }
     s.addTable([head, ...rows] as any, {
       x: tx,
       y: 2.25,
@@ -1006,6 +1035,57 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
             ? "Portföy primi şirket bazında netleşmiş dengesizlikle hesaplandığı için santral primlerinden düşüktür."
             : "Santraller ayrı dengelerde uzlaştırıldığı için portföy primi, santral primlerinin üretim ağırlıklı ortalamasıdır."),
       { x: M, y: 6.45, w: CW, h: 0.45, fontSize: 9, color: C.sub, valign: "top" }
+    );
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // 7c. ADİL PRİM (Shapley): netleşen maliyetin üyelere paylaştırılması
+  // ---------------------------------------------------------------------------------------------
+  if (r.fairShare && r.fairShare.members.length >= 2) {
+    const fs = r.fairShare;
+    const who = { owners: "Santral sahibi", plants: "Santral", companies: "Şirket" }[fs.basis];
+    const rows = [...fs.members].sort((a, b) => b.discountPct - a.discountPct);
+    const best = rows[0];
+    const lo = Math.min(...rows.map((m) => m.fairUnitTl));
+    const hi = Math.max(...rows.map((m) => m.fairUnitTl));
+    // Başlık iki satıra sığsın: unvanın ilk iki kelimesi (ör. "R.K. RÜZGAR", "HNS ENERJİ")
+    const shortName = (n: string) => n.split(/\s+/).slice(0, 2).join(" ");
+    const title = `Adil prim ${nf(lo, 0)}–${nf(hi, 0)} TL/MWh; portföyden en çok yararlanan ${shortName(best.name)} (%${nf(best.discountPct, 0)} indirim)`;
+    const s = contentSlide("Adil prim", title, "assumption");
+    s.addNotes(
+      "Shapley paylaştırması: her üye, gruba katılabileceği tüm sıralamalardaki ortalama marjinal maliyetini öder; sapması diğerlerini dengeleyen üye daha çok indirim alır. " +
+        "Tablo, toplayıcının ya da grubun her üyeye teklif edeceği MWh başına sapma priminin dayanağıdır. Paylaşım yöntemi sözleşmeyle belirlenir; Shapley istikrarlıdır (hiçbir alt grup ayrılarak daha ucuza gelmez). " +
+        "Rakamlar veri yılının kurallarıyla; KÜPST santral bazında olduğu için her üye kendi KÜPST'ünü taşır."
+    );
+    const cell = (v: string, o: Record<string, unknown> = {}) => ({ text: v, options: { fontSize: 10.5, fontFace: FONT_BODY, color: C.ink, ...o } });
+    const head = [who, "Üretim", "Tek başına", "Adil prim", "İndirim"].map((h, i) =>
+      cell(h, { bold: true, color: C.white, fill: { color: C.navy }, align: i === 0 ? "left" : "right" })
+    );
+    const body = rows.map((m, i) => {
+      const fill = i % 2 ? { fill: { color: C.panel } } : {};
+      return [
+        cell(m.name.length > 60 ? `${m.name.slice(0, 58)}…` : m.name, fill),
+        cell(`${nf(m.actualMwh / 1000, 0)} GWh`, { ...fill, align: "right" }),
+        cell(`${nf(m.standaloneUnitTl, 0)} TL/MWh`, { ...fill, align: "right", color: C.sub }),
+        cell(`${nf(m.fairUnitTl, 0)} TL/MWh`, { ...fill, align: "right", bold: true }),
+        cell(`%${nf(m.discountPct, 0)}`, { ...fill, align: "right", bold: true, color: C.gain }),
+      ];
+    });
+    s.addTable([head, ...body] as any, {
+      x: M,
+      y: 1.95,
+      w: CW,
+      colW: [CW - 6.2, 1.3, 1.6, 1.6, 1.7],
+      rowH: 0.36,
+      border: { type: "none" },
+      margin: [0, 0.08, 0, 0.08],
+      valign: "middle",
+    });
+    text(
+      s,
+      "Tek başına: üye kendi dengesinde (kendi santralleri kendi aralarında netleşmiş) + kendi KÜPST'ü. Adil prim: netleşen maliyetin Shapley payı + kendi KÜPST'ü. " +
+        "İndirim yalnızca dengesizlik kısmına uygulanır. Veri yılının kurallarıyla; paylaşım oranı sözleşmeyle belirlenir.",
+      { x: M, y: Math.min(1.95 + (rows.length + 1) * 0.36 + 0.25, 6.3), w: CW, h: 0.55, fontSize: 9.5, color: C.sub, valign: "top" }
     );
   }
 
@@ -1298,6 +1378,9 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
             : "") +
           (r.dataGaps.length
             ? ` Eksik veri: ${r.dataGaps.map(describeGap).join("; ")}; bu aylar santral ve portföy rakamlarına girmedi.`
+            : "") +
+          (r.outages.plants.length
+            ? ` Olası arıza/kısıntı blokları (tahmin ≥ kurulu gücün %30'u, üretim ≤ %2, ≥ 3 saat) riskin %${nf(r.outages.sharePct, 1)} kadarı; hesaplardan çıkarılmadı.`
             : ""),
       ],
       [

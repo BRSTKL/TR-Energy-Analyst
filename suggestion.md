@@ -22,7 +22,8 @@
 |---|---|---|
 | 1 | ✅ 27.09.2026 | B1/T1 gün içi gecikmesi 2 saat (1 saat "teorik", %25 kapatma "kusursuz öngörü" etiketli; rapor %18 → %4) · M3/R9/T2/C2 veri bütünlüğü (`lib/analysis/data-completeness.ts`; uyarı bandı, rapor özeti ve Ek B, karşılaştırma satırı) · M2/R5/L3 tek işaret kuralı (`lib/conventions.ts`; sonuç sayfası rapor ve planlamayla aynı) · L1 gün etiketleri |
 | 2 | ✅ 27.09.2026 | M1/L2/I1/I3/B3 tek uzlaştırma tabanı: İçgörüler, Planlama, Geriye dönük test ve GİP paneli portföyü şirket/toplayıcı netleşmiş seriyle hesaplar (`settleByCompanyGroups`); netleştirme GİP fiyat alanlarını artık taşıyor (önceden düşüyordu) · R1–R4 sonuç kartı raporla aynı tanım (`lib/report/deviation-load.ts`), etiketler (senaryo / varsayıma bağlı), toplayıcı dili, profil kutusu mevzuat rejimini yazıyor · I4 bilinçli düşük bildirim önerisi kaldırıldı (yerine açıkta eksik üretimi GİP'te kapatma) · I2 hata kurulu güce oranlanıyor · I5 (kısmi) sıralama birim maliyete göre, gösterim sırası tutarlı · R6 YEKDEM santralleri işaretli, gelir kartı "piyasa değeri" · KGÖP → KGÜP (ayrıştırıcı iki yazımı da tanır) |
-| kalan | ⏳ | E3 (EPİAŞ ekranında bütünlük tablosu) · D2 (DSG'de YEKDEM hariç/dahil seçeneği) · I5 tam (sektör yüzdeliği + Shapley skoru, Tur 3) |
+| 3 | ✅ 27.09.2026 | 3.3 arıza/kısıntı tespiti (`lib/analysis/outage-detection.ts`; birden çok santralde eşzamanlı blok = olası kısıntı; tahmin kalitesi slaytı, Ek B, sonuç kartı) · D1/T5 adil prim slaytı (Shapley; toplayıcıda sahipler, tek şirkette santraller, çok şirkette şirketler) · 3.2/T4 PPA göstergesi (yakalanan fiyat + dengesizlik primi; risk primi slaytı ve sonuç kartı) |
+| kalan | ⏳ | E3 (EPİAŞ ekranında bütünlük tablosu) · D2 (DSG'de YEKDEM hariç/dahil) · I5 tam (İçgörüler skoru: sektör yüzdeliği + Shapley) · K1 (sektör karnesinde arıza saatleri hariç: saatlik veri saklanmalı) · 3.1 2026 gerçek veri · 3.4 aday tarama · 3.5 düşük fiyat maruziyeti · Tur 5 görünüm |
 
 ---
 
@@ -36,7 +37,7 @@
 | 4 | **Dengesizlik tabanı sayfadan sayfaya değişiyor.** Sonuçlar ve rapor şirket/portföy bazında netleşmiş (24,8 M), İçgörüler, Planlama ve Geriye dönük test santral bazında netleşmemiş (36,6 M). Aynı proje için iki "yıllık kayıp" görünüyor. | P1 |
 | 5 | **Sonuç sayfası ile rapor farklı başlık rakamı veriyor.** Sonuç sayfası sapma yükünü 29,7 M (tüm santraller), rapor 13,0 M (ana senaryo, YEKDEM dengesizliği havuzda) gösteriyor. Etiketler de uyumsuz: sonuç sayfasında 2026 projeksiyonu ve risk primi hâlâ "KESİN HESAP". | P1 |
 | 6 | **YEKDEM santrallerinde gelir yanlış.** Birim gelir, capture price, planlama verimliliği ve "portföy yönetim skoru" PTF geliri varsayıyor. YEKDEM santrali ise YEKDEM fiyatından gelir alır. | P1 |
-| 7 | **Arıza ve kısıntı saatleri tahmin hatası sayılıyor.** En pahalı saatlerin önemli kısmında tahmin 30–50 MWh, üretim ~0 (ör. 2025-10-03, 2025-02-06). Bunlar tahmin kalitesi değil, olası arıza ya da YAT talimatı. Karne ve sektör sırası bu yüzden cezalandırılıyor. | P1 |
+| 7 | **Arıza ve kısıntı saatleri tahmin hatası sayılıyor.** Tahmin yüksekken üretimin ~0 olduğu bloklar (ör. 2025-02-06) tahmin kalitesi değil, olası arıza ya da YAT talimatı. *Ölçüm (Tur 3):* santral başına maliyetin %0–6'sı, portföylerde ~%1. Etkisi sınırlı, ama karnede ayrıca gösterilmeli. 6–8 Haziran 2025'te (Kurban Bayramı) farklı şirketlerin santralleri aynı saatlerde durmuş: olası sistem geneli kısıntı. | P1 → P2 |
 
 ---
 

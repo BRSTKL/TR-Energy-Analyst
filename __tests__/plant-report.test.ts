@@ -195,6 +195,16 @@ describe("Santral raporu verisi", () => {
     expect(r.plants.map((p) => p.organizationName).sort()).toEqual(["Şirket 1", "Şirket 2"]);
     // Toplayıcı yoksa alan boş
     expect(buildPlantReport(base).aggregator).toBeNull();
+
+    // Shapley: iki sahip, birlikte maliyet 0. A: (508 + (0 − 120)) / 2 = 194; B: (120 + (0 − 508)) / 2 = −194
+    expect(r.fairShare?.basis).toBe("owners");
+    const fa = r.fairShare!.members.find((m) => m.name === "Şirket 1")!;
+    const fb = r.fairShare!.members.find((m) => m.name === "Şirket 2")!;
+    expect(fa.shapleyCostTl).toBeCloseTo(194, 4);
+    expect(fb.shapleyCostTl).toBeCloseTo(-194, 4);
+    expect(fa.shapleyCostTl + fb.shapleyCostTl).toBeCloseTo(r.aggregator!.portfolioCostTl, 4);
+    // Profil: tek saat, PTF 2000 → yakalanan fiyat = baz PTF
+    expect(r.marketProfile).toMatchObject({ baseloadPtfTl: 2000, capturePriceTl: 2000, captureRatePct: 100 });
   });
 });
 

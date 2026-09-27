@@ -16,6 +16,8 @@ import { processHourlyRecord } from "@/lib/calculations/engine";
 import { aggregateMonthly } from "@/lib/calculations/aggregate";
 import { HourlyResult, ImbalancePricingProfile, REGULATORY_IMBALANCE_REGIMES } from "@/lib/calculations/types";
 import { findDataGaps, type PlantDataGap } from "@/lib/analysis/data-completeness";
+import { detectOutages, markConcurrent, type PlantOutages } from "@/lib/analysis/outage-detection";
+import { analyzeDsgScenario, MAX_EXACT_PLANTS } from "@/lib/analysis/dsg-scenarios";
 import { combineBacktests, MIN_FEASIBLE_LAG_HOURS, persistenceStrategy, runBacktest } from "@/lib/analysis/backtest";
 import { KUPST_REGIMES, kupstForHour, kupstTotal } from "@/lib/calculations/kupst";
 import { percentileRank, quantile, type Distribution } from "@/lib/sector/benchmark";
@@ -213,6 +215,36 @@ export interface PlantReportData {
   } | null;
   /** Veri döneminde ayı eksik olan santraller (ör. EPİAŞ'ta bir ay yayımlanmamış); eksik ay hesaplara girmez */
   dataGaps: PlantDataGap[];
+  /**
+   * Olası arıza / kısıntı: tahmin yüksekken üretimin ~0 olduğu ≥3 saatlik bloklar (yalnızca bloğu olan santraller).
+   * concurrent blok birden çok santralde aynı anda: olası kısıntı (YAT); diğerleri olası arıza. Maliyet santral bazında.
+   */
+  outages: { plants: PlantOutages[]; costTl: number; sharePct: number };
+  /**
+   * Profil (şekil) göstergesi: baz PTF = dönemin saatlik PTF ortalaması; yakalanan fiyat = üretim ağırlıklı PTF.
+   * captureRatePct < 100 ise santraller fiyatın düşük olduğu saatlerde daha çok üretir (profil maliyeti).
+   */
+  marketProfile: { baseloadPtfTl: number; capturePriceTl: number; captureRatePct: number };
+  /**
+   * Adil pay (Shapley): netleşen dengesizlik maliyetinin üyeler arasında, her üyenin gruba kattığı ortalama marjinal
+   * maliyete göre paylaştırılması. Üyeler toplayıcı portföyünde lisans sahipleri, tek şirkette santraller, birden çok
+   * şirkette şirketlerdir. fairUnitTl = (Shapley payı + kendi KÜPST'ü) / üretim: üyeye teklif edilecek MWh başına sapma
+   * primi (veri yılı kurallarıyla). En fazla MAX_EXACT_PLANTS üye; aksi halde null.
+   */
+  fairShare: {
+    basis: "owners" | "plants" | "companies";
+    members: Array<{
+      name: string;
+      plantNames: string[];
+      actualMwh: number;
+      standaloneCostTl: number;
+      shapleyCostTl: number;
+      kupstTl: number;
+      standaloneUnitTl: number;
+      fairUnitTl: number;
+      discountPct: number;
+    }>;
+  } | null;
   /**
    * Toplayıcı portföyü (projede toplayıcı tanımlıysa): santraller sahiplerinin kendi dengesinde (her sahip ayrı) ile
    * toplayıcı portföyünde tek dengede uzlaştırılması arasındaki fark, yani portföyün yarattığı netleşme değeri.
@@ -516,6 +548,75 @@ export function buildPlantReport(
     };
   }
 
+  // Profil: baz PTF (saat başına bir kez) ve üretim ağırlıklı PTF
+  const ptfByHour = new Map<number, number>();
+  let ptfWeighted = 0;
+  let mwhAll = 0;
+  for (const h of all) {
+    ptfByHour.set(new Date(h.timestamp).getTime(), h.ptf);
+    ptfWeighted += h.actualMwh * h.ptf;
+    mwhAll += h.actualMwh;
+  }
+  const baseloadPtf = ptfByHour.size ? Array.from(ptfByHour.values()).reduce((a, b) => a + b, 0) / ptfByHour.size : 0;
+  const capturePrice = mwhAll > 0 ? ptfWeighted / mwhAll : 0;
+  const marketProfile = { baseloadPtfTl: baseloadPtf, capturePriceTl: capturePrice, captureRatePct: pct(capturePrice, baseloadPtf) };
+
+  // Olası arıza / kısıntı blokları (santral bazında)
+  const outagePlants = markConcurrent(withData.map((p) => detectOutages(p.plantName, p.hourly, p.capacityMw))).filter((o) => o.events.length > 0);
+  const outageCost = outagePlants.reduce((sum, o) => sum + o.costTl, 0);
+  const outages = { plants: outagePlants, costTl: outageCost, sharePct: pct(outageCost, plantLevelCost) };
+
+  // Adil pay (Shapley): üyeler toplayıcıda sahipler, tek şirkette santraller, birden çok şirkette şirketler
+  let fairShare: PlantReportData["fairShare"] = null;
+  {
+    const basis: NonNullable<PlantReportData["fairShare"]>["basis"] = data.aggregator ? "owners" : groupList.length === 1 ? "plants" : "companies";
+    const memberOf = (p: Plant) => {
+      if (basis === "plants") return { key: `plant:${p.plantId}`, name: p.plantName };
+      const id = basis === "owners" && p.ownerOrganizationId !== undefined ? p.ownerOrganizationId : p.organizationId;
+      const name = basis === "owners" && p.ownerName !== undefined ? p.ownerName : p.organizationName;
+      return id !== null ? { key: `org:${id}`, name: name ?? `Şirket ${id}` } : { key: `plant:${p.plantId}`, name: p.plantName };
+    };
+    const members = new Map<string, { name: string; plants: Plant[] }>();
+    for (const p of withData) {
+      const m = memberOf(p);
+      const g = members.get(m.key) ?? { name: m.name, plants: [] };
+      g.plants.push(p);
+      members.set(m.key, g);
+    }
+    if (members.size >= 2 && members.size <= MAX_EXACT_PLANTS) {
+      const inputs = Array.from(members.entries()).map(([key, m]) => ({
+        plantId: key,
+        plantName: m.name,
+        plantType: m.plants[0].plantType,
+        // Üyenin kendi santralleri kendi aralarında netleşmiş seri
+        hourly: settleByCompany(m.plants.map((p) => ({ ...p, organizationId: 0 })), data.profile),
+      }));
+      const shapley = analyzeDsgScenario(inputs, inputs.map((i) => i.plantId), data.profile).allocation?.find((a) => a.id === "shapley");
+      if (shapley) {
+        const kupstOf = new Map(plants.map((r) => [r.name, r.kupstTl]));
+        fairShare = {
+          basis,
+          members: shapley.shares.map((sh) => {
+            const m = members.get(sh.plantId)!;
+            const mwh = m.plants.reduce((sum, p) => sum + p.hourly.reduce((a, h) => a + h.actualMwh, 0), 0);
+            const kupst = m.plants.reduce((sum, p) => sum + (kupstOf.get(p.plantName) ?? 0), 0);
+            return {
+              name: m.name,
+              plantNames: m.plants.map((p) => p.plantName),
+              actualMwh: mwh,
+              standaloneCostTl: sh.standaloneCost,
+              shapleyCostTl: sh.allocatedCost,
+              kupstTl: kupst,
+              standaloneUnitTl: mwh > 0 ? (sh.standaloneCost + kupst) / mwh : 0,
+              fairUnitTl: mwh > 0 ? (sh.allocatedCost + kupst) / mwh : 0,
+              discountPct: pct(sh.standaloneCost - sh.allocatedCost, sh.standaloneCost),
+            };
+          }),
+        };
+      }
+    }
+  }
+
   // Gün içi: önceki 4 aydan öğrenilen oranla, uygulanabilir en kısa gecikmede (2 saat) görülen hatanın kapatılması
   let intraday: PlantReportData["intraday"] = null;
   const backtests =
@@ -661,6 +762,9 @@ export function buildPlantReport(
     coefficients2026,
     dsg,
     aggregator,
+    outages,
+    marketProfile,
+    fairShare,
     dataGaps: findDataGaps(data.plants.map((p) => ({ plantName: p.plantName, timestamps: p.hourly.map((h) => new Date(h.timestamp).getTime()) }))),
     intraday,
   };

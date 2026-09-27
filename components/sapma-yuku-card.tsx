@@ -24,6 +24,9 @@ export interface SapmaSummary {
   } | null;
   sector: PlantReportData["sector"];
   aggregator?: PlantReportData["aggregator"];
+  outages?: PlantReportData["outages"];
+  fairShare?: PlantReportData["fairShare"];
+  marketProfile?: PlantReportData["marketProfile"];
   check: { unknownOwner: string[]; yekdemNextUnknown: string[]; missing: Array<{ company: string; plants: string[] }> };
 }
 
@@ -133,6 +136,16 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh }: { sapma: SapmaSum
           </div>
         )}
 
+        {sapma.outages && sapma.outages.plants.length > 0 && (
+          <p className="flex items-start gap-1.5 text-xs text-slate-600">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
+            Olası arıza/kısıntı: {sapma.outages.plants.reduce((a, o) => a + o.events.length, 0)} blok (tahmin kurulu gücün ≥%30&apos;u,
+            üretim ≤%2, ≥3 saat), dengesizlik riskinin %{sapma.outages.sharePct.toLocaleString("tr-TR", { maximumFractionDigits: 1 })} kadarı
+            {sapma.outages.plants.some((o) => o.events.some((e) => e.concurrent)) && "; bir kısmı birden çok santralde aynı anda (olası kısıntı)"}.
+            Tahmin hatası değil; arıza mı YAT talimatı mı teyit edilmeli.
+          </p>
+        )}
+
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Tile
             label="Dengesizlik riski"
@@ -187,6 +200,19 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh }: { sapma: SapmaSum
                     </div>
                   ))}
                 </div>
+                {sapma.marketProfile && sapma.marketProfile.baseloadPtfTl > 0 && (() => {
+                  // PPA göstergesi: profil indirimi (yakalanan fiyat / baz PTF) + beklenen dengesizlik primi
+                  const mp = sapma.marketProfile!;
+                  const premiumPct = (sapma.riskPremium!.portfolio.expectedTlPerMwh / mp.baseloadPtfTl) * 100;
+                  const ppa = mp.captureRatePct - premiumPct;
+                  const f = (v: number) => v.toLocaleString("tr-TR", { maximumFractionDigits: 1 });
+                  return (
+                    <p className="mt-2 rounded-md bg-slate-50 px-2 py-1.5 text-xs text-slate-700">
+                      <strong>PPA göstergesi: baz PTF&apos;nin ~%{f(ppa)} kadarı</strong> · yakalanan fiyat %{f(mp.captureRatePct)} (profil indirimi %
+                      {f(100 - mp.captureRatePct)}) · dengesizlik primi %{f(premiumPct)}. Fiyat riski ve marj hariç.
+                    </p>
+                  );
+                })()}
               </div>
             )}
             {sapma.sector && (
