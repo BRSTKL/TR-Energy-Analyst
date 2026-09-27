@@ -1114,25 +1114,35 @@ export async function exportPlantReportPptx(r: PlantReportData, author: ReportAu
         effort: "Orta · gün içi operasyon",
       });
     }
-    // Sektör medyanının üstündeki santraller medyana inseydi (santral tek başına; netleşme öncesi, üst sınır)
+    // Sektör medyanının üstündeki santraller medyana inseydi (santral tek başına; netleşme öncesi, üst sınır). Ana
+    // senaryoyla tutarlı: YEKDEM'deki santralin dengesizliği YEKDEM havuzunda kaldığından yalnızca KÜPST kazancı sayılır;
+    // KÜPST'ün sapmayla orantılı azaldığı varsayılır.
+    const yekdemInPool = !!ex;
     const weak = (r.sector?.types ?? []).flatMap((t) =>
       t.plants
         .filter((sp) => sp.unitTl > t.unitImbalanceTl.median)
         .map((sp) => {
           const row = r.plants.find((p) => p.name === sp.name);
-          return { name: sp.name, gain: row ? (sp.unitTl - t.unitImbalanceTl.median) * row.actualMwh : 0 };
+          if (!row) return { name: sp.name, gain: 0, kupstOnly: false };
+          const share = 1 - t.unitImbalanceTl.median / sp.unitTl;
+          const kupstOnly = yekdemInPool && row.yekdem === true;
+          const imbalanceGain = kupstOnly ? 0 : (sp.unitTl - t.unitImbalanceTl.median) * row.actualMwh;
+          return { name: sp.name, gain: imbalanceGain + row.kupstTl * share, kupstOnly };
         })
     );
     const weakGain = weak.reduce((a, w) => a + w.gain, 0);
+    const kupstOnlyNames = weak.filter((w) => w.kupstOnly).map((w) => w.name);
     items.push({
       title: weak.length ? "Zayıf santrallerde tahmin iyileştirme" : "En pahalı saatlere odaklı tahmin iyileştirme",
       impact: weak.length && weakGain > 0 ? `≈ ${formatTlShort(weakGain)} · üst sınır` : "Hesaplanmadı",
       value: weakGain,
       body:
         (weak.length
-          ? `${weak.length} santral (${weak.map((w) => w.name).join(", ")}) sektör medyanının üstünde; medyana inmeleri santral tek başına ${formatTlShort(
+          ? `${weak.length} santral (${weak.map((w) => w.name).join(", ")}) sektör medyanının üstünde; medyana inmeleri ${formatTlShort(
               weakGain
-            )} eder (netleşme öncesi). `
+            )} eder (santral tek başına, netleşme öncesi; dengesizlik + KÜPST${
+              kupstOnlyNames.length ? `, YEKDEM'deki ${kupstOnlyNames.join(", ")} için yalnızca KÜPST` : ""
+            }). `
           : `Riskin %${nf(r.alignment.sameDirectionCostPct, 0)} kadarı sistemle aynı yöndeki sapmalardan geliyor. `) +
         (r.plants.filter((p) => p.biasPct > 1).length > r.plants.length / 2 ? "Planlar sistematik olarak yüksek: kalibrasyon ilk adım. " : "") +
         "En pahalı saatlerde tahmin sağlayıcıyla hedefli iyileştirme.",
