@@ -251,6 +251,22 @@ function EpiasPlantImport() {
     return out;
   }, [selected, jobs, startDay, endDay]);
 
+  // Kayıttan önce veri bütünlüğü: planı ve gerçekleşeni birlikte olan saatleri ayın %90'ından az olan santral-aylar.
+  // Eksik ay hesaplardan sessizce düşer (santral maliyeti, portföy netleşmesi, sektör kıyası); kullanıcı görerek onaylar.
+  const gapSummary = useMemo(
+    () =>
+      selected
+        .map((p) => {
+          const m = merged[p.id];
+          const months = m ? m.series.coverage.filter((c) => c.hours > 0 && c.bothHours < c.hours * 0.9) : [];
+          return { name: plantDisplayName(p), months };
+        })
+        .filter((g) => g.months.length > 0),
+    [selected, merged]
+  );
+  const [gapsAcknowledged, setGapsAcknowledged] = useState(false);
+  useEffect(() => setGapsAcknowledged(false), [gapSummary.length, fetchKey]);
+
   // Önerileri bir kez doldur; kullanıcı değiştirirse ezme
   useEffect(() => {
     setForms((prev) => {
@@ -562,12 +578,38 @@ function EpiasPlantImport() {
                   tekrar deneyin ya da listeden çıkarın.
                 </p>
               )}
+              {allReady && gapSummary.length > 0 && (
+                <div className="space-y-1.5 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+                  <p className="flex items-center gap-1.5 text-sm font-semibold">
+                    <AlertTriangle className="h-4 w-4" /> Eksik veri: bu aylar hesaplara girmeyecek
+                  </p>
+                  <ul className="list-disc pl-5">
+                    {gapSummary.map((g) => (
+                      <li key={g.name}>
+                        {g.name}:{" "}
+                        {g.months
+                          .map((c) => `${c.month.slice(5)}.${c.month.slice(0, 4)} (${c.bothHours}/${c.hours} saat)`)
+                          .join(", ")}
+                      </li>
+                    ))}
+                  </ul>
+                  <p>
+                    Eksik ay santralin birim maliyetini, portföy netleşmesini ve sektör kıyasını etkiler. Dönemi değiştirip yeniden
+                    çekebilir, santrali çıkarabilir ya da bilerek devam edebilirsiniz; rapor eksik ayları ayrıca belirtir.
+                  </p>
+                  <label className="flex items-center gap-1.5 font-medium">
+                    <input type="checkbox" checked={gapsAcknowledged} onChange={(e) => setGapsAcknowledged(e.target.checked)} />
+                    Eksik ayları gördüm, bu haliyle kaydet
+                  </label>
+                </div>
+              )}
               <Button
                 onClick={save}
                 disabled={
                   creating ||
                   fetching ||
                   !allReady ||
+                  (gapSummary.length > 0 && !gapsAcknowledged) ||
                   !formsValid ||
                   (target === "new" ? !projectName.trim() : !targetProjectId) ||
                   addedNotice !== null
