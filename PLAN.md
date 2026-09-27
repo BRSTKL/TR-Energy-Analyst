@@ -72,7 +72,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 - **Kabul:** Rapor kendi içinde tutarlı; kapsam, istikrar ve doğrulama bilgisi raporda yer alıyor.
 
 ### Aşama 2: Piyasa katmanı (yeni "Piyasa" sayfası)
-- [ ] **2.1 Piyasa özeti.** Seçilen dönem için şunlar gösterilir:
+- [x] **2.1 Piyasa özeti.** ✅ 27.09.2026 · motor `f8d1972`, sayfa `6b1962b` (`/market`). Seçilen dönem için şunlar gösterilir:
   - PTF ve SMF (ortalama, dağılım, aylık seyir)
   - **SMF–PTF makası** (ortalama, P90, saat profili)
   - Sistem yönü payları (açık / fazla / dengede)
@@ -80,7 +80,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
   - GİP ağırlıklı ortalama fiyatı ve hacmi
 
   *Yeniden kullanılan:* `MarketData` tablosu, EPİAŞ senkronu, grafik bileşenleri. Yeni tablo gerekmiyor.
-- [ ] **2.2 Yıl karşılaştırması.** Aynı ayların yan yana gösterimi: 2025 ve 2026, Ocak–Ağustos. "Makas %51 açıldı" gibi sonuç cümlesi otomatik üretilir.
+- [x] **2.2 Yıl karşılaştırması.** ✅ 27.09.2026 · `6b1962b`. Aynı ayların yan yana gösterimi: 2025 ve 2026, Ocak–Ağustos. "Makas %51 açıldı" gibi sonuç cümlesi otomatik üretilir.
 - [ ] **2.3 Projeye bağlantı (3.5).** Proje sonuçlarına "düşük ve sıfır fiyatlı saat maruziyeti" eklenir: üretimin ne kadarı bu saatlerde gerçekleşti, ne kadar gelir kaybedildi. *Yeniden kullanılan:* capture price hesabı.
 - [ ] **2.4 Veri tamamlama.** 2024 ve Eylül 2026'daki LEGACY piyasa verisi EPİAŞ'tan yeniden çekilir, yıllar arası kıyas güvenilir olur. *Yeniden kullanılan:* "EPİAŞ Canlı Veri Çek".
 - **Teslim:** Piyasa sayfası.
@@ -133,6 +133,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 ## 4. İlerleme kaydı
 | Tarih | Adım | Commit | Not |
 |---|---|---|---|
+| 27.09.2026 | 2.1–2.2 Piyasa sayfası ve yıl karşılaştırması | `6b1962b` | `/market`: "Ne değişti?" cümleleri (makas, ay ay tutarlılık, PTF, sıfır fiyatlı saat, sistem yönü), 6 gösterge, aylık makas önceki yılla yan yana, saat profili, sistem yönü, ay ay tablo ve CSV. Bulut oturumunda sentetik veriyle denendi; gerçek 2025/2026 rakamları yerel veritabanında kontrol edilecek. |
 | 27.09.2026 | 1.4 I5 İçgörüler puanı | `84823c8` | Puan sektördeki yer (2026: Maslaktepe 97, Akkuş 70, Boreas 67, Gündoğdu 15, Alares 13). |
 | 27.09.2026 | 1.4 D2 DSG YEKDEM hariç | `655c243` | Gain 2026 portföy değeri: tüm santraller 13,2 M (%36), ana senaryoda (YEKDEM hariç) 2,6 M (%20); raporda ikisi birlikte. Alt grup netleşme hesabı düzeltildi. |
 | 27.09.2026 | 1.4 E3 Kayıt öncesi bütünlük | `93ff3e9` | Eksik ay özeti ve onay kutusu (Boreas 07.2025 ile denendi). |
