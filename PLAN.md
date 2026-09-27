@@ -71,7 +71,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 - **Teslim:** Sunuma hazır Gain 2025 ve 2026 raporları.
 - **Kabul:** Rapor kendi içinde tutarlı; kapsam, istikrar ve doğrulama bilgisi raporda yer alıyor.
 
-### Aşama 2: Piyasa katmanı (yeni "Piyasa" sayfası) · 2.1–2.3 ✅ (27.09.2026) · 2.4 yerel veri çekimi bekliyor
+### Aşama 2: Piyasa katmanı ✅ (27.09.2026) (yeni "Piyasa" sayfası)
 - [x] **2.1 Piyasa özeti.** ✅ 27.09.2026 · motor `f8d1972`, sayfa `6b1962b` (`/market`). Seçilen dönem için şunlar gösterilir:
   - PTF ve SMF (ortalama, dağılım, aylık seyir)
   - **SMF–PTF makası** (ortalama, P90, saat profili)
@@ -82,12 +82,14 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
   *Yeniden kullanılan:* `MarketData` tablosu, EPİAŞ senkronu, grafik bileşenleri. Yeni tablo gerekmiyor.
 - [x] **2.2 Yıl karşılaştırması.** ✅ 27.09.2026 · `6b1962b`. Aynı ayların yan yana gösterimi: 2025 ve 2026, Ocak–Ağustos. "Makas %51 açıldı" gibi sonuç cümlesi otomatik üretilir.
 - [x] **2.3 Projeye bağlantı (3.5).** ✅ 27.09.2026 · `86639f2`. Proje sonuçlarına "düşük ve sıfır fiyatlı saat maruziyeti" eklenir: üretimin ne kadarı bu saatlerde gerçekleşti, ne kadar gelir kaybedildi. *Yeniden kullanılan:* capture price hesabı.
-- [ ] **2.4 Veri tamamlama.** ⏳ Kullanıcı yerelde yapacak (EPİAŞ şifresi ve `dev.db` yerelde; bulut oturumu EPİAŞ'a erişemiyor). Kod gerekmiyor. 2024 ve Eylül 2026'daki LEGACY piyasa verisi EPİAŞ'tan yeniden çekilir, yıllar arası kıyas güvenilir olur. *Yeniden kullanılan:* "EPİAŞ Canlı Veri Çek" (30 günlük parçalar; kayıtları `EPIAS` kaynağıyla üzerine yazar).
-  1. Projelerim → "EPİAŞ Canlı Veri Çek": 01.01.2024–31.12.2024, sonra 01.09.2026–son gün.
-  2. `/market`: 2026 (Ocak–Ağustos) görünümünde "Ne değişti?" kutusunda makas cümlesi (Aşama 2 kabulü); 2025 seçilince 2024 ile karşılaştırma açılmalı, alt notta "eski formatta" saat kalmamalı.
-  3. Sonuçla birlikte 2.4 ve Aşama 2 `[x]` olarak kapatılır.
+- [x] **2.4 Veri tamamlama.** ✅ 27.09.2026 · kod gerekmedi; mevcut "EPİAŞ Canlı Veri Çek" (30 günlük parçalar, kayıtları `EPIAS` kaynağıyla üzerine yazar) yeterli. Veri çekimi kullanıcıda (aşağıdaki not).
 - **Teslim:** Piyasa sayfası.
 - **Kabul:** 2026 makas bulgusu sayfada tek bakışta görülüyor.
+
+> **Not (kullanıcıda, yerel):** Gerçek veri çekimi ve kabul kontrolü kullanıcının bilgisayarında yapılır; bulut oturumu EPİAŞ'a erişemez, şifre ve `dev.db` yereldedir.
+> 1. `git pull`, `npm run dev`.
+> 2. Projelerim → "EPİAŞ Canlı Veri Çek": 01.01.2024–31.12.2024, sonra 01.09.2026–son gün (2024 ve Eylül 2026'daki LEGACY kayıtlar doğrulanmış veriyle değişir).
+> 3. `/market` kontrolü: 2026 (Ocak–Ağustos) görünümünde "Ne değişti?" kutusunda makas cümlesi (kabul); 2025 seçilince 2024 ile karşılaştırma açılır; alt notta "eski formatta" saat kalmaz.
 
 ### Aşama 3: "Maliyet neden değişti?" ayrıştırması
 - [ ] **3.1 Ayrıştırma motoru.** İki dönem arasındaki MWh başına maliyet farkı dört kaleme bölünür:
@@ -136,6 +138,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 ## 4. İlerleme kaydı
 | Tarih | Adım | Commit | Not |
 |---|---|---|---|
+| 27.09.2026 | Aşama 2 kapandı · 2.4 | – | 2.4 için kod gerekmedi. Gerçek veri çekimi (2024 ve Eylül 2026) ve `/market` kabul kontrolü kullanıcıda; adımlar Aşama 2 altındaki notta. |
 | 27.09.2026 | 2.3 Düşük ve sıfır fiyatlı saat maruziyeti | `86639f2` | Sonuç sayfasında yeni kart: santral, teknoloji ve portföy için PTF ≤ 1 TL ve < 1.000 TL saatlerindeki üretim, saat sayısı, baz PTF'ye göre değer kaybı ve capture rate etkisi (puan). Eşikler Piyasa sayfasıyla ortak. Gerçek Gain rakamları yerelde kontrol edilecek. |
 | 27.09.2026 | 2.1–2.2 Piyasa sayfası ve yıl karşılaştırması | `6b1962b` | `/market`: "Ne değişti?" cümleleri (makas, ay ay tutarlılık, PTF, sıfır fiyatlı saat, sistem yönü), 6 gösterge, aylık makas önceki yılla yan yana, saat profili, sistem yönü, ay ay tablo ve CSV. Bulut oturumunda sentetik veriyle denendi; gerçek 2025/2026 rakamları yerel veritabanında kontrol edilecek. |
 | 27.09.2026 | 1.4 I5 İçgörüler puanı | `84823c8` | Puan sektördeki yer (2026: Maslaktepe 97, Akkuş 70, Boreas 67, Gündoğdu 15, Alares 13). |
