@@ -262,6 +262,21 @@ export function detectMissingHours(
 }
 
 /**
+ * Net sapmanın dengesizlik maliyeti: processHourlyRecord(...).imbalanceCost ile aynı sonuç, ara nesne üretmeden.
+ * Aynı saatte birçok bileşimin fiyatlandığı taramalar (aday santral, alt grup) için.
+ */
+export function imbalanceCostOf(
+  imbalanceMwh: number,
+  market: Pick<MarketPriceRecord, "timestamp" | "ptf" | "smf" | "systemDirection">,
+  profile: ImbalancePricingProfile
+): number {
+  if (imbalanceMwh === 0) return 0;
+  const p = resolveImbalanceProfile(profile, market.timestamp);
+  if (imbalanceMwh > 0) return imbalanceMwh * (market.ptf - calculatePositiveImbalancePrice(market.ptf, market.smf, market.systemDirection, p));
+  return -imbalanceMwh * (calculateNegativeImbalancePrice(market.ptf, market.smf, market.systemDirection, p) - market.ptf);
+}
+
+/**
  * processHourlyRecord(hourlyRecord, marketPriceRecord, profile): HourlyResult
  * → Yukarıdaki tüm alanları hesaplayıp tek bir obje döndürür.
  */

@@ -526,6 +526,12 @@ export default function ProjectResultsPage() {
               </Link>
             </Button>
             <Button asChild variant="outline" size="sm" className="gap-1.5">
+              <Link href={`/projects/${projectId}/candidates`}>
+                <Target className="h-3.5 w-3.5" />
+                Aday Santraller
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="gap-1.5">
               <Link href={`/projects/${projectId}/backtest`}>
                 <FlaskConical className="h-3.5 w-3.5" />
                 Geriye Dönük Test
