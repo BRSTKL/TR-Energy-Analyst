@@ -226,3 +226,38 @@ export function companyRollup(
     };
   });
 }
+
+export interface SectorTypeChange {
+  /** İki dönemde de kıyaslamaya giren santral sayısı */
+  plants: number;
+  /** MWh başına dengesizliği artan santrallerin payı (%) */
+  increasedPct: number;
+  /** Santral bazında MWh başına dengesizlik değişiminin medyanı (%) */
+  medianCostChangePct: number;
+  /** Medyan sapma (Σ|gerçekleşen − plan| / Σ gerçekleşen, %) */
+  medianDeviationPct: { prev: number; cur: number };
+}
+
+/**
+ * Sektör karnesinin iki dönemi arasında aynı santrallerin değişimi ("sektörün hepsinde arttı, tahmin hatası sabit"
+ * cümlesinin dayanağı). Santraller EPİAŞ kimliğiyle eşlenir; önceki dönemde maliyeti sıfır olanlar oran hesabına girmez.
+ */
+export function sectorYearChange(prev: SectorBenchmark, cur: SectorBenchmark): Partial<Record<"RES" | "GES", SectorTypeChange>> {
+  const before = new Map(prev.plants.map((p) => [p.epiasPlantId, p]));
+  const out: Partial<Record<"RES" | "GES", SectorTypeChange>> = {};
+  for (const type of ["RES", "GES"] as const) {
+    const pairs = cur.plants
+      .filter((p) => p.type === type)
+      .map((p) => [before.get(p.epiasPlantId), p] as const)
+      .filter((x): x is readonly [SectorPlantMetrics, SectorPlantMetrics] => !!x[0] && x[0].type === type && x[0].unitImbalanceTl > 0);
+    if (pairs.length === 0) continue;
+    const med = (v: number[]) => quantile([...v].sort((a, b) => a - b), 0.5);
+    out[type] = {
+      plants: pairs.length,
+      increasedPct: (pairs.filter(([a, b]) => b.unitImbalanceTl > a.unitImbalanceTl).length / pairs.length) * 100,
+      medianCostChangePct: med(pairs.map(([a, b]) => (b.unitImbalanceTl / a.unitImbalanceTl - 1) * 100)),
+      medianDeviationPct: { prev: med(pairs.map(([a]) => a.deviationPct)), cur: med(pairs.map(([, b]) => b.deviationPct)) },
+    };
+  }
+  return out;
+}

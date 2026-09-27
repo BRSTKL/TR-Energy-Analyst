@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { companyRollup, distribution, percentileRank, plantMetrics, passesQuality, quantile } from "@/lib/sector/benchmark";
+import { companyRollup, distribution, percentileRank, plantMetrics, passesQuality, quantile, sectorYearChange, type SectorBenchmark, type SectorPlantMetrics } from "@/lib/sector/benchmark";
 import { processHourlyRecord } from "@/lib/calculations/engine";
 import { DEFAULT_IMBALANCE_PROFILE } from "@/lib/calculations/types";
 
@@ -47,5 +47,23 @@ describe("Sektör karnesi", () => {
     expect(a.unitImbalanceTl).toBeCloseTo(62.5, 10); // (10 000 + 15 000) / 400
     expect(a.rankPct).toBeCloseTo(25, 10); // [100, 50, 150, 80] içinde altında 1 değer → 1/4
     expect(a.peakMw).toBe(20);
+  });
+});
+
+describe("Sektör karnesi yıllar arası değişim", () => {
+  const plant = (id: number, type: "RES" | "GES", unit: number, dev: number): SectorPlantMetrics => ({
+    epiasPlantId: id, name: `S${id}`, type, organizationName: null, yekdem: null, hours: 5000, actualMwh: 1000, peakMw: 1,
+    imbalanceCostTl: unit * 1000, kupstTl: 0, unitImbalanceTl: unit, unitKupstTl: 0, deviationPct: dev, sameDirectionPct: 50, biasPct: 0,
+  });
+  const bench = (year: number, plants: SectorPlantMetrics[]) => ({ year, plants } as unknown as SectorBenchmark);
+
+  it("aynı santraller eşlenir: artan pay, medyan değişim ve medyan sapma", () => {
+    const prev = bench(2025, [plant(1, "RES", 40, 18), plant(2, "RES", 50, 20), plant(3, "RES", 60, 22), plant(9, "GES", 30, 10), plant(7, "RES", 0, 5)]);
+    const cur = bench(2026, [plant(1, "RES", 60, 18), plant(2, "RES", 75, 21), plant(3, "RES", 54, 22), plant(4, "RES", 80, 30), plant(7, "RES", 10, 5)]);
+    const ch = sectorYearChange(prev, cur);
+    // 4 yalnızca 2026'da, 7'nin 2025 maliyeti sıfır: dışarıda; GES eşleşmesi yok
+    expect(ch.RES).toMatchObject({ plants: 3, medianCostChangePct: 50, medianDeviationPct: { prev: 20, cur: 21 } });
+    expect(ch.RES!.increasedPct).toBeCloseTo(200 / 3, 10);
+    expect(ch.GES).toBeUndefined();
   });
 });
