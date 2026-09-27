@@ -7,15 +7,31 @@
  * - Capture price: üretim ağırlıklı ortalama PTF = Σ(gerçekleşen × PTF) / Σ gerçekleşen
  * - Baz yük PTF: dönemdeki saatlerin düz ortalama PTF'si
  * - Capture rate: capture price / baz yük PTF. 1'in altı, santralin ucuz saatlerde ürettiğini gösterir.
+ * - Düşük ve sıfır fiyatlı saat maruziyeti: bu saatlerdeki üretim ve baz yük PTF'ye göre değer kaybı
+ *   Σ gerçekleşen × (baz PTF − PTF). Kayıp / (üretim × baz PTF), capture rate'i bu saatlerin kaç puan düşürdüğüdür.
  */
 
 import { HourlyResult } from "@/lib/calculations/types";
+import { LOW_PRICE_MAX, ZERO_PRICE_MAX } from "@/lib/analysis/market-summary";
 
 export interface PlantComparisonInput {
   plantId: string;
   plantName: string;
   plantType: string;
   hourly: HourlyResult[];
+}
+
+export interface LowPriceExposure {
+  /** PTF ≤ ZERO_PRICE_MAX saatlerindeki üretim (MWh) */
+  zeroMwh: number;
+  /** PTF < LOW_PRICE_MAX saatlerindeki üretim (MWh; sıfır fiyatlılar dahil) */
+  lowMwh: number;
+  /** Üretim olan sıfır / düşük fiyatlı saat sayısı (aynı saat birden çok santralde bir kez sayılır) */
+  zeroHours: number;
+  lowHours: number;
+  /** Bu saatlerdeki üretimin baz yük PTF'ye göre değer kaybı: Σ gerçekleşen × (baz PTF − PTF) */
+  zeroLossTl: number;
+  lowLossTl: number;
 }
 
 export interface ComparisonRow {
@@ -36,6 +52,7 @@ export interface ComparisonRow {
   totalImbalanceCost: number;
   /** Dengesizlik maliyeti / fiktif gelir */
   imbalanceCostShare: number;
+  lowPrice: LowPriceExposure;
 }
 
 export interface PlantComparisonResult {
@@ -58,6 +75,9 @@ function summarize(
   let revenue = 0;
   let fictive = 0;
   let imbalanceCost = 0;
+  const low: LowPriceExposure = { zeroMwh: 0, lowMwh: 0, zeroHours: 0, lowHours: 0, zeroLossTl: 0, lowLossTl: 0 };
+  const zeroTimes = new Set<number>();
+  const lowTimes = new Set<number>();
 
   for (const h of hourly) {
     actual += h.actualMwh;
@@ -66,7 +86,21 @@ function summarize(
     revenue += h.totalRevenue;
     fictive += h.fictiveRevenue;
     imbalanceCost += h.imbalanceCost;
+
+    if (h.ptf < LOW_PRICE_MAX) {
+      const loss = h.actualMwh * (baseloadPtf - h.ptf);
+      low.lowMwh += h.actualMwh;
+      low.lowLossTl += loss;
+      if (h.actualMwh > 0) lowTimes.add(new Date(h.timestamp).getTime());
+      if (h.ptf <= ZERO_PRICE_MAX) {
+        low.zeroMwh += h.actualMwh;
+        low.zeroLossTl += loss;
+        if (h.actualMwh > 0) zeroTimes.add(new Date(h.timestamp).getTime());
+      }
+    }
   }
+  low.zeroHours = zeroTimes.size;
+  low.lowHours = lowTimes.size;
 
   const capturePrice = safeDiv(ptfWeighted, actual);
 
@@ -82,6 +116,7 @@ function summarize(
     unitImbalanceCost: safeDiv(imbalanceCost, actual),
     totalImbalanceCost: imbalanceCost,
     imbalanceCostShare: safeDiv(imbalanceCost, fictive),
+    lowPrice: low,
   };
 }
 

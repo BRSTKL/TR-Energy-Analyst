@@ -67,6 +67,23 @@ describe("Santral / Teknoloji Karşılaştırma (plant-comparison)", () => {
     expect(h1.imbalanceCostShare).toBeCloseTo(496 / (7 * 1000 + 5 * 3000), 10);
   });
 
+  it("Düşük ve sıfır fiyatlı saat maruziyeti: üretim, saat ve baz PTF'ye göre kayıp", () => {
+    // 00:00 PTF 0 (sıfır), 01:00 PTF 800 (düşük), 02:00 PTF 3200; baz PTF = 4000 / 3
+    const base = 4000 / 3;
+    const ges = { plantId: "g1", plantName: "GES_1", plantType: "GES", hourly: [hour(0, 4, 4, 0), hour(1, 6, 6, 800), hour(2, 10, 10, 3200)] };
+    const res = { plantId: "r3", plantName: "RES_3", plantType: "RES", hourly: [hour(0, 0, 0, 0), hour(1, 5, 5, 800), hour(2, 5, 5, 3200)] };
+    const out = comparePlants([ges, res]);
+    expect(out.baseloadPtf).toBeCloseTo(base, 10);
+    const g = out.plants[0].lowPrice;
+    expect(g).toMatchObject({ zeroMwh: 4, lowMwh: 10, zeroHours: 1, lowHours: 2 });
+    expect(g.zeroLossTl).toBeCloseTo(4 * base, 6);
+    expect(g.lowLossTl).toBeCloseTo(4 * base + 6 * (base - 800), 6);
+    // Üretimsiz sıfır fiyatlı saat sayılmaz
+    expect(out.plants[1].lowPrice).toMatchObject({ zeroMwh: 0, zeroHours: 0, lowMwh: 5, lowHours: 1 });
+    // Portföyde aynı saat bir kez sayılır, MWh toplanır
+    expect(out.portfolio!.lowPrice).toMatchObject({ zeroMwh: 4, lowMwh: 15, zeroHours: 1, lowHours: 2 });
+  });
+
   it("Portföy satırı tüm santralleri kapsamalı, boş girdide null dönmelidir", () => {
     expect(result.portfolio?.totalActualMwh).toBe(52);
     expect(result.portfolio?.plantCount).toBe(3);

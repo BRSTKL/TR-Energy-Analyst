@@ -66,6 +66,7 @@ import { MarketDataStatus } from "@/components/market-data-status";
 import { MarketDataUploadDialog } from "@/components/market-data-upload-dialog";
 import { ReportDownloadDialog } from "@/components/report-download-dialog";
 import { PlantComparisonCard } from "@/components/plant-comparison-card";
+import { LowPriceExposureCard } from "@/components/low-price-exposure-card";
 import { ForecastAccuracyCard } from "@/components/forecast-accuracy-card";
 import type { PlantComparisonResult } from "@/lib/analysis/plant-comparison";
 import { NettingCard } from "@/components/netting-card";
@@ -947,6 +948,11 @@ export default function ProjectResultsPage() {
         {/* Santral ve Teknoloji Karşılaştırması (Capture Price) */}
         {data.comparison && (
           <PlantComparisonCard comparison={data.comparison} yekdemPlants={data.sapma?.yekdem?.plantNames ?? []} />
+        )}
+
+        {/* Düşük ve sıfır fiyatlı saat maruziyeti */}
+        {data.comparison && (
+          <LowPriceExposureCard comparison={data.comparison} yekdemPlants={data.sapma?.yekdem?.plantNames ?? []} />
         )}
 
         {/* DSG Netleştirme Analizi */}
