@@ -276,8 +276,11 @@ export async function exportPlantReportPptx(
   const load = deviationLoad(r);
   {
     const exiting = ex?.exitingPlants ?? [];
-    const title = agg && agg.benefitTl > 0 && load.a2026 !== null
-      ? `${agg.name} portföyünde netleşme riski %${nf(agg.benefitPct, 0)} azaltıyor; sapma yükü 2026'da ${formatTlShort(load.a2026)}`
+    // Toplayıcı başlığı: veri 2026 öncesiyse 2026 projeksiyonuyla, veri zaten 2026 kurallarıyla ise dönemin sapma yüküyle
+    const title = agg && agg.benefitTl > 0
+      ? load.a2026 !== null
+        ? `${agg.name} portföyünde netleşme riski %${nf(agg.benefitPct, 0)} azaltıyor; sapma yükü 2026'da ${formatTlShort(load.a2026)}`
+        : `${agg.name} portföyünde netleşme riski %${nf(agg.benefitPct, 0)} azaltıyor; ${yearOf(r)} sapma yükü ${formatTlShort(load.a2025)}`
       : ex
       ? load.a2026 !== null && load.b2026 !== null
         ? `2026'da ${exiting.length ? `${exiting.length} santral YEKDEM'den çıkıyor ve ` : ""}katsayı %6'ya çıkıyor: ${unit.gen} sapma yükü ${formatTlShort(
@@ -313,6 +316,15 @@ export async function exportPlantReportPptx(
         });
       if (load.b2026 !== null)
         stats.push({ value: formatTlShort(load.b2026), label: `2026 · duyarlılık: YEKDEM santrallerinin dengesizliği de ${unit.dat} yansısaydı`, color: C.sub });
+      // Veri zaten 2026 kurallarıyla: projeksiyon yok; aynı dönemin duyarlılığı ve MWh başına yük gösterilir
+      if (load.a2026 === null) {
+        stats.push({
+          value: formatTlShort(load.b2025),
+          label: `${yearOf(r)} · duyarlılık: YEKDEM santrallerinin dengesizliği de ${unit.dat} yansısaydı`,
+          color: C.sub,
+        });
+        stats.push({ value: `${nf(t.actualMwh > 0 ? load.b2025 / t.actualMwh : 0, 0)} TL`, label: "Üretilen MWh başına sapma yükü (tüm santraller)", color: C.ink });
+      }
     } else {
       stats.push({
         value: formatTlShort(load.b2025),

@@ -13,7 +13,10 @@ const share = (part: number, whole: number, digits = 1) => (whole > 0 ? `%${num(
 const tl = (v: number) =>
   Math.abs(v) >= 1e6 ? `${num(v / 1e6, 1)} M ₺` : Math.abs(v) >= 1e4 ? `${num(v / 1e3, 0)} bin ₺` : `${num(v, 0)} ₺`;
 
-/** Bu saatler baz PTF'den satılsaydı capture rate'in yükseleceği puan */
+/**
+ * Bu saatlerin capture rate'e brüt etkisi (puan): baz PTF'den satılsalardı oran kaç puan yükselirdi. Brüttür: pahalı
+ * saatlerde baz PTF'nin üstünde satılan üretimin katkısı dahil değil; net tablo için capture rate'in kendisine bakılır.
+ */
 const rateImpact = (lossTl: number, mwh: number, baseloadPtf: number) =>
   mwh > 0 && baseloadPtf > 0 ? `${lossTl > 0 ? "−" : "+"}${num((Math.abs(lossTl) / (mwh * baseloadPtf)) * 100, 1)} puan` : "–";
 
@@ -38,6 +41,7 @@ function Row({ row, yekdem, baseloadPtf }: { row: ComparisonRow; yekdem: boolean
       <TableCell className="text-right font-mono text-rose-700">{tl(lp.lowLossTl)}</TableCell>
       <TableCell className="text-right font-mono">{row.totalActualMwh > 0 ? num(lp.lowLossTl / row.totalActualMwh, 1) : "–"}</TableCell>
       <TableCell className="text-right font-mono">{rateImpact(lp.lowLossTl, row.totalActualMwh, baseloadPtf)}</TableCell>
+      <TableCell className="text-right font-mono">%{num(row.captureRate * 100, 1)}</TableCell>
     </TableRow>
   );
 }
@@ -68,7 +72,8 @@ export function LowPriceExposureCard({ comparison, yekdemPlants = [] }: { compar
         <CardDescription>
           PTF&apos;nin {num(LOW_PRICE_MAX)} ₺/MWh altına indiği saatlerde (sıfır fiyat: PTF ≤ {num(ZERO_PRICE_MAX)} ₺) ne kadar
           üretildi ve bu üretim dönemin düz ortalama PTF&apos;sine ({num(comparison.baseloadPtf)} ₺/MWh) göre ne kadar az değerlendi.
-          Kayıp, capture price&apos;ı baz PTF&apos;nin altına çeken profil maliyetinin bu saatlerden gelen kısmıdır.
+          Bu, ucuz saatlerin brüt etkisidir; santralin pahalı saatlerde baz PTF&apos;nin üstünde sattığı üretim hesaba katılmaz.
+          Net tablo capture rate sütunundadır.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -77,7 +82,19 @@ export function LowPriceExposureCard({ comparison, yekdemPlants = [] }: { compar
             Portföy üretiminde {num(LOW_PRICE_MAX)} ₺ altındaki saatlerin payı <b>{share(lp.lowMwh, pf.totalActualMwh)}</b> ({num(lp.lowMwh)} MWh,{" "}
             {num(lp.lowHours)} saat); sıfır fiyatlı saatlerin payı <b>{share(lp.zeroMwh, pf.totalActualMwh)}</b> ({num(lp.zeroHours)} saat). Bu üretim baz
             PTF ile satılsaydı <b>{tl(lp.lowLossTl)}</b> daha fazla değer ederdi: tüm üretimin MWh&apos;ı başına{" "}
-            {num(lp.lowLossTl / pf.totalActualMwh, 1)} ₺; capture rate&apos;e etkisi {rateImpact(lp.lowLossTl, pf.totalActualMwh, comparison.baseloadPtf)}.
+            {num(lp.lowLossTl / pf.totalActualMwh, 1)} ₺; capture rate&apos;e brüt etkisi {rateImpact(lp.lowLossTl, pf.totalActualMwh, comparison.baseloadPtf)}.{" "}
+            {(() => {
+              // Net: capture rate = 100 − (ucuz saatlerin brüt etkisi) + (diğer saatlerin katkısı)
+              const gross = pf.totalActualMwh > 0 && comparison.baseloadPtf > 0 ? (lp.lowLossTl / (pf.totalActualMwh * comparison.baseloadPtf)) * 100 : 0;
+              const net = pf.captureRate * 100;
+              const others = net - 100 + gross;
+              return (
+                <>
+                  Net capture rate <b>%{num(net, 1)}</b>
+                  {others > 0.05 ? `: diğer saatlerdeki (baz PTF üstü) üretim +${num(others, 1)} puan telafi ediyor.` : "."}
+                </>
+              );
+            })()}
             {worst && comparison.plants.length > 1 && worst.lowPrice.lowMwh > 0 && (
               <>
                 {" "}
@@ -101,7 +118,8 @@ export function LowPriceExposureCard({ comparison, yekdemPlants = [] }: { compar
                 <TableHead className="text-right">Saat</TableHead>
                 <TableHead className="text-right">Değer kaybı</TableHead>
                 <TableHead className="text-right">₺/MWh (tüm üretim)</TableHead>
-                <TableHead className="text-right">Capture rate etkisi</TableHead>
+                <TableHead className="text-right">Brüt etki (puan)</TableHead>
+                <TableHead className="text-right">Net capture rate</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -113,8 +131,9 @@ export function LowPriceExposureCard({ comparison, yekdemPlants = [] }: { compar
           </Table>
         </div>
         <p className="text-xs text-slate-500">
-          Değer kaybı = Σ üretim × (baz PTF − PTF), yalnızca {num(LOW_PRICE_MAX)} ₺ altındaki saatler. Capture rate etkisi = değer kaybı /
-          (üretim × baz PTF): bu saatler baz PTF&apos;den satılsaydı capture rate&apos;in kaç puan yükseleceği.
+          Değer kaybı = Σ üretim × (baz PTF − PTF), yalnızca {num(LOW_PRICE_MAX)} ₺ altındaki saatler. Brüt etki = değer kaybı /
+          (üretim × baz PTF): bu saatler baz PTF&apos;den satılsaydı capture rate&apos;in kaç puan yükseleceği. Net capture rate =
+          üretim ağırlıklı PTF / baz PTF (tüm saatler).
           {yekdemPlants.length > 0 && " YEKDEM santrallerinin geliri YEKDEM fiyatından oluşur; bu satırlardaki kayıp üretimin piyasa değeridir, santralin fiili gelir kaybı değildir."}{" "}
           Dönemin fiyat seyri için{" "}
           <Link href="/market" className="text-sky-700 underline">
