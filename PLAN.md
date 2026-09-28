@@ -71,7 +71,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 - **Teslim:** Sunuma hazır Gain 2025 ve 2026 raporları.
 - **Kabul:** Rapor kendi içinde tutarlı; kapsam, istikrar ve doğrulama bilgisi raporda yer alıyor.
 
-### Aşama 2: Piyasa katmanı ✅ (27.09.2026) (yeni "Piyasa" sayfası) · gerçek veri bekleyen: 2.4 ve kabul kontrolü
+### Aşama 2: Piyasa katmanı ✅ (27.09.2026; kabul ve 2.4: 28.09.2026) (yeni "Piyasa" sayfası)
 - [x] **2.1 Piyasa özeti.** ✅ 27.09.2026 · motor `f8d1972`, sayfa `6b1962b` (`/market`). Seçilen dönem için şunlar gösterilir:
   - PTF ve SMF (ortalama, dağılım, aylık seyir)
   - **SMF–PTF makası** (ortalama, P90, saat profili)
@@ -82,7 +82,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
   *Yeniden kullanılan:* `MarketData` tablosu, EPİAŞ senkronu, grafik bileşenleri. Yeni tablo gerekmiyor.
 - [x] **2.2 Yıl karşılaştırması.** ✅ 27.09.2026 · `6b1962b`. Aynı ayların yan yana gösterimi: 2025 ve 2026, Ocak–Ağustos. "Makas %51 açıldı" gibi sonuç cümlesi otomatik üretilir.
 - [x] **2.3 Projeye bağlantı (3.5).** ✅ 27.09.2026 · `86639f2`. Proje sonuçlarına "düşük ve sıfır fiyatlı saat maruziyeti" eklenir: üretimin ne kadarı bu saatlerde gerçekleşti, ne kadar gelir kaybedildi. *Yeniden kullanılan:* capture price hesabı.
-- [ ] **2.4 Veri tamamlama.** ⏳ Gerçek veri gerekiyor, yapılmadı (aşağıdaki not). Kod gerekmedi: mevcut "EPİAŞ Canlı Veri Çek" (30 günlük parçalar, kayıtları `EPIAS` kaynağıyla üzerine yazar) yeterli.
+- [x] **2.4 Veri tamamlama.** ✅ 28.09.2026 (yerel): 2024 tam yıl (8.784 saat) ve 01–27.09.2026 (648 saat) EPİAŞ'tan yeniden çekildi; LEGACY kayıt kalmadı. 2025 ↔ 2024 karşılaştırması açıldı: makas 395 → 469 TL (+%19), sıfır fiyatlı saat 5 → 48. Kod gerekmedi: mevcut "EPİAŞ Canlı Veri Çek" (30 günlük parçalar, kayıtları `EPIAS` kaynağıyla üzerine yazar) yeterli.
 - [x] **Kabul kontrolü.** ✅ 28.09.2026 (yerel, gerçek veri): `/market` 2026 (Ocak–Ağustos) görünümünde ilk cümle "SMF–PTF makası %58 açıldı: 483 → 763 TL"; makas 8 ayın hepsinde 2025'ten geniş; sıfır fiyatlı saat 39 → 394.
 - **Teslim:** Piyasa sayfası.
 - **Kabul:** 2026 makas bulgusu sayfada tek bakışta görülüyor.
@@ -163,6 +163,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 ## 4. İlerleme kaydı
 | Tarih | Adım | Commit | Not |
 |---|---|---|---|
+| 28.09.2026 | 2.4 Veri tamamlama | — (veri) | 2024 ve Eylül 2026 EPİAŞ'tan; üç yıllık eğilim: makas 395 → 469 → 763 TL, sıfır fiyatlı saat 5 → 48 → 394 (2026 Oca–Ağu). Saatlik sektör toplaması (2026, 2025) başlatıldı. |
 | 28.09.2026 | Aşama 2–4 yerel kontrol | `395aae6` | tsc/lint temiz, 290 test. Aşama 2 ve 3 kabul gerçek veriyle geçti. Düzeltmeler: 2026 verili projede özet slaytı (toplayıcı başlığı, boş sol sütun), düşük fiyat kartında brüt etki yanında net capture rate (%101,2; brüt −25,4 puan yanıltıcıydı). Bekleyen: 2.4 ve saatlik sektör toplaması (VPN), 4.3 hidro (karar). Öneri: aday sayfasında MWh başına kazanca göre sıralama ve YEKDEM süzgeci. |
 | 27.09.2026 | Aşama 4 (4.1, 4.2; 4.3 kodu) | `23b5c70`, `18d6ef6` | Saatlik sektör serisi (gzip), `--rebuild`, K1 görünümü; aday santral taraması ve sayfası (Shapley adil prim); hidro karnesi desteği (`--hes`, tahmini alt tip). 4.3 karnesi ve Gain kabul kontrolü gerçek veri bekliyor (Aşama 4 notu). |
 | 27.09.2026 | İşaretleme kuralı | – | Gerçek veri gerektiren maddeler `[ ]` kalır ve not alır: 2.4 geri alındı; Aşama 2 ve 3'e "Kabul kontrolü" maddesi eklendi. |
