@@ -10,7 +10,11 @@
  * payı Shapley ile hesaplanır (dsg-scenarios ile aynı tanım; üyelerin 2^n alt grubunun saatlik net sapması bir kez
  * hazırlanır). Üye sayısı MAX_EXACT_PLANTS'ı aşarsa portföy tek oyuncu sayılır ve kazanç ikiye bölünür.
  * Adil prim: (Shapley payı + tahmini KÜPST) / adayın üretimi; toplayıcının adaya önerebileceği MWh başına dengesizlik
- * bedelidir. SAF: I/O yok.
+ * bedelidir.
+ * Sıralama iki türlüdür: toplam kazanç (TL) büyük santralleri öne çıkarır; MWh başına kazanç ise adayın her MWh'ına ne
+ * kadar prim alanı açtığını gösterir. MWh başına sıralamada üretimi portföyün MIN_PER_MWH_SHARE'inden az adaylar sona
+ * düşer: çok küçük ve tahmini çok kötü santrallerin kazancı neredeyse tamamen kendi maliyetidir, sözleşmeye değmez.
+ * SAF: I/O yok.
  */
 
 import { imbalanceCostOf, processHourlyRecord } from "@/lib/calculations/engine";
@@ -72,20 +76,27 @@ export interface CandidateResult {
   } | null;
 }
 
+export type CandidateSort = "total" | "perMwh";
+
 export interface ScreeningResult {
   portfolio: { members: number; hours: number; actualMwh: number; costTl: number };
+  sortBy: CandidateSort;
+  /** MWh başına sıralamada üst sıralara girmek için gereken en az üretim (MWh); toplam sıralamada null */
+  minActualMwh: number | null;
   candidates: CandidateResult[];
   /** Kapsam eşiğini geçemeyen (portföy saatlerinin %90'ından azında verisi olan) aday sayısı */
   skippedForCoverage: number;
 }
 
 export const MIN_CANDIDATE_COVERAGE = 0.9;
+/** MWh başına sıralamada adayın üretimi portföy üretiminin en az bu payı olmalı */
+export const MIN_PER_MWH_SHARE = 0.05;
 
 export function screenCandidates(
   members: ScreeningMember[],
   candidates: ScreeningCandidate[],
   profile: ImbalancePricingProfile,
-  { top = 10 }: { top?: number } = {}
+  { top = 10, sortBy = "total" }: { top?: number; sortBy?: CandidateSort } = {}
 ): ScreeningResult {
   // Portföy saatleri: piyasa örneği, bu saatin katsayıları ve portföyün net sapması
   const index = new Map<number, number>();
@@ -156,7 +167,12 @@ export function screenCandidates(
       _cand: c,
     });
   }
-  results.sort((a, b) => b.gainTl - a.gainTl);
+  const minActualMwh = sortBy === "perMwh" ? pActual * MIN_PER_MWH_SHARE : null;
+  if (minActualMwh === null) results.sort((a, b) => b.gainTl - a.gainTl);
+  else {
+    const big = (r: CandidateResult) => (r.actualMwh >= minActualMwh ? 1 : 0);
+    results.sort((a, b) => big(b) - big(a) || b.gainPerMwhTl - a.gainPerMwhTl);
+  }
 
   // İlk N aday: adil pay. Shapley: aday, üyelerin her S alt grubuna katılımındaki marjinal maliyetini
   // |S|!(n−|S|)!/(n+1)! ağırlığıyla öder. Alt grupların saatlik net sapması ve maliyeti adaydan bağımsızdır.
@@ -223,6 +239,8 @@ export function screenCandidates(
 
   return {
     portfolio: { members: members.length, hours: samples.length, actualMwh: pActual, costTl: pCost.reduce((a, b) => a + b, 0) },
+    sortBy,
+    minActualMwh,
     candidates: results.map(({ _cand, ...r }) => r),
     skippedForCoverage: skipped,
   };

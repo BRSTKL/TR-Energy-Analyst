@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { screenCandidates, type ScreeningCandidate, type ScreeningMember } from "@/lib/analysis/candidate-screening";
+import { MIN_PER_MWH_SHARE, screenCandidates, type ScreeningCandidate, type ScreeningMember } from "@/lib/analysis/candidate-screening";
 import { analyzeDsgScenario } from "@/lib/analysis/dsg-scenarios";
 import { imbalanceCostOf, processHourlyRecord } from "@/lib/calculations/engine";
 import { DEFAULT_IMBALANCE_PROFILE, type SystemDirection } from "@/lib/calculations/types";
@@ -90,5 +90,31 @@ describe("Aday santral taraması", () => {
     const c = r.candidates[0];
     expect(c.fair!.method).toBe("two-player");
     expect(c.fair!.allocatedCostTl).toBeCloseTo(c.standaloneCostTl - c.gainTl / 2, 9);
+  });
+
+  it("MWh başına sıralama: büyük adaylar kazanç/MWh'a göre, portföyün %5'inden küçük üretimli aday sonda", () => {
+    const small = (key: string, deltas: number[]): ScreeningCandidate => ({
+      ...candidate(key, []),
+      rows: deltas.map((d, i) => ({ timestamp: t(i), forecastMwh: 0.8, actualMwh: 0.8 + d })),
+    });
+    const cands = [
+      candidate("big7", [-3, 2, -4, 1, -2, 3]), // tam ters, büyük kazanç
+      candidate("mid8", [-1, 1, -1, 0, -1, 1]), // kısmen ters
+      small("tiny9", [-0.7, 0.7, -0.7, 0.7, -0.7, 0.7]),
+    ];
+    const total = screenCandidates(pf, cands, P);
+    expect(total.sortBy).toBe("total");
+    expect(total.minActualMwh).toBeNull();
+    expect(total.candidates[0].key).toBe("big7");
+
+    const r = screenCandidates(pf, cands, P, { sortBy: "perMwh" });
+    expect(r.minActualMwh).toBeCloseTo(r.portfolio.actualMwh * MIN_PER_MWH_SHARE, 9);
+    const tiny = r.candidates.find((c) => c.key === "tiny9")!;
+    expect(tiny.actualMwh).toBeLessThan(r.minActualMwh!);
+    // Küçük aday MWh başına en yüksek kazanca sahip olsa bile sonda
+    expect(tiny.gainPerMwhTl).toBeGreaterThan(Math.max(...r.candidates.filter((c) => c !== tiny).map((c) => c.gainPerMwhTl)));
+    expect(r.candidates[r.candidates.length - 1].key).toBe("tiny9");
+    const bigOnes = r.candidates.slice(0, -1);
+    for (let i = 1; i < bigOnes.length; i++) expect(bigOnes[i - 1].gainPerMwhTl).toBeGreaterThanOrEqual(bigOnes[i].gainPerMwhTl);
   });
 });
