@@ -83,7 +83,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 - [x] **2.2 Yıl karşılaştırması.** ✅ 27.09.2026 · `6b1962b`. Aynı ayların yan yana gösterimi: 2025 ve 2026, Ocak–Ağustos. "Makas %51 açıldı" gibi sonuç cümlesi otomatik üretilir.
 - [x] **2.3 Projeye bağlantı (3.5).** ✅ 27.09.2026 · `86639f2`. Proje sonuçlarına "düşük ve sıfır fiyatlı saat maruziyeti" eklenir: üretimin ne kadarı bu saatlerde gerçekleşti, ne kadar gelir kaybedildi. *Yeniden kullanılan:* capture price hesabı.
 - [ ] **2.4 Veri tamamlama.** ⏳ Gerçek veri gerekiyor, yapılmadı (aşağıdaki not). Kod gerekmedi: mevcut "EPİAŞ Canlı Veri Çek" (30 günlük parçalar, kayıtları `EPIAS` kaynağıyla üzerine yazar) yeterli.
-- [ ] **Kabul kontrolü.** ⏳ Gerçek veri gerekiyor, yapılmadı (aşağıdaki not).
+- [x] **Kabul kontrolü.** ✅ 28.09.2026 (yerel, gerçek veri): `/market` 2026 (Ocak–Ağustos) görünümünde ilk cümle "SMF–PTF makası %58 açıldı: 483 → 763 TL"; makas 8 ayın hepsinde 2025'ten geniş; sıfır fiyatlı saat 39 → 394.
 - **Teslim:** Piyasa sayfası.
 - **Kabul:** 2026 makas bulgusu sayfada tek bakışta görülüyor.
 
@@ -105,7 +105,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
   *Uygulanan:* MWh başına maliyet = netleşmiş sapma / üretim (tahmin hatası) × sapma MWh'ı başına bedel. Bedel; sapmanın saat ve yön dağılımına (hacim ve profil), PTF–SMF–sistem yönüne (fiyat makası) ve katsayı kuralına bağlı. Saatler takvimde eşlenir (29 Şubat hariç); her kalem iki yönde değiştirilip yeniden fiyatlanır, kalan etkileşimdir. Üretim hacmi tek başına birim maliyeti değiştirmez. Makas yalnızca sistemle aynı yöndeki sapmayı fiyatlar.
 - [x] **3.2 Karşılaştırma sayfası.** ✅ 27.09.2026 · `ec679b9` (`/compare`, tam iki proje seçilince). Aynı santrallerden oluşan iki proje seçilince ayrıştırma şelale grafiği gösterilir.
 - [x] **3.3 Rapor slaytı.** ✅ 27.09.2026 · `f5f94cf` (önceki yıl projesi otomatik bulunur: EPİAŞ santrallerinin en az %80'i, verisi bir önceki yıl). "2026'da ne değişti?": şelale grafiği ve sektör desteği ("294 santralin hepsinde arttı, tahmin hatası sabit"). *Yeniden kullanılan:* köprü slaytı çizimi, sektör karnesi.
-- [ ] **Kabul kontrolü (Gain 2025 → 2026).** ⏳ Gerçek veri gerekiyor, yapılmadı (aşağıdaki not).
+- [x] **Kabul kontrolü (Gain 2025 → 2026).** ✅ 28.09.2026 (yerel, gerçek veri): 65,0 → 86,7 TL/MWh (+%33); fiyat makası +22,9, katsayı +6,4, tahmin +1,2, hacim/profil −8,0, etkileşim −0,9; **açıklanan pay %96**. Tahmin hatası %16,4 → %16,7. Rapor 4. slaytı "Ne değişti?" sektör desteğiyle doğru.
 - **Teslim:** Ayrıştırma slaytı ve sayfası.
 - **Kabul:** Gain 2025 → 2026 farkının en az %90'ı dört kaleme dağıtılıyor, kalan "etkileşim" olarak gösteriliyor.
 
@@ -125,7 +125,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 - [ ] **4.3 Hidro karnesi.** ⏳ Gerçek veri gerekiyor, karne toplanmadı (aşağıdaki not). HES santralleri için sektör karnesi (nehir tipi / barajlı ayrımıyla). Gain'in 29 hidro santrali bu sayede kıyaslanabilir.
 
   *Kod hazır* (`23b5c70`): `--hes` ile toplama; tahmini alt tip (addaki baraj / regülatör, yoksa gün içi üretim esnekliği); sektör sayfasında Hidro sekmesi ve alt tip süzgeci; rapor ve aday taraması HES'i tanır.
-- [ ] **Kabul kontrolü (Gain).** ⏳ Gerçek veri gerekiyor, yapılmadı (aşağıdaki not).
+- [ ] **Kabul kontrolü (Gain).** ◐ 28.09.2026 kısmi: aday listesi gerçek veriyle üretiliyor (144 aday, 1,6 sn; ilk aday EVRENCİK RES, kazanç 14,3 M TL / %26), ancak 2026 saatlik sektör serisi 523 santralin yalnızca 221'inde var (toplama 27.09 21:51'de VPN değişince durdu). Tam kabul için 2025 ve 2026 toplaması tamamlanmalı (VPN FR/US).
 - **Teslim:** "Portföyünüze en çok değer katacak 10 santral" listesi.
 - **Kabul:** Gain için liste üretiliyor ve her aday için beklenen kazanç veriliyor.
 
@@ -163,6 +163,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 ## 4. İlerleme kaydı
 | Tarih | Adım | Commit | Not |
 |---|---|---|---|
+| 28.09.2026 | Aşama 2–4 yerel kontrol | `395aae6` | tsc/lint temiz, 290 test. Aşama 2 ve 3 kabul gerçek veriyle geçti. Düzeltmeler: 2026 verili projede özet slaytı (toplayıcı başlığı, boş sol sütun), düşük fiyat kartında brüt etki yanında net capture rate (%101,2; brüt −25,4 puan yanıltıcıydı). Bekleyen: 2.4 ve saatlik sektör toplaması (VPN), 4.3 hidro (karar). Öneri: aday sayfasında MWh başına kazanca göre sıralama ve YEKDEM süzgeci. |
 | 27.09.2026 | Aşama 4 (4.1, 4.2; 4.3 kodu) | `23b5c70`, `18d6ef6` | Saatlik sektör serisi (gzip), `--rebuild`, K1 görünümü; aday santral taraması ve sayfası (Shapley adil prim); hidro karnesi desteği (`--hes`, tahmini alt tip). 4.3 karnesi ve Gain kabul kontrolü gerçek veri bekliyor (Aşama 4 notu). |
 | 27.09.2026 | İşaretleme kuralı | – | Gerçek veri gerektiren maddeler `[ ]` kalır ve not alır: 2.4 geri alındı; Aşama 2 ve 3'e "Kabul kontrolü" maddesi eklendi. |
 | 27.09.2026 | Aşama 3 (3.1–3.3) | `a6cc546`, `ec679b9`, `f5f94cf` | Ayrıştırma motoru (tahmin hatası, fiyat makası, katsayı kuralı, hacim ve profil, etkileşim), `/compare` şelale kartı, rapora "Ne değişti?" slaytı ve Ek B yöntem notu, `sectorYearChange`. Sentetik veride farkın %99,8'i açıklandı; Gain kabul kontrolü yerelde (Aşama 3 notu). |
