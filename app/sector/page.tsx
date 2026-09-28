@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { SECTOR_TECHS, type Distribution, type HydroKind, type SectorBenchmark, type SectorCompanyRow, type SectorTech } from "@/lib/sector/benchmark";
 import type { SectorPlant } from "@/lib/services/sector";
 
+import { MethodLink } from "@/components/method-link";
 type Tech = SectorTech;
 type HydroFilter = "all" | HydroKind | "unknown";
 
@@ -267,6 +268,7 @@ export default function SectorPage() {
               <span className="font-medium text-slate-700">Sektör karnesi</span>
             </div>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Sektör karnesi {data.label}</h1>
+            <MethodLink section="sektor" label="Yöntem ve varsayımlar" />
             <p className="mt-1 max-w-3xl text-xs text-slate-600 sm:text-sm">
               EPİAŞ&apos;ta üretimi yayımlanan lisanslı {techs.map((t) => TECH_LABEL[t].toLocaleLowerCase("tr-TR")).join(", ")} santrallerinin
               MWh başına dengesizlik riski, aynı motorla ve santral tek başına uzlaştırılmış varsayımıyla (tahmin kalitesi kıyası). Dönemin en

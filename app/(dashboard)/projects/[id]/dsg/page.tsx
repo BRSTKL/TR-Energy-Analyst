@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { DsgScenarioResult } from "@/lib/analysis/dsg-scenarios";
 
+import { MethodLink } from "@/components/method-link";
 interface PlantOption {
   plantId: string;
   plantName: string;
@@ -103,6 +104,7 @@ export default function DsgScenarioPage() {
           <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
             <Network className="h-6 w-6 text-indigo-600" /> DSG Senaryoları
           </h1>
+          <MethodLink section="adil-prim" label="Yöntem ve varsayımlar" />
           <p className="mt-1 max-w-3xl text-sm text-slate-600">
             Dengeden sorumlu grubu şirketler (piyasa katılımcıları) kurar. Aynı şirketin santralleri zaten birlikte
             uzlaştırıldığından her şirket tek üyedir; fayda yalnızca şirketler arasındaki ek netleşmedir. Grubu seçin;

@@ -57,3 +57,26 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Yazdırma / PDF (Metodoloji sayfası "PDF olarak indir"): A4, kenar boşlukları, bağlantılar metin renginde */
+@media print {
+  @page {
+    size: A4;
+    margin: 16mm 14mm;
+  }
+  html,
+  body {
+    background: white !important;
+  }
+  a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+  h2 {
+    break-after: avoid;
+  }
+  pre,
+  table {
+    break-inside: avoid;
+  }
+}

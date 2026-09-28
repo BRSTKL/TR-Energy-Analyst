@@ -39,6 +39,7 @@ import {
   FileSpreadsheet,
   Flame,
   Layers,
+  BookOpen,
   Lightbulb,
   PlusCircle,
   Sun,
@@ -241,6 +242,12 @@ export default function HomePage() {
               <Link href="/compare">
                 <Layers className="h-4 w-4" />
                 Projeleri karşılaştır
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="gap-2">
+              <Link href="/methodology">
+                <BookOpen className="h-4 w-4" />
+                Metodoloji
               </Link>
             </Button>
             {/* Dialog Trigger */}

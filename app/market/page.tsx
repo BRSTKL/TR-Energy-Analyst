@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { LOW_PRICE_MAX, ZERO_PRICE_MAX, pairMonths, type MarketSummary } from "@/lib/analysis/market-summary";
 
+import { MethodLink } from "@/components/method-link";
 interface MarketResponse {
   available: { start: string; end: string; lastFullMonthEnd: string };
   period: { start: string; end: string; label: string };
@@ -209,6 +210,7 @@ export default function MarketPage() {
               <span className="font-medium text-slate-700">Piyasa</span>
             </div>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Piyasa özeti {data.period.label}</h1>
+            <MethodLink section="piyasa" label="Yöntem ve varsayımlar" />
             <p className="mt-1 max-w-3xl text-xs text-slate-600 sm:text-sm">
               EPİAŞ saatlik PTF, SMF, sistem yönü ve GİP verisinden {nf(c.hours)} saat. SMF–PTF makası, dengesizliğin gün öncesi
               fiyatından ne kadar uzakta uzlaştığını gösterir; sistemle aynı yöndeki her MWh sapmanın bedeli bu farkla büyür.

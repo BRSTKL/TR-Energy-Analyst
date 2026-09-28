@@ -1252,7 +1252,7 @@ export async function exportPlantReportPptx(
     const s = contentSlide("Adil prim", title, "assumption");
     s.addNotes(
       "Shapley paylaştırması: her üye, gruba katılabileceği tüm sıralamalardaki ortalama marjinal maliyetini öder; sapması diğerlerini dengeleyen üye daha çok indirim alır. " +
-        "Tablo, toplayıcının ya da grubun her üyeye teklif edeceği MWh başına sapma priminin dayanağıdır. Paylaşım yöntemi sözleşmeyle belirlenir; Shapley istikrarlıdır (hiçbir alt grup ayrılarak daha ucuza gelmez). " +
+        "Tablo, toplayıcının ya da grubun her üyeye teklif edeceği MWh başına sapma priminin dayanağıdır. Paylaşım yöntemi sözleşmeyle belirlenir; Shapley üye sırasından bağımsızdır ve her üyeye katkısı oranında pay verir (bir alt grubun ayrılıp daha ucuza gelip gelemeyeceği DSG sayfasında ayrıca kontrol edilir). " +
         "Rakamlar veri yılının kurallarıyla; KÜPST santral bazında olduğu için her üye kendi KÜPST'ünü taşır."
     );
     const cell = (v: string, o: Record<string, unknown> = {}) => ({ text: v, options: { fontSize: 10.5, fontFace: FONT_BODY, color: C.ink, ...o } });

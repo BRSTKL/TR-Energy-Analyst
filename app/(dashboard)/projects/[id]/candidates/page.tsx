@@ -12,6 +12,7 @@ import type { AccessFilter, MemberScope, ProjectCandidates, YekdemFilter } from 
 import type { CandidateAccessKind } from "@/lib/analysis/candidate-access";
 import type { SectorTech } from "@/lib/sector/benchmark";
 
+import { MethodLink } from "@/components/method-link";
 const nf = (v: number, d = 0) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
 const tl = (v: number) => (Math.abs(v) >= 1e6 ? `${nf(v / 1e6, 1)} M ₺` : `${nf(v / 1e3, 0)} bin ₺`);
 const TECH: Record<string, string> = { RES: "Rüzgâr", GES: "Güneş", HES: "Hidro" };
@@ -143,6 +144,7 @@ export default function CandidatesPage() {
           <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
             <Target className="h-6 w-6 text-indigo-600" /> Aday santraller
           </h1>
+          <MethodLink section="aday" label="Yöntem ve varsayımlar" />
           <p className="mt-1 max-w-3xl text-sm text-slate-600">
             Portföyünüze en çok değer katacak santraller: aday portföyle tek dengede uzlaştırılsaydı, saat saat netleşme sayesinde portföy
             ve aday birlikte ne kadar daha az dengesizlik öderdi. Adaylar aynı yılın sektör karnesindeki santrallerdir; adil prim, adayın

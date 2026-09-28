@@ -73,6 +73,7 @@ import { NettingCard } from "@/components/netting-card";
 import { SapmaYukuCard, type SapmaSummary } from "@/components/sapma-yuku-card";
 import type { NettingResult } from "@/lib/analysis/portfolio-netting";
 
+import { MethodLink } from "@/components/method-link";
 interface PlantResult {
   plantId: string;
   plantName: string;
@@ -455,6 +456,7 @@ export default function ProjectResultsPage() {
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
               {data.project.name}
             </h1>
+            <MethodLink section="dengesizlik" label="Yöntem ve varsayımlar" />
             {/* Açıklama özet satırındaki şirket adıyla aynıysa tekrar gösterilmez */}
             {data.project.description &&
               !data.summary?.companies.some(

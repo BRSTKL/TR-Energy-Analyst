@@ -1,0 +1,539 @@
+import React from "react";
+import Link from "next/link";
+import type { Metadata } from "next";
+import { ArrowLeft, BookOpen } from "lucide-react";
+import { PrintButton } from "@/components/print-button";
+
+export const metadata: Metadata = {
+  title: "Metodoloji | TR-Energy Analyst",
+  description: "Veri kaynakları, hesaplama yöntemleri, mevzuat dayanağı, doğrulamalar ve sınırlar.",
+};
+
+/**
+ * Metodoloji: uygulamadaki ve rapordaki her rakamın nereden geldiği. Tek kaynak: yöntem değiştiğinde bu sayfa ve
+ * "Sürüm notları" güncellenir. "PDF olarak indir" sayfayı yöntem notuna çevirir (baskı düzeni globals.css).
+ * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
+ */
+
+const VERSION = "1.0";
+const VERSION_DATE = "28 Eylül 2026";
+
+const SECTIONS: Array<{ id: string; title: string }> = [
+  { id: "ozet", title: "Özet" },
+  { id: "veri", title: "Veri kaynakları" },
+  { id: "dengesizlik", title: "Dengesizlik riski" },
+  { id: "kupst", title: "KÜPST (sapma tutarı)" },
+  { id: "uzlastirma", title: "Uzlaştırma birimi ve netleşme" },
+  { id: "yekdem", title: "YEKDEM senaryoları" },
+  { id: "adil-prim", title: "Adil prim (Shapley)" },
+  { id: "risk-primi", title: "Risk primi ve PPA göstergesi" },
+  { id: "ayristirma", title: "Maliyet neden değişti?" },
+  { id: "piyasa", title: "Piyasa göstergeleri" },
+  { id: "sektor", title: "Sektör karnesi" },
+  { id: "aday", title: "Aday ve hedef santraller" },
+  { id: "gip", title: "Gün içi piyasa senaryosu" },
+  { id: "kalite", title: "Veri bütünlüğü ve arıza saatleri" },
+  { id: "dogrulama", title: "Doğrulamalar" },
+  { id: "etiketler", title: "Etiketler, varsayımlar ve sınırlar" },
+  { id: "kaynakca", title: "Kaynakça" },
+  { id: "surum", title: "Sürüm notları" },
+];
+
+function Section({ id, n, title, children }: { id: string; n: number; title: string; children: React.ReactNode }) {
+  return (
+    <section id={id} className="scroll-mt-6 border-t border-slate-200 pt-6">
+      <h2 className="text-lg font-bold text-slate-900">
+        <span className="mr-2 text-slate-400">{n}.</span>
+        {title}
+      </h2>
+      <div className="mt-3 space-y-3 text-sm leading-relaxed text-slate-700">{children}</div>
+    </section>
+  );
+}
+
+/** Formül bloğu */
+function F({ children }: { children: React.ReactNode }) {
+  return (
+    <pre className="overflow-x-auto whitespace-pre-wrap rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-[12.5px] leading-6 text-slate-800 print:border-slate-300">
+      {children}
+    </pre>
+  );
+}
+
+const TAG_STYLE = {
+  exact: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  estimate: "border-amber-200 bg-amber-50 text-amber-800",
+  assumption: "border-violet-200 bg-violet-50 text-violet-800",
+  scenario: "border-sky-200 bg-sky-50 text-sky-800",
+} as const;
+const TAG_TEXT = { exact: "KESİN HESAP", estimate: "TAHMİNİ", assumption: "VARSAYIMA BAĞLI", scenario: "SENARYO" } as const;
+
+function Tag({ kind }: { kind: keyof typeof TAG_STYLE }) {
+  return <span className={`inline-block rounded border px-1.5 py-0.5 text-[10.5px] font-semibold tracking-wide ${TAG_STYLE[kind]}`}>{TAG_TEXT[kind]}</span>;
+}
+
+const STATUS_STYLE = {
+  verified: "text-emerald-700",
+  source: "text-slate-600",
+  check: "text-amber-700",
+  inference: "text-violet-700",
+} as const;
+
+function Table({ head, rows }: { head: string[]; rows: React.ReactNode[][] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-[13px]">
+        <thead>
+          <tr className="border-b border-slate-300 text-left text-xs uppercase tracking-wide text-slate-500">
+            {head.map((h) => (
+              <th key={h} className="py-1.5 pr-3 font-semibold">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i} className="border-b border-slate-100 align-top">
+              {r.map((c, j) => (
+                <td key={j} className="py-1.5 pr-3">
+                  {c}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export default function MethodologyPage() {
+  let n = 0;
+  const next = () => ++n;
+  return (
+    <div className="min-h-screen bg-slate-50/60 pb-16 print:bg-white print:pb-0">
+      <header className="border-b bg-white print:border-b-2 print:border-slate-800">
+        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-6 sm:px-6 md:flex-row md:items-end md:justify-between lg:px-8">
+          <div>
+            <div className="flex items-center gap-2 text-xs print:hidden">
+              <Link href="/" className="flex items-center gap-1 text-slate-500 hover:text-slate-900">
+                <ArrowLeft className="h-3 w-3" /> Dashboard
+              </Link>
+              <span className="text-slate-300">/</span>
+              <span className="font-medium text-slate-700">Metodoloji</span>
+            </div>
+            <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+              <BookOpen className="h-6 w-6 text-indigo-600 print:hidden" /> Metodoloji
+            </h1>
+            <p className="mt-1 max-w-3xl text-sm text-slate-600">
+              TR-Energy Analyst&apos;teki ve Dengesizlik Karnesi raporundaki her rakamın nereden geldiği: veri kaynakları, hesaplama
+              yöntemleri, mevzuat dayanağı, doğrulamalar ve sınırlar.
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Sürüm {VERSION} · {VERSION_DATE}
+            </p>
+          </div>
+          <PrintButton />
+        </div>
+      </header>
+
+      <div className="mx-auto grid max-w-6xl gap-8 px-4 pt-6 sm:px-6 lg:grid-cols-[220px_1fr] lg:px-8 print:block print:max-w-none print:px-0">
+        <nav className="print:hidden lg:sticky lg:top-6 lg:self-start">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">İçindekiler</p>
+          <ol className="mt-2 space-y-1 text-sm">
+            {SECTIONS.map((s, i) => (
+              <li key={s.id}>
+                <a href={`#${s.id}`} className="text-slate-600 hover:text-indigo-700">
+                  <span className="mr-1 text-slate-400">{i + 1}.</span>
+                  {s.title}
+                </a>
+              </li>
+            ))}
+          </ol>
+        </nav>
+
+        <main className="space-y-6 rounded-lg border border-slate-200 bg-white p-6 shadow-sm print:space-y-4 print:border-0 print:p-0 print:shadow-none">
+          <Section id="ozet" n={next()} title="Özet">
+            <p>
+              Uygulama, bir üreticinin gün öncesi üretim planı (KGÜP) ile gerçekleşen üretimini (UEVM) saat saat karşılaştırır ve plan hatasının
+              bedelini, EPİAŞ&apos;ın yayımladığı piyasa fiyatları (PTF, SMF) ve sistem yönüyle, mevzuattaki uzlaştırma kurallarına göre
+              hesaplar. Bütün sayfalar ve rapor aynı hesaplama motorunu kullanır: bir rakam sonuç sayfasında, raporda ve sektör karnesinde aynı
+              yoldan çıkar.
+            </p>
+            <p>
+              Veri yalnızca kamuya açık EPİAŞ Şeffaflık Platformu&apos;dur. Şirketin gün içi işlemleri, ikili anlaşmaları ve fiili uzlaştırma
+              faturaları açık veride yoktur; bu yüzden rakamlar &quot;kapatılması gereken risk&quot; olarak okunmalı, gerçekleşen bedel olarak
+              değil. Her rakamın ne kadar kesin olduğu rapordaki etiketlerle belirtilir (bölüm 16).
+            </p>
+          </Section>
+
+          <Section id="veri" n={next()} title="Veri kaynakları">
+            <p>Tüm veriler EPİAŞ Şeffaflık Platformu&apos;ndan, saatlik ve Türkiye saatiyle (Türkiye 2016&apos;dan beri yaz saati uygulamaz; her gün 24 saattir).</p>
+            <Table
+              head={["Veri", "Anlamı", "Kullanım"]}
+              rows={[
+                ["KGÜP (ilk sürüm)", "Kesinleşmiş günlük üretim programı: santralin gün öncesinde bildirdiği saatlik plan", "Plan; dengesizlik ve KÜPST'ün dayanağı"],
+                ["UEVM", "Uzlaştırmaya esas veriş miktarı: sayaçtan ölçülen saatlik üretim", "Gerçekleşen üretim"],
+                ["PTF", "Piyasa takas fiyatı (gün öncesi piyasası)", "Satış fiyatı ve dengesizlik fiyatının tabanı"],
+                ["SMF ve sistem yönü", "Sistem marjinal fiyatı (dengeleme güç piyasası) ve saatin enerji açığı / fazlası", "Dengesizlik fiyatı"],
+                ["GİP ağırlıklı ortalama fiyatı ve hacmi", "Gün içi piyasasında saatin işlem fiyatı", "Gün içi senaryosu ve piyasa özeti"],
+                ["Santral ve şirket listeleri", "Santral → uzlaştırma birimi, şirket → santraller, toplayıcıların santral listeleri", "Uzlaştırma birimi, sektör karnesi, hedef santraller"],
+                ["YEKDEM listeleri", "Yıl bazında YEK Destekleme Mekanizması'ndaki santraller", "YEKDEM senaryoları"],
+              ]}
+            />
+            <p>
+              KGÜP&apos;ün <b>ilk sürümü</b> kullanılır: dengesizlik ve KÜPST, gün öncesinde kesinleşen plana göre uzlaştırılır; sonradan
+              düzeltilmiş sürüm şirketin gerçekte taahhüt ettiği planı göstermez. Birden çok uzlaştırma birimi olan santralde birimlerin
+              serileri toplanır.
+            </p>
+          </Section>
+
+          <Section id="dengesizlik" n={next()} title="Dengesizlik riski">
+            <p>
+              Her saat için sapma = gerçekleşen − plan. Pozitif sapma (fazla üretim) sistemden düşük fiyatla alınır, negatif sapma (eksik
+              üretim) yüksek fiyatla kapatılır. Dengesizlik fiyatları:
+            </p>
+            <F>
+              {`Pozitif dengesizlik fiyatı = min(PTF, SMF) × (1 − k)
+Negatif dengesizlik fiyatı = max(PTF, SMF) × (1 + l)
+
+Dengesizlik riski (saat) = sapma > 0 :  sapma × (PTF − pozitif fiyat)
+                           sapma < 0 : |sapma| × (negatif fiyat − PTF)
+MWh başına risk = Σ risk / Σ gerçekleşen üretim`}
+            </F>
+            <p>
+              Bu, üretimin tamamı gün öncesinde PTF&apos;den satılabilseydi elde edilecek gelir ile gün öncesi satış + dengesizlik tutarı
+              arasındaki farktır; yani plan hatasının bedeli. Katsayılar saatin tarihine göre seçilir:
+            </p>
+            <Table
+              head={["Dönem", "k ve l"]}
+              rows={[
+                ["2026 öncesi", "k = l = %3, sistem yönünden bağımsız"],
+                ["1 Ocak 2026'dan itibaren", "Sapma sistemle aynı yöndeyse %6 (sistem fazlasındayken fazla, açığındayken eksik üretim); ters yöndeyse ya da sistem dengedeyse %3"],
+              ]}
+            />
+            <p>
+              Sistemle ters yöndeki sapma sistemi dengelediği için ucuzdur; riskin büyük kısmı aynı yöndeki sapmadan doğar. Gün içi işlemler
+              açık veride olmadığından hesap &quot;gün içi işlemler öncesi&quot; risktir. <Tag kind="exact" />
+            </p>
+          </Section>
+
+          <Section id="kupst" n={next()} title="KÜPST (sapma tutarı)">
+            <p>Lisanslı üretici, dengesizlik tutarından ayrı olarak, planından tolerans payını aşan sapması için sapma tutarı öder:</p>
+            <F>
+              {`KÜPSM (saat) = max(0, |UEVM − KÜP| − tolerans × KÜP)
+KÜPST (saat) = KÜPSM × max(PTF, SMF) × 0,03`}
+            </F>
+            <Table
+              head={["Dönem", "Rüzgâr", "Güneş", "Diğer"]}
+              rows={[
+                ["2025 öncesi", "%21", "%12", "—"],
+                ["2025", "%17", "%10", "%5"],
+                ["2026'dan itibaren", "%15", "%8", "%5"],
+              ]}
+            />
+            <p>
+              KÜPST santral (uzlaştırma birimi) bazında hesaplanır; şirket ya da toplayıcı portföyünde netleşmez. Toleransın plana oranlandığı
+              varsayılmıştır (resmi formül görsel olarak yayımlanmıştır); arıza sayısına bağlı katsayı artışı kapsam dışıdır. 2026 oranlarının
+              kurul kararı metni görülmemiştir. Bu nedenlerle KÜPST her yerde <Tag kind="estimate" /> olarak etiketlenir.
+            </p>
+            <p>
+              <b>Sapma yükü</b> = dengesizlik riski + tahmini KÜPST. Raporda &quot;santralin plandan sapmasının toplam bedeli&quot; olarak
+              kullanılır.
+            </p>
+          </Section>
+
+          <Section id="uzlastirma" n={next()} title="Uzlaştırma birimi ve netleşme">
+            <p>
+              Dengesizlik santral bazında değil, dengeden sorumlu taraf (şirket ya da toplayıcı) bazında saat saat netleşir: aynı saatte bir
+              santralin fazlası diğerinin eksiğini karşılar. Uygulama iki birimi destekler:
+            </p>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>
+                <b>Şirket bazında</b> (varsayılan): aynı şirketin santralleri birlikte netleşir. Şirket bilgisi EPİAŞ şirket → santral
+                listelerinden gelir.
+              </li>
+              <li>
+                <b>Toplayıcı portföyü</b>: farklı sahiplerin santralleri toplayıcının tek dengesinde netleşir; santral sahipleri raporda korunur.
+              </li>
+            </ul>
+            <F>
+              {`Netleşmiş risk (saat) = risk( Σ sapma_i )          (birimdeki santraller üzerinden)
+Netleşme değeri       = Σ_i risk(sapma_i) − Σ_saat risk(Σ_i sapma_i)`}
+            </F>
+            <p>
+              Değerin kalıcı olup olmadığını görmek için ay ay netleşme oranı ve &quot;bir üyenin fazla, diğerinin eksik ürettiği saatlerin
+              payı&quot; birlikte verilir. <Tag kind="exact" />
+            </p>
+          </Section>
+
+          <Section id="yekdem" n={next()} title="YEKDEM senaryoları">
+            <p>
+              YEKDEM&apos;deki santrallerin geliri YEKDEM fiyatından oluşur ve dengesizliklerinin YEKDEM portföyünde uzlaştırıldığı
+              değerlendirilir (mevzuatın yapısına ve EPİAŞ&apos;ın YEKDEM dengesizlik maliyetini ayrı yayımlamasına dayanan çıkarım). Bu yüzden
+              iki senaryo hesaplanır:
+            </p>
+            <Table
+              head={["Senaryo", "Varsayım", "Kullanım"]}
+              rows={[
+                [
+                  <b key="a">A · ana senaryo</b>,
+                  "YEKDEM santrallerinin dengesizliği YEKDEM havuzunda kalır; şirkete yalnız YEKDEM dışı santrallerin dengesizliği ve tüm santrallerin KÜPST'ü yansır. Portföyde yalnız YEKDEM dışı santraller netleşir.",
+                  "Rapor başlıkları, köprü, aday taraması (varsayılan)",
+                ],
+                [<b key="b">B · duyarlılık</b>, "YEKDEM santrallerinin dengesizliği de şirkete / portföye yansır.", "Aralığın üst ucu"],
+              ]}
+            />
+            <p>
+              Karşı taraf hangisinin geçerli olduğunu söylediğinde aralık tek rakama iner. YEKDEM&apos;den çıkış yılı YEKDEM listelerinden
+              belirlenir. <Tag kind="assumption" />
+            </p>
+          </Section>
+
+          <Section id="adil-prim" n={next()} title="Adil prim (Shapley)">
+            <p>
+              Netleşen portföy maliyeti üyelere (santral sahipleri ya da santraller) Shapley değeriyle paylaştırılır: her üye, gruba
+              katılabileceği tüm sıralamalardaki ortalama marjinal maliyetini öder.
+            </p>
+            <F>
+              {`φ_i = Σ_{S ⊆ N∖{i}}  |S|! (n − |S| − 1)! / n!  × [ c(S ∪ {i}) − c(S) ]
+Adil prim (TL/MWh) = (φ_i + KÜPST_i) / üretim_i
+İndirim = (tek başına maliyet − φ_i) / (tek başına maliyet + KÜPST_i)`}
+            </F>
+            <p>
+              c(S), S alt grubunun saat saat netleşmiş dengesizlik riskidir. Shapley her üyeye katkısı oranında pay verir ve üye sırasından
+              bağımsızdır. Paylaşımın istikrarlı olup olmadığı, yani hiçbir alt grubun ayrılıp kendi grubunu kurarak daha ucuza gelemeyeceği
+              (çekirdek koşulu), her zaman garanti değildir; DSG sayfası bunu ayrıca kontrol eder. Üye sayısı 8&apos;i aşarsa tam hesap yerine iki oyunculu yaklaşım kullanılır (kazanç
+              ikiye bölünür). Paylaşım oranı sözleşmeyle belirlenir; tablo teklifin dayanağıdır. <Tag kind="assumption" />
+            </p>
+          </Section>
+
+          <Section id="risk-primi" n={next()} title="Risk primi ve PPA göstergesi">
+            <F>
+              {`Beklenen prim  = dönemin sapma yükü / dönemin üretimi                (TL/MWh)
+İhtiyatlı prim = aylık MWh başına sapma yükünün 90. yüzdeliği (P90)
+PPA göstergesi = capture rate − beklenen prim / baz PTF
+capture rate   = üretim ağırlıklı PTF / düz ortalama PTF`}
+            </F>
+            <p>
+              Prim, portföyün piyasaya açık olduğu varsayımıyla (YEKDEM yok), en güncel kurallarla (2026 katsayıları ve KÜPST oranları)
+              hesaplanır; en az 6 ay veri gerekir. Fiyat riski ve marj dahil değildir. <Tag kind="assumption" />
+            </p>
+          </Section>
+
+          <Section id="ayristirma" n={next()} title="Maliyet neden değişti?">
+            <p>Aynı santrallerin iki dönemi arasındaki MWh başına maliyet farkı dört kaleme ayrılır:</p>
+            <F>
+              {`MWh başına maliyet = W × ḡ
+W = Σ|net sapma| / Σ üretim                      → tahmin hatası
+ḡ = Σ(|net sapma| × bedel) / Σ|net sapma|        → sapma MWh'ı başına bedel`}
+            </F>
+            <ul className="list-disc space-y-1 pl-5">
+              <li><b>Tahmin hatası:</b> W&apos;nin değişimi.</li>
+              <li><b>Fiyat makası:</b> aynı sapmaların diğer dönemin PTF, SMF ve sistem yönüyle bedeli.</li>
+              <li><b>Katsayı kuralı:</b> 2025 %3 → 2026 %6 / %3.</li>
+              <li><b>Hacim ve profil:</b> sapmanın saatlere ve işarete dağılımı.</li>
+            </ul>
+            <p>
+              İki dönemin saatleri takvimde eşlenir (aynı ay, gün, saat; 29 Şubat hariç). Her kalem tek başına diğer dönemin değeriyle
+              değiştirilip yeniden fiyatlanır; etki, iki yöndeki geçişin ortalamasıdır (sıradan bağımsız). Dört etkinin toplamı ile gerçek fark
+              arasındaki kalan &quot;etkileşim&quot; olarak gösterilir. <Tag kind="exact" />
+            </p>
+          </Section>
+
+          <Section id="piyasa" n={next()} title="Piyasa göstergeleri">
+            <Table
+              head={["Gösterge", "Tanım"]}
+              rows={[
+                ["SMF–PTF makası", "|SMF − PTF| saatlik ortalaması; dengesizlik maliyetinin fiyat tarafındaki sürücüsü"],
+                ["Yönlü makas", "Sistem açığında SMF − PTF, fazlasında PTF − SMF ortalaması"],
+                ["Sıfır fiyatlı saat", "PTF ≤ 1 TL/MWh"],
+                ["Düşük fiyatlı saat", "PTF < 1.000 TL/MWh"],
+                ["Sistem yönü payı", "Açık / fazla / denge saatlerinin payı"],
+                ["GİP fiyatı", "Hacim ağırlıklı gün içi fiyatı"],
+              ]}
+            />
+            <p>Yıllar arası karşılaştırmada her ay bir önceki yılın aynı ayıyla eşlenir. <Tag kind="exact" /></p>
+          </Section>
+
+          <Section id="sektor" n={next()} title="Sektör karnesi">
+            <p>
+              EPİAŞ&apos;ta üretimi yayımlanan lisanslı rüzgâr, güneş ve (isteğe bağlı) hidro santrallerinin aynı dönemdeki göstergeleri, aynı
+              motordan. Santraller <b>tek başına</b> kıyaslanır: amaç tahmin kalitesini karşılaştırmaktır, şirket içi netleşme şirketten
+              şirkete değiştiği için kıyasa katılmaz.
+            </p>
+            <p>
+              <b>Kalite süzgeci:</b> dönem saatlerinin en az %90&apos;ında verisi olan ve plan / gerçekleşen oranı 0,75–1,33 arasında olan santraller
+              kıyaslanır (eksik ya da tutarsız veri elenir). Dağılım santral sayısına göre P10, P25, medyan, P75 ve P90 ile, ayrıca üretim
+              ağırlıklı ortalamayla verilir; santralin yeri teknoloji içindeki yüzdelik sırasıdır. <b>K1 görünümü</b> olası arıza / kısıntı saatlerini (bölüm 14) dışarıda bırakır.
+            </p>
+            <p>
+              Hidro alt tipi (barajlı / nehir tipi) addan ya da gün içi üretim esnekliğinden tahmin edilir. <Tag kind="exact" /> (alt tip:{" "}
+              <Tag kind="estimate" />)
+            </p>
+          </Section>
+
+          <Section id="aday" n={next()} title="Aday ve hedef santraller">
+            <p>Sektör karnesindeki her santral için, portföye eklenseydi ne kadar değer katacağı saat saat hesaplanır:</p>
+            <F>
+              {`Netleşme kazancı = Σ_saat [ c(portföy) + c(aday) − c(portföy + aday) ]
+İlk N aday için adil prim: portföy üyeleri + aday üzerinden Shapley (bölüm 7)`}
+            </F>
+            <p>
+              Portföy, ana senaryoda YEKDEM dışı santrallerdir. Portföy saatlerinin %90&apos;ından azında verisi olan aday elenir. İki sıralama
+              vardır: toplam kazanç (büyük santralleri öne çıkarır) ve MWh başına kazanç (üretimi portföyün %5&apos;inden az adaylar sona alınır).
+              Kazançlar aday başınadır, toplanamaz. <Tag kind="exact" />
+            </p>
+            <p>
+              <b>Ulaşılabilirlik</b> sırayla belirlenir: (1) EPİAŞ&apos;ta &quot;(TOPLAYICI)&quot; olarak kayıtlı katılımcıların santral
+              listelerinde ise &quot;başka toplayıcıda&quot;; (2) görevli tedarik şirketinin portföyü ya da lisanssız santralse hedef dışı; (3) sahibinin
+              ya da şirket adındaki markanın EPİAŞ&apos;ta en az 3 santrali varsa &quot;grup portföyü&quot;; (4) hiçbiri değilse &quot;hedef&quot;.
+              Dengeden sorumlu grup üyeliği santral bazında yayımlanmadığı için &quot;hedef&quot; bir tahmindir. <Tag kind="estimate" />
+            </p>
+          </Section>
+
+          <Section id="gip" n={next()} title="Gün içi piyasa senaryosu">
+            <p>
+              Tahmin hatasının bir kısmı teslimattan önce görülüp gün içi piyasasında kapatılsaydı riskin ne kadar azalacağı test edilir. GİP
+              teslimattan 60 dakika önce kapandığı için uygulanabilir en kısa gecikme <b>2 saat</b> kabul edilir; 1 saatlik gecikme
+              &quot;teorik&quot; olarak ayrılır.
+            </p>
+            <p>
+              Kapatma oranı önceki 4 aydan öğrenilir ve sonraki ayda test edilir (ileriye dönük, veri sızıntısı yok). İşlem fiyatı saatin
+              gerçekleşen GİP ağırlıklı ortalamasıdır; zor saatlerde daha kötü fiyat varsayılır. Sonuç üst sınırdır: şirket gün içinde zaten
+              işlem yapıyorsa kazancın bir kısmı hâlihazırda alınıyordur. &quot;Kusursuz öngörü&quot; ile hesaplanan tavan ayrıca etiketlenir.{" "}
+              <Tag kind="scenario" />
+            </p>
+          </Section>
+
+          <Section id="kalite" n={next()} title="Veri bütünlüğü ve arıza saatleri">
+            <p>
+              <b>Veri bütünlüğü:</b> her santral için ay ay beklenen ve mevcut saat sayısı karşılaştırılır; beklenen saatlerin %90&apos;ından azı
+              olan aylar raporda ve sayfalarda uyarı olarak gösterilir (eksik ay sessizce hesaptan düşmez).
+            </p>
+            <p>
+              <b>Olası arıza / kısıntı:</b> plan kurulu gücün en az %30&apos;u, gerçekleşen en fazla %2&apos;si olan ve en az 3 saat süren
+              bloklar işaretlenir. Aynı saatlerde birden çok santralde görülen bloklar sistem geneli kısıntıya (yük atma talimatı, YAT)
+              işaret eder. Bu saatler tahmin hatası olmayabilir; nedeni işletmeciyle teyit edilmelidir. <Tag kind="estimate" />
+            </p>
+            <p>
+              <b>İşaret kuralı:</b> plan fazlası = (Σ plan − Σ gerçekleşen) / Σ gerçekleşen. Pozitifse plan fazla (santral eksik üretti).
+            </p>
+          </Section>
+
+          <Section id="dogrulama" n={next()} title="Doğrulamalar">
+            <Table
+              head={["Kontrol", "Sonuç"]}
+              rows={[
+                [
+                  "EPİAŞ verisi ↔ şirket dosyası (BALABANLI RES)",
+                  "KGÜP ilk sürümü 5.880 saatin tamamında birebir; UEVM Mayıs–Aralık 2025 saat saat eşleşti (161.893 MWh)",
+                ],
+                ["Hızlı maliyet fonksiyonu ↔ saatlik hesap", "2025 ve 2026 kuralları, iki yön, üç sistem durumunda aynı sonuç (otomatik test)"],
+                ["Aday taramasındaki Shapley ↔ DSG senaryo motoru", "Aynı adil pay (otomatik test)"],
+                ["Maliyet ayrıştırması (Gain 2025 → 2026)", "Dört kalem farkın %96'sını açıklıyor; kalan etkileşim"],
+                ["Piyasa verisi", "2024, 2025 ve 2026 fiyatları EPİAŞ'tan yeniden çekildi; eski formatta kayıt kalmadı"],
+                ["Otomatik testler", "296 test (28.09.2026); her değişiklikte çalıştırılır"],
+              ]}
+            />
+          </Section>
+
+          <Section id="etiketler" n={next()} title="Etiketler, varsayımlar ve sınırlar">
+            <Table
+              head={["Etiket", "Anlamı"]}
+              rows={[
+                [<Tag key="e" kind="exact" />, "Açık veriden, mevzuattaki formülle doğrudan hesap"],
+                [<Tag key="t" kind="estimate" />, "Formülü ya da oranı tam doğrulanmamış hesap (ör. KÜPST, hedef santral sınıfı)"],
+                [<Tag key="v" kind="assumption" />, "Bir varsayıma dayanır (ör. YEKDEM ana senaryosu, adil prim paylaşımı)"],
+                [<Tag key="s" kind="scenario" />, "Davranış varsayımı; taahhüt değil (ör. gün içi pozisyon güncellemesi)"],
+              ]}
+            />
+            <p>
+              <b>Sınırlar:</b>
+            </p>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>Gün içi işlemler ve ikili anlaşmalar açık veride yok: rakamlar gün içi işlemler öncesi risktir.</li>
+              <li>Yük atma talimatları santral bazında yayımlanmaz; talimata düşen üretim dengesizlik gibi görünebilir.</li>
+              <li>Dengeden sorumlu grup üyeliği santral bazında yayımlanmaz; uzlaştırma birimi şirket listelerinden ya da kullanıcı seçiminden gelir.</li>
+              <li>2026 projeksiyonları, veri yılının fiyatları ve sistem yönleri tekrar ederse geçerlidir.</li>
+              <li>PTF fiyat tahmini yapılmaz; uygulama ölçer ve açıklar.</li>
+            </ul>
+          </Section>
+
+          <Section id="kaynakca" n={next()} title="Kaynakça">
+            <p className="text-xs text-slate-500">
+              Durum: <span className={STATUS_STYLE.verified}>doğrulandı</span> (canlı veriyle ya da resmi metinle kontrol edildi) ·{" "}
+              <span className={STATUS_STYLE.source}>kaynak</span> (resmi kaynağa dayanır, metin ayrıca okunmalı) ·{" "}
+              <span className={STATUS_STYLE.check}>teyit edilmeli</span> (resmi metin görülmedi) ·{" "}
+              <span className={STATUS_STYLE.inference}>çıkarım</span> (mevzuatın yapısından)
+            </p>
+            <Table
+              head={["Konu", "Kaynak", "Durum"]}
+              rows={[
+                [
+                  "Piyasa ve santral verisi",
+                  <span key="1">
+                    EPİAŞ Şeffaflık Platformu,{" "}
+                    <a className="text-indigo-700 underline" href="https://seffaflik.epias.com.tr" target="_blank" rel="noreferrer">
+                      seffaflik.epias.com.tr
+                    </a>
+                  </span>,
+                  <span key="s1" className={STATUS_STYLE.verified}>doğrulandı</span>,
+                ],
+                [
+                  "Dengesizlik fiyatı ve k, l katsayıları",
+                  "Elektrik Piyasası Dengeleme ve Uzlaştırma Yönetmeliği; EPDK kurul kararları",
+                  <span key="s2" className={STATUS_STYLE.source}>kaynak</span>,
+                ],
+                [
+                  "2026'dan itibaren yöne bağlı %3 / %6",
+                  "EPDK, k ve l katsayılarının 1/1/2026 tarihinden itibaren belirlenmesine ilişkin kurul kararı",
+                  <span key="s3" className={STATUS_STYLE.check}>teyit edilmeli (karar tarihi ve sayısı)</span>,
+                ],
+                [
+                  "KÜPST formülü ve 2025 tolerans oranları",
+                  "Dengeleme ve Uzlaştırma Yönetmeliği; EPDK 21.11.2024 tarihli, 13025 sayılı kurul kararı",
+                  <span key="s4" className={STATUS_STYLE.source}>kaynak</span>,
+                ],
+                [
+                  "KÜPST 2026 tolerans oranları",
+                  "EPDK taslak metni ve basın; kurul kararının resmi metni görülmedi",
+                  <span key="s5" className={STATUS_STYLE.check}>teyit edilmeli</span>,
+                ],
+                [
+                  "YEKDEM portföy uzlaştırması",
+                  "Yenilenebilir Enerji Kaynaklarının Belgelendirilmesi ve Desteklenmesine İlişkin Yönetmelik (YEKDEM uzlaştırma hükümleri); EPİAŞ YEKDEM yayınları",
+                  <span key="s6" className={STATUS_STYLE.inference}>çıkarım</span>,
+                ],
+                ["GİP kapı kapanışı", "Gün içi piyasasında işlemler teslimattan 60 dakika önce kapanır (EPİAŞ GİP kuralları)", <span key="s7" className={STATUS_STYLE.source}>kaynak</span>],
+                [
+                  "Shapley değeri",
+                  "Shapley, L. S. (1953). A Value for n-Person Games. Contributions to the Theory of Games II, 307–317.",
+                  <span key="s8" className={STATUS_STYLE.verified}>doğrulandı</span>,
+                ],
+              ]}
+            />
+          </Section>
+
+          <Section id="surum" n={next()} title="Sürüm notları">
+            <Table
+              head={["Sürüm", "Tarih", "Değişiklik"]}
+              rows={[
+                [
+                  "1.0",
+                  VERSION_DATE,
+                  "İlk yayın. Kapsam: dengesizlik ve KÜPST, uzlaştırma birimi ve YEKDEM senaryoları, adil prim, risk primi, maliyet ayrıştırması, piyasa göstergeleri, sektör karnesi (2025 ve 2026 Ocak–Ağustos), aday ve hedef santraller, gün içi senaryosu.",
+                ],
+              ]}
+            />
+          </Section>
+
+          <p className="border-t border-slate-200 pt-4 text-xs text-slate-500">
+            TR-Energy Analyst · Metodoloji sürüm {VERSION} ({VERSION_DATE}) · Veri: EPİAŞ Şeffaflık Platformu
+          </p>
+        </main>
+      </div>
+    </div>
+  );
+}

@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import type { ProjectKpis } from "@/lib/services/project-kpis";
 import { CostChangeCard, type CostChangeData } from "@/components/cost-change-card";
 
+import { MethodLink } from "@/components/method-link";
 interface ProjectOption {
   id: string;
   name: string;
@@ -219,6 +220,7 @@ export default function ComparePage() {
               <span className="font-medium text-slate-700">Proje karşılaştırma</span>
             </div>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Proje karşılaştırma</h1>
+            <MethodLink section="ayristirma" label="Yöntem ve varsayımlar" />
             <p className="mt-1 max-w-3xl text-xs text-slate-600 sm:text-sm">
               Projelerin sapma yükü, netleşme kazancı, risk primi ve sektördeki yeri yan yana. Rakamlar Dengesizlik Karnesi ile aynı
               motordan gelir; her proje bir şirket ya da portföy olabilir.
