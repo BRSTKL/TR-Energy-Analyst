@@ -145,11 +145,19 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 > 5. Sonuç uygunsa 4.3 ve "Kabul kontrolü" `[x]` olarak işaretlenir.
 
 ### Aşama 5: İş başvurusu paketi
-- [ ] **5.1 Anonim vaka çalışması.** Gain raporunun şirket adları gizlenmiş sürümü ("Toplayıcı A", "Santral 1…"). Portföyde ve mülakatta paylaşılabilir. *Yeniden kullanılan:* PowerPoint üreticisine "anonim" seçeneği eklenir.
+- [x] **5.1 Anonim vaka çalışması.** Kullanıcı kendisi hazırlıyor (28.09.2026 kararı). Bunun yerine rapor çıktısı uzman gözüyle gözden geçirildi ve düzeltildi (5.1a).
+- [x] **5.1a Rapor çıktısı düzeltmeleri.** ✅ 28.09.2026. Gain 2026 raporunun 14 slaytı görüntüye çevrilip incelendi. Düzeltilenler:
+  - **Ana senaryo tutarlılığı.** Özet başlığı ve fırsatlar %36'yı (YEKDEM dahil) öne çıkarıyordu; ana senaryo %20 / 2,6 M TL. Artık önce ana senaryo, sonra "YEKDEM dahil" duyarlılığı yazılıyor. "97 TL" kutusunun hangi varsayıma dayandığı yazıldı.
+  - **Dönem ifadeleri.** 8 aylık veride "yıllık risk / yıl boyunca / yıllık ortalama" yerine "dönem".
+  - **Santral karnesi başlığı.** 1 MW'lık PAŞALİMANI yerine önemliliğe göre: sektör medyanına inse en çok TL kazandıracak santral (ALARES, ≈ 945 bin TL). Sektör ve fırsatlar slaytlarıyla aynı ölçüt.
+  - **Köprü açıklaması.** Yalnız slaytta olan öğeleri anlatıyor; 2026 verisinde "2025 fiyatları tekrar ederse" notu yok.
+  - **PPA kutusu.** Negatif "profil indirimi %-1,2" yerine "profil primi %1,2".
+  - **Yeni "Büyüme fırsatı" slaytı** (toplayıcı projelerinde; 4.2 ve 4.5): YEKDEM dışı adaylarda toplayıcı payı (%54), ilk 5 bağımsız hedef, netleşme kazancı ve adil prim.
+  - **Aday taraması portföy kapsamı** (tüm santraller / YEKDEM dışı = ana senaryo). Sayfa ve rapor varsayılanı ana senaryo; ana senaryoda kazançlar yaklaşık yarı yarıya (portföyün YEKDEM dışı kısmı 78 GWh).
 - [ ] **5.2 Yöntem notu.** 2–3 sayfalık metodoloji ve doğrulama belgesi: mevzuat kaynakları, varsayımlar, doğrulamalar, sınırlar. Mülakatta "nasıl hesapladın?" sorusunun cevabı.
-- [ ] **5.3 Demo senaryosu.** 3 dakikalık canlı gösterim akışı ve ekran kaydı: şirket ara → proje → sonuç → piyasa → ayrıştırma → rapor.
-- [ ] **5.4 İçerik serisi.** "2026'da dengesizlik maliyeti neden %55 arttı?" (makas bulgusu), güneş ve rüzgâr karşılaştırması, toplayıcının değeri. Anonim görseller uygulamadan üretilir.
-- [ ] **5.5 (Karar gerekiyor) Çevrimiçi demo.** Anlık görüntü verisiyle salt okunur bir demo sürümü mü, yoksa yalnızca video mu?
+- [ ] **5.3 Demo senaryosu.** ⏸ Sonraya bırakıldı (28.09.2026). 3 dakikalık canlı gösterim akışı ve ekran kaydı: şirket ara → proje → sonuç → piyasa → ayrıştırma → rapor.
+- [ ] **5.4 İçerik serisi.** ⏸ Sonraya bırakıldı (28.09.2026). Eklenecek bulgu: rüzgâr adaylarının %65'i zaten bir toplayıcıda. "2026'da dengesizlik maliyeti neden %55 arttı?" (makas bulgusu), güneş ve rüzgâr karşılaştırması, toplayıcının değeri. Anonim görseller uygulamadan üretilir.
+- [x] **5.5 Çevrimiçi demo.** ✅ Karar 28.09.2026: **Seçenek B**, yayında demo yok. Paylaşım PDF (rapor ve yöntem notu) ve video (5.3) ile yapılacak.
 - **Teslim:** Başvuruya eklenecek paket.
 - **Kabul:** Paketi okuyan biri uygulamayı açmadan değerini anlayabiliyor.
 
@@ -163,7 +171,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 ## 3. Karar noktaları (sizin onayınız gerekiyor)
 1. **Aşama sırası:** Önerim 1 → 2 → 3 → 5 → 4 → 6. Aşama 5 (başvuru paketi), 2 ve 3 bittiğinde en güçlü halindedir; 4 büyük bir veri işidir.
 2. **Hidro (4.3):** Gain'in hidro santralleri dahil edilsin mi? Veri çekimi uzun sürer (~1 saat). *Kod hazır; toplama isteğe bağlı (`--hes`), karar ve çekim kullanıcıda.*
-3. **Çevrimiçi demo (5.5):** Yayında bir demo mu, yoksa yalnızca video ve PDF mi?
+3. **Çevrimiçi demo (5.5):** ✅ Seçenek B, video ve PDF (28.09.2026).
 4. **Kapsam dışı:** PTF fiyat tahmin modeli bu planda yok. Uygulamanın gücü ölçmek ve açıklamak; tahmin modeli ayrı ve büyük bir iş.
 
 ---
@@ -171,6 +179,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 ## 4. İlerleme kaydı
 | Tarih | Adım | Commit | Not |
 |---|---|---|---|
+| 28.09.2026 | 5.1a Rapor düzeltmeleri, 5.5 kararı | (bu commit) | Rapor: ana senaryo tutarlılığı (%20; YEKDEM dahil %36), dönem ifadeleri, önemliliğe göre karne başlığı, köprü açıklaması, "Büyüme fırsatı" slaytı. Aday taraması portföy kapsamı (varsayılan ana senaryo). 5.1 kullanıcıda; 5.3 ve 5.4 sonraya; 5.5 = B. |
 | 28.09.2026 | 4.5 Hedef santraller | `7f0c257` | Toplayıcı listeleri (30 / 862 santral). Gain 2026 adaylarının %65'i zaten bir toplayıcıda; hedef 44 (YEKDEM dışı 13). 2025 saatlik sektör toplaması bitti (84 santral EPİAŞ 403 engeli yüzünden hidro turunda yeniden denenecek); hidro toplaması sürüyor. |
 | 28.09.2026 | Aşama 4 kabul, 4.4 | `bed540c` | 2026 saatlik sektör serisi tamam (523/523, hata 0); Gain 2026 aday taraması 364 adayla kabulü geçti. Aday sayfasına MWh başına sıralama ve YEKDEM süzgeci eklendi (291 test). 2025 saatlik toplaması sürüyor; ardından hidro (`--hes`) 2026 ve 2025. |
 | 28.09.2026 | 2.4 Veri tamamlama | — (veri) | 2024 ve Eylül 2026 EPİAŞ'tan; üç yıllık eğilim: makas 395 → 469 → 763 TL, sıfır fiyatlı saat 5 → 48 → 394 (2026 Oca–Ağu). Saatlik sektör toplaması (2026, 2025) başlatıldı. |

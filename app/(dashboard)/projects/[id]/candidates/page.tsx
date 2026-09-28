@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { CandidateResult, CandidateSort } from "@/lib/analysis/candidate-screening";
-import type { AccessFilter, ProjectCandidates, YekdemFilter } from "@/lib/services/candidates";
+import type { AccessFilter, MemberScope, ProjectCandidates, YekdemFilter } from "@/lib/services/candidates";
 import type { CandidateAccessKind } from "@/lib/analysis/candidate-access";
 import type { SectorTech } from "@/lib/sector/benchmark";
 
@@ -56,6 +56,11 @@ function AccessBadge({ c }: { c: CandidateResult }) {
   return <span className={`mt-1 inline-block rounded border px-1.5 py-0.5 text-[11px] ${b.cls}`}>{b.text + detail}</span>;
 }
 
+const MEMBER_SCOPES: Array<{ id: MemberScope; label: string }> = [
+  { id: "merchant", label: "YEKDEM dışı santraller (ana senaryo)" },
+  { id: "all", label: "Tüm santraller" },
+];
+
 const SORTS: Array<{ id: CandidateSort; label: string }> = [
   { id: "total", label: "Toplam kazanç" },
   { id: "perMwh", label: "MWh başına kazanç" },
@@ -87,6 +92,7 @@ export default function CandidatesPage() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["id"]>("ALL");
   const [yekdem, setYekdem] = useState<YekdemFilter>("all");
   const [access, setAccess] = useState<AccessFilter>("independent");
+  const [memberScope, setMemberScope] = useState<MemberScope>("merchant");
   const [sortBy, setSortBy] = useState<CandidateSort>("total");
   const [data, setData] = useState<ProjectCandidates | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -101,6 +107,7 @@ export default function CandidatesPage() {
     if (yekdem !== "all") q.set("yekdem", yekdem);
     if (sortBy !== "total") q.set("sort", sortBy);
     if (access !== "all") q.set("access", access);
+    if (memberScope !== "all") q.set("members", memberScope);
     fetch(`/api/projects/${projectId}/candidates${q.toString() ? `?${q}` : ""}`)
       .then((r) => r.json())
       .then((d) => {
@@ -109,7 +116,7 @@ export default function CandidatesPage() {
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Aday taraması yüklenemedi."))
       .finally(() => setLoading(false));
-  }, [projectId, filter, yekdem, sortBy, access]);
+  }, [projectId, filter, yekdem, sortBy, access, memberScope]);
 
   const list = data?.result.candidates ?? [];
   const top = list.filter((c) => c.fair);
@@ -170,6 +177,14 @@ export default function CandidatesPage() {
             ))}
           </div>
           <div className="flex w-full flex-wrap items-center gap-1.5">
+            <span className="text-xs text-slate-500">Portföy:</span>
+            {MEMBER_SCOPES.map((f) => (
+              <Button key={f.id} size="sm" variant={memberScope === f.id ? "default" : "outline"} onClick={() => setMemberScope(f.id)}>
+                {f.label}
+              </Button>
+            ))}
+          </div>
+          <div className="flex w-full flex-wrap items-center gap-1.5">
             <span className="text-xs text-slate-500">Ulaşılabilirlik:</span>
             {ACCESS_FILTERS.map((f) => {
               const n = data ? (f.id === "all" ? Object.values(data.accessCounts).reduce((a, b) => a + b, 0) : data.accessCounts[f.id]) : null;
@@ -225,7 +240,8 @@ export default function CandidatesPage() {
                   <p>Uygun aday yok.</p>
                 )}
                 <p className="text-xs text-slate-600">
-                  Portföy: {pf.members} {BASIS[data.basis]}, {nf(pf.hours)} saat, {nf(pf.actualMwh / 1000)} GWh, dengesizlik maliyeti {tl(pf.costTl)} ·
+                  Portföy{data.memberScope === "merchant" ? " (YEKDEM dışı santraller; YEKDEM dengesizliği havuzda kalır)" : " (tüm santraller)"}:{" "}
+                  {pf.members} {BASIS[data.basis]}, {nf(pf.hours)} saat, {nf(pf.actualMwh / 1000)} GWh, dengesizlik maliyeti {tl(pf.costTl)} ·
                   sektör karnesi {data.sectorLabel}. Tutarlar projenin dönemi içindir.
                 </p>
               </CardContent>

@@ -21,6 +21,7 @@ import { loadProjectHourly, type ProjectHourly } from "@/lib/services/project-ho
 export type YekdemFilter = "all" | "exclude" | "only";
 /** Ulaşılabilirlik süzgeci: hepsi ya da tek bir sınıf ("independent" = hedef: toplayıcısız, bağımsız) */
 export type AccessFilter = "all" | CandidateAccessKind;
+export type MemberScope = "all" | "merchant";
 
 export interface ProjectCandidates {
   project: { id: string; name: string };
@@ -38,6 +39,11 @@ export interface ProjectCandidates {
   aggregatorList: { asOf: string; aggregators: number; failed: number } | null;
   /** Aday dışı bırakılanlar: projede olan, toplayıcının EPİAŞ portföyünde olan ve YEKDEM süzgecine takılan santraller */
   excluded: { inProject: number; inAggregatorPortfolio: number; byYekdem: number; byAccess: number };
+  /**
+   * Portföy üyeleri: all = projedeki tüm santraller; merchant = YEKDEM dışı santraller (raporun ana senaryosu: YEKDEM
+   * santrallerinin dengesizliği YEKDEM havuzunda kalır, portföyde netleşmez)
+   */
+  memberScope: MemberScope;
   /** Sektör karnesinde olup saatlik serisi toplanmamış santral sayısı */
   withoutHourly: number;
   result: ScreeningResult;
@@ -45,9 +51,8 @@ export interface ProjectCandidates {
 
 type Plant = ProjectHourly["plants"][number];
 
-/** Raporun adil pay slaytıyla aynı üyeler */
-function members(data: ProjectHourly): { basis: ProjectCandidates["basis"]; members: ScreeningMember[] } {
-  const withData = data.plants.filter((p) => p.hourly.length > 0);
+/** Raporun adil pay slaytıyla aynı üyeler (verilen santrallerden) */
+function members(data: ProjectHourly, withData: Plant[]): { basis: ProjectCandidates["basis"]; members: ScreeningMember[] } {
   const companies = new Set(withData.map((p) => (p.organizationId !== null ? `org:${p.organizationId}` : `plant:${p.plantId}`)));
   const basis: ProjectCandidates["basis"] = data.aggregator ? "owners" : companies.size === 1 ? "plants" : "companies";
   const groups = new Map<string, { name: string; plants: Plant[] }>();
@@ -79,7 +84,8 @@ export async function projectCandidates(
     sortBy = "total",
     yekdem = "all",
     access = "all",
-  }: { types?: SectorTech[]; top?: number; sortBy?: CandidateSort; yekdem?: YekdemFilter; access?: AccessFilter } = {}
+    memberScope = "all",
+  }: { types?: SectorTech[]; top?: number; sortBy?: CandidateSort; yekdem?: YekdemFilter; access?: AccessFilter; memberScope?: MemberScope } = {}
 ): Promise<ProjectCandidates | { error: string }> {
   const data = await loadProjectHourly(projectId);
   if (!data) return { error: "Proje bulunamadı." };
@@ -142,12 +148,16 @@ export async function projectCandidates(
     });
   }
 
-  const m = members(data);
+  // Ana senaryo: yalnız YEKDEM dışı santraller netleşir; YEKDEM dışı santral yoksa tüm santraller kullanılır
+  const merchant = withData.filter((p) => p.yekdem !== true);
+  const scope: MemberScope = memberScope === "merchant" && merchant.length > 0 ? "merchant" : "all";
+  const m = members(data, scope === "merchant" ? merchant : withData);
   return {
     project: data.project,
     year,
     sectorLabel: sectorPeriodLabel(bench),
     basis: m.basis,
+    memberScope: scope,
     types,
     yekdem,
     access,
