@@ -115,17 +115,18 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 > 3. GAİN 2026 projesinde PPT İndir → 4. slayt "Ne değişti?"; sektör karnesi 2025 ve 2026 toplanmışsa sağ altta sektör desteği ("294 santralin hepsinde arttı") görünür, toplanmamışsa okuma notu.
 > 4. Sonuç uygunsa "Kabul kontrolü" `[x]` olarak işaretlenir.
 
-### Aşama 4: Toplayıcı büyüme analizi ✅ (27.09.2026) · gerçek veri bekleyen: 4.3 karnesi ve kabul kontrolü
+### Aşama 4: Toplayıcı büyüme analizi ✅ (27.09.2026; kabul: 28.09.2026) · sürüyor: 4.3 hidro toplaması
 - [x] **4.1 Saatlik sektör verisi.** ✅ 27.09.2026 · `23b5c70`. Sektör toplama betiği santral özetine ek olarak saatlik sapma serisini de (sıkıştırılmış) saklar. Bu, aynı zamanda K1'i (arıza saatleri hariç karne) mümkün kılar. *Yeniden kullanılan:* `sector-collect.mts`, önbellek.
 
   *Uygulanan:* seriler `.cache/epias/sector-<yıl>-hourly/<kimlik>.json.gz` (yıl başına ~18 MB); `--rebuild` EPİAŞ'a gitmeden diskteki serilerden ve güncel fiyatlardan karneyi yeniden kurar. K1: karnede "arıza / kısıntı saatleri hariç" MWh başına dengesizlik ve sektör sayfasında K1 görünümü.
 - [x] **4.2 Aday santral taraması (3.4).** ✅ 27.09.2026 · `18d6ef6` (`/projects/[id]/candidates`, sonuç sayfasında "Aday Santraller"). Portföye eklenince netleşme kazancı en yüksek olan santraller sıralanır; santral başına beklenen Shapley primi de verilir. *Yeniden kullanılan:* `analyzeDsgScenario` (marjinal katkı), Shapley.
 
   *Uygulanan:* kazanç = Σ saat [c(portföy) + c(aday) − c(portföy + aday)]; ilk 10 aday için Shapley adil primi (dsg-scenarios ile aynı tanım, testle doğrulandı) + KÜPST. Projede ve toplayıcının EPİAŞ portföyünde olan santraller aday sayılmaz.
-- [ ] **4.3 Hidro karnesi.** ⏳ Gerçek veri gerekiyor, karne toplanmadı (aşağıdaki not). HES santralleri için sektör karnesi (nehir tipi / barajlı ayrımıyla). Gain'in 29 hidro santrali bu sayede kıyaslanabilir.
+- [ ] **4.3 Hidro karnesi.** ⏳ Onaylandı (28.09.2026); toplama sırada: 2025 RES/GES saatlik toplaması bitince `--hes` ile önce 2026, sonra 2025. HES santralleri için sektör karnesi (nehir tipi / barajlı ayrımıyla). Gain'in 29 hidro santrali bu sayede kıyaslanabilir.
 
   *Kod hazır* (`23b5c70`): `--hes` ile toplama; tahmini alt tip (addaki baraj / regülatör, yoksa gün içi üretim esnekliği); sektör sayfasında Hidro sekmesi ve alt tip süzgeci; rapor ve aday taraması HES'i tanır.
-- [ ] **Kabul kontrolü (Gain).** ◐ 28.09.2026 kısmi: aday listesi gerçek veriyle üretiliyor (144 aday, 1,6 sn; ilk aday EVRENCİK RES, kazanç 14,3 M TL / %26), ancak 2026 saatlik sektör serisi 523 santralin yalnızca 221'inde var (toplama 27.09 21:51'de VPN değişince durdu). Tam kabul için 2025 ve 2026 toplaması tamamlanmalı (VPN FR/US).
+- [x] **Kabul kontrolü (Gain).** ✅ 28.09.2026 (yerel, gerçek veri): 2026 saatlik sektör serisi tamam (523 santral toplandı, 370'i karnede; hata 0). GAİN ENERJİ RES 2026 için 364 aday taranıyor, saatlik verisi eksik aday yok. Toplam kazanca göre ilk aday KARABURUN RES: 15,5 M TL (%21), adil prim 121,4 TL/MWh (tek başına 138,0). YEKDEM dışı + MWh başına sıralamada (boyut eşiği 13,8 GWh) ilk aday R3-TRABZON-1 RES: 312,5 TL/MWh. `/sector` K1 görünümü: rüzgâr medyanı 164 → 162 TL/MWh (arıza saatleri hariç).
+- [x] **4.4 Aday sayfası iyileştirmesi.** ✅ 28.09.2026 · `bed540c`. MWh başına kazanç sıralaması (üretimi portföyün %5'inden az adaylar sona) ve YEKDEM süzgeci (Tümü / YEKDEM dışı / YEKDEM). Neden: toplam TL büyük santralleri öne çıkarıyordu; MWh başına sıralama eşiksiz kullanıldığında ise 0,2–5 GWh'lık lisanssız santraller listenin başına çıkıyordu.
 - **Teslim:** "Portföyünüze en çok değer katacak 10 santral" listesi.
 - **Kabul:** Gain için liste üretiliyor ve her aday için beklenen kazanç veriliyor.
 
@@ -163,6 +164,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 ## 4. İlerleme kaydı
 | Tarih | Adım | Commit | Not |
 |---|---|---|---|
+| 28.09.2026 | Aşama 4 kabul, 4.4 | `bed540c` | 2026 saatlik sektör serisi tamam (523/523, hata 0); Gain 2026 aday taraması 364 adayla kabulü geçti. Aday sayfasına MWh başına sıralama ve YEKDEM süzgeci eklendi (291 test). 2025 saatlik toplaması sürüyor; ardından hidro (`--hes`) 2026 ve 2025. |
 | 28.09.2026 | 2.4 Veri tamamlama | — (veri) | 2024 ve Eylül 2026 EPİAŞ'tan; üç yıllık eğilim: makas 395 → 469 → 763 TL, sıfır fiyatlı saat 5 → 48 → 394 (2026 Oca–Ağu). Saatlik sektör toplaması (2026, 2025) başlatıldı. |
 | 28.09.2026 | Aşama 2–4 yerel kontrol | `395aae6` | tsc/lint temiz, 290 test. Aşama 2 ve 3 kabul gerçek veriyle geçti. Düzeltmeler: 2026 verili projede özet slaytı (toplayıcı başlığı, boş sol sütun), düşük fiyat kartında brüt etki yanında net capture rate (%101,2; brüt −25,4 puan yanıltıcıydı). Bekleyen: 2.4 ve saatlik sektör toplaması (VPN), 4.3 hidro (karar). Öneri: aday sayfasında MWh başına kazanca göre sıralama ve YEKDEM süzgeci. |
 | 27.09.2026 | Aşama 4 (4.1, 4.2; 4.3 kodu) | `23b5c70`, `18d6ef6` | Saatlik sektör serisi (gzip), `--rebuild`, K1 görünümü; aday santral taraması ve sayfası (Shapley adil prim); hidro karnesi desteği (`--hes`, tahmini alt tip). 4.3 karnesi ve Gain kabul kontrolü gerçek veri bekliyor (Aşama 4 notu). |
