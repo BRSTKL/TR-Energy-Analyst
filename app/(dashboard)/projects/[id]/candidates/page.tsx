@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { CandidateResult, CandidateSort } from "@/lib/analysis/candidate-screening";
-import type { ProjectCandidates, YekdemFilter } from "@/lib/services/candidates";
+import type { AccessFilter, ProjectCandidates, YekdemFilter } from "@/lib/services/candidates";
+import type { CandidateAccessKind } from "@/lib/analysis/candidate-access";
 import type { SectorTech } from "@/lib/sector/benchmark";
 
 const nf = (v: number, d = 0) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -27,6 +28,34 @@ const YEKDEM_FILTERS: Array<{ id: YekdemFilter; label: string }> = [
   { id: "exclude", label: "YEKDEM dışı" },
   { id: "only", label: "YEKDEM" },
 ];
+const ACCESS_FILTERS: Array<{ id: AccessFilter; label: string }> = [
+  { id: "independent", label: "Hedef (bağımsız)" },
+  { id: "all", label: "Tümü" },
+  { id: "aggregator", label: "Başka toplayıcıda" },
+  { id: "group", label: "Grup portföyü" },
+  { id: "retail", label: "Lisanssız / tedarik" },
+  { id: "unknown", label: "Sahibi bilinmiyor" },
+];
+const ACCESS_BADGE: Record<CandidateAccessKind, { text: string; cls: string }> = {
+  independent: { text: "Hedef: toplayıcısız, bağımsız", cls: "bg-emerald-50 text-emerald-800 border-emerald-200" },
+  group: { text: "Grup portföyü", cls: "bg-slate-50 text-slate-700 border-slate-200" },
+  aggregator: { text: "Başka toplayıcıda", cls: "bg-rose-50 text-rose-800 border-rose-200" },
+  retail: { text: "Lisanssız / görevli tedarik", cls: "bg-slate-50 text-slate-600 border-slate-200" },
+  unknown: { text: "Sahibi bilinmiyor", cls: "bg-amber-50 text-amber-800 border-amber-200" },
+};
+
+function AccessBadge({ c }: { c: CandidateResult }) {
+  if (!c.access) return null;
+  const b = ACCESS_BADGE[c.access.kind];
+  const detail =
+    c.access.kind === "aggregator"
+      ? `: ${c.access.label}`
+      : c.access.kind === "group"
+        ? `: ${c.access.label} (${c.access.groupPlants} santral)`
+        : "";
+  return <span className={`mt-1 inline-block rounded border px-1.5 py-0.5 text-[11px] ${b.cls}`}>{b.text + detail}</span>;
+}
+
 const SORTS: Array<{ id: CandidateSort; label: string }> = [
   { id: "total", label: "Toplam kazanç" },
   { id: "perMwh", label: "MWh başına kazanç" },
@@ -39,9 +68,9 @@ const sub = (c: CandidateResult) =>
 
 function downloadCsv(d: ProjectCandidates) {
   const num = (v: number | null | undefined, digits = 1) => (v == null ? "" : v.toFixed(digits).replace(".", ","));
-  const head = ["Sıra", "Santral", "EPİAŞ kimliği", "Şirket", "Teknoloji", "YEKDEM", "Üretim MWh", "Tek başına dengesizlik TL", "Netleşme kazancı TL", "Kazanç TL/MWh", "Kazanç / tek başına %", "Zıt yönde saat %", "Adil prim TL/MWh", "Tek başına TL/MWh (KÜPST dahil)"];
+  const head = ["Sıra", "Santral", "EPİAŞ kimliği", "Şirket", "Teknoloji", "YEKDEM", "Ulaşılabilirlik", "Toplayıcı / grup", "Üretim MWh", "Tek başına dengesizlik TL", "Netleşme kazancı TL", "Kazanç TL/MWh", "Kazanç / tek başına %", "Zıt yönde saat %", "Adil prim TL/MWh", "Tek başına TL/MWh (KÜPST dahil)"];
   const lines = d.result.candidates.map((c, i) =>
-    [String(i + 1), c.name, String(c.epiasPlantId), c.organizationName ?? "", TECH[c.type] ?? c.type, c.yekdem ? "Evet" : c.yekdem === false ? "Hayır" : "", num(c.actualMwh, 0), num(c.standaloneCostTl, 0), num(c.gainTl, 0), num(c.gainPerMwhTl), num(c.gainPct), num(c.offsettingPct), num(c.fair?.fairUnitTl), num(c.fair?.standaloneUnitTl)]
+    [String(i + 1), c.name, String(c.epiasPlantId), c.organizationName ?? "", TECH[c.type] ?? c.type, c.yekdem ? "Evet" : c.yekdem === false ? "Hayır" : "", c.access ? ACCESS_BADGE[c.access.kind].text : "", c.access?.label ?? "", num(c.actualMwh, 0), num(c.standaloneCostTl, 0), num(c.gainTl, 0), num(c.gainPerMwhTl), num(c.gainPct), num(c.offsettingPct), num(c.fair?.fairUnitTl), num(c.fair?.standaloneUnitTl)]
       .map((x) => `"${x.replace(/"/g, '""')}"`)
       .join(";")
   );
@@ -57,6 +86,7 @@ export default function CandidatesPage() {
   const { id: projectId } = useParams<{ id: string }>();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["id"]>("ALL");
   const [yekdem, setYekdem] = useState<YekdemFilter>("all");
+  const [access, setAccess] = useState<AccessFilter>("independent");
   const [sortBy, setSortBy] = useState<CandidateSort>("total");
   const [data, setData] = useState<ProjectCandidates | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +100,7 @@ export default function CandidatesPage() {
     if (filter !== "ALL") q.set("types", filter);
     if (yekdem !== "all") q.set("yekdem", yekdem);
     if (sortBy !== "total") q.set("sort", sortBy);
+    if (access !== "all") q.set("access", access);
     fetch(`/api/projects/${projectId}/candidates${q.toString() ? `?${q}` : ""}`)
       .then((r) => r.json())
       .then((d) => {
@@ -78,7 +109,7 @@ export default function CandidatesPage() {
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Aday taraması yüklenemedi."))
       .finally(() => setLoading(false));
-  }, [projectId, filter, yekdem, sortBy]);
+  }, [projectId, filter, yekdem, sortBy, access]);
 
   const list = data?.result.candidates ?? [];
   const top = list.filter((c) => c.fair);
@@ -138,6 +169,18 @@ export default function CandidatesPage() {
               </Button>
             ))}
           </div>
+          <div className="flex w-full flex-wrap items-center gap-1.5">
+            <span className="text-xs text-slate-500">Ulaşılabilirlik:</span>
+            {ACCESS_FILTERS.map((f) => {
+              const n = data ? (f.id === "all" ? Object.values(data.accessCounts).reduce((a, b) => a + b, 0) : data.accessCounts[f.id]) : null;
+              return (
+                <Button key={f.id} size="sm" variant={access === f.id ? "default" : "outline"} onClick={() => setAccess(f.id)}>
+                  {f.label}
+                  {n !== null && <span className="ml-1 text-xs opacity-70">{nf(n)}</span>}
+                </Button>
+              );
+            })}
+          </div>
           {loading && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
           {data && (
             <Button size="sm" variant="outline" className="ml-auto gap-1.5" onClick={() => downloadCsv(data)}>
@@ -150,6 +193,16 @@ export default function CandidatesPage() {
           <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span className="break-words">{error}</span>
+          </div>
+        )}
+
+        {data && !data.aggregatorList && (
+          <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span className="break-words">
+              Toplayıcıların santral listeleri henüz toplanmadı; &quot;başka toplayıcıda&quot; ayrımı yapılamıyor ve bu santraller hedef
+              görünebilir. Toplamak için (VPN açık): <code>node --env-file=.env node_modules/.bin/tsx scripts/aggregator-collect.mts</code>
+            </span>
           </div>
         )}
 
@@ -213,6 +266,7 @@ export default function CandidatesPage() {
                         <TableCell>
                           <p className="font-medium text-slate-900">{c.name}</p>
                           <p className="text-xs text-slate-500">{sub(c)}</p>
+                          <AccessBadge c={c} />
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-right tabular-nums">{nf(c.actualMwh / 1000)} GWh</TableCell>
                         <TableCell>
@@ -238,7 +292,7 @@ export default function CandidatesPage() {
                     {top.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={9} className="py-8 text-center text-sm text-slate-500">
-                          Bu teknolojide aday yok.
+                          Bu süzgeçlerle aday yok.
                         </TableCell>
                       </TableRow>
                     )}
@@ -282,6 +336,7 @@ export default function CandidatesPage() {
                             <TableCell>
                               <p className="text-slate-900">{c.name}</p>
                               <p className="text-xs text-slate-500">{sub(c)}</p>
+                              <AccessBadge c={c} />
                             </TableCell>
                             <TableCell className="whitespace-nowrap text-right tabular-nums">{nf(c.actualMwh / 1000)} GWh</TableCell>
                             <TableCell className="text-right tabular-nums">{tl(c.gainTl)}</TableCell>
@@ -301,6 +356,7 @@ export default function CandidatesPage() {
               Adaylar {data.sectorLabel} sektör karnesindeki {data.types.map((t) => TECH[t].toLocaleLowerCase("tr-TR")).join(", ")} santralleridir;
               projede olan {data.excluded.inProject} ve toplayıcının EPİAŞ portföyünde zaten olan {data.excluded.inAggregatorPortfolio} santral
               aday sayılmadı.
+              {data.excluded.byAccess > 0 && ` Ulaşılabilirlik süzgeci nedeniyle ${nf(data.excluded.byAccess)} santral listede yok.`}
               {data.excluded.byYekdem > 0 &&
                 ` Destek süzgeci nedeniyle ${nf(data.excluded.byYekdem)} santral (${data.yekdem === "exclude" ? "YEKDEM'li" : "YEKDEM dışı"}) listede yok.`}
               {data.withoutHourly > 0 && ` Saatlik serisi toplanmamış ${nf(data.withoutHourly)} santral taranamadı.`}
@@ -310,6 +366,17 @@ export default function CandidatesPage() {
               {top[0]?.fair?.method === "two-player" ? " (üye sayısı fazla olduğundan portföy tek oyuncu sayıldı, kazanç ikiye bölündü)" : ""}. Zıt
               yönde saat: adayın ve portföyün sapmasının ters işaretli olduğu saatlerin payı. YEKDEM&apos;li bir santralin dengesizliği ana senaryoda
               YEKDEM havuzunda kaldığından, toplayıcının serbest piyasa portföyüne katkısı için &quot;YEKDEM dışı&quot; süzgeci daha gerçekçidir.
+            </p>
+            <p className="text-xs text-slate-500">
+              <b>Ulaşılabilirlik:</b> &quot;Başka toplayıcıda&quot;, EPİAŞ&apos;ta &quot;(TOPLAYICI)&quot; olarak kayıtlı katılımcıların santral
+              listelerinden gelir
+              {data.aggregatorList
+                ? ` (${data.aggregatorList.aggregators} toplayıcı, ${data.aggregatorList.asOf}${data.aggregatorList.failed ? `; ${data.aggregatorList.failed} toplayıcının listesi alınamadı` : ""})`
+                : " (henüz toplanmadı)"}
+              . &quot;Grup portföyü&quot;: sahibinin grubunun EPİAŞ&apos;ta en az 3 santrali var (aynı şirket ya da şirket adındaki aynı marka,
+              ör. ENERJİSA); böyle bir grup santrallerini kendi portföyünde netleştirir. &quot;Lisanssız / görevli tedarik&quot;: görevli tedarik
+              şirketlerinin (K3) portföyü ve lisanssız santraller. &quot;Hedef&quot;: bunların hiçbiri. Tahmindir: dengeden sorumlu grup
+              üyeliği EPİAŞ&apos;ta santral bazında yayımlanmaz ve yalnızca yer adıyla kurulmuş bir proje şirketi grubuna bağlanamaz.
             </p>
           </>
         )}

@@ -7,6 +7,9 @@
  * zaten olan santraller aday sayılmaz. Saatlik sektör verisi scripts/sector-collect.mts ile toplanır.
  */
 
+import { classifyCandidate, groupCounts, type CandidateAccessKind } from "@/lib/analysis/candidate-access";
+import { loadAggregatorMembership } from "@/lib/services/aggregator-membership";
+import { loadOwnerEntries } from "@/lib/services/epias-plants";
 import { screenCandidates, type CandidateSort, type ScreeningCandidate, type ScreeningMember, type ScreeningResult } from "@/lib/analysis/candidate-screening";
 import { settleByCompany } from "@/lib/report/plant-report";
 import { decodeHourly } from "@/lib/sector/hourly-store";
@@ -16,6 +19,8 @@ import { loadProjectHourly, type ProjectHourly } from "@/lib/services/project-ho
 
 /** YEKDEM süzgeci: hepsi, yalnız YEKDEM dışı (serbest piyasa) ya da yalnız YEKDEM santralleri */
 export type YekdemFilter = "all" | "exclude" | "only";
+/** Ulaşılabilirlik süzgeci: hepsi ya da tek bir sınıf ("independent" = hedef: toplayıcısız, bağımsız) */
+export type AccessFilter = "all" | CandidateAccessKind;
 
 export interface ProjectCandidates {
   project: { id: string; name: string };
@@ -26,8 +31,13 @@ export interface ProjectCandidates {
   basis: "owners" | "plants" | "companies";
   types: SectorTech[];
   yekdem: YekdemFilter;
+  access: AccessFilter;
+  /** Teknoloji ve YEKDEM süzgecinden geçen adayların ulaşılabilirlik sınıflarına dağılımı (ulaşılabilirlik süzgecinden önce) */
+  accessCounts: Record<CandidateAccessKind, number>;
+  /** Toplayıcı listelerinin tarihi ve sayısı; toplanmamışsa null (bu durumda "başka toplayıcıda" ayrımı yapılamaz) */
+  aggregatorList: { asOf: string; aggregators: number; failed: number } | null;
   /** Aday dışı bırakılanlar: projede olan, toplayıcının EPİAŞ portföyünde olan ve YEKDEM süzgecine takılan santraller */
-  excluded: { inProject: number; inAggregatorPortfolio: number; byYekdem: number };
+  excluded: { inProject: number; inAggregatorPortfolio: number; byYekdem: number; byAccess: number };
   /** Sektör karnesinde olup saatlik serisi toplanmamış santral sayısı */
   withoutHourly: number;
   result: ScreeningResult;
@@ -68,7 +78,8 @@ export async function projectCandidates(
     top = 10,
     sortBy = "total",
     yekdem = "all",
-  }: { types?: SectorTech[]; top?: number; sortBy?: CandidateSort; yekdem?: YekdemFilter } = {}
+    access = "all",
+  }: { types?: SectorTech[]; top?: number; sortBy?: CandidateSort; yekdem?: YekdemFilter; access?: AccessFilter } = {}
 ): Promise<ProjectCandidates | { error: string }> {
   const data = await loadProjectHourly(projectId);
   if (!data) return { error: "Proje bulunamadı." };
@@ -86,7 +97,30 @@ export async function projectCandidates(
   const inAggregator = new Set(data.aggregator?.portfolio?.plantIds ?? []);
   const open = bench.plants.filter((p) => types.includes(p.type) && !inProject.has(p.epiasPlantId) && !inAggregator.has(p.epiasPlantId));
   // YEKDEM bilgisi olmayan santral "YEKDEM dışı" süzgecinde kalır, "yalnız YEKDEM"de elenir
-  const pool = open.filter((p) => (yekdem === "exclude" ? p.yekdem !== true : yekdem === "only" ? p.yekdem === true : true));
+  const byYekdem = open.filter((p) => (yekdem === "exclude" ? p.yekdem !== true : yekdem === "only" ? p.yekdem === true : true));
+
+  // Ulaşılabilirlik: başka bir toplayıcıda mı (EPİAŞ toplayıcı listeleri), grupta mı (sahip dizini), bağımsız mı
+  const [membership, ownerEntries] = await Promise.all([loadAggregatorMembership(), loadOwnerEntries(year)]);
+  const owners = new Map(ownerEntries);
+  const ownOrgId = data.aggregator?.portfolio?.orgId ?? null;
+  const aggregatorOf = new Map<number, string>();
+  for (const [plantId, list] of membership?.byPlant ?? []) {
+    const others = list.filter((a) => a.id !== ownOrgId);
+    if (others.length) aggregatorOf.set(plantId, others.map((a) => a.name).join(", "));
+  }
+  const ctx = { aggregatorOf, groups: groupCounts(owners.values()) };
+  const accessOf = new Map(
+    byYekdem.map((p) => [
+      p.epiasPlantId,
+      classifyCandidate(
+        { epiasPlantId: p.epiasPlantId, name: p.name, organizationId: owners.get(p.epiasPlantId)?.organizationId ?? null, organizationName: p.organizationName },
+        ctx
+      ),
+    ])
+  );
+  const accessCounts: Record<CandidateAccessKind, number> = { independent: 0, group: 0, aggregator: 0, retail: 0, unknown: 0 };
+  for (const a of accessOf.values()) accessCounts[a.kind]++;
+  const pool = byYekdem.filter((p) => access === "all" || accessOf.get(p.epiasPlantId)!.kind === access);
   const candidates: ScreeningCandidate[] = [];
   let withoutHourly = 0;
   for (const p of pool) {
@@ -103,6 +137,7 @@ export async function projectCandidates(
       organizationName: p.organizationName,
       yekdem: p.yekdem,
       hydroKind: p.hydroKind ?? null,
+      access: accessOf.get(p.epiasPlantId) ?? null,
       rows: decodeHourly(series),
     });
   }
@@ -115,10 +150,14 @@ export async function projectCandidates(
     basis: m.basis,
     types,
     yekdem,
+    access,
+    accessCounts,
+    aggregatorList: membership ? { asOf: membership.asOf, aggregators: membership.aggregatorCount, failed: membership.failedCount } : null,
     excluded: {
       inProject: bench.plants.filter((p) => inProject.has(p.epiasPlantId)).length,
       inAggregatorPortfolio: bench.plants.filter((p) => !inProject.has(p.epiasPlantId) && inAggregator.has(p.epiasPlantId)).length,
-      byYekdem: open.length - pool.length,
+      byYekdem: open.length - byYekdem.length,
+      byAccess: byYekdem.length - pool.length,
     },
     withoutHourly,
     result: screenCandidates(m.members, candidates, data.profile, { top, sortBy }),

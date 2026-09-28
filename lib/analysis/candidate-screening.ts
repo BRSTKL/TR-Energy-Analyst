@@ -21,6 +21,7 @@ import { imbalanceCostOf, processHourlyRecord } from "@/lib/calculations/engine"
 import { HourlyResult, ImbalancePricingProfile, resolveImbalanceProfile } from "@/lib/calculations/types";
 import { kupstTotal } from "@/lib/calculations/kupst";
 import { MAX_EXACT_PLANTS } from "@/lib/analysis/dsg-scenarios";
+import type { CandidateAccess } from "@/lib/analysis/candidate-access";
 
 /** Portföy üyesi (toplayıcıda sahip, tek şirkette santral); saatlik serisi üyenin kendi içinde netleşmiş */
 export interface ScreeningMember {
@@ -38,6 +39,8 @@ export interface ScreeningCandidate {
   organizationName: string | null;
   yekdem: boolean | null;
   hydroKind?: string | null;
+  /** Ulaşılabilirlik (başka toplayıcıda, grupta, bağımsız …); taramayı etkilemez, sonuca aynen geçer */
+  access?: CandidateAccess | null;
   /** Ham saatlik plan ve gerçekleşen (sektör karnesinin saatlik serisi); fiyatlar portföyün saatlerinden alınır */
   rows: Array<{ timestamp: Date | string; forecastMwh: number; actualMwh: number }>;
 }
@@ -50,6 +53,7 @@ export interface CandidateResult {
   organizationName: string | null;
   yekdem: boolean | null;
   hydroKind: string | null;
+  access: CandidateAccess | null;
   /** Portföy saatlerinden adayın verisi olanlar */
   hours: number;
   actualMwh: number;
@@ -156,6 +160,7 @@ export function screenCandidates(
       organizationName: c.organizationName,
       yekdem: c.yekdem,
       hydroKind: c.hydroKind ?? null,
+      access: c.access ?? null,
       hours,
       actualMwh: actual,
       standaloneCostTl: standalone,

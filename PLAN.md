@@ -127,6 +127,13 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
   *Kod hazır* (`23b5c70`): `--hes` ile toplama; tahmini alt tip (addaki baraj / regülatör, yoksa gün içi üretim esnekliği); sektör sayfasında Hidro sekmesi ve alt tip süzgeci; rapor ve aday taraması HES'i tanır.
 - [x] **Kabul kontrolü (Gain).** ✅ 28.09.2026 (yerel, gerçek veri): 2026 saatlik sektör serisi tamam (523 santral toplandı, 370'i karnede; hata 0). GAİN ENERJİ RES 2026 için 364 aday taranıyor, saatlik verisi eksik aday yok. Toplam kazanca göre ilk aday KARABURUN RES: 15,5 M TL (%21), adil prim 121,4 TL/MWh (tek başına 138,0). YEKDEM dışı + MWh başına sıralamada (boyut eşiği 13,8 GWh) ilk aday R3-TRABZON-1 RES: 312,5 TL/MWh. `/sector` K1 görünümü: rüzgâr medyanı 164 → 162 TL/MWh (arıza saatleri hariç).
 - [x] **4.4 Aday sayfası iyileştirmesi.** ✅ 28.09.2026 · `bed540c`. MWh başına kazanç sıralaması (üretimi portföyün %5'inden az adaylar sona) ve YEKDEM süzgeci (Tümü / YEKDEM dışı / YEKDEM). Neden: toplam TL büyük santralleri öne çıkarıyordu; MWh başına sıralama eşiksiz kullanıldığında ise 0,2–5 GWh'lık lisanssız santraller listenin başına çıkıyordu.
+- [ ] **4.5 Hedef santraller: toplayıcısı olmayan, bağımsız santraller.** ◐ 28.09.2026 kod hazır; toplayıcı listeleri toplanınca kabul. Aday listesi uyum ölçüsüdür, ulaşılabilirlik söylemez; toplayıcının asıl hedefi başka toplayıcıda ve büyük bir grubun portföyünde olmayan santrallerdir. Düşünce zinciri:
+  1. *Başka toplayıcıda mı?* EPİAŞ'ta "(TOPLAYICI)" ekli ~36 katılımcının santral listesi çekilir (`scripts/aggregator-collect.mts` → `.cache/epias/aggregator-membership.json`). Kesin bilgi.
+  2. *Görevli tedarik / lisanssız mı?* Sahibi "K3 … PERAKENDE" ya da adında LÜY/LÜM_ olanlar hedef değil.
+  3. *Büyük bir grubun mu?* Sahip dizininde (tüm teknolojiler) aynı şirketin ya da şirket adındaki aynı markanın (ör. ENERJİSA, BORUSAN) en az 3 santrali varsa grup portföyü sayılır. Tahmin: SPV'ler yer adıyla kurulmuşsa gruba bağlanamaz.
+  4. *Kalan:* hedef (bağımsız). Dengeden sorumlu grup üyeliği santral bazında yayımlanmadığı için en iyi tahmindir; sayfada böyle yazar.
+  5. Aday sayfasında "Ulaşılabilirlik" süzgeci (varsayılan: Hedef), santral başına durum etiketi, CSV sütunu. Sahip dizini taramasında toplayıcılar artık atlanır (toplayıcı sahibi ezmesin).
+  *İlk sonuç (toplayıcı listesi olmadan):* 2026 YEKDEM dışı 159 adayın 61'i hedef, 59'u grup, 21'i lisanssız/tedarik, 18'i sahibi bilinmiyor.
 - **Teslim:** "Portföyünüze en çok değer katacak 10 santral" listesi.
 - **Kabul:** Gain için liste üretiliyor ve her aday için beklenen kazanç veriliyor.
 

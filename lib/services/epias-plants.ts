@@ -19,7 +19,7 @@ import { epiasRequest, formatToEpiasIso } from "@/lib/services/epias-service";
 import type { EpiasOrganization, EpiasPowerPlant, KgupVersion } from "@/lib/epias-plant/plant-data";
 import { guessTechnologyFromName } from "@/lib/epias-plant/plant-data";
 import { plantPeriods } from "@/lib/epias-plant/period";
-import type { AggregatorPortfolio } from "@/lib/projects/aggregator";
+import { isAggregatorName, type AggregatorPortfolio } from "@/lib/projects/aggregator";
 
 export interface EpiasUevcb {
   id: number;
@@ -178,6 +178,11 @@ async function nearestOwnerIndex(year: number): Promise<OwnerIndexFile | null> {
   return null;
 }
 
+/** Diskteki en yakın yılın tam sahip dizini (EPİAŞ'a bağlanmaz); yoksa boş */
+export async function loadOwnerEntries(year: number): Promise<Array<[number, PlantOwner]>> {
+  return (await nearestOwnerIndex(year))?.entries ?? [];
+}
+
 /**
  * Santral kimliği → şirket dizini. EPİAŞ'ta santralden şirkete giden bir servis yok; bu yüzden yıl içinde tanımlı
  * tüm şirketlerin santral listesi (power-plant-list-by-organization-id) taranır ve diske yazılır
@@ -216,6 +221,11 @@ export function plantOwnerIndex(year: number, forceRefresh = false): Promise<Pla
     const worker = async () => {
       while (next < todo.length) {
         const org = todo[next++];
+        // Toplayıcının listesindeki santraller başka şirketlere aittir: sahibi ezmemesi için toplayıcı taranmaz
+        if (isAggregatorName(org.name)) {
+          scanned.add(org.id);
+          continue;
+        }
         for (let attempt = 1; attempt <= 3; attempt++) {
           try {
             for (const p of await listPlantsByOrganization(org.id, start, end)) {
