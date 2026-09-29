@@ -44,11 +44,12 @@ export function calculateImbalanceMwh(actualMwh: number, forecastMwh: number): n
  *
  * Pozitif Dengesizlik (actual > forecast):
  * Üretici sisteme fazla enerji vermiştir.
- * Satış Birim Fiyatı = Min(PTF, SMF) * (1 - k)
+ * Satış Birim Fiyatı = Min(PTF, SMF) * (1 - l)   (DUY md. 110: l pozitif, k negatif dengesizlik katsayısı; burada tek katsayı)
  *
  * Negatif Dengesizlik (actual < forecast):
  * Üretici taahhüt ettiğinden az enerji üretmiştir, eksik enerjiyi sistemden satın alır.
  * Alış Birim Fiyatı = Max(PTF, SMF) * (1 + k)
+ * Eski, tek katsayılı yardımcı; uygulama hesapları engine.ts'teki yöne bağlı katsayılarla yapılır.
  */
 export function calculateImbalanceCost({
   actualMwh,

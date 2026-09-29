@@ -15,8 +15,8 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.0";
-const VERSION_DATE = "28 Eylül 2026";
+const VERSION = "1.1";
+const VERSION_DATE = "29 Eylül 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
   { id: "ozet", title: "Özet" },
@@ -195,8 +195,8 @@ export default function MethodologyPage() {
               üretim) yüksek fiyatla kapatılır. Dengesizlik fiyatları:
             </p>
             <F>
-              {`Pozitif dengesizlik fiyatı = min(PTF, SMF) × (1 − k)
-Negatif dengesizlik fiyatı = max(PTF, SMF) × (1 + l)
+              {`Pozitif dengesizlik fiyatı = min(PTF, SMF) × (1 − l)      l: pozitif dengesizlik katsayısı
+Negatif dengesizlik fiyatı = max(PTF, SMF) × (1 + k)      k: negatif dengesizlik katsayısı
 
 Dengesizlik riski (saat) = sapma > 0 :  sapma × (PTF − pozitif fiyat)
                            sapma < 0 : |sapma| × (negatif fiyat − PTF)
@@ -207,14 +207,17 @@ MWh başına risk = Σ risk / Σ gerçekleşen üretim`}
               arasındaki farktır; yani plan hatasının bedeli. Katsayılar saatin tarihine göre seçilir:
             </p>
             <Table
-              head={["Dönem", "k ve l"]}
+              head={["Dönem ve sistem yönü", "k (negatif dengesizlik)", "l (pozitif dengesizlik)"]}
               rows={[
-                ["2026 öncesi", "k = l = %3, sistem yönünden bağımsız"],
-                ["1 Ocak 2026'dan itibaren", "Sapma sistemle aynı yöndeyse %6 (sistem fazlasındayken fazla, açığındayken eksik üretim); ters yöndeyse ya da sistem dengedeyse %3"],
+                ["2026 öncesi, her yönde", "%3", "%3"],
+                ["2026'dan itibaren · sistem enerji açığı", "%6", "%3"],
+                ["2026'dan itibaren · sistem enerji fazlası", "%3", "%6"],
+                ["2026'dan itibaren · sistem dengede", "%3", "%3"],
               ]}
             />
             <p>
-              Sistemle ters yöndeki sapma sistemi dengelediği için ucuzdur; riskin büyük kısmı aynı yöndeki sapmadan doğar. Gün içi işlemler
+              Yani 2026&apos;dan itibaren sistemle aynı yöndeki sapma (açıkta eksik, fazlada fazla üretim) %6, ters yöndeki %3 katsayıyla
+              uzlaşır. Sistemle ters yöndeki sapma sistemi dengelediği için ucuzdur; riskin büyük kısmı aynı yöndeki sapmadan doğar. Gün içi işlemler
               açık veride olmadığından hesap &quot;gün içi işlemler öncesi&quot; risktir. <Tag kind="exact" />
             </p>
           </Section>
@@ -457,6 +460,11 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
               <li>Yük atma talimatları santral bazında yayımlanmaz; talimata düşen üretim dengesizlik gibi görünebilir.</li>
               <li>Dengeden sorumlu grup üyeliği santral bazında yayımlanmaz; uzlaştırma birimi şirket listelerinden ya da kullanıcı seçiminden gelir.</li>
               <li>2026 projeksiyonları, veri yılının fiyatları ve sistem yönleri tekrar ederse geçerlidir.</li>
+              <li>
+                Yönetmelik metni, dengesizlik fiyatında uzlaştırma dönemi içindeki 15 dakikalık SMF&apos;lerin en yükseğinin (negatif) ve en
+                düşüğünün (pozitif) kullanılmasını öngörüyor; uygulama EPİAŞ&apos;ın saatlik SMF&apos;sini kullanır. Bu hükmün yürürlük tarihi teyit
+                edilmelidir.
+              </li>
               <li>PTF fiyat tahmini yapılmaz; uygulama ölçer ve açıklar.</li>
             </ul>
           </Section>
@@ -482,14 +490,24 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
                   <span key="s1" className={STATUS_STYLE.verified}>doğrulandı</span>,
                 ],
                 [
-                  "Dengesizlik fiyatı ve k, l katsayıları",
-                  "Elektrik Piyasası Dengeleme ve Uzlaştırma Yönetmeliği; EPDK kurul kararları",
-                  <span key="s2" className={STATUS_STYLE.source}>kaynak</span>,
+                  "Dengesizlik tutarı formülü; k negatif, l pozitif dengesizlik katsayısı, sistem yönüne bağlı",
+                  <span key="2">
+                    Elektrik Piyasası Dengeleme ve Uzlaştırma Yönetmeliği md. 110 (RG 29.12.2025, 33122 sayılı değişiklikle),{" "}
+                    <a className="text-indigo-700 underline" href="https://www.mevzuat.gov.tr/mevzuat?MevzuatNo=12985&MevzuatTur=7&MevzuatTertip=5" target="_blank" rel="noreferrer">
+                      mevzuat.gov.tr
+                    </a>
+                  </span>,
+                  <span key="s2" className={STATUS_STYLE.verified}>doğrulandı (yönetmelik metni)</span>,
                 ],
                 [
-                  "2026'dan itibaren yöne bağlı %3 / %6",
-                  "EPDK, k ve l katsayılarının 1/1/2026 tarihinden itibaren belirlenmesine ilişkin kurul kararı",
-                  <span key="s3" className={STATUS_STYLE.check}>teyit edilmeli (karar tarihi ve sayısı)</span>,
+                  "2026'dan itibaren k ve l değerleri (açık: k %6, l %3; fazla: k %3, l %6; denge: %3)",
+                  <span key="3">
+                    EPDK, &quot;k ve l katsayılarının 1/1/2026 tarihinden itibaren belirlenmesine ilişkin Kurul Kararı Taslağı&quot;,{" "}
+                    <a className="text-indigo-700 underline" href="https://www.epdk.gov.tr/Detay/Icerik/4-16180/elektrik-piyasasina-iliskin-cesitli-mevzuatlarda-" target="_blank" rel="noreferrer">
+                      epdk.gov.tr
+                    </a>
+                  </span>,
+                  <span key="s3" className={STATUS_STYLE.source}>taslak metni doğrulandı; nihai kurul kararının sayısı görülmedi</span>,
                 ],
                 [
                   "KÜPST formülü ve 2025 tolerans oranları",
@@ -521,8 +539,13 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
                 [
+                  "1.1",
+                  "29 Eylül 2026",
+                  "k ve l gösterimi yönetmelik metnine göre düzeltildi (k negatif, l pozitif dengesizlik katsayısı; sistem yönüne göre tablo). Hesaplar değişmedi: uygulama zaten sistemle aynı yöndeki sapmaya %6 uyguluyordu. Kaynakçada yönetmelik ve EPDK taslak metni doğrulandı. 15 dakikalık SMF notu eklendi.",
+                ],
+                [
                   "1.0",
-                  VERSION_DATE,
+                  "28 Eylül 2026",
                   "İlk yayın. Kapsam: dengesizlik ve KÜPST, uzlaştırma birimi ve YEKDEM senaryoları, adil prim, risk primi, maliyet ayrıştırması, piyasa göstergeleri, sektör karnesi (2025 ve 2026 Ocak–Ağustos), aday ve hedef santraller, gün içi senaryosu.",
                 ],
               ]}

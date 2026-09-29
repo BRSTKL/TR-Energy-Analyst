@@ -303,7 +303,7 @@ export function PricingProfileDialog({
                     Pozitif Dengesizlik (SURPLUS)
                   </label>
                   <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
-                    1 - 2k
+                    1 − l (aynı yön)
                   </span>
                 </div>
                 <input
@@ -331,7 +331,7 @@ export function PricingProfileDialog({
                     Pozitif Dengesizlik (Diğer Yönler)
                   </label>
                   <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
-                    1 - k
+                    1 − l
                   </span>
                 </div>
                 <input
@@ -359,7 +359,7 @@ export function PricingProfileDialog({
                     Negatif Dengesizlik (DEFICIT)
                   </label>
                   <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded">
-                    1 + 2k
+                    1 + k (aynı yön)
                   </span>
                 </div>
                 <input
