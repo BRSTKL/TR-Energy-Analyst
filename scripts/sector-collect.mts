@@ -93,7 +93,14 @@ const price = (rows: Array<{ timestamp: Date; forecastMwh: number; actualMwh: nu
       ? [
           processHourlyRecord(
             { timestamp: row.timestamp, forecastMwh: row.forecastMwh, actualMwh: row.actualMwh },
-            { timestamp: m.timestamp, ptf: m.ptf, smf: m.smf, systemDirection: m.systemDirection as SystemDirection },
+            {
+              timestamp: m.timestamp,
+              ptf: m.ptf,
+              smf: m.smf,
+              systemDirection: m.systemDirection as SystemDirection,
+              imbalancePosPrice: m.imbalancePosPrice,
+              imbalanceNegPrice: m.imbalanceNegPrice,
+            },
             DEFAULT_IMBALANCE_PROFILE
           ),
         ]

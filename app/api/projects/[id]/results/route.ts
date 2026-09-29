@@ -83,6 +83,8 @@ export async function GET(_request: Request, { params }: { params: { id: string 
           ptf: record.marketData.ptf,
           smf: record.marketData.smf,
           systemDirection: record.marketData.systemDirection as SystemDirection,
+          imbalancePosPrice: record.marketData.imbalancePosPrice,
+          imbalanceNegPrice: record.marketData.imbalanceNegPrice,
         };
 
         const hourlyResult = processHourlyRecord(

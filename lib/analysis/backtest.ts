@@ -11,7 +11,7 @@
  * SAF fonksiyonlar: I/O yok.
  */
 
-import { processHourlyRecord } from "@/lib/calculations/engine";
+import { processHourlyRecord, pricedMarket } from "@/lib/calculations/engine";
 import { HourlyResult, ImbalancePricingProfile } from "@/lib/calculations/types";
 import { DEFAULT_INTRADAY_REALISM, persistenceTradeGain, realisticHourGain } from "@/lib/analysis/intraday-arbitrage";
 
@@ -92,7 +92,7 @@ export function priceHours(hourly: HourlyResult[], profile: ImbalancePricingProf
     const t = new Date(h.timestamp).getTime();
     const r = processHourlyRecord(
       { timestamp: h.timestamp, actualMwh: h.actualMwh, forecastMwh: h.forecastMwh },
-      { timestamp: h.timestamp, ptf: h.ptf, smf: h.smf, systemDirection: h.systemDirection },
+      pricedMarket(h),
       profile
     );
     return {
@@ -113,7 +113,7 @@ export function costWithMultiplier(h: PricedHour, k: number, profile: ImbalanceP
   const s = h.source;
   return processHourlyRecord(
     { timestamp: s.timestamp, actualMwh: s.actualMwh, forecastMwh: s.forecastMwh * k },
-    { timestamp: s.timestamp, ptf: s.ptf, smf: s.smf, systemDirection: s.systemDirection },
+    pricedMarket(s),
     profile
   ).imbalanceCost;
 }

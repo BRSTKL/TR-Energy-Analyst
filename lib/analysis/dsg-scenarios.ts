@@ -15,7 +15,7 @@
  * SAF fonksiyonlar: I/O yok.
  */
 
-import { processHourlyRecord } from "@/lib/calculations/engine";
+import { processHourlyRecord, pricedMarket } from "@/lib/calculations/engine";
 import { HourlyResult, ImbalancePricingProfile } from "@/lib/calculations/types";
 import type { NettingPlantInput } from "@/lib/analysis/portfolio-netting";
 
@@ -149,7 +149,7 @@ export function analyzeDsgScenario(
     const s = data.samples[k];
     return processHourlyRecord(
       { timestamp: s.timestamp, forecastMwh: f, actualMwh: a },
-      { timestamp: s.timestamp, ptf: s.ptf, smf: s.smf, systemDirection: s.systemDirection },
+      pricedMarket(s),
       profile
     ).imbalanceCost;
   };

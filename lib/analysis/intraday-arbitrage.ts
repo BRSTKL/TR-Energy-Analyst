@@ -22,7 +22,7 @@
  */
 
 import { HourlyResult, ImbalancePricingProfile, SystemDirection } from "@/lib/calculations/types";
-import { processHourlyRecord } from "@/lib/calculations/engine";
+import { processHourlyRecord, pricedMarket } from "@/lib/calculations/engine";
 
 export interface ArbitrageAggregate {
   period: string; // "YYYY-MM" veya "YYYY"
@@ -797,7 +797,7 @@ export function persistenceTradeGain(
     s = Math.sign(s) * Math.min(Math.abs(s), cap);
   }
   const { price } = realisticTradePrice(h, s > 0 ? "sell" : "buy", realism.stressHaircutPercent);
-  const market = { timestamp: h.timestamp, ptf: h.ptf, smf: h.smf, systemDirection: h.systemDirection };
+  const market = pricedMarket(h);
   const revenue = (forecastMwh: number) =>
     processHourlyRecord({ timestamp: h.timestamp, actualMwh: h.actualMwh, forecastMwh }, market, profile).totalRevenue;
   return {

@@ -70,6 +70,8 @@ export async function GET(
           ptf: record.marketData.ptf,
           smf: record.marketData.smf,
           systemDirection: record.marketData.systemDirection as any,
+          imbalancePosPrice: record.marketData.imbalancePosPrice,
+          imbalanceNegPrice: record.marketData.imbalanceNegPrice,
         });
       }
     }

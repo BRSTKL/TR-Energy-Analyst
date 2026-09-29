@@ -17,7 +17,7 @@
  * SAF: I/O yok.
  */
 
-import { imbalanceCostOf, processHourlyRecord } from "@/lib/calculations/engine";
+import { imbalanceCostOf, processHourlyRecord, pricedMarket } from "@/lib/calculations/engine";
 import { HourlyResult, ImbalancePricingProfile, resolveImbalanceProfile } from "@/lib/calculations/types";
 import { kupstTotal } from "@/lib/calculations/kupst";
 import { MAX_EXACT_PLANTS } from "@/lib/analysis/dsg-scenarios";
@@ -216,7 +216,7 @@ export function screenCandidates(
       hourly.push(
         processHourlyRecord(
           { timestamp: s.timestamp, forecastMwh: row.forecastMwh, actualMwh: row.actualMwh },
-          { timestamp: s.timestamp, ptf: s.ptf, smf: s.smf, systemDirection: s.systemDirection },
+          pricedMarket(s),
           profile
         )
       );

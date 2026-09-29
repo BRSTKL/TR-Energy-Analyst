@@ -196,6 +196,8 @@ export async function GET(
           gipVolumeMwh: record.marketData.gipVolumeMwh,
           gipMinPrice: record.marketData.gipMinPrice,
           gipMaxPrice: record.marketData.gipMaxPrice,
+          imbalancePosPrice: record.marketData.imbalancePosPrice,
+          imbalanceNegPrice: record.marketData.imbalanceNegPrice,
         };
 
         const result = processHourlyRecord(

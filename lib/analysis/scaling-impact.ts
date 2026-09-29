@@ -11,7 +11,7 @@
  * Katsayı aynı dönemin verisinden hesaplandığı için (in-sample) sonuç iyimser bir üst sınırdır.
  */
 
-import { processHourlyRecord } from "@/lib/calculations/engine";
+import { processHourlyRecord, pricedMarket } from "@/lib/calculations/engine";
 import {
   DEFAULT_IMBALANCE_PROFILE,
   HourlyResult,
@@ -47,7 +47,7 @@ export function simulateForecastScaling(
   for (const h of hourly) {
     scaled += processHourlyRecord(
       { timestamp: h.timestamp, actualMwh: h.actualMwh, forecastMwh: h.forecastMwh * scaleFactor },
-      { timestamp: h.timestamp, ptf: h.ptf, smf: h.smf, systemDirection: h.systemDirection },
+      pricedMarket(h),
       profile
     ).imbalanceCost;
   }

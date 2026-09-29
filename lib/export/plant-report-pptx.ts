@@ -1530,7 +1530,7 @@ export async function exportPlantReportPptx(
       ],
       [
         "Dengesizlik fiyatı",
-        "Mevzuata göre saat saat: pozitif dengesizlik MIN(PTF, SMF) × (1 − l), negatif MAX(PTF, SMF) × (1 + k). 2026 öncesi k = l = %3; 2026'dan itibaren sistemle aynı yönde %6.",
+        "Mevzuata göre saat saat: pozitif dengesizlik MIN(PTF, SMF) × (1 − l), negatif MAX(PTF, SMF) × (1 + k). 2026 öncesi k = l = %3; 2026'dan itibaren sistemle aynı yönde %6, ayrıca taban (150 TL) ve negatif fiyat (−100 TL) kuralları ve 15 dakikalık SMF. Bu yüzden fiyat EPİAŞ'ın resmi uzlaştırmasından (sistem dengesizlik tutarı ÷ miktarı) alınır; 2024–2025'te formülle birebir aynıdır.",
       ],
       [
         "Dengesizlik riski",

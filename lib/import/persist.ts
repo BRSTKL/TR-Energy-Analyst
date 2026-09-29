@@ -64,6 +64,8 @@ export async function writePlantImports(
                   ptf: market.ptf,
                   smf: market.smf,
                   systemDirection: market.systemDirection as SystemDirection,
+                  imbalancePosPrice: market.imbalancePosPrice,
+                  imbalanceNegPrice: market.imbalanceNegPrice,
                 },
                 profile
               ).imbalanceCost.toFixed(2)

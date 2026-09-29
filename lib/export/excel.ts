@@ -16,11 +16,13 @@ import ExcelJS from "exceljs";
 import {
   DEFAULT_IMBALANCE_PROFILE,
   ImbalancePricingProfile,
+  OfficialImbalancePrices,
   resolveImbalanceProfile,
   toPricingProfile,
 } from "@/lib/calculations/types";
+import { imbalancePrices } from "@/lib/calculations/engine";
 
-export interface HourlyExportRow {
+export interface HourlyExportRow extends OfficialImbalancePrices {
   timestamp: Date | string;
   yearMonth: string; // YYYY-MM
   hourStr: string;   // 09:00
@@ -197,15 +199,24 @@ export async function exportToExcel(
     // K: Dengesizlik [MWh] = Gerçekleşen - Tahmin
     row.getCell(11).value = { formula: `G${rowNum}-F${rowNum}` };
 
-    // L: Pozitif Dengesizlik Fiyatı [₺/MWh]
-    row.getCell(12).value = {
-      formula: `IF(J${rowNum}="SURPLUS", MIN(H${rowNum},I${rowNum})*${rowProfile.positiveSurplusCoef}, MIN(H${rowNum},I${rowNum})*${rowProfile.positiveOtherCoef})`,
-    };
-
-    // M: Negatif Dengesizlik Fiyatı [₺/MWh]
-    row.getCell(13).value = {
-      formula: `IF(J${rowNum}="DEFICIT", MAX(H${rowNum},I${rowNum})*${rowProfile.negativeDeficitCoef}, MAX(H${rowNum},I${rowNum})*${rowProfile.negativeOtherCoef})`,
-    };
+    // L / M: Pozitif ve negatif dengesizlik fiyatı [₺/MWh]. Uygulamanın fiyatı (EPİAŞ resmi fiyatı ya da 2026 taban
+    // kuralları dahil mevzuat formülü) basit MIN/MAX formülüyle aynıysa şeffaflık için formül, değilse değer yazılır
+    // (2026: 15 dakikalık SMF, taban ve negatif fiyat kuralları hücre formülüyle ifade edilemez).
+    const engine = imbalancePrices(record, rowProfile);
+    const simplePos = Math.min(record.ptf, record.smf) * (record.systemDirection === "SURPLUS" ? rowProfile.positiveSurplusCoef : rowProfile.positiveOtherCoef);
+    const simpleNeg = Math.max(record.ptf, record.smf) * (record.systemDirection === "DEFICIT" ? rowProfile.negativeDeficitCoef : rowProfile.negativeOtherCoef);
+    row.getCell(12).value =
+      Math.abs(engine.positive - simplePos) < 0.005
+        ? {
+            formula: `IF(J${rowNum}="SURPLUS", MIN(H${rowNum},I${rowNum})*${rowProfile.positiveSurplusCoef}, MIN(H${rowNum},I${rowNum})*${rowProfile.positiveOtherCoef})`,
+          }
+        : Number(engine.positive.toFixed(4));
+    row.getCell(13).value =
+      Math.abs(engine.negative - simpleNeg) < 0.005
+        ? {
+            formula: `IF(J${rowNum}="DEFICIT", MAX(H${rowNum},I${rowNum})*${rowProfile.negativeDeficitCoef}, MAX(H${rowNum},I${rowNum})*${rowProfile.negativeOtherCoef})`,
+          }
+        : Number(engine.negative.toFixed(4));
 
     // N: Dengesizlik Tutarı [₺] = IF(Dengesizlik>0, Dengesizlik*PozitifFiyat, IF(Dengesizlik<0, Dengesizlik*NegatifFiyat, 0))
     row.getCell(14).value = {

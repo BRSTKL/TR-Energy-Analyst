@@ -15,6 +15,7 @@ import {
   ImbalanceProfile,
   MarketPriceRecord,
   PlantHourlyInput,
+  regulatoryRegimeAt,
   resolveImbalanceProfile,
   SystemDirection,
 } from "./types";
@@ -27,10 +28,23 @@ export function calculateImbalance(actualMwh: number, forecastMwh: number): numb
   return actualMwh - forecastMwh;
 }
 
+/** 2026 fiyat kuralları (DUY md. 110, yürürlük 1/1/2026): V ve B birim fiyatları (başlangıç değerleri, TL/MWh) */
+export const IMBALANCE_FLOOR_V = 150;
+export const IMBALANCE_NEGATIVE_B = 100;
+
+/** Pozitif dengesizlik fiyatının tabanı (katsayıdan önce): 2026 kurallarında MIN(PTF, SMF) < V ise −B */
+const positiveBase = (low: number, floors: boolean | undefined) => (floors && low < IMBALANCE_FLOOR_V ? -IMBALANCE_NEGATIVE_B : low);
+/** Negatif dengesizlik fiyatının tabanı: 2026 kurallarında en az V */
+const negativeBase = (high: number, floors: boolean | undefined) => (floors ? Math.max(IMBALANCE_FLOOR_V, high) : high);
+
+const positiveCoef = (dir: SystemDirection, p: ImbalancePricingProfile) => (dir === "SURPLUS" ? p.positiveSurplusCoef : p.positiveOtherCoef);
+const negativeCoef = (dir: SystemDirection, p: ImbalancePricingProfile) => (dir === "DEFICIT" ? p.negativeDeficitCoef : p.negativeOtherCoef);
+
 /**
- * 2. calculatePositiveImbalancePrice(ptf, smf, systemDirection, profile): number
- * → systemDirection === 'SURPLUS' ise: min(ptf, smf) * profile.positiveSurplusCoef
- * → systemDirection === 'DEFICIT' veya 'BALANCED' ise: min(ptf, smf) * profile.positiveOtherCoef
+ * 2. calculatePositiveImbalancePrice(ptf, smf, systemDirection, profile): number (formül; resmi fiyat için imbalancePrices)
+ * → taban = min(ptf, smf); profile.floors ise taban < 150 → −100 (2026 kuralı)
+ * → systemDirection === 'SURPLUS' ise: taban * profile.positiveSurplusCoef
+ * → systemDirection === 'DEFICIT' veya 'BALANCED' ise: taban * profile.positiveOtherCoef
  */
 export function calculatePositiveImbalancePrice(
   ptf: number,
@@ -38,17 +52,14 @@ export function calculatePositiveImbalancePrice(
   systemDirection: SystemDirection,
   profile: ImbalancePricingProfile
 ): number {
-  const basePrice = Math.min(ptf, smf);
-  if (systemDirection === "SURPLUS") {
-    return basePrice * profile.positiveSurplusCoef;
-  }
-  return basePrice * profile.positiveOtherCoef;
+  return positiveBase(Math.min(ptf, smf), profile.floors) * positiveCoef(systemDirection, profile);
 }
 
 /**
- * 3. calculateNegativeImbalancePrice(ptf, smf, systemDirection, profile): number
- * → systemDirection === 'DEFICIT' ise: max(ptf, smf) * profile.negativeDeficitCoef
- * → systemDirection === 'SURPLUS' veya 'BALANCED' ise: max(ptf, smf) * profile.negativeOtherCoef
+ * 3. calculateNegativeImbalancePrice(ptf, smf, systemDirection, profile): number (formül; resmi fiyat için imbalancePrices)
+ * → taban = max(ptf, smf); profile.floors ise en az 150 (2026 kuralı)
+ * → systemDirection === 'DEFICIT' ise: taban * profile.negativeDeficitCoef
+ * → systemDirection === 'SURPLUS' veya 'BALANCED' ise: taban * profile.negativeOtherCoef
  */
 export function calculateNegativeImbalancePrice(
   ptf: number,
@@ -56,11 +67,52 @@ export function calculateNegativeImbalancePrice(
   systemDirection: SystemDirection,
   profile: ImbalancePricingProfile
 ): number {
-  const basePrice = Math.max(ptf, smf);
-  if (systemDirection === "DEFICIT") {
-    return basePrice * profile.negativeDeficitCoef;
-  }
-  return basePrice * profile.negativeOtherCoef;
+  return negativeBase(Math.max(ptf, smf), profile.floors) * negativeCoef(systemDirection, profile);
+}
+
+/** Fiyatlamaya giren piyasa alanları (MarketPriceRecord ve HourlyResult ikisi de uyar) */
+export type PricedMarket = Pick<MarketPriceRecord, "timestamp" | "ptf" | "smf" | "systemDirection" | "imbalancePosPrice" | "imbalanceNegPrice">;
+
+/** Bir saatlik sonuçtan ya da piyasa kaydından fiyatlamaya giren alanlar (resmi fiyatlar dahil). Yeniden fiyatlama yapan analizler bunu kullanır. */
+export const pricedMarket = (m: PricedMarket): PricedMarket => ({
+  timestamp: m.timestamp,
+  ptf: m.ptf,
+  smf: m.smf,
+  systemDirection: m.systemDirection,
+  imbalancePosPrice: m.imbalancePosPrice ?? null,
+  imbalanceNegPrice: m.imbalanceNegPrice ?? null,
+});
+
+/**
+ * Saatin pozitif ve negatif dengesizlik fiyatı. EPİAŞ'ın resmi fiyatı varsa o esas alınır: resmi fiyat, saatin kendi
+ * tarihindeki mevzuat katsayısına bölünerek tabana çevrilir (pozitif: resmi / (1 − l), negatif: resmi / (1 + k)) ve
+ * uygulanan profilin katsayısıyla çarpılır. Böylece mevzuat profili saatin kendi tarihinde resmi fiyatı birebir verir;
+ * başka bir katsayı kuralı (ör. 2026 kurallarının 2025 verisine uygulanması, ayrıştırmadaki katsayı değişimi) aynı
+ * tabana uygulanır. Resmi taban 15 dakikalık SMF, taban ve negatif fiyat kurallarını zaten içerir; 2026 kuralları
+ * (floors) yalnızca kendi tarihinde bu kuralları içermeyen tabana (resmi fiyatı olmayan saat, 2026 öncesi saat) ayrıca
+ * uygulanır.
+ */
+export function imbalancePrices(market: PricedMarket, effectiveProfile: ImbalancePricingProfile): { positive: number; negative: number } {
+  const { low, high } = imbalanceBases(market, effectiveProfile.floors);
+  return { positive: low * positiveCoef(market.systemDirection, effectiveProfile), negative: high * negativeCoef(market.systemDirection, effectiveProfile) };
+}
+
+/**
+ * Katsayıdan önceki taban fiyatlar: pozitif fiyat = low × (1 − l), negatif fiyat = high × (1 + k). Resmi fiyat varsa
+ * saatin kendi tarihindeki katsayıya bölünerek bulunur; yoksa MIN / MAX(PTF, SMF). `floors`: 2026 taban ve negatif fiyat
+ * kuralları, kendi tarihinde bu kuralları içermeyen tabana uygulanır.
+ */
+export function imbalanceBases(market: PricedMarket, floors: boolean | undefined): { low: number; high: number } {
+  const { ptf, smf, systemDirection: dir } = market;
+  const own = regulatoryRegimeAt(market.timestamp).coefficients;
+  const officialPos = market.imbalancePosPrice ?? null;
+  const officialNeg = market.imbalanceNegPrice ?? null;
+  const low = officialPos !== null ? officialPos / positiveCoef(dir, own) : Math.min(ptf, smf);
+  const high = officialNeg !== null ? officialNeg / negativeCoef(dir, own) : Math.max(ptf, smf);
+  return {
+    low: officialPos !== null && own.floors ? low : positiveBase(low, floors),
+    high: officialNeg !== null && own.floors ? high : negativeBase(high, floors),
+  };
 }
 
 /**
@@ -265,15 +317,11 @@ export function detectMissingHours(
  * Net sapmanın dengesizlik maliyeti: processHourlyRecord(...).imbalanceCost ile aynı sonuç, ara nesne üretmeden.
  * Aynı saatte birçok bileşimin fiyatlandığı taramalar (aday santral, alt grup) için.
  */
-export function imbalanceCostOf(
-  imbalanceMwh: number,
-  market: Pick<MarketPriceRecord, "timestamp" | "ptf" | "smf" | "systemDirection">,
-  profile: ImbalancePricingProfile
-): number {
+export function imbalanceCostOf(imbalanceMwh: number, market: PricedMarket, profile: ImbalancePricingProfile): number {
   if (imbalanceMwh === 0) return 0;
-  const p = resolveImbalanceProfile(profile, market.timestamp);
-  if (imbalanceMwh > 0) return imbalanceMwh * (market.ptf - calculatePositiveImbalancePrice(market.ptf, market.smf, market.systemDirection, p));
-  return -imbalanceMwh * (calculateNegativeImbalancePrice(market.ptf, market.smf, market.systemDirection, p) - market.ptf);
+  const prices = imbalancePrices(market, resolveImbalanceProfile(profile, market.timestamp));
+  if (imbalanceMwh > 0) return imbalanceMwh * (market.ptf - prices.positive);
+  return -imbalanceMwh * (prices.negative - market.ptf);
 }
 
 /**
@@ -293,19 +341,8 @@ export function processHourlyRecord(
   // 1. Dengesizlik miktarı (MWh)
   const imbalanceMwh = calculateImbalance(actualMwh, forecastMwh);
 
-  // 2 & 3. Dengesizlik birim fiyatları (TL/MWh)
-  const positivePrice = calculatePositiveImbalancePrice(
-    ptf,
-    smf,
-    systemDirection,
-    effectiveProfile
-  );
-  const negativePrice = calculateNegativeImbalancePrice(
-    ptf,
-    smf,
-    systemDirection,
-    effectiveProfile
-  );
+  // 2 & 3. Dengesizlik birim fiyatları (TL/MWh): EPİAŞ resmi fiyatı varsa o, yoksa mevzuat formülü
+  const { positive: positivePrice, negative: negativePrice } = imbalancePrices(marketPriceRecord, effectiveProfile);
 
   // 4. Dengesizlik tutarı (TL)
   const imbalanceAmount = calculateImbalanceAmount(
@@ -353,6 +390,8 @@ export function processHourlyRecord(
     gipVolumeMwh: marketPriceRecord.gipVolumeMwh ?? null,
     gipMinPrice: marketPriceRecord.gipMinPrice ?? null,
     gipMaxPrice: marketPriceRecord.gipMaxPrice ?? null,
+    imbalancePosPrice: marketPriceRecord.imbalancePosPrice ?? null,
+    imbalanceNegPrice: marketPriceRecord.imbalanceNegPrice ?? null,
     plantId: hourlyRecord.plantId,
     plantName: hourlyRecord.plantName,
   };

@@ -14,7 +14,7 @@ import {
   SystemDirection,
   DEFAULT_IMBALANCE_PROFILE,
 } from "@/lib/calculations/types";
-import { processHourlyRecord } from "@/lib/calculations/engine";
+import { processHourlyRecord, pricedMarket } from "@/lib/calculations/engine";
 
 export interface PeriodEfficiency {
   period: string; // "YYYY-MM-DD" veya "YYYY-MM"
@@ -307,12 +307,7 @@ export function simulateBiasCorrectedForecast(
       plantName: item.plantName,
     };
 
-    const marketPriceRecord: MarketPriceRecord = {
-      timestamp: item.timestamp,
-      ptf: item.ptf,
-      smf: item.smf,
-      systemDirection: item.systemDirection,
-    };
+    const marketPriceRecord: MarketPriceRecord = pricedMarket(item);
 
     // Faz 2 saf hesaplama motorunu yeniden çalıştır
     const simulated = processHourlyRecord(hourlyRecord, marketPriceRecord, profile);

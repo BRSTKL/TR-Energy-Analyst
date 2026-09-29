@@ -8,7 +8,7 @@
  * Tüm simülasyonlar aynı dönemin verisiyle yapılır (in-sample); gelecekteki etki için üst sınır niteliğindedir.
  */
 
-import { processHourlyRecord } from "@/lib/calculations/engine";
+import { processHourlyRecord, pricedMarket } from "@/lib/calculations/engine";
 import { HourlyResult, ImbalancePricingProfile } from "@/lib/calculations/types";
 import { DEFAULT_INTRADAY_REALISM, evaluateRealisticClosing } from "@/lib/analysis/intraday-arbitrage";
 
@@ -50,7 +50,7 @@ export function simulateForecastMultiplier(
     if (!select(h)) continue;
     const simulated = processHourlyRecord(
       { timestamp: h.timestamp, actualMwh: h.actualMwh, forecastMwh: h.forecastMwh * multiplier },
-      { timestamp: h.timestamp, ptf: h.ptf, smf: h.smf, systemDirection: h.systemDirection },
+      pricedMarket(h),
       profile
     );
     saving += h.imbalanceCost - simulated.imbalanceCost;

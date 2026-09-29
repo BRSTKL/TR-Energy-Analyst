@@ -20,6 +20,12 @@ export interface ImbalancePricingProfile {
   positiveOtherCoef: number; // örn: 0.97
   negativeDeficitCoef: number; // örn: 1.06
   negativeOtherCoef: number; // örn: 1.03
+  /**
+   * 2026 fiyat kuralları (DUY md. 110, RG 29/12/2025, yürürlük 1/1/2026): negatif dengesizlik fiyatı en az
+   * V (150 TL/MWh) × (1 + k); MIN(PTF, SMF) < V ise pozitif dengesizlik fiyatı −B (100 TL/MWh) × (1 − l).
+   * REGULATORY profilde saatin tarihine göre seçilir; CUSTOM profilde tanımsızsa uygulanmaz.
+   */
+  floors?: boolean;
 }
 
 /** Geriye dönük uyumluluk takma adı */
@@ -31,7 +37,8 @@ export type ImbalanceProfile = ImbalancePricingProfile;
  *
  * - 2026 öncesi: k = l = 0,03, sistem yönünden bağımsız.
  * - 1 Ocak 2026'dan itibaren: sapma yönü sistem yönüyle AYNIYSA %6, değilse (veya sistem dengedeyse) %3.
- *   (EPDK "k ve l Katsayılarının 1/1/2026 tarihinden itibaren Belirlenmesine İlişkin Kurul Kararı".)
+ *   (EPDK "k ve l Katsayılarının 1/1/2026 tarihinden itibaren Belirlenmesine İlişkin Kurul Kararı".) Ayrıca taban
+ *   ve negatif fiyat kuralları (floors): negatif fiyat ≥ 150 × (1 + k); MIN(PTF, SMF) < 150 ise pozitif fiyat −100 × (1 − l).
  *
  * Tarihler Türkiye duvar saatidir (uygulamanın zaman damgası kuralıyla aynı: UTC alanlarında saklanır).
  */
@@ -48,6 +55,7 @@ export const REGULATORY_IMBALANCE_REGIMES: {
       positiveOtherCoef: 0.97,
       negativeDeficitCoef: 1.03,
       negativeOtherCoef: 1.03,
+      floors: false,
     },
   },
   {
@@ -58,6 +66,7 @@ export const REGULATORY_IMBALANCE_REGIMES: {
       positiveOtherCoef: 0.97,
       negativeDeficitCoef: 1.06,
       negativeOtherCoef: 1.03,
+      floors: true,
     },
   },
 ];
@@ -119,7 +128,18 @@ export const DEFAULT_IMBALANCE_PROFILE: ImbalancePricingProfile = {
   positiveOtherCoef: 0.97,
   negativeDeficitCoef: 1.06,
   negativeOtherCoef: 1.03,
+  floors: true,
 };
+
+/**
+ * EPİAŞ'ın saat için uyguladığı resmi dengesizlik fiyatları (TL/MWh): sistemin pozitif / negatif dengesizlik tutarı
+ * bölü miktarı (Şeffaflık Platformu imbalance-amount / imbalance-quantity). 2026'daki 15 dakikalık SMF, taban ve negatif
+ * fiyat kurallarını içerir. Yoksa (eski veri, çok küçük sistem dengesizliği) null: fiyat formülden hesaplanır.
+ */
+export interface OfficialImbalancePrices {
+  imbalancePosPrice?: number | null;
+  imbalanceNegPrice?: number | null;
+}
 
 export interface HourlyRecord {
   timestamp: Date | string;
@@ -129,7 +149,7 @@ export interface HourlyRecord {
   plantName?: string;
 }
 
-export interface MarketPriceRecord {
+export interface MarketPriceRecord extends OfficialImbalancePrices {
   timestamp: Date | string;
   ptf: number;
   smf: number;
@@ -141,7 +161,7 @@ export interface MarketPriceRecord {
   gipMaxPrice?: number | null;
 }
 
-export interface HourlyResult {
+export interface HourlyResult extends OfficialImbalancePrices {
   timestamp: Date | string;
   actualMwh: number;
   forecastMwh: number;

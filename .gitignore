@@ -47,3 +47,6 @@ Icon?
 
 # EPİAŞ dizin önbelleği
 /.cache/
+
+# Geçici analiz betikleri
+scripts/tmp/

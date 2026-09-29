@@ -12,8 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { resolveImbalanceProfile, SystemDirection, toPricingProfile } from "@/lib/calculations/types";
 import {
   calculateImbalance,
-  calculateNegativeImbalancePrice,
-  calculatePositiveImbalancePrice,
+  imbalancePrices,
   calculateImbalanceAmount,
   calculateDayAheadSalesAmount,
   calculateTotalRevenue,
@@ -62,6 +61,8 @@ export interface EpiasSyncResult {
     avgPtf: number;
     avgSmf: number;
   };
+  /** EPİAŞ resmi dengesizlik fiyatı yazılan saat sayısı; alınamadıysa hata metni */
+  officialImbalance?: { written: number } | { error: string };
   error?: string;
 }
 
@@ -664,16 +665,16 @@ export async function recalculateProjectImbalances(
     const imbalanceMwh = calculateImbalance(gen.actualMwh, gen.forecastMwh);
 
     if (recalculateCosts) {
-      const posPrice = calculatePositiveImbalancePrice(
-        mData.ptf,
-        mData.smf,
-        mData.systemDirection as SystemDirection,
-        resolveImbalanceProfile(profile, gen.timestamp)
-      );
-      const negPrice = calculateNegativeImbalancePrice(
-        mData.ptf,
-        mData.smf,
-        mData.systemDirection as SystemDirection,
+      // Resmi dengesizlik fiyatı varsa o, yoksa mevzuat formülü (hesap motoruyla aynı)
+      const { positive: posPrice, negative: negPrice } = imbalancePrices(
+        {
+          timestamp: gen.timestamp,
+          ptf: mData.ptf,
+          smf: mData.smf,
+          systemDirection: mData.systemDirection as SystemDirection,
+          imbalancePosPrice: mData.imbalancePosPrice,
+          imbalanceNegPrice: mData.imbalanceNegPrice,
+        },
         resolveImbalanceProfile(profile, gen.timestamp)
       );
       const imbAmount = calculateImbalanceAmount(imbalanceMwh, posPrice, negPrice);
@@ -733,6 +734,17 @@ export async function syncEpiasToDatabase(options: {
   // 1. MarketData tablosuna upsert et
   const totalUpserted = await upsertMarketRecords(items, "EPIAS");
 
+  // 1b. Aynı saatlerin EPİAŞ resmi dengesizlik fiyatları (2026'dan itibaren formülden farklıdır). Alınamazsa piyasa
+  // verisi yine yazılır; hesap o saatlerde formüle düşer. (Dinamik içe aktarma: imbalance-prices bu modülü kullanır.)
+  let officialImbalance: EpiasSyncResult["officialImbalance"];
+  try {
+    const { syncOfficialImbalancePrices } = await import("@/lib/services/imbalance-prices");
+    const day = (d: string | Date) => (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10);
+    officialImbalance = { written: (await syncOfficialImbalancePrices(day(startDate), day(endDate))).written };
+  } catch (e) {
+    officialImbalance = { error: e instanceof Error ? e.message : String(e) };
+  }
+
   // 2. İlgili projenin santral kayıtlarını ilişkilendir ve dengesizlik maliyetlerini güncelle
   const totalGenRecordsUpdated = projectId
     ? await recalculateProjectImbalances(projectId, startDate, endDate, recalculateCosts)
@@ -746,6 +758,7 @@ export async function syncEpiasToDatabase(options: {
     success: true,
     totalMarketRecords: totalUpserted,
     totalGenerationRecordsUpdated: totalGenRecordsUpdated,
+    officialImbalance,
     dateRange: {
       start: formatToEpiasIso(startDate, false),
       end: formatToEpiasIso(endDate, true),

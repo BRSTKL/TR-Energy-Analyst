@@ -16,7 +16,7 @@
  * maliyetin grup üyeleri arasında nasıl paylaştırılacağı DSG sözleşmesine bağlıdır ve burada modellenmez.
  */
 
-import { processHourlyRecord } from "@/lib/calculations/engine";
+import { processHourlyRecord, pricedMarket } from "@/lib/calculations/engine";
 import {
   DEFAULT_IMBALANCE_PROFILE,
   HourlyResult,
@@ -112,12 +112,7 @@ export function analyzeGroupNetting(
   for (const b of buckets.values()) {
     const netted = processHourlyRecord(
       { timestamp: b.sample.timestamp, forecastMwh: b.forecastMwh, actualMwh: b.actualMwh },
-      {
-        timestamp: b.sample.timestamp,
-        ptf: b.sample.ptf,
-        smf: b.sample.smf,
-        systemDirection: b.sample.systemDirection,
-      },
+      pricedMarket(b.sample),
       profile
     );
     standaloneCost += b.standaloneCost;

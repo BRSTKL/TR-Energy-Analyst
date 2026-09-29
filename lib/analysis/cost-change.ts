@@ -20,8 +20,8 @@
  * SAF: I/O yok.
  */
 
-import { calculateNegativeImbalancePrice, calculatePositiveImbalancePrice } from "@/lib/calculations/engine";
-import { HourlyResult, ImbalancePricingProfile, resolveImbalanceProfile, SystemDirection } from "@/lib/calculations/types";
+import { imbalanceBases, imbalancePrices, pricedMarket, type PricedMarket } from "@/lib/calculations/engine";
+import { HourlyResult, ImbalancePricingProfile, regulatoryRegimeAt, resolveImbalanceProfile } from "@/lib/calculations/types";
 
 export interface CostChangePlant {
   /** Dönemler arası eşleştirme anahtarı (EPİAŞ santral kimliği ya da ad) */
@@ -89,12 +89,8 @@ export interface CostChangeResult {
   sentences: string[];
 }
 
-interface Market {
-  t: Date | string;
-  ptf: number;
-  smf: number;
-  dir: SystemDirection;
-}
+/** Saatin piyasası (resmi dengesizlik fiyatları dahil); t: saatin kendi zaman damgası */
+type Market = PricedMarket & { t: Date | string };
 
 interface Prepared {
   input: CostChangePeriodInput;
@@ -122,7 +118,7 @@ function prepare(input: CostChangePeriodInput, keys: Set<string>): Prepared {
     for (const h of p.hourly) {
       const k = calendarKey(h.timestamp);
       if (k.startsWith("02-29")) continue;
-      if (!market.has(k)) market.set(k, { t: h.timestamp, ptf: h.ptf, smf: h.smf, dir: h.systemDirection });
+      if (!market.has(k)) market.set(k, { ...pricedMarket(h), t: h.timestamp });
       const d = h.actualMwh - h.forecastMwh;
       deltas.set(k, (deltas.get(k) ?? 0) + d);
       actual.set(k, (actual.get(k) ?? 0) + h.actualMwh);
@@ -132,17 +128,18 @@ function prepare(input: CostChangePeriodInput, keys: Set<string>): Prepared {
   return { input, market, unitDelta, actual, plantAbs, hours: market.size };
 }
 
-/** Sapmanın MWh başına bedeli: fazla üretimde PTF − pozitif fiyat, eksik üretimde negatif fiyat − PTF */
+/**
+ * Sapmanın MWh başına bedeli: fazla üretimde PTF − pozitif fiyat, eksik üretimde negatif fiyat − PTF. Taban (makas)
+ * piyasanın kendi saatinden gelir: resmi fiyat varsa ondan (15 dakikalık SMF, 2026 taban ve negatif fiyat kuralları
+ * dahil), yoksa MIN / MAX(PTF, SMF); bu yüzden 2026 fiyat kuralları "fiyat makası" kalemine girer. Katsayı kalemi
+ * yalnızca k ve l'dir.
+ */
 function penalty(delta: number, m: Market, c: ImbalancePricingProfile): { spread: number; coef: number } {
-  if (delta > 0) {
-    const base = Math.min(m.ptf, m.smf);
-    return { spread: m.ptf - base, coef: base - calculatePositiveImbalancePrice(m.ptf, m.smf, m.dir, c) };
-  }
-  if (delta < 0) {
-    const base = Math.max(m.ptf, m.smf);
-    return { spread: base - m.ptf, coef: calculateNegativeImbalancePrice(m.ptf, m.smf, m.dir, c) - base };
-  }
-  return { spread: 0, coef: 0 };
+  if (delta === 0) return { spread: 0, coef: 0 };
+  const { low, high } = imbalanceBases(m, regulatoryRegimeAt(m.timestamp).coefficients.floors);
+  const prices = imbalancePrices(m, { ...c, floors: regulatoryRegimeAt(m.timestamp).coefficients.floors });
+  if (delta > 0) return { spread: m.ptf - low, coef: low - prices.positive };
+  return { spread: high - m.ptf, coef: prices.negative - high };
 }
 
 /** Sapma profili X'in, Y'nin piyasasıyla ve Z'nin katsayı kuralıyla bedeli (ortak saatlerde) */
@@ -177,7 +174,7 @@ function summarize(p: Prepared, common: string[]): CostChangePeriod {
   for (const deltas of Array.from(p.unitDelta.values()))
     for (const k of common) {
       const d = deltas.get(k) ?? 0;
-      const dir = p.market.get(k)!.dir;
+      const dir = p.market.get(k)!.systemDirection;
       if ((d > 0 && dir === "SURPLUS") || (d < 0 && dir === "DEFICIT")) same += Math.abs(d);
     }
   const costTl = own.spread + own.coef;

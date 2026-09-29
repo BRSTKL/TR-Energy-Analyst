@@ -15,7 +15,7 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.3";
+const VERSION = "1.4";
 const VERSION_DATE = "29 Eylül 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
@@ -220,6 +220,24 @@ MWh başına risk = Σ risk / Σ gerçekleşen üretim`}
               uzlaşır. Sistemle ters yöndeki sapma sistemi dengelediği için ucuzdur; riskin büyük kısmı aynı yöndeki sapmadan doğar. Gün içi işlemler
               açık veride olmadığından hesap &quot;gün içi işlemler öncesi&quot; risktir. <Tag kind="exact" />
             </p>
+            <p>
+              <b>2026 fiyat kuralları</b> (md. 110, 29.12.2025 değişikliği, yürürlük 1.1.2026). Formüle üç kural eklendi:
+            </p>
+            <F>
+              {`Negatif fiyat = max(V, PTF, SMF_N) × (1 + k)           V = 150 TL/MWh
+                 (PTF ya da SMF azami fiyat limitindeyse: AFL × 1,05 × (1 + k))
+Pozitif fiyat  = −B × (1 − l)   eğer min(PTF, SMF_P) < V,   B = 100 TL/MWh
+               = min(PTF, SMF_P) × (1 − l)   diğer hallerde
+SMF_N / SMF_P  = saatin içindeki 15 dakikalık SMF'lerin en yükseği / en düşüğü`}
+            </F>
+            <p>
+              Düşük fiyatlı saatlerde fazla üretim para kazanmaz, öder; eksik üretim en az 150 TL/MWh&apos;dan kapatılır. 15 dakikalık SMF
+              saatlik veriden görülemediği için uygulama <b>EPİAŞ&apos;ın resmi dengesizlik fiyatını</b> kullanır: Şeffaflık
+              Platformu&apos;nun sistem dengesizlik tutarı (TL) ve miktarı (MWh) servislerinden, saat başına tutar ÷ miktar. Resmi fiyat
+              saatin kendi katsayısına bölünerek &quot;taban&quot;a çevrilir; mevzuat profili saatin kendi tarihinde resmi fiyatı birebir verir,
+              2026 kurallarının 2025 verisine uygulanması gibi projeksiyonlarda taban kuralları ayrıca eklenir. Resmi fiyatı henüz
+              yayımlanmamış saatlerde (ay kapanmadan) V ve B kurallarıyla formül kullanılır. <Tag kind="exact" />
+            </p>
           </Section>
 
           <Section id="kupst" n={next()} title="KÜPST (sapma tutarı)">
@@ -335,7 +353,8 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
             <p>
               İki dönemin saatleri takvimde eşlenir (aynı ay, gün, saat; 29 Şubat hariç). Her kalem tek başına diğer dönemin değeriyle
               değiştirilip yeniden fiyatlanır; etki, iki yöndeki geçişin ortalamasıdır (sıradan bağımsız). Dört etkinin toplamı ile gerçek fark
-              arasındaki kalan &quot;etkileşim&quot; olarak gösterilir. <Tag kind="exact" />
+              arasındaki kalan &quot;etkileşim&quot; olarak gösterilir. &quot;Katsayı kuralı&quot; yalnızca k ve l&apos;dir; 2026&apos;nın 15 dakikalık
+              SMF, taban ve negatif fiyat kuralları resmi fiyatın içinde olduğundan &quot;fiyat makası&quot; kalemine girer. <Tag kind="exact" />
             </p>
           </Section>
 
@@ -429,9 +448,13 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
                 ],
                 ["Hızlı maliyet fonksiyonu ↔ saatlik hesap", "2025 ve 2026 kuralları, iki yön, üç sistem durumunda aynı sonuç (otomatik test)"],
                 ["Aday taramasındaki Shapley ↔ DSG senaryo motoru", "Aynı adil pay (otomatik test)"],
-                ["Maliyet ayrıştırması (Gain 2025 → 2026)", "Dört kalem farkın %96'sını açıklıyor; kalan etkileşim"],
-                ["Piyasa verisi", "2024, 2025 ve 2026 fiyatları EPİAŞ'tan yeniden çekildi; eski formatta kayıt kalmadı"],
-                ["Otomatik testler", "296 test (28.09.2026); her değişiklikte çalıştırılır"],
+                [
+                  "Dengesizlik fiyatı ↔ EPİAŞ resmi uzlaştırması",
+                  "2024 (8.784 saat) ve 2025 (8.760 saat): mevzuat formülü resmi fiyatla aynı (saat başına ortalama fark 0,02 ve 0,01 TL/MWh). 2026 (5.832 saat): 15 dakikalık SMF nedeniyle formül ortalama 33 TL/MWh sapıyor; uygulama resmi fiyatı birebir kullanıyor",
+                ],
+                ["Maliyet ayrıştırması (Gain 2025 → 2026)", "Dört kalem farkın %97'sini açıklıyor; kalan etkileşim"],
+                ["Piyasa verisi", "2024, 2025 ve 2026 fiyatları ve resmi dengesizlik fiyatları EPİAŞ'tan; eski formatta kayıt kalmadı"],
+                ["Otomatik testler", "309 test (29.09.2026); her değişiklikte çalıştırılır"],
               ]}
             />
           </Section>
@@ -455,9 +478,9 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
               <li>Dengeden sorumlu grup üyeliği santral bazında yayımlanmaz; uzlaştırma birimi şirket listelerinden ya da kullanıcı seçiminden gelir.</li>
               <li>2026 projeksiyonları, veri yılının fiyatları ve sistem yönleri tekrar ederse geçerlidir.</li>
               <li>
-                Yönetmelik metni, dengesizlik fiyatında uzlaştırma dönemi içindeki 15 dakikalık SMF&apos;lerin en yükseğinin (negatif) ve en
-                düşüğünün (pozitif) kullanılmasını öngörüyor; uygulama EPİAŞ&apos;ın saatlik SMF&apos;sini kullanır. Bu hükmün yürürlük tarihi teyit
-                edilmelidir.
+                Resmi dengesizlik fiyatı, o saatte tüm sistemin dengesizliğine göre ağırlıklıdır. 2026&apos;da fiyat 15 dakikalık dilimlere göre
+                oluştuğundan, bir santralin kendi dilimlerindeki sapması farklı dağılıyorsa gerçek fiyatı biraz farklı olabilir; santralin 15
+                dakikalık üretimi açık veride yoktur.
               </li>
               <li>PTF fiyat tahmini yapılmaz; uygulama ölçer ve açıklar.</li>
             </ul>
@@ -492,6 +515,16 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
                     </a>
                   </span>,
                   <span key="s2" className={STATUS_STYLE.verified}>doğrulandı (yönetmelik metni)</span>,
+                ],
+                [
+                  "2026 fiyat kuralları: taban V = 150 TL, negatif fiyat B = 100 TL, azami fiyatta AFL × 1,05, 15 dakikalık SMF (SMF_N / SMF_P)",
+                  "Dengeleme ve Uzlaştırma Yönetmeliği md. 110/1–2 (RG 29.12.2025, 33122; yürürlük 1.1.2026); formül EPDK taslak metninden okundu",
+                  <span key="s2b" className={STATUS_STYLE.verified}>doğrulandı (yönetmelik ve taslak metni, EPİAŞ resmi tutarlarıyla)</span>,
+                ],
+                [
+                  "Resmi dengesizlik fiyatı",
+                  "EPİAŞ Şeffaflık Platformu, dengesizlik tutarı ve dengesizlik miktarı servisleri (saatlik, sistem geneli)",
+                  <span key="s2c" className={STATUS_STYLE.verified}>doğrulandı</span>,
                 ],
                 [
                   "2026'dan itibaren k ve l değerleri (açık: k %6, l %3; fazla: k %3, l %6; denge: %3)",
@@ -549,6 +582,11 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.4",
+                  "29 Eylül 2026",
+                  "Dengesizlik fiyatı EPİAŞ'ın resmi uzlaştırmasından (sistem dengesizlik tutarı / miktarı). 2026 fiyat kuralları (taban 150 TL, negatif fiyat −100 TL, 15 dakikalık SMF) eklendi. 2024–2025'te formül resmi fiyatla aynı; 2026'da resmi fiyatla Gain portföy dengesizliği %10 arttı (23,9 → 26,2 M TL), sektörde güneş medyanı 113 → 134 TL/MWh.",
+                ],
                 [
                   "1.3",
                   "29 Eylül 2026",

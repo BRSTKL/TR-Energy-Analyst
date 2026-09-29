@@ -300,6 +300,8 @@ function settleGroup(plants: HourlyResult[][], profile: ImbalancePricingProfile)
           gipVolumeMwh: b.sample.gipVolumeMwh,
           gipMinPrice: b.sample.gipMinPrice,
           gipMaxPrice: b.sample.gipMaxPrice,
+          imbalancePosPrice: b.sample.imbalancePosPrice,
+          imbalanceNegPrice: b.sample.imbalanceNegPrice,
         },
         profile
       )

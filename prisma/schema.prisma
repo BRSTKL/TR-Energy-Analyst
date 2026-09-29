@@ -64,6 +64,8 @@ model MarketData {
   gipVolumeMwh    Float?             // GİP saatlik kontratında eşleşen toplam miktar (MWh)
   gipMinPrice     Float?             // GİP saatlik kontratının en düşük eşleşme fiyatı (TL/MWh)
   gipMaxPrice     Float?             // GİP saatlik kontratının en yüksek eşleşme fiyatı (TL/MWh)
+  imbalancePosPrice Float?           // EPİAŞ resmi pozitif dengesizlik fiyatı (TL/MWh): sistem pozitif dengesizlik tutarı / miktarı
+  imbalanceNegPrice Float?           // EPİAŞ resmi negatif dengesizlik fiyatı (TL/MWh): sistem negatif dengesizlik tutarı / miktarı
   source          String             @default("LEGACY") // "EPIAS" | "FILE" | "SEED" | "LEGACY" (kaynağı doğrulanmamış eski kayıt)
   syncedAt        DateTime?          // EPİAŞ'tan çekildiği veya dosyadan yüklendiği son an (eski kayıtlarda boş)
   records         GenerationRecord[]
