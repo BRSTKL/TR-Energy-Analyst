@@ -115,14 +115,14 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 > 3. GAİN 2026 projesinde PPT İndir → 4. slayt "Ne değişti?"; sektör karnesi 2025 ve 2026 toplanmışsa sağ altta sektör desteği ("294 santralin hepsinde arttı") görünür, toplanmamışsa okuma notu.
 > 4. Sonuç uygunsa "Kabul kontrolü" `[x]` olarak işaretlenir.
 
-### Aşama 4: Toplayıcı büyüme analizi ✅ (27.09.2026; kabul: 28.09.2026) · sürüyor: 4.3 hidro toplaması
+### Aşama 4: Toplayıcı büyüme analizi ✅ (27.09.2026; kabul: 28.09.2026; 4.3 hidro: 29.09.2026)
 - [x] **4.1 Saatlik sektör verisi.** ✅ 27.09.2026 · `23b5c70`. Sektör toplama betiği santral özetine ek olarak saatlik sapma serisini de (sıkıştırılmış) saklar. Bu, aynı zamanda K1'i (arıza saatleri hariç karne) mümkün kılar. *Yeniden kullanılan:* `sector-collect.mts`, önbellek.
 
   *Uygulanan:* seriler `.cache/epias/sector-<yıl>-hourly/<kimlik>.json.gz` (yıl başına ~18 MB); `--rebuild` EPİAŞ'a gitmeden diskteki serilerden ve güncel fiyatlardan karneyi yeniden kurar. K1: karnede "arıza / kısıntı saatleri hariç" MWh başına dengesizlik ve sektör sayfasında K1 görünümü.
 - [x] **4.2 Aday santral taraması (3.4).** ✅ 27.09.2026 · `18d6ef6` (`/projects/[id]/candidates`, sonuç sayfasında "Aday Santraller"). Portföye eklenince netleşme kazancı en yüksek olan santraller sıralanır; santral başına beklenen Shapley primi de verilir. *Yeniden kullanılan:* `analyzeDsgScenario` (marjinal katkı), Shapley.
 
   *Uygulanan:* kazanç = Σ saat [c(portföy) + c(aday) − c(portföy + aday)]; ilk 10 aday için Shapley adil primi (dsg-scenarios ile aynı tanım, testle doğrulandı) + KÜPST. Projede ve toplayıcının EPİAŞ portföyünde olan santraller aday sayılmaz.
-- [ ] **4.3 Hidro karnesi.** ⏳ Onaylandı (28.09.2026); toplama sırada: 2025 RES/GES saatlik toplaması bitince `--hes` ile önce 2026, sonra 2025. HES santralleri için sektör karnesi (nehir tipi / barajlı ayrımıyla). Gain'in 29 hidro santrali bu sayede kıyaslanabilir.
+- [x] **4.3 Hidro karnesi.** ✅ 29.09.2026 (veri; kod `23b5c70`). Hidro karnesi 2025'te 529 santral, medyan 57 TL/MWh; 2026'da (Ocak–Ağustos) 598 santral, medyan 79 TL/MWh. 2026 toplaması eksiksiz (1.385 / 1.385); 2025'te EPİAŞ 403 engelleri yüzünden 81 santral eksik, karne için yeterli. Gain'in 29 hidro santralinin 28'i karnede. Üretim ağırlıklı ortalamaları 60 TL/MWh, sektör medyanı 79: Gain'in hidroları sektörün iyi yarısında. Göksu ve Pamukluk en iyi %6'da, Çifteköprü ve Araklı-3 en kötü %20'de. Barajlı ve nehir tipi medyanları birbirine yakın (2026: 81 / 76); alt tip tahmini olduğu için bu fark yorumlanmamalı. HES santralleri için sektör karnesi (nehir tipi / barajlı ayrımıyla). Gain'in 29 hidro santrali bu sayede kıyaslanabilir.
 
   *Kod hazır* (`23b5c70`): `--hes` ile toplama; tahmini alt tip (addaki baraj / regülatör, yoksa gün içi üretim esnekliği); sektör sayfasında Hidro sekmesi ve alt tip süzgeci; rapor ve aday taraması HES'i tanır.
 - [x] **Kabul kontrolü (Gain).** ✅ 28.09.2026 (yerel, gerçek veri): 2026 saatlik sektör serisi tamam (523 santral toplandı, 370'i karnede; hata 0). GAİN ENERJİ RES 2026 için 364 aday taranıyor, saatlik verisi eksik aday yok. Toplam kazanca göre ilk aday KARABURUN RES: 15,5 M TL (%21), adil prim 121,4 TL/MWh (tek başına 138,0). YEKDEM dışı + MWh başına sıralamada (boyut eşiği 13,8 GWh) ilk aday R3-TRABZON-1 RES: 312,5 TL/MWh. `/sector` K1 görünümü: rüzgâr medyanı 164 → 162 TL/MWh (arıza saatleri hariç).
@@ -179,6 +179,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 ## 4. İlerleme kaydı
 | Tarih | Adım | Commit | Not |
 |---|---|---|---|
+| 29.09.2026 | 4.3 Hidro karnesi | — (veri) | 2025: 529 HES (medyan 57), 2026: 598 HES (medyan 79). Gece VPN DE'ye geçince toplama durdu; VPN GB ile tamamlandı. Gain hidroları: ağırlıklı 60 TL/MWh (sektör medyanı 79). Aşama 4 tamamen kapandı. |
 | 28.09.2026 | 5.2 Metodoloji sayfası | (bu commit) | `/methodology` + PDF (8 sayfa A4) + sayfalardan "Yöntem" bağlantıları. Kaynakçada teyit bekleyen 2 satır. |
 | 28.09.2026 | 5.1a Rapor düzeltmeleri, 5.5 kararı | (bu commit) | Rapor: ana senaryo tutarlılığı (%20; YEKDEM dahil %36), dönem ifadeleri, önemliliğe göre karne başlığı, köprü açıklaması, "Büyüme fırsatı" slaytı. Aday taraması portföy kapsamı (varsayılan ana senaryo). 5.1 kullanıcıda; 5.3 ve 5.4 sonraya; 5.5 = B. |
 | 28.09.2026 | 4.5 Hedef santraller | `7f0c257` | Toplayıcı listeleri (30 / 862 santral). Gain 2026 adaylarının %65'i zaten bir toplayıcıda; hedef 44 (YEKDEM dışı 13). 2025 saatlik sektör toplaması bitti (84 santral EPİAŞ 403 engeli yüzünden hidro turunda yeniden denenecek); hidro toplaması sürüyor. |
