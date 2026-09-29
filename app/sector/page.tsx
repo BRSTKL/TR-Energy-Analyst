@@ -467,7 +467,7 @@ export default function SectorPage() {
 
         <p className="text-xs text-slate-500">
           Kaynak: EPİAŞ Şeffaflık Platformu, {data.label} saatlik KGÜP (ilk versiyon), UEVM, PTF ve SMF. Değerler santral tek başına
-          uzlaştırılmış varsayımıyladır; şirket içi netleşme ve YEKDEM havuzu hariçtir, bu yüzden şirketin ödediği tutar değil tahmin
+          uzlaştırılmış varsayımıyladır; şirket içi netleşme hariçtir, bu yüzden şirketin ödediği tutar değil tahmin
           kalitesinin kıyasıdır. KÜPST EPDK 13025 tolerans oranlarıyla tahmindir. MW, santralin yıl içindeki en yüksek saatlik
           üretimidir (kurulu güç yaklaşığı). Şirket rakamı, şirketin kıyaslamadaki santrallerinin üretim ağırlıklı ortalamasıdır.
         </p>

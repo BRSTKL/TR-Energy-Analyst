@@ -21,7 +21,6 @@ import { loadProjectHourly, type ProjectHourly } from "@/lib/services/project-ho
 export type YekdemFilter = "all" | "exclude" | "only";
 /** Ulaşılabilirlik süzgeci: hepsi ya da tek bir sınıf ("independent" = hedef: toplayıcısız, bağımsız) */
 export type AccessFilter = "all" | CandidateAccessKind;
-export type MemberScope = "all" | "merchant";
 
 export interface ProjectCandidates {
   project: { id: string; name: string };
@@ -39,11 +38,6 @@ export interface ProjectCandidates {
   aggregatorList: { asOf: string; aggregators: number; failed: number } | null;
   /** Aday dışı bırakılanlar: projede olan, toplayıcının EPİAŞ portföyünde olan ve YEKDEM süzgecine takılan santraller */
   excluded: { inProject: number; inAggregatorPortfolio: number; byYekdem: number; byAccess: number };
-  /**
-   * Portföy üyeleri: all = projedeki tüm santraller; merchant = YEKDEM dışı santraller (raporun ana senaryosu: YEKDEM
-   * santrallerinin dengesizliği YEKDEM havuzunda kalır, portföyde netleşmez)
-   */
-  memberScope: MemberScope;
   /** Sektör karnesinde olup saatlik serisi toplanmamış santral sayısı */
   withoutHourly: number;
   result: ScreeningResult;
@@ -84,8 +78,7 @@ export async function projectCandidates(
     sortBy = "total",
     yekdem = "all",
     access = "all",
-    memberScope = "all",
-  }: { types?: SectorTech[]; top?: number; sortBy?: CandidateSort; yekdem?: YekdemFilter; access?: AccessFilter; memberScope?: MemberScope } = {}
+  }: { types?: SectorTech[]; top?: number; sortBy?: CandidateSort; yekdem?: YekdemFilter; access?: AccessFilter } = {}
 ): Promise<ProjectCandidates | { error: string }> {
   const data = await loadProjectHourly(projectId);
   if (!data) return { error: "Proje bulunamadı." };
@@ -148,16 +141,13 @@ export async function projectCandidates(
     });
   }
 
-  // Ana senaryo: yalnız YEKDEM dışı santraller netleşir; YEKDEM dışı santral yoksa tüm santraller kullanılır
-  const merchant = withData.filter((p) => p.yekdem !== true);
-  const scope: MemberScope = memberScope === "merchant" && merchant.length > 0 ? "merchant" : "all";
-  const m = members(data, scope === "merchant" ? merchant : withData);
+  // Portföyün tüm santralleri netleşir (YEKDEM santrallerinin dengesizliği de kendilerine aittir)
+  const m = members(data, withData);
   return {
     project: data.project,
     year,
     sectorLabel: sectorPeriodLabel(bench),
     basis: m.basis,
-    memberScope: scope,
     types,
     yekdem,
     access,

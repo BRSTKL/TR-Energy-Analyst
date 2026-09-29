@@ -15,7 +15,7 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.2";
+const VERSION = "1.3";
 const VERSION_DATE = "29 Eylül 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
@@ -24,7 +24,7 @@ const SECTIONS: Array<{ id: string; title: string }> = [
   { id: "dengesizlik", title: "Dengesizlik riski" },
   { id: "kupst", title: "KÜPST (sapma tutarı)" },
   { id: "uzlastirma", title: "Uzlaştırma birimi ve netleşme" },
-  { id: "yekdem", title: "YEKDEM senaryoları" },
+  { id: "yekdem", title: "YEKDEM santralleri" },
   { id: "adil-prim", title: "Adil prim (Shapley)" },
   { id: "risk-primi", title: "Risk primi ve PPA göstergesi" },
   { id: "ayristirma", title: "Maliyet neden değişti?" },
@@ -273,26 +273,18 @@ Netleşme değeri       = Σ_i risk(sapma_i) − Σ_saat risk(Σ_i sapma_i)`}
             </p>
           </Section>
 
-          <Section id="yekdem" n={next()} title="YEKDEM senaryoları">
+          <Section id="yekdem" n={next()} title="YEKDEM santralleri">
             <p>
-              YEKDEM&apos;deki santrallerin geliri YEKDEM fiyatından oluşur ve dengesizliklerinin YEKDEM portföyünde uzlaştırıldığı
-              değerlendirilir (mevzuatın yapısına ve EPİAŞ&apos;ın YEKDEM dengesizlik maliyetini ayrı yayımlamasına dayanan çıkarım). Bu yüzden
-              iki senaryo hesaplanır:
+              YEKDEM katılımcısı ürettiği enerjiyi <b>serbest piyasada kendisi satar</b> (YEK Yönetmeliği md. 15/1) ve bu üretime karşılık
+              piyasa işletmecisine PTF üzerinden hesaplanan YEKDEM gelirini öder, YEK bedelini alır (md. 18, 23/1). Dolayısıyla YEKDEM
+              santralinin dengesizliği ve KÜPST&apos;ü, diğer santrallerde olduğu gibi, dengeden sorumlu tarafına (şirketine ya da
+              toplayıcısına) aittir. YEKDEM portföyünün dengesizliğini düzenleyen md. 16 ve 17, 29.4.2016 tarihinde yürürlükten
+              kaldırılmıştır.
             </p>
-            <Table
-              head={["Senaryo", "Varsayım", "Kullanım"]}
-              rows={[
-                [
-                  <b key="a">A · ana senaryo</b>,
-                  "YEKDEM santrallerinin dengesizliği YEKDEM havuzunda kalır; şirkete yalnız YEKDEM dışı santrallerin dengesizliği ve tüm santrallerin KÜPST'ü yansır. Portföyde yalnız YEKDEM dışı santraller netleşir.",
-                  "Rapor başlıkları, köprü, aday taraması (varsayılan)",
-                ],
-                [<b key="b">B · duyarlılık</b>, "YEKDEM santrallerinin dengesizliği de şirkete / portföye yansır.", "Aralığın üst ucu"],
-              ]}
-            />
             <p>
-              Karşı taraf hangisinin geçerli olduğunu söylediğinde aralık tek rakama iner. YEKDEM&apos;den çıkış yılı YEKDEM listelerinden
-              belirlenir. <Tag kind="assumption" />
+              Bu yüzden uygulamada YEKDEM santralleri dengesizlik, netleşme, KÜPST, adil prim ve aday taramasında diğer santrallerle
+              aynı şekilde hesaba girer. YEKDEM yalnızca gelir tarafını değiştirir: gelir PTF yerine YEK fiyatından oluşur, bu yüzden
+              YEKDEM santrali olan portföyde &quot;dengesizliğin gelire oranı&quot; gösterilmez. <Tag kind="exact" />
             </p>
           </Section>
 
@@ -386,7 +378,7 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
 İlk N aday için adil prim: portföy üyeleri + aday üzerinden Shapley (bölüm 7)`}
             </F>
             <p>
-              Portföy, ana senaryoda YEKDEM dışı santrallerdir. Portföy saatlerinin %90&apos;ından azında verisi olan aday elenir. İki sıralama
+              Portföy, projedeki tüm santrallerdir (YEKDEM santralleri dahil). Portföy saatlerinin %90&apos;ından azında verisi olan aday elenir. İki sıralama
               vardır: toplam kazanç (büyük santralleri öne çıkarır) ve MWh başına kazanç (üretimi portföyün %5&apos;inden az adaylar sona alınır).
               Kazançlar aday başınadır, toplanamaz. <Tag kind="exact" />
             </p>
@@ -450,7 +442,7 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
               rows={[
                 [<Tag key="e" kind="exact" />, "Açık veriden, mevzuattaki formülle doğrudan hesap"],
                 [<Tag key="t" kind="estimate" />, "Formülü ya da oranı tam doğrulanmamış hesap (ör. KÜPST, hedef santral sınıfı)"],
-                [<Tag key="v" kind="assumption" />, "Bir varsayıma dayanır (ör. YEKDEM ana senaryosu, adil prim paylaşımı)"],
+                [<Tag key="v" kind="assumption" />, "Bir varsayıma dayanır (ör. risk primi, adil prim paylaşımı)"],
                 [<Tag key="s" kind="scenario" />, "Davranış varsayımı; taahhüt değil (ör. gün içi pozisyon güncellemesi)"],
               ]}
             />
@@ -533,9 +525,15 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
                   <span key="s5" className={STATUS_STYLE.source}>taslak metni doğrulandı; nihai karar sayısı görülmedi</span>,
                 ],
                 [
-                  "YEKDEM portföy uzlaştırması",
-                  "Yenilenebilir Enerji Kaynaklarının Belgelendirilmesi ve Desteklenmesine İlişkin Yönetmelik (YEKDEM uzlaştırma hükümleri); EPİAŞ YEKDEM yayınları",
-                  <span key="s6" className={STATUS_STYLE.inference}>çıkarım</span>,
+                  "YEKDEM katılımcısı üretimini serbest piyasada satar; dengesizliği kendisine aittir",
+                  <span key="6">
+                    Yenilenebilir Enerji Kaynaklarının Belgelendirilmesi ve Desteklenmesine İlişkin Yönetmelik md. 15/1, 18, 23/1; md. 16–17
+                    mülga (RG 29.4.2016),{" "}
+                    <a className="text-indigo-700 underline" href="https://www.mevzuat.gov.tr/MevzuatMetin/yonetmelik/7.5.18907.pdf" target="_blank" rel="noreferrer">
+                      mevzuat.gov.tr
+                    </a>
+                  </span>,
+                  <span key="s6" className={STATUS_STYLE.verified}>doğrulandı (yönetmelik metni)</span>,
                 ],
                 ["GİP kapı kapanışı", "Gün içi piyasasında işlemler teslimattan 60 dakika önce kapanır (EPİAŞ GİP kuralları)", <span key="s7" className={STATUS_STYLE.source}>kaynak</span>],
                 [
@@ -551,6 +549,11 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.3",
+                  "29 Eylül 2026",
+                  "YEKDEM: \"dengesizlik YEKDEM havuzunda kalır\" varsayımı (eski ana senaryo) kaldırıldı. YEK Yönetmeliği md. 15/1 ve 23/1'e göre YEKDEM katılımcısı üretimini serbest piyasada kendisi satar ve dengesizliği kendisine aittir; havuz uzlaştırmasını düzenleyen md. 16–17 2016'da kaldırılmıştı. YEKDEM santralleri artık tüm hesaplarda diğer santrallerle aynı sayılır.",
+                ],
                 [
                   "1.2",
                   "29 Eylül 2026",

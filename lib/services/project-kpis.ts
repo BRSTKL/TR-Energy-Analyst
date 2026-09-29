@@ -24,11 +24,11 @@ export interface ProjectKpis {
   imbalanceCompanyLevelTl: number;
   nettingTl: number;
   kupstTl: number;
-  /** Sapma yükü: A = ana senaryo (YEKDEM dengesizliği havuzda), B = tüm santraller şirkete */
-  load: { a2025: number; a2026: number | null; b2025: number; b2026: number | null };
-  /** Tüm santrallerin sapma yükü / üretim (B tanımı, şirketler arası tutarlı taban) */
+  /** Sapma yükü (dengesizlik + KÜPST, tüm santraller): veri döneminin kurallarıyla; veri 2026 öncesiyse 2026 kurallarıyla da */
+  load: { current: number; next2026: number | null };
+  /** Sapma yükü / üretim */
   unitLoadTl: number;
-  /** Piyasaya açık portföy varsayımıyla, 2026 kurallarıyla (en az 6 ay veri) */
+  /** 2026 kurallarıyla (en az 6 ay veri) */
   riskPremium: { expectedTlPerMwh: number; p90MonthTlPerMwh: number } | null;
   sector: Array<{ type: string; unitTl: number; rankPct: number }>;
   yekdem: { inYekdem: number; exiting: number; staying: number; unknown: number };
@@ -48,7 +48,6 @@ export async function projectKpis(projectId: string): Promise<ProjectKpis | null
   const r = buildPlantReport({ ...data, plants: withData }, context, { intraday: false });
   const load = deviationLoad(r);
   const worst = r.plants.reduce<(typeof r.plants)[number] | null>((w, p) => (!w || p.unitCostTl > w.unitCostTl ? p : w), null);
-  const ex = r.exposure;
   return {
     id: data.project.id,
     name: data.project.name,
@@ -63,16 +62,17 @@ export async function projectKpis(projectId: string): Promise<ProjectKpis | null
     nettingTl: r.settlement.sameCompanyNettingTl,
     kupstTl: r.kupst.totalTl,
     load,
-    unitLoadTl: r.totals.actualMwh > 0 ? load.b2025 / r.totals.actualMwh : 0,
+    unitLoadTl: r.totals.actualMwh > 0 ? load.current / r.totals.actualMwh : 0,
     riskPremium: r.riskPremium
       ? { expectedTlPerMwh: r.riskPremium.portfolio.expectedTlPerMwh, p90MonthTlPerMwh: r.riskPremium.portfolio.p90MonthTlPerMwh }
       : null,
     sector: (r.sector?.types ?? []).map((t) => ({ type: t.type, unitTl: t.portfolioUnitTl, rankPct: t.portfolioRankPct })),
     yekdem: {
       inYekdem: r.yekdem?.plantNames.length ?? 0,
-      exiting: ex?.exitingPlants.length ?? 0,
-      staying: ex?.stayingPlants.length ?? 0,
-      unknown: ex?.unknownExitPlants.length ?? 0,
+      // YEKDEM'den çıkış geliri etkiler (YEK fiyatı yerine PTF), dengesizliği etkilemez
+      exiting: r.plants.filter((p) => p.yekdem && p.yekdemNextYear === false).length,
+      staying: r.plants.filter((p) => p.yekdem && p.yekdemNextYear === true).length,
+      unknown: r.plants.filter((p) => p.yekdem && p.yekdemNextYear === null).length,
     },
     worstPlant: worst ? { name: worst.name, type: worst.type, unitCostTl: worst.unitCostTl } : null,
     // Verisi hiç olmayan santral de görünsün diye tüm santrallerle

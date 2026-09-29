@@ -11,7 +11,7 @@
  *   4b. Sektörle kıyaslama (sektör karnesi varsa): teknoloji başına dağılım bandı ve şirketin santralleri
  *   5. Tahmin kalitesi: sistemle aynı yöndeki sapmanın payı ve santral bazında sistematik sapma
  *   6. Saat × ay ısı haritası: kaybın ne zaman oluştuğu
- *   7. 2026 katsayıları ve YEKDEM çıkışı
+ *   7. 2026 katsayıları
  *   7b. Dengesizlik risk primi: MWh başına beklenen ve ihtiyatlı (P90) prim, santral bazında tablo
  *   8. Fırsatlar
  *   9. Önerilen sonraki adım ve iletişim
@@ -127,7 +127,7 @@ type TextOpts = Parameters<Slide["addText"]>[1];
 
 /**
  * @param options.costChange aynı santrallerin önceki yıl projesiyle ayrıştırma (varsa "Ne değişti?" slaytı eklenir)
- * @param options.growth toplayıcı projelerinde hedef santraller (YEKDEM dışı, bağımsız; varsa "Büyüme" slaytı eklenir)
+ * @param options.growth toplayıcı projelerinde hedef santraller (bağımsız; varsa "Büyüme" slaytı eklenir)
  */
 export async function exportPlantReportPptx(
   r: PlantReportData,
@@ -146,7 +146,6 @@ export async function exportPlantReportPptx(
   const netted = r.settlement.sameCompanyNettingTl > 0.005 * r.settlement.plantLevelCostTl;
   const singleCompany = r.settlement.companies.length === 1 ? r.settlement.companies[0].name : null;
   const intradayOn = !!r.intraday && r.intraday.savingTl > 0;
-  const ex = r.exposure;
   // Toplayıcı portföyünde uzlaştırma birimi portföydür; metinlerde "şirket" yerine "portföy"
   const agg = r.aggregator;
   const unit = agg
@@ -272,82 +271,38 @@ export async function exportPlantReportPptx(
   // ---------------------------------------------------------------------------------------------
   // 2. YÖNETİCİ ÖZETİ
   // ---------------------------------------------------------------------------------------------
-  // YEKDEM varsa iki varsayım. A (ana senaryo): YEKDEM santrallerinin dengesizliği YEKDEM portföyünde uzlaştırılır
-  // (YEK Yönetmeliği md. 15-17'deki portföy uzlaştırması ve EPİAŞ'ın ayrı yayımladığı YEKDEM dengesizlik maliyeti bunu
-  // destekler), KÜPST ise tüm santraller için şirkete aittir. B (duyarlılık): YEKDEM santrallerinin dengesizliği de
-  // şirkete yansır. Her rakam "dengesizlik riski + tahmini KÜPST" toplamıdır (sapma yükü).
+  // Her rakam "dengesizlik riski + tahmini KÜPST" toplamıdır (sapma yükü). YEKDEM santralleri dahildir: YEKDEM katılımcısı
+  // üretimini serbest piyasada kendisi satar ve dengesizliği kendisine aittir (YEK Yönetmeliği md. 15/1, 23/1).
   const k2026 = r.kupst.next2026Tl ?? r.kupst.totalTl;
   const load = deviationLoad(r);
   {
-    const exiting = ex?.exitingPlants ?? [];
     // Toplayıcı başlığı: veri 2026 öncesiyse 2026 projeksiyonuyla, veri zaten 2026 kurallarıyla ise dönemin sapma yüküyle
-    // Ana senaryoda (YEKDEM dengesizliği havuzda) yalnız YEKDEM dışı santraller netleşir: başlık bu oranı verir
-    const aggPct = agg
-      ? agg.merchantOnly
-        ? `%${nf(agg.merchantOnly.benefitPct, 0)} (YEKDEM dahil %${nf(agg.benefitPct, 0)})`
-        : `%${nf(agg.benefitPct, 0)}`
-      : "";
     const title = agg && agg.benefitTl > 0
-      ? load.a2026 !== null
-        ? `${agg.name} portföyünde netleşme riski ${aggPct} azaltıyor; sapma yükü 2026'da ${formatTlShort(load.a2026)}`
-        : `${agg.name} portföyünde netleşme riski ${aggPct} azaltıyor; ${yearOf(r)} sapma yükü ${formatTlShort(load.a2025)}`
-      : ex
-      ? load.a2026 !== null && load.b2026 !== null
-        ? `2026'da ${exiting.length ? `${exiting.length} santral YEKDEM'den çıkıyor ve ` : ""}katsayı %6'ya çıkıyor: ${unit.gen} sapma yükü ${formatTlShort(
-            load.a2025
-          )} → ${formatTlShort(load.a2026)}`
-        : `YEKDEM dışı santrallerin sapma yükü ${formatTlShort(load.a2025)}; YEKDEM santralleriyle birlikte ${formatTlShort(load.b2025)}`
-      : s2026 && load.b2026 !== null
-        ? `${yearOf(r)} sapma yükü ${formatTlShort(load.b2025)}; aynı üretimle 2026 kurallarında ${formatTlShort(load.b2026)}`
-        : `Portföyün sapma yükü ${formatTlShort(load.b2025)}: dengesizlik riski ve KÜPST`;
+      ? load.next2026 !== null
+        ? `${agg.name} portföyünde netleşme riski %${nf(agg.benefitPct, 0)} azaltıyor; sapma yükü 2026'da ${formatTlShort(load.next2026)}`
+        : `${agg.name} portföyünde netleşme riski %${nf(agg.benefitPct, 0)} azaltıyor; ${yearOf(r)} sapma yükü ${formatTlShort(load.current)}`
+      : s2026 && load.next2026 !== null
+        ? `${yearOf(r)} sapma yükü ${formatTlShort(load.current)}; aynı üretimle 2026 kurallarında ${formatTlShort(load.next2026)}`
+        : `Portföyün sapma yükü ${formatTlShort(load.current)}: dengesizlik riski ve KÜPST`;
     const s = contentSlide("Yönetici özeti", title);
     s.addNotes(
       `Ana mesaj: ${title}. Sapma yükü iki kalemden oluşur: dengesizlik riski (gün öncesi plan hatasının dengesizlik fiyatıyla değeri, gün içi işlemler öncesi) ve KÜPST (toleransı aşan sapmanın bedeli, santral bazında). ` +
         "Gelebilecek itiraz: 'Biz bu kadar ödemiyoruz, gün içinde kapatıyoruz.' Cevap: Olabilir; gün içi işlemleriniz açık veride yok. Rakam kapatılması gereken risktir; ikinci adım sizin verinizle doğrulamak." +
-        (ex
-          ? " YEKDEM için iki varsayım var: A'da YEKDEM santrallerinin dengesizliği YEKDEM portföyüne, B'de şirkete yansır. Karşı tarafa hangisinin geçerli olduğunu sorun; cevap aralığı tek rakama indirir."
+        (r.yekdem
+          ? " YEKDEM santralleri dahildir: YEKDEM katılımcısı üretimini serbest piyasada kendisi satar, dengesizliği kendisine aittir (YEK Yönetmeliği md. 15/1 ve 23/1; YEKDEM portföyü dengesizliğini düzenleyen md. 16–17 2016'da kaldırıldı)."
           : "")
     );
 
     const stats: Array<{ value: string; label: string; color: string }> = [];
-    if (ex) {
-      stats.push({
-        value: formatTlShort(load.a2025),
-        label: `${yearOf(r)} · YEKDEM dışı ${ex.directPlants.length} santralin dengesizliği ${formatTlShort(ex.directCostTl)} + tüm santrallerin KÜPST'ü ${formatTlShort(r.kupst.totalTl)}`,
-        color: C.cost,
-      });
-      if (load.a2026 !== null)
-        stats.push({
-          value: formatTlShort(load.a2026),
-          label: exiting.length
-            ? `2026 · YEKDEM'den çıkan ${exiting.length} santralin dengesizliği de ${unit.dat} geçiyor; 2026 katsayıları ve KÜPST oranlarıyla`
-            : `2026 · aynı üretim, 2026 katsayıları ve KÜPST oranlarıyla (YEKDEM'den çıkan santral yok)`,
-          color: C.risk,
-        });
-      if (load.b2026 !== null)
-        stats.push({ value: formatTlShort(load.b2026), label: `2026 · duyarlılık: YEKDEM santrallerinin dengesizliği de ${unit.dat} yansısaydı`, color: C.sub });
-      // Veri zaten 2026 kurallarıyla: projeksiyon yok; aynı dönemin duyarlılığı ve MWh başına yük gösterilir
-      if (load.a2026 === null) {
-        stats.push({
-          value: formatTlShort(load.b2025),
-          label: `${yearOf(r)} · duyarlılık: YEKDEM santrallerinin dengesizliği de ${unit.dat} yansısaydı`,
-          color: C.sub,
-        });
-        stats.push({
-          value: `${nf(t.actualMwh > 0 ? load.b2025 / t.actualMwh : 0, 0)} TL`,
-          label: "Üretilen MWh başına sapma yükü, tüm santraller piyasaya açık olsaydı (risk primi slaytındaki beklenen prim)",
-          color: C.ink,
-        });
-      }
-    } else {
-      stats.push({
-        value: formatTlShort(load.b2025),
-        label: `${yearOf(r)} sapma yükü: dengesizlik ${formatTlShort(cost)} + KÜPST ${formatTlShort(r.kupst.totalTl)}`,
-        color: C.cost,
-      });
-      stats.push({ value: `${nf(t.actualMwh > 0 ? load.b2025 / t.actualMwh : 0, 0)} TL`, label: "Üretilen MWh başına sapma yükü", color: C.ink });
-      if (load.b2026 !== null) stats.push({ value: formatTlShort(load.b2026), label: "2026 · aynı üretim, 2026 katsayılarıyla", color: C.risk });
-    }
+    stats.push({
+      value: formatTlShort(load.current),
+      label: `${yearOf(r)} sapma yükü: dengesizlik ${formatTlShort(cost)} + KÜPST ${formatTlShort(r.kupst.totalTl)}${r.yekdem ? " (YEKDEM santralleri dahil)" : ""}`,
+      color: C.cost,
+    });
+    if (load.next2026 !== null) stats.push({ value: formatTlShort(load.next2026), label: "2026 · aynı üretim, 2026 katsayıları ve KÜPST oranlarıyla", color: C.risk });
+    stats.push({ value: `${nf(t.actualMwh > 0 ? load.current / t.actualMwh : 0, 0)} TL`, label: "Üretilen MWh başına sapma yükü", color: C.ink });
+    if (load.next2026 === null && agg && agg.benefitTl > 0)
+      stats.push({ value: formatTlShort(agg.benefitTl), label: `${agg.name} portföyünün netleşme değeri (%${nf(agg.benefitPct, 0)})`, color: C.gain });
     stats.forEach((st, i) => {
       const y = 1.95 + i * 1.55;
       text(s, st.value, { x: M, y, w: 4.7, h: 0.75, fontSize: 32, bold: true, fontFace: FONT_HEAD, color: st.color });
@@ -367,23 +322,9 @@ export async function exportPlantReportPptx(
       })();
       points.push({
         kind: "exact",
-        text: agg.merchantOnly
-          ? `Ana senaryoda (YEKDEM dengesizliği havuzda) YEKDEM dışı ${agg.merchantOnly.plantCount} santral ${agg.name} portföyünde saat saat netleşir: ${formatTlShort(
-              agg.merchantOnly.benefitTl
-            )} (%${nf(agg.merchantOnly.benefitPct, 0)}). YEKDEM santralleri de dahil edilirse (duyarlılık) ${formatTlShort(agg.standaloneCostTl)} → ${formatTlShort(
-              agg.portfolioCostTl
-            )}: ${formatTlShort(agg.benefitTl)} (%${nf(agg.benefitPct, 0)})${months}.`
-          : `Santraller sahiplerinin kendi dengesinde ${formatTlShort(agg.standaloneCostTl)} dengesizlik riski taşırdı; ${agg.name} portföyünde saat saat netleşince ${formatTlShort(
-              agg.portfolioCostTl
-            )}. Portföyün değeri ${formatTlShort(agg.benefitTl)} (%${nf(agg.benefitPct, 0)}; ${yearOf(r)} katsayıları)${months}.`,
-      });
-    }
-    if (ex && exiting.length > 0) {
-      points.push({
-        kind: "exact",
-        text:
-          `YEKDEM'den çıkan ${exiting.length} santral (${exiting.join(", ")}) 2026'dan itibaren piyasa fiyatına maruz kalıyor` +
-          (ex.stayingPlants.length ? `; ${ex.stayingPlants.join(", ")} YEKDEM'de devam ediyor.` : "."),
+        text: `Santraller sahiplerinin kendi dengesinde ${formatTlShort(agg.standaloneCostTl)} dengesizlik riski taşırdı; ${agg.name} portföyünde saat saat netleşince ${formatTlShort(
+          agg.portfolioCostTl
+        )}. Portföyün değeri ${formatTlShort(agg.benefitTl)} (%${nf(agg.benefitPct, 0)}; ${yearOf(r)} katsayıları)${months}.`,
       });
     }
     points.push({
@@ -435,33 +376,18 @@ export async function exportPlantReportPptx(
     type Step = { label: string; value: number; kind: "total" | "down" | "up" | "assumption" | "kupst" | "scenario" | "target" };
     const steps: Step[] = [];
     let imb2026: number;
-    if (ex) {
-      // Ana senaryo (A): YEKDEM dışı dengesizlik → 2026 katsayısı → YEKDEM'den çıkanlar → + tüm santrallerin KÜPST'ü
-      steps.push({ label: `Dengesizlik riski ${yearOf(r)} (YEKDEM dışı)`, value: ex.directCostTl, kind: "total" });
-      imb2026 = ex.directCostTl;
-      if (ex.direct2026Tl !== null && ex.exposure2026Tl !== null) {
-        steps.push({ label: "2026 katsayı etkisi", value: ex.direct2026Tl - ex.directCostTl, kind: "up" });
-        if (ex.exitingPlants.length) {
-          steps.push({ label: `YEKDEM'den çıkan ${ex.exitingPlants.length} santral`, value: ex.exposure2026Tl - ex.direct2026Tl, kind: "assumption" });
-        }
-        imb2026 = ex.exposure2026Tl;
-        steps.push({ label: "Dengesizlik riski 2026", value: imb2026, kind: "total" });
-      }
-      steps.push({ label: "KÜPST, tüm santraller (tahmini)", value: k2026, kind: "kupst" });
-    } else {
-      if (netted) {
-        steps.push({ label: "Santraller tek tek uzlaştırılsaydı", value: r.settlement.plantLevelCostTl, kind: "total" });
-        steps.push({ label: agg ? "Portföy içi netleşme" : "Şirket içi netleşme", value: -r.settlement.sameCompanyNettingTl, kind: "down" });
-      }
-      steps.push({ label: `Dengesizlik riski ${yearOf(r)}`, value: cost, kind: "total" });
-      imb2026 = cost;
-      if (s2026) {
-        steps.push({ label: "2026 katsayı etkisi", value: s2026.deltaTl, kind: "up" });
-        imb2026 = s2026.cost2026Tl;
-        steps.push({ label: "Dengesizlik riski 2026", value: imb2026, kind: "total" });
-      }
-      steps.push({ label: "KÜPST (tahmini)", value: k2026, kind: "kupst" });
+    if (netted) {
+      steps.push({ label: "Santraller tek tek uzlaştırılsaydı", value: r.settlement.plantLevelCostTl, kind: "total" });
+      steps.push({ label: agg ? "Portföy içi netleşme" : "Şirket içi netleşme", value: -r.settlement.sameCompanyNettingTl, kind: "down" });
     }
+    steps.push({ label: `Dengesizlik riski ${yearOf(r)}`, value: cost, kind: "total" });
+    imb2026 = cost;
+    if (s2026) {
+      steps.push({ label: "2026 katsayı etkisi", value: s2026.deltaTl, kind: "up" });
+      imb2026 = s2026.cost2026Tl;
+      steps.push({ label: "Dengesizlik riski 2026", value: imb2026, kind: "total" });
+    }
+    steps.push({ label: "KÜPST (tahmini)", value: k2026, kind: "kupst" });
     const loadEnd = steps.reduce((lvl, st) => (st.kind === "total" ? st.value : lvl + st.value), 0);
     steps.push({ label: s2026 ? "Sapma yükü 2026" : "Sapma yükü", value: loadEnd, kind: "total" });
     const intradaySaving = intradayOn ? (r.intraday!.savingPct / 100) * imb2026 : 0;
@@ -471,21 +397,19 @@ export async function exportPlantReportPptx(
     }
 
     const title = s2026
-      ? `2026'da ${ex ? `${unit.dat} yansıyacak ` : ""}sapma yükü ${formatTlShort(loadEnd)}${
+      ? `2026'da sapma yükü ${formatTlShort(loadEnd)}${
           intradayOn ? `; gün içi pozisyon güncellemesi en fazla ${formatTlShort(intradaySaving)} azaltabilir` : ""
         }`
       : `Sapma yükü ${formatTlShort(loadEnd)}: dengesizlik riski ve KÜPST`;
     const s = contentSlide("Sapma yükü köprüsü", title);
     s.addNotes(
       "Köprüyü soldan sağa okuyun. " +
-        (ex
-          ? `Başlangıç YEKDEM dışı santrallerin dengesizlik riski; YEKDEM santrallerinin dengesizliği YEKDEM portföyünde uzlaştırılır (mevzuatın yapısına dayanan çıkarım). 2026 katsayısı ve YEKDEM'den çıkan santraller ekleniyor; kesikli turuncu adım bu çıkarıma bağlıdır. KÜPST tüm santraller için şirkete aittir. `
-          : netted
+        (netted
             ? `İlk sütun santraller tek tek uzlaştırılsaydı oluşacak risk; ${unit.self.toLocaleLowerCase("tr-TR")} birbirini dengelediği için ${formatTlShort(
                 r.settlement.sameCompanyNettingTl
               )} zaten netleşiyor. `
             : "") +
-        "KÜPST santral bazında hesaplanır, netleşmez; 2026 projeksiyonu 2026 tolerans oranlarıyla (rüzgâr %15, güneş %8) yapıldı. 2026 adımları 2025 fiyatları ve sistem yönleri tekrar ederse geçerlidir. " +
+        "KÜPST santral bazında hesaplanır, netleşmez; 2026 projeksiyonu 2026 tolerans oranları ve katsayısıyla (rüzgâr %15, güneş %8, katsayı 0,05) yapıldı. 2026 adımları veri yılının fiyatları ve sistem yönleri tekrar ederse geçerlidir. " +
         (intradayOn ? "Gün içi adımı senaryodur ve üst sınırdır; yalnızca dengesizlik riskine uygulanmıştır." : "")
     );
 
@@ -1049,32 +973,21 @@ export async function exportPlantReportPptx(
   }
 
   // ---------------------------------------------------------------------------------------------
-  // 7. 2026 KATSAYILARI VE YEKDEM
+  // 7. 2026 KATSAYILARI
   // ---------------------------------------------------------------------------------------------
   if (s2026) {
-    const exiting = ex?.exitingPlants ?? [];
-    const title = ex
-      ? `2026'da ${unit.gen} sapma yükü ${formatTlShort(load.a2026!)}; YEKDEM dengesizliği ${unit.dat} yansısaydı ${formatTlShort(load.b2026!)}`
-      : `2026 katsayılarıyla aynı üretim ${formatTlShort(s2026.deltaTl)} daha fazla dengesizlik riski yaratıyor (%${nf(s2026.deltaPct, 0)})`;
-    const s = contentSlide("2026 riski", title, ex ? "assumption" : "exact");
+    const title = `2026 katsayılarıyla aynı üretim ${formatTlShort(s2026.deltaTl)} daha fazla dengesizlik riski yaratıyor (%${nf(s2026.deltaPct, 0)})`;
+    const s = contentSlide("2026 riski", title, "exact");
     s.addNotes(
-      "1 Ocak 2026'dan itibaren sistemle aynı yöndeki sapmada katsayı %3'ten %6'ya çıktı; aynı tahmin kalitesiyle risk artıyor. Hesap, 2025'in fiyatları ve sistem yönleri tekrar ederse geçerlidir. " +
-        (ex
-          ? "Bu slaytın sorusu: 'YEKDEM döneminde dengesizlik ve KÜPST size mi yansıyordu, YEKDEM portföyüne mi?' A'da YEKDEM'den çıkan santraller 2026'da yeni bir yük getirir; B'de yük zaten vardı ve artış yalnızca katsayıdan gelir. Bu, görüşmenin en güçlü sorusudur."
-          : "")
+      "1 Ocak 2026'dan itibaren sistemle aynı yöndeki sapmada katsayı %3'ten %6'ya çıktı; aynı tahmin kalitesiyle risk artıyor. Hesap, veri yılının fiyatları ve sistem yönleri tekrar ederse geçerlidir."
     );
-    const leftW = ex ? 7.2 : CW;
+    const leftW = CW;
     text(
       s,
       "1 Ocak 2026'dan itibaren sapma sistemle aynı yöndeyse (sistem fazlasındayken fazla, açığındayken eksik üretim) dengesizlik fiyatındaki pay %3'ten %6'ya çıktı. Ters yöndeki sapmada %3 devam ediyor. Tutarlar dengesizlik riski + tahmini KÜPST.",
       { x: M, y: 1.85, w: leftW, h: 0.85, fontSize: 12.5, color: C.sub, valign: "top" }
     );
-    const pairs = ex
-      ? [
-          { head: "Ana senaryo", sub: "YEKDEM dengesizliği havuza yansır", v25: load.a2025, v26: load.a2026! },
-          { head: "Duyarlılık", sub: `YEKDEM dengesizliği ${unit.dat} yansır`, v25: load.b2025, v26: load.b2026! },
-        ]
-      : [{ head: "", sub: "", v25: load.b2025, v26: load.b2026! }];
+    const pairs = [{ head: "", sub: "", v25: load.current, v26: load.next2026! }];
     const maxV = Math.max(...pairs.flatMap((p) => [p.v25, p.v26]), 1);
     const bottom = 6.05;
     const plotH = 2.45;
@@ -1108,28 +1021,6 @@ export async function exportPlantReportPptx(
       });
     });
 
-    if (ex) {
-      const px = M + leftW + 0.35;
-      const pw = W - M - px;
-      round(s, px, 1.85, pw, 4.55, C.assumBg);
-      text(s, "Doğrulanacak tek soru", { x: px + 0.3, y: 2.05, w: pw - 0.6, h: 0.4, fontSize: 16, bold: true, fontFace: FONT_HEAD });
-      text(s, "YEKDEM döneminde santralin dengesizliği YEKDEM portföyünde mi uzlaştırılıyordu? Mevzuatın yapısı (YEK Yön. md. 15–17) bunu destekliyor.", {
-        x: px + 0.3,
-        y: 2.5,
-        w: pw - 0.6,
-        h: 0.8,
-        fontSize: 12.5,
-        bold: true,
-        color: C.assumTx,
-        valign: "top",
-      });
-      const lines: string[] = [];
-      if (exiting.length) lines.push(`2026'da YEKDEM'den çıkıyor: ${exiting.join(", ")}`);
-      if (ex.stayingPlants.length) lines.push(`YEKDEM'de devam ediyor: ${ex.stayingPlants.join(", ")}`);
-      if (ex.unknownExitPlants.length) lines.push(`Çıkış yılı bilinmiyor: ${ex.unknownExitPlants.join(", ")}`);
-      text(s, lines.join("\n\n"), { x: px + 0.3, y: 3.4, w: pw - 0.6, h: 2.0, fontSize: 11, valign: "top" });
-      text(s, "Kaynak: EPİAŞ YEKDEM santral listeleri (veri yılı ve sonraki yıl); YEK Yönetmeliği md. 15–17.", { x: px + 0.3, y: 5.85, w: pw - 0.6, h: 0.4, fontSize: 9, color: C.sub, valign: "top" });
-    }
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -1142,10 +1033,10 @@ export async function exportPlantReportPptx(
       pf.p90MonthTlPerMwh,
       0
     )} TL ihtiyatlı`;
-    // 2026 kuralları ve piyasaya açık portföy varsayımıyla: veri kesin, çerçeve varsayım
+    // 2026 kurallarıyla: veri kesin, çerçeve (kurallar sabit kalır, fiyatlar tekrar eder) varsayım
     const s = contentSlide("Risk primi", title, "assumption");
     s.addNotes(
-      "Risk primi, bu portföyün (ya da bir santralin) üretimini satarken veya bir toplayıcıya devrederken fiyata eklenmesi gereken MWh başına sapma yüküdür: dengesizlik + KÜPST, 2026 kurallarıyla, piyasaya açık bir portföy varsayımıyla (YEKDEM yok). " +
+      "Risk primi, bu portföyün (ya da bir santralin) üretimini satarken veya bir toplayıcıya devrederken fiyata eklenmesi gereken MWh başına sapma yüküdür: dengesizlik + KÜPST, 2026 kurallarıyla, tüm santraller (YEKDEM santrallerinin dengesizliği de kendilerine aittir). " +
         `Beklenen değer ${isFullYear(r) ? "yıllık" : "dönem"} ortalamasıdır; ihtiyatlı değer ayların %90'ının altında kaldığı seviyedir. Toplayıcılar teklif verirken bu iki rakam arasında bir prim seçer. ` +
         "Santral tablosu, portföye yeni santral alırken ya da santral bazında sözleşme yaparken kullanılır; santral tek başına uzlaştırılır, bu yüzden portföy priminden yüksektir."
     );
@@ -1226,7 +1117,7 @@ export async function exportPlantReportPptx(
     });
     text(
       s,
-      `${rp.rules}. Piyasaya açık portföy varsayımı (YEKDEM yok); gün içi işlemler öncesi. ` +
+      `${rp.rules}. Tüm santraller (YEKDEM santrallerinin dengesizliği de kendilerine aittir); gün içi işlemler öncesi. ` +
         (agg && netted
           ? `Portföy primi ${agg.name} portföyünde netleşmiş dengesizlikle hesaplandı; santral primleriyle arasındaki fark, toplayıcının santrallere sunabileceği indirim payıdır.`
           : netted
@@ -1348,7 +1239,7 @@ export async function exportPlantReportPptx(
     });
     text(
       s,
-      `Netleşme kazancı: aday ${growth.memberScope === "merchant" ? "portföyün YEKDEM dışı santralleriyle (ana senaryo)" : "portföyle"} tek dengede uzlaştırılsaydı portföy ve adayın birlikte daha az ödeyeceği dengesizlik, ${
+      `Netleşme kazancı: aday portföyle tek dengede uzlaştırılsaydı portföy ve adayın birlikte daha az ödeyeceği dengesizlik, ${
         growth.sectorLabel
       }; yüzde, adayın tek başına maliyetine göre. Kazançlar aday başınadır, toplanamaz. Tek başına ve adil prim KÜPST dahil. ` +
         "Bağımsız: toplayıcı listelerinde yok, grubu 3'ten az santralli, görevli tedarik ya da lisanssız değil; dengeden sorumlu grup üyeliği yayımlanmadığı için tahmindir, görüşmeden önce doğrulanmalı.",
@@ -1365,7 +1256,7 @@ export async function exportPlantReportPptx(
     const items: Item[] = [];
     if (r.intraday) {
       // Gün içi güncelleme dengesizlik riskini azaltır (KÜPST'e uygulanmaz); köprüdeki 2026 dengesizlik riskiyle aynı dayanak
-      const basis = ex ? (ex.exposure2026Tl ?? ex.directCostTl) : (s2026?.cost2026Tl ?? cost);
+      const basis = s2026?.cost2026Tl ?? cost;
       items.push({
         title: "Gün içi piyasada pozisyon güncelleme",
         value: r.intraday.savingTl > 0 ? (r.intraday.savingPct / 100) * basis : 0,
@@ -1381,24 +1272,19 @@ export async function exportPlantReportPptx(
         effort: "Orta · gün içi operasyon",
       });
     }
-    // Sektör medyanının üstündeki santraller medyana inseydi (santral tek başına; netleşme öncesi, üst sınır). Ana
-    // senaryoyla tutarlı: YEKDEM'deki santralin dengesizliği YEKDEM havuzunda kaldığından yalnızca KÜPST kazancı sayılır;
-    // KÜPST'ün sapmayla orantılı azaldığı varsayılır.
-    const yekdemInPool = !!ex;
+    // Sektör medyanının üstündeki santraller medyana inseydi (santral tek başına; netleşme öncesi, üst sınır). YEKDEM
+    // santralleri dahil (dengesizlikleri kendilerine aittir); KÜPST'ün sapmayla orantılı azaldığı varsayılır.
     const weak = (r.sector?.types ?? []).flatMap((t) =>
       t.plants
         .filter((sp) => sp.unitTl > t.unitImbalanceTl.median)
         .map((sp) => {
           const row = r.plants.find((p) => p.name === sp.name);
-          if (!row) return { name: sp.name, gain: 0, kupstOnly: false };
+          if (!row) return { name: sp.name, gain: 0 };
           const share = 1 - t.unitImbalanceTl.median / sp.unitTl;
-          const kupstOnly = yekdemInPool && row.yekdem === true;
-          const imbalanceGain = kupstOnly ? 0 : (sp.unitTl - t.unitImbalanceTl.median) * row.actualMwh;
-          return { name: sp.name, gain: imbalanceGain + row.kupstTl * share, kupstOnly };
+          return { name: sp.name, gain: (sp.unitTl - t.unitImbalanceTl.median) * row.actualMwh + row.kupstTl * share };
         })
     );
     const weakGain = weak.reduce((a, w) => a + w.gain, 0);
-    const kupstOnlyNames = weak.filter((w) => w.kupstOnly).map((w) => w.name);
     items.push({
       title: weak.length ? "Zayıf santrallerde tahmin iyileştirme" : "En pahalı saatlere odaklı tahmin iyileştirme",
       impact: weak.length && weakGain > 0 ? `≈ ${formatTlShort(weakGain)} · üst sınır` : "Hesaplanmadı",
@@ -1407,9 +1293,7 @@ export async function exportPlantReportPptx(
         (weak.length
           ? `${weak.length} santral (${weak.map((w) => w.name).join(", ")}) sektör medyanının üstünde; medyana inmeleri ${formatTlShort(
               weakGain
-            )} eder (santral tek başına, netleşme öncesi; dengesizlik + KÜPST${
-              kupstOnlyNames.length ? `, YEKDEM'deki ${kupstOnlyNames.join(", ")} için yalnızca KÜPST` : ""
-            }). `
+            )} eder (santral tek başına, netleşme öncesi; dengesizlik + KÜPST). `
           : `Riskin %${nf(r.alignment.sameDirectionCostPct, 0)} kadarı sistemle aynı yöndeki sapmalardan geliyor. `) +
         (r.plants.filter((p) => p.biasPct > 1).length > r.plants.length / 2 ? "Planlar sistematik olarak yüksek: kalibrasyon ilk adım. " : "") +
         "En pahalı saatlerde tahmin sağlayıcıyla hedefli iyileştirme.",
@@ -1434,9 +1318,7 @@ export async function exportPlantReportPptx(
     } else if (agg && agg.benefitTl > 0) {
       items.push({
         title: `${agg.name} portföyünde netleşme (zaten alınıyor)`,
-        impact: agg.merchantOnly
-          ? `${formatTlShort(agg.merchantOnly.benefitTl)} · %${nf(agg.merchantOnly.benefitPct, 0)} (YEKDEM dahil ${formatTlShort(agg.benefitTl)})`
-          : `${formatTlShort(agg.benefitTl)} · %${nf(agg.benefitPct, 0)}`,
+        impact: `${formatTlShort(agg.benefitTl)} · %${nf(agg.benefitPct, 0)}`,
         body:
           `Saatlerin %${nf(agg.offsettingHourSharePct, 0)} kadarında bir sahibin santrali fazla, diğerininki eksik üretiyor; portföy bu saatlerde kendi içinde dengelenir. ` +
           (() => {
@@ -1667,7 +1549,7 @@ export async function exportPlantReportPptx(
         "Sınırlar",
         "Santralin gün içi piyasa işlemleri ve ikili anlaşmaları açık veride yok; gün içinde kapatılan sapmalar varsa gerçek maliyet daha düşüktür. TEİAŞ yük atma/alma talimatları (kısıntı) santral bazında yayımlanmadığından ayrılamadı; talimatla düşen üretim dengesizlik sayılmaz, bu yüzden kısıntı yaşayan santrallerde risk olduğundan yüksek görünebilir." +
           (r.yekdem
-            ? " YEKDEM santrallerinin geliri YEKDEM fiyatından oluşur; YEKDEM döneminde dengesizliğin santrale mi YEKDEM portföyüne mi yansıdığı ayrıca doğrulanmalıdır."
+            ? " YEKDEM santralleri dahildir: YEKDEM katılımcısı üretimini serbest piyasada kendisi satar ve dengesizliği kendisine aittir (YEK Yönetmeliği md. 15/1, 23/1; YEKDEM portföyü dengesizliğini düzenleyen md. 16–17 29.4.2016'da kaldırıldı); yalnızca geliri PTF yerine YEK fiyatından oluşur."
             : "") +
           (r.dataGaps.length
             ? ` Eksik veri: ${r.dataGaps.map(describeGap).join("; ")}; bu aylar santral ve portföy rakamlarına girmedi.`
@@ -1691,7 +1573,7 @@ export async function exportPlantReportPptx(
         : []),
       [
         "Etiketler",
-        `KESİN HESAP: veriden doğrudan. TAHMİNİ: tolerans oranı ve dayanağı tam doğrulanmamış hesap (KÜPST). VARSAYIMA BAĞLI: YEKDEM santrallerinin dengesizliğinin YEKDEM portföyünde uzlaştırıldığı çıkarımına dayanır (YEK Yön. md. 15–17; ana senaryo); duyarlılık olarak ${unit.dat} yansıdığı durum da verilir. SENARYO: davranış varsayımı; taahhüt değildir.`,
+        `KESİN HESAP: veriden doğrudan. TAHMİNİ: tolerans oranı ve dayanağı tam doğrulanmamış hesap (KÜPST). VARSAYIMA BAĞLI: bir varsayıma dayanır (risk primi, adil prim paylaşımı). SENARYO: davranış varsayımı; taahhüt değildir.`,
       ],
     ];
     // Satır yüksekliği metin uzunluğuna göre: aynı satırdaki iki bloğun uzun olanı belirler (sabit adım uzun metni

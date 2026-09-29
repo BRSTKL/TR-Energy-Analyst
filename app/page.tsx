@@ -166,8 +166,8 @@ function ProjectsSection({ rows, total }: { rows: ProjectKpis[] | null | undefin
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-sm text-slate-600">{r.period ? periodShort(r.period) : "—"}</TableCell>
                 <TableCell className="whitespace-nowrap text-right tabular-nums">
-                  <span className="font-semibold text-slate-900">{tl(r.load.a2025)}</span>
-                  {r.load.a2026 !== null && <p className="text-xs text-rose-700">2026 kurallarıyla {tl(r.load.a2026)}</p>}
+                  <span className="font-semibold text-slate-900">{tl(r.load.current)}</span>
+                  {r.load.next2026 !== null && <p className="text-xs text-rose-700">2026 kurallarıyla {tl(r.load.next2026)}</p>}
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-right tabular-nums">{nf(r.unitLoadTl)} TL</TableCell>
                 <TableCell className="text-sm">
@@ -196,8 +196,8 @@ function ProjectsSection({ rows, total }: { rows: ProjectKpis[] | null | undefin
           </TableBody>
         </Table>
         <p className="border-t px-4 py-2 text-xs text-slate-500">
-          Sapma yükü: dönemin dengesizlik riski (ana senaryo, uzlaştırma biriminde netleşmiş) + tahmini KÜPST. MWh başına: tüm
-          santraller piyasaya açık olsaydı (projeler arası karşılaştırılabilir taban). Sektördeki yer: MWh başına dengesizlikte aynı
+          Sapma yükü: dönemin dengesizlik riski (tüm santraller, uzlaştırma biriminde netleşmiş) + tahmini KÜPST. MWh başına: sapma
+          yükü / üretim. Sektördeki yer: MWh başına dengesizlikte aynı
           dönemin sektör karnesindeki yüzdelik.
           {total !== null && total > rows.length ? ` En yeni ${rows.length} proje gösteriliyor (toplam ${total}).` : ""}
         </p>

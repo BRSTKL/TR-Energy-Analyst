@@ -150,7 +150,6 @@ export async function GET(_request: Request, { params }: { params: { id: string 
         settlement: report.settlement,
         kupst: report.kupst,
         kupstByPlant: Object.fromEntries(report.plants.map((p) => [p.name, p.kupstTl])),
-        exposure: report.exposure,
         coefficients2026: report.coefficients2026,
         yekdem: report.yekdem,
         coverage: report.coverage,

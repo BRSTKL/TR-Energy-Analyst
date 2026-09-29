@@ -28,9 +28,8 @@ interface DsgResponse extends DsgScenarioResult {
   /** Grup üyeleri şirketlerdir (sahibi bilinmeyen santral kendi başına üye) */
   plants: PlantOption[];
   unknownOwnerPlants: string[];
-  /** Veri döneminde YEKDEM'de olan santraller ve bu hesapta hariç tutulup tutulmadıkları */
+  /** Veri döneminde YEKDEM'de olan santraller (bilgi; dengesizlikleri de kendilerine aittir) */
   yekdemPlants: string[];
-  yekdemExcluded: boolean;
 }
 
 const MONTHS_TR = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
@@ -47,7 +46,6 @@ export default function DsgScenarioPage() {
   const [selected, setSelected] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [excludeYekdem, setExcludeYekdem] = useState(false);
   // Hızlı art arda seçimlerde yalnızca son isteğin sonucu gösterilsin
   const requestId = useRef(0);
 
@@ -58,7 +56,6 @@ export default function DsgScenarioPage() {
       try {
         const params = new URLSearchParams();
         if (ids) params.set("plants", ids.join(","));
-        if (excludeYekdem) params.set("yekdem", "exclude");
         const query = params.size ? `?${params}` : "";
         const res = await fetch(`/api/projects/${projectId}/dsg${query}`, { cache: "no-store" });
         const d: DsgResponse = await res.json();
@@ -73,10 +70,10 @@ export default function DsgScenarioPage() {
         if (id === requestId.current) setLoading(false);
       }
     },
-    [projectId, excludeYekdem]
+    [projectId]
   );
 
-  // İlk açılış ve YEKDEM seçimi değişince tüm üyelerle yeniden hesapla (hariç tutulan santralin sahibi listeden düşebilir)
+  // İlk açılışta tüm üyelerle hesapla
   useEffect(() => {
     load(null);
   }, [load]);
@@ -131,19 +128,10 @@ export default function DsgScenarioPage() {
                   En az iki üye (şirket) seçin. {loading && "Hesaplanıyor..."}
                 </CardDescription>
                 {data.yekdemPlants.length > 0 && (
-                  <label className="mt-2 flex items-start gap-2 text-xs text-slate-700">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5"
-                      checked={excludeYekdem}
-                      onChange={(e) => setExcludeYekdem(e.target.checked)}
-                    />
-                    <span>
-                      <b>YEKDEM santrallerini hariç tut</b> ({data.yekdemPlants.join(", ")}). Raporun ana senaryosunda YEKDEM
-                      santrallerinin dengesizliği YEKDEM havuzunda uzlaştırılır; grubun gerçekten netleştirebileceği yalnızca
-                      piyasadaki santrallerdir.
-                    </span>
-                  </label>
+                  <p className="mt-2 text-xs text-slate-600">
+                    YEKDEM&apos;deki santraller ({data.yekdemPlants.join(", ")}) de gruba dahildir: YEKDEM katılımcısı üretimini serbest
+                    piyasada kendisi satar, dengesizliği kendisine aittir (YEK Yönetmeliği md. 15/1, 23/1).
+                  </p>
                 )}
               </CardHeader>
               <CardContent className="flex flex-wrap gap-2">
@@ -431,8 +419,8 @@ export default function DsgScenarioPage() {
               <CardContent className="space-y-1.5 p-4 text-xs leading-relaxed text-slate-600">
                 <p>
                   <strong>Varsayımlar.</strong> Grup düzeyinde aynı dengesizlik fiyat formülü ve katsayıları uygulanır.
-                  Her üyenin maliyeti şirket bazında uzlaştırılmış dengesizliktir. DSG kurma ve üyelik şartları, YEKDEM
-                  kapsamındaki santrallerin katılımı modellenmez; KÜPST santral bazında olduğundan DSG ile değişmez.
+                  Her üyenin maliyeti şirket bazında uzlaştırılmış dengesizliktir. DSG kurma ve üyelik şartları
+                  modellenmez; KÜPST santral bazında olduğundan DSG ile değişmez.
                 </p>
                 <p>
                   Fayda geçmiş verinin aynı üye bileşimiyle hesaplanır. Grup içinde GİP&apos;te yalnızca netleşmiş

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPlantReport } from "@/lib/report/plant-report";
+import { buildPlantReport, deviationLoad } from "@/lib/report/plant-report";
 import { settlementIdentity } from "@/lib/projects/aggregator";
 import { processHourlyRecord } from "@/lib/calculations/engine";
 import { DEFAULT_IMBALANCE_PROFILE, SystemDirection } from "@/lib/calculations/types";
@@ -105,7 +105,7 @@ describe("Santral raporu verisi", () => {
     expect(r.plants.find((p) => p.name === "B")!.costShareOfRevenuePct).not.toBeNull();
   });
 
-  it("YEKDEM varsa riski doğrudan / YEKDEM olarak ayırır; 2026'da yalnızca YEKDEM'den çıkanları ekler", () => {
+  it("YEKDEM santralleri dengesizlik ve KÜPST'te diğer santrallerle aynı sayılır (YEK Yön. md. 15/1, 23/1)", () => {
     const t = at(2025, 5, 1, 12);
     const r = buildPlantReport(
       project([
@@ -115,26 +115,22 @@ describe("Santral raporu verisi", () => {
       ]),
       { companyPlantTotals: new Map([[1, 4]]), missingCompanyPlants: new Map([[1, ["Eksik RES"]]]) }
     );
-    const e = r.exposure!;
-    // Sistem fazlasında fazla üretim: MWh başına PTF − MIN(PTF,SMF)×(1−l)
+    // Sistem fazlasında fazla üretim: MWh başına PTF − MIN(PTF,SMF)×(1−l); üç santral aynı şirkette netleşir
     const per25 = 2000 - 1800 * 0.97;
     const per26 = 2000 - 1800 * 0.94;
-    expect(e.directCostTl).toBeCloseTo(2 * per25, 6);
-    expect(e.yekdemCostTl).toBeCloseTo((3 + 4) * per25, 6);
-    expect(e.direct2026Tl).toBeCloseTo(2 * per26, 6);
-    // 2026: D + Çıkan birlikte (aynı şirket), Kalan hariç
-    expect(e.exposure2026Tl).toBeCloseTo((2 + 3) * per26, 6);
-    expect(e.exitingPlants).toEqual(["Çıkan"]);
-    // KÜPST (RES %17, plan 10 → tolerans 1,7 MWh): D sapma 2 → 0,3; Çıkan 3 → 1,3; Kalan 4 → 2,3; fiyat max(2000,1800) × 0,03
+    expect(r.totals.imbalanceCostTl).toBeCloseTo((2 + 3 + 4) * per25, 6);
+    expect(r.coefficients2026!.cost2026Tl).toBeCloseTo((2 + 3 + 4) * per26, 6);
+    expect(r.yekdem).toEqual({ plantNames: ["Çıkan", "Kalan"] });
+    // KÜPST (RES %17, plan 10 → tolerans 1,7 MWh): D 0,3; Çıkan 1,3; Kalan 2,3; fiyat max(2000,1800) × 0,03
     const k = (excess: number) => excess * 2000 * 0.03;
     const k26 = (excess: number) => excess * 2000 * 0.05; // 2026 fiyat katsayısı (EPDK 2026 taslağı)
-    expect(e.kupstDirectTl).toBeCloseTo(k(0.3), 6);
-    expect(e.kupstYekdemTl).toBeCloseTo(k(1.3) + k(2.3), 6);
-    // 2026 projeksiyonu 2026 oranlarıyla (RES %15 → tolerans 1,5 MWh, katsayı 0,05): D 0,5; Çıkan 1,5; Kalan 2,5
-    expect(e.kupstExposure2026Tl).toBeCloseTo(k26(0.5) + k26(1.5), 6);
-    expect(r.kupst.next2026Tl).toBeCloseTo(k26(0.5) + k26(1.5) + k26(2.5), 6);
     expect(r.kupst.totalTl).toBeCloseTo(k(0.3) + k(1.3) + k(2.3), 6);
-    expect(e.stayingPlants).toEqual(["Kalan"]);
+    // 2026 projeksiyonu 2026 oranlarıyla (RES %15 → tolerans 1,5 MWh, katsayı 0,05): tüm santraller
+    expect(r.kupst.next2026Tl).toBeCloseTo(k26(0.5) + k26(1.5) + k26(2.5), 6);
+    // Sapma yükü: tüm santrallerin dengesizliği + KÜPST
+    const load = deviationLoad(r);
+    expect(load.current).toBeCloseTo((2 + 3 + 4) * per25 + k(0.3) + k(1.3) + k(2.3), 6);
+    expect(load.next2026).toBeCloseTo((2 + 3 + 4) * per26 + k26(0.5) + k26(1.5) + k26(2.5), 6);
     expect(r.coverage).toEqual([{ company: "Şirket 1", inProject: 3, total: 4, missing: ["Eksik RES"] }]);
   });
 

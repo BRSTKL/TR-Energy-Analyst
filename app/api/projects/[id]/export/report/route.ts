@@ -36,10 +36,10 @@ export async function GET(request: Request, { params }: { params: { id: string }
       console.error("Report cost change error:", e);
       return null;
     });
-    // Toplayıcı projelerinde büyüme slaytı: YEKDEM dışı, bağımsız hedef santraller (ana senaryo portföyüyle). Sektörün saatlik
+    // Toplayıcı projelerinde büyüme slaytı: bağımsız hedef santraller (portföyün tüm santralleriyle). Sektörün saatlik
     // serisi yoksa ya da hata verirse rapor onsuz üretilir
     const growth = data.aggregator
-      ? await projectCandidates(params.id, { yekdem: "exclude", access: "independent", memberScope: "merchant", top: 5 })
+      ? await projectCandidates(params.id, { access: "independent", top: 5 })
           .then((g) => ("error" in g ? null : g))
           .catch((e) => {
             console.error("Report growth error:", e);

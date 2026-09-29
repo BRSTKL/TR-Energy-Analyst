@@ -12,7 +12,6 @@ export interface SapmaSummary {
   settlement: PlantReportData["settlement"];
   kupst: PlantReportData["kupst"];
   kupstByPlant: Record<string, number>;
-  exposure: PlantReportData["exposure"];
   coefficients2026: PlantReportData["coefficients2026"];
   yekdem: PlantReportData["yekdem"];
   coverage: PlantReportData["coverage"];
@@ -60,24 +59,22 @@ function Tile({ label, value, sub, tone, chip }: { label: string; value: string;
 }
 
 /**
- * Sonuç sayfasının "Sapma yükü" kartı: şirket bazında uzlaştırılmış dengesizlik riski + tahmini KÜPST, 2026 etkisi ve
- * YEKDEM varsayımları (A: YEKDEM portföyüne yansır, B: şirkete yansır). PowerPoint raporuyla aynı rakamlar.
+ * Sonuç sayfasının "Sapma yükü" kartı: uzlaştırma biriminde netleşmiş dengesizlik riski + tahmini KÜPST ve 2026 etkisi.
+ * YEKDEM santralleri de dahildir (dengesizlikleri kendilerine aittir; YEK Yönetmeliği md. 15/1, 23/1). PowerPoint
+ * raporuyla aynı rakamlar.
  */
 export function SapmaYukuCard({ sapma, projectId, onRefresh }: { sapma: SapmaSummary; projectId: string; onRefresh: () => void }) {
   const [updating, setUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const st = sapma.settlement;
-  const ex = sapma.exposure;
   const c26 = sapma.coefficients2026;
-  const k26 = sapma.kupst.next2026Tl ?? sapma.kupst.totalTl;
   const companyCost = st.companyLevelCostTl;
   const netted = st.sameCompanyNettingTl > 0.005 * st.plantLevelCostTl;
-  // Rapor özetiyle aynı tanım: YEKDEM varsa ana senaryo (YEKDEM dengesizliği havuzda), yoksa tüm santraller
-  const load = deviationLoad({ exposure: ex, coefficients2026: c26, kupst: sapma.kupst, totals: { imbalanceCostTl: companyCost } });
+  // Rapor özetiyle aynı tanım: tüm santraller
+  const load = deviationLoad({ coefficients2026: c26, kupst: sapma.kupst, totals: { imbalanceCostTl: companyCost } });
   const agg = sapma.aggregator ?? null;
   const unitLabel = agg ? `${agg.name} portföyünde` : "şirket bazında";
   const nettingPlace = agg ? "portföy içinde" : "şirket içinde";
-  const payer = agg ? "portföye" : "şirkete";
 
   const warnings: string[] = [];
   for (const m of sapma.check.missing) warnings.push(`${m.company} şirketinin ${m.plants.length} santrali projede yok: ${m.plants.join(", ")}.`);
@@ -117,11 +114,10 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh }: { sapma: SapmaSum
                 : "Dengesizlik şirket bazında uzlaştırılır: aynı şirketin santralleri her saat birbirini dengeler."}{" "}
               KÜPST santral bazındadır, netleşmez. Rakamlar PowerPoint raporuyla aynıdır.
               {agg?.scope && <span className="mt-1 block font-medium text-slate-700">{agg.scope}.</span>}
-              {agg?.merchantOnly && (
+              {sapma.yekdem && (
                 <span className="mt-1 block text-slate-700">
-                  Portföy değeri tüm santrallerle {tl(agg.benefitTl)} (%{Math.round(agg.benefitPct)}); ana senaryoda (YEKDEM dengesizliği
-                  havuzda) yalnızca YEKDEM dışı {agg.merchantOnly.plantCount} santral netleşir: {tl(agg.merchantOnly.benefitTl)} (%
-                  {Math.round(agg.merchantOnly.benefitPct)}).
+                  YEKDEM&apos;deki {sapma.yekdem.plantNames.length} santral de dahildir: YEKDEM katılımcısı üretimini serbest piyasada kendisi
+                  satar, dengesizliği kendisine aittir (YEK Yönetmeliği md. 15/1, 23/1); yalnızca geliri PTF yerine YEK fiyatından oluşur.
                 </span>
               )}
             </CardDescription>
@@ -173,22 +169,12 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh }: { sapma: SapmaSum
             chip={<Chip kind="exact" />}
           />
           <Tile label="KÜPST (sapma bedeli)" value={tl(sapma.kupst.totalTl)} sub="Tolerans dışı sapma × max(PTF, SMF) × katsayı (2025: 0,03; 2026: 0,05)" tone="text-rose-700" chip={<Chip kind="estimate" />} />
-          <Tile
-            label={ex ? "Sapma yükü · ana senaryo" : "Sapma yükü"}
-            value={tl(load.a2025)}
-            sub={
-              ex
-                ? `YEKDEM dışı dengesizlik ${tl(ex.directCostTl)} + tüm santrallerin KÜPST'ü; YEKDEM dengesizliği de sayılırsa ${tl(load.b2025)}`
-                : "Dengesizlik riski + KÜPST (tüm santraller)"
-            }
-            tone="text-slate-900"
-            chip={ex ? <Chip kind="assumption" /> : undefined}
-          />
-          {load.a2026 !== null && (
+          <Tile label="Sapma yükü" value={tl(load.current)} sub="Dengesizlik riski + KÜPST (tüm santraller)" tone="text-slate-900" />
+          {load.next2026 !== null && (
             <Tile
-              label={ex ? "2026 kurallarıyla · ana senaryo" : "2026 kurallarıyla"}
-              value={tl(load.a2026)}
-              sub={`${ex && load.b2026 !== null ? `Duyarlılık ${tl(load.b2026)}; ` : c26 ? `Dengesizlik +${tl(c26.deltaTl)}; ` : ""}2025 fiyatları ve sistem yönleri tekrar ederse`}
+              label="2026 kurallarıyla"
+              value={tl(load.next2026)}
+              sub={`${c26 ? `Dengesizlik +${tl(c26.deltaTl)}; ` : ""}veri yılının fiyatları ve sistem yönleri tekrar ederse`}
               tone="text-amber-600"
               chip={<Chip kind="scenario" />}
             />
@@ -204,7 +190,7 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh }: { sapma: SapmaSum
                   <Chip kind="assumption" />
                 </div>
                 <p className="mt-0.5 text-2xs text-slate-500">
-                  Sözleşme fiyatına eklenecek MWh başına sapma yükü · {sapma.riskPremium.rules} · piyasaya açık portföy
+                  Sözleşme fiyatına eklenecek MWh başına sapma yükü · {sapma.riskPremium.rules}
                 </p>
                 <div className="mt-2 grid grid-cols-3 gap-2 text-center">
                   {[
@@ -263,47 +249,6 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh }: { sapma: SapmaSum
           </div>
         )}
 
-        {ex && (
-          <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-semibold text-slate-900">YEKDEM: ana senaryo ve duyarlılık</p>
-              <Chip kind="assumption" />
-            </div>
-            <p className="mt-1 text-xs text-slate-600">
-              Mevzuatın yapısına göre (YEK Yön. md. 15–17) YEKDEM santrallerinin dengesizliği YEKDEM portföyünde uzlaştırılır;
-              KÜPST tüm santraller için {payer} aittir. Resmi teyit için doğrulanmalı.
-              {ex.exitingPlants.length > 0 && ` 2026'da YEKDEM'den çıkan: ${ex.exitingPlants.join(", ")}.`}
-              {ex.stayingPlants.length > 0 && ` Devam eden: ${ex.stayingPlants.join(", ")}.`}
-              {ex.unknownExitPlants.length > 0 && ` Çıkış yılı bilinmeyen: ${ex.unknownExitPlants.join(", ")}.`}
-            </p>
-            <div className="mt-2 overflow-x-auto">
-              <table className="w-full min-w-[420px] text-xs">
-                <thead>
-                  <tr className="text-left text-slate-500">
-                    <th className="py-1 font-medium">Senaryo</th>
-                    <th className="py-1 text-right font-medium">2025 sapma yükü</th>
-                    <th className="py-1 text-right font-medium">2026 sapma yükü</th>
-                  </tr>
-                </thead>
-                <tbody className="text-slate-800">
-                  <tr className="border-t border-indigo-100">
-                    <td className="py-1.5">
-                      Ana senaryo · dengesizlik: YEKDEM dışı{ex.exitingPlants.length ? " (2026'da + YEKDEM'den çıkanlar)" : ""}; KÜPST: tüm santraller
-                    </td>
-                    <td className="py-1.5 text-right font-semibold">{tl(ex.directCostTl + sapma.kupst.totalTl)}</td>
-                    <td className="py-1.5 text-right font-semibold">{ex.exposure2026Tl !== null ? tl(ex.exposure2026Tl + k26) : "—"}</td>
-                  </tr>
-                  <tr className="border-t border-indigo-100">
-                    <td className="py-1.5">Duyarlılık · YEKDEM santrallerinin dengesizliği de {payer} yansısaydı</td>
-                    <td className="py-1.5 text-right font-semibold">{tl(companyCost + sapma.kupst.totalTl)}</td>
-                    <td className="py-1.5 text-right font-semibold">{c26 ? tl(c26.cost2026Tl + k26) : "—"}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
         {plantsByKupst.length > 1 && (
           <details className="rounded-md border border-slate-200 p-2.5">
             <summary className="cursor-pointer text-xs font-semibold text-slate-700">Santral bazında KÜPST (tahmini)</summary>
@@ -320,8 +265,8 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh }: { sapma: SapmaSum
 
         <p className="flex items-start gap-1.5 text-2xs text-slate-500">
           <Info className="mt-0.5 h-3 w-3 shrink-0" />
-          KÜPST tahminidir: tolerans plana oranlandı (2025: rüzgâr %17, güneş %10, diğer %5, EPDK 13025; 2026&apos;dan itibaren
-          rüzgâr %15, güneş %8). Kısıntı talimatları santral bazında yayımlanmadığından ayrılamadı. Aşağıdaki santral grafikleri ve tablo santral bazındadır; portföy
+          KÜPST tahminidir: tolerans plana oranlandı (2025: rüzgâr %17, güneş %10, diğer %5, katsayı 0,03, EPDK 13025; 2026&apos;dan
+          itibaren rüzgâr %15, güneş %8, katsayı 0,05). Kısıntı talimatları santral bazında yayımlanmadığından ayrılamadı. Aşağıdaki santral grafikleri ve tablo santral bazındadır; portföy
           toplamları {agg ? "portföy" : "şirket"} bazındadır.
         </p>
       </CardContent>

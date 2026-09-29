@@ -49,25 +49,21 @@ const METRICS: Metric[] = [
   },
   {
     section: "Sapma yükü (dengesizlik + KÜPST)",
-    label: "Veri yılı, ana senaryo",
-    hint: "YEKDEM santrallerinin dengesizliği YEKDEM havuzunda; KÜPST tüm santraller için şirkete",
-    text: (k) => mTl(k.load.a2025),
+    label: "Veri dönemi",
+    hint: "Tüm santraller (YEKDEM santrallerinin dengesizliği de kendilerine aittir), uzlaştırma biriminde netleşmiş",
+    text: (k) => mTl(k.load.current),
   },
   {
-    label: "2026 kurallarıyla, ana senaryo",
-    hint: "YEKDEM'den çıkan santraller şirkete geçer; %3/%6 katsayı ve 2026 KÜPST oranları",
+    label: "2026 kurallarıyla",
+    hint: "Aynı üretim; %3/%6 katsayı ve 2026 KÜPST oranları",
     text: (k) =>
-      k.load.a2026 === null
+      k.load.next2026 === null
         ? "Veri zaten 2026 kurallarıyla (projeksiyon gerekmez)"
-        : `${mTl(k.load.a2026)} (${k.load.a2026 >= k.load.a2025 ? "+" : ""}%${nf((k.load.a2026 / k.load.a2025 - 1) * 100)})`,
-  },
-  {
-    label: "Duyarlılık: tüm santraller şirkete",
-    text: (k) => (k.load.b2026 === null ? `${mTl(k.load.b2025)} (veri yılı)` : `${mTl(k.load.b2025)} → ${mTl(k.load.b2026)}`),
+        : `${mTl(k.load.next2026)} (${k.load.next2026 >= k.load.current ? "+" : ""}%${nf((k.load.next2026 / k.load.current - 1) * 100)})`,
   },
   {
     label: "MWh başına sapma yükü",
-    hint: "Tüm santraller, şirket bazında netleşmiş; şirketler arası karşılaştırma için ortak taban",
+    hint: "Tüm santraller, uzlaştırma biriminde netleşmiş; şirketler arası karşılaştırma için ortak taban",
     text: (k) => `${nf(k.unitLoadTl)} TL/MWh`,
     value: (k) => k.unitLoadTl,
     better: "low",

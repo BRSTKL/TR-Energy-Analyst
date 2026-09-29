@@ -72,8 +72,8 @@ function ProjectKpiBlock({ k }: { k: ProjectKpis | null | undefined }) {
   const unit = k.companies.length === 1 ? k.companies[0] : `${k.companies.length} şirket, şirket bazında`;
   return (
     <div className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-lg border border-slate-200 bg-white p-3">
-      {cell("Sapma yükü (dönem)", tlShort(k.load.a2025), k.load.a2026 !== null ? <span className="text-rose-700">2026 kurallarıyla {tlShort(k.load.a2026)}</span> : "ana senaryo")}
-      {cell("MWh başına", `${nfTr(k.unitLoadTl)} TL`, "tüm santraller piyasada")}
+      {cell("Sapma yükü (dönem)", tlShort(k.load.current), k.load.next2026 !== null ? <span className="text-rose-700">2026 kurallarıyla {tlShort(k.load.next2026)}</span> : "dengesizlik + KÜPST")}
+      {cell("MWh başına", `${nfTr(k.unitLoadTl)} TL`, "sapma yükü / üretim")}
       {cell(
         "Sektördeki yer",
         k.sector.length ? (

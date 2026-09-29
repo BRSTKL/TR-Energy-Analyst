@@ -137,34 +137,13 @@ export interface PlantReportData {
     /** Sahibi bilinmeyen santral sayısı (her biri ayrı şirket sayıldı) */
     unknownOwnerCount: number;
   };
-  /** Veri döneminde YEKDEM'de olan santraller (yoksa null) */
-  yekdem: { plantNames: string[] } | null;
   /**
-   * Portföyde YEKDEM santrali varsa riskin kime yansıdığına göre ayrımı. YEKDEM'deki santrallerin dengesizliği şirkete
-   * değil YEKDEM portföyüne yansıyor olabilir (doğrulanmalı); bu yüzden "doğrudan" kapsam YEKDEM dışı santrallerdir.
-   * Tüm tutarlar şirket bazında netleşmiş. 2026 alanları yalnızca veri 2026 öncesiyse doludur.
+   * Veri döneminde YEKDEM'de olan santraller (yoksa null). Bilgi amaçlıdır: YEKDEM katılımcısı üretimini serbest
+   * piyasada kendisi satar ve dengesizliği kendisine aittir (YEK Yönetmeliği md. 15/1 ve 23/1; YEKDEM portföyü
+   * dengesizliğini düzenleyen md. 16–17 29/4/2016'da yürürlükten kaldırıldı). Bu yüzden tüm hesaplarda YEKDEM
+   * santralleri diğer santrallerle aynı şekilde uzlaştırmaya girer; yalnızca gelir PTF yerine YEK fiyatından oluşur.
    */
-  exposure: {
-    /** YEKDEM dışı santrallerin riski: şirkete doğrudan yansır */
-    directCostTl: number;
-    directPlants: string[];
-    /** YEKDEM santrallerinin kendi aralarında netleşmiş riski */
-    yekdemCostTl: number;
-    /** Tüm santraller birlikte netleşseydi (totals.imbalanceCostTl ile aynı) */
-    allCostTl: number;
-    /** Sonraki yıl YEKDEM'den çıkan / devam eden / durumu bilinmeyen santraller */
-    exitingPlants: string[];
-    stayingPlants: string[];
-    unknownExitPlants: string[];
-    /** YEKDEM dışı santraller 2026 katsayılarıyla */
-    direct2026Tl: number | null;
-    /** 2026'da şirkete yansıyacak risk: YEKDEM dışı + YEKDEM'den çıkan santraller, 2026 katsayılarıyla */
-    exposure2026Tl: number | null;
-    /** Tahmini KÜPST aynı kapsamlarla (2026: en güncel oranlarla) */
-    kupstDirectTl: number;
-    kupstYekdemTl: number;
-    kupstExposure2026Tl: number | null;
-  } | null;
+  yekdem: { plantNames: string[] } | null;
   /**
    * Sektörle kıyaslama (sektör karnesi aynı yıl için varsa): teknoloji başına dağılım ve şirket santrallerinin yeri.
    * rankPct: santralin MWh başına dengesizliğinin sektördeki yüzdelik sırası (düşük = daha iyi).
@@ -270,11 +249,6 @@ export interface PlantReportData {
     offsettingHourSharePct: number;
     /** Ay ay fayda oranı (%): portföy değerinin her ay tekrarlanıp tekrarlanmadığı */
     monthlyBenefit: Array<{ month: string; benefitPct: number }>;
-    /**
-     * Ana senaryo: YEKDEM santrallerinin dengesizliği YEKDEM havuzunda kaldığından portföyün fiilen netleştirebildiği
-     * yalnızca YEKDEM dışı santrallerdir. Portföyde YEKDEM santrali ve en az iki YEKDEM dışı sahip varsa dolu.
-     */
-    merchantOnly: { plantCount: number; benefitTl: number; benefitPct: number } | null;
     /**
      * Kapsam cümlesi (toplayıcının EPİAŞ portföyü kayıtlıysa): "Kapsam: Gain Toplayıcı portföyündeki 40 santralin 6
      * tanesi (portföy: 29 hidro, 6 rüzgâr, 5 diğer; EPİAŞ, Eylül 2026)"
@@ -574,12 +548,6 @@ export function buildPlantReport(
       owners.set(key, [...(owners.get(key) ?? []), p]);
     }
     const x = crossGroup(Array.from(owners.values()));
-    // YEKDEM dışı santraller arasında (ana senaryo)
-    const merchantGroups = Array.from(owners.values())
-      .map((g) => g.filter((p) => p.yekdem !== true))
-      .filter((g) => g.length > 0);
-    const hasYekdem = withData.some((p) => p.yekdem === true);
-    const m = hasYekdem && merchantGroups.length >= 2 ? crossGroup(merchantGroups) : null;
     aggregator = {
       name: data.aggregator.name,
       ownerCount: owners.size,
@@ -589,7 +557,6 @@ export function buildPlantReport(
       benefitPct: x.benefitPct,
       offsettingHourSharePct: x.offsettingPct,
       monthlyBenefit: x.monthly,
-      merchantOnly: m ? { plantCount: merchantGroups.flat().length, benefitTl: m.benefit, benefitPct: m.benefitPct } : null,
       scope: (() => {
         const pf = data.aggregator!.portfolio;
         if (!pf) return null;
@@ -698,27 +665,6 @@ export function buildPlantReport(
   const pre2026 = start < REGIME_2026_START;
   const kupst = { totalTl: kupstOf(withData), next2026Tl: pre2026 ? kupstNextOf(withData) : null };
 
-  let exposure: PlantReportData["exposure"] = null;
-  if (hasYekdem) {
-    const direct = withData.filter((p) => !p.yekdem);
-    const yek = withData.filter((p) => p.yekdem);
-    const exiting = yek.filter((p) => p.yekdemNextYear === false);
-    exposure = {
-      directCostTl: settleSubset(direct, data.profile),
-      directPlants: direct.map((p) => p.plantName),
-      yekdemCostTl: settleSubset(yek, data.profile),
-      allCostTl: companyCost,
-      exitingPlants: exiting.map((p) => p.plantName),
-      stayingPlants: yek.filter((p) => p.yekdemNextYear === true).map((p) => p.plantName),
-      unknownExitPlants: yek.filter((p) => p.yekdemNextYear === null).map((p) => p.plantName),
-      direct2026Tl: pre2026 ? settleSubset(direct, profile2026) : null,
-      exposure2026Tl: pre2026 ? settleSubset([...direct, ...exiting], profile2026) : null,
-      kupstDirectTl: kupstOf(direct),
-      kupstYekdemTl: kupstOf(yek),
-      kupstExposure2026Tl: pre2026 ? kupstNextOf([...direct, ...exiting]) : null,
-    };
-  }
-
   const coverage: PlantReportData["coverage"] = [];
   for (const g of groupList) {
     const orgId = g.plants[0].organizationId;
@@ -803,7 +749,6 @@ export function buildPlantReport(
       unknownOwnerCount: withData.filter((p) => p.organizationId === null).length,
     },
     yekdem: hasYekdem ? { plantNames: withData.filter((p) => p.yekdem).map((p) => p.plantName) } : null,
-    exposure,
     coverage,
     kupst,
     sector,
