@@ -1678,7 +1678,7 @@ export async function exportPlantReportPptx(
       ],
       [
         "KÜPST (tahmini)",
-        `Saatlik |gerçekleşen − plan| sapmanın tolerans payını aşan kısmı × max(PTF, SMF) × 0,03; santral bazında, YEKDEM santralleri dahil ${unit.dat} ait. Tolerans plana oranlandı: 2025'te rüzgâr %17, güneş %10, diğer %5 (EPDK 13025); 2026'dan itibaren rüzgâr %15, güneş %8 (resmi karar metni görülmedi); öncesinde %21 / %12. Arıza sayısına bağlı katsayı artışı kapsam dışı.`,
+        `Saatlik |gerçekleşen − plan| sapmanın tolerans payını aşan kısmı × max(PTF, SMF) × katsayı; santral bazında, YEKDEM santralleri dahil ${unit.dat} ait. Tolerans plana oranlandı. 2025: rüzgâr %17, güneş %10, diğer %5, katsayı 0,03 (EPDK 13025). 2026'dan itibaren: rüzgâr %15, güneş %8, diğer %5, katsayı 0,05 (EPDK kurul kararı taslağı; nihai karar sayısı görülmedi). 2025 öncesi %21 / %12, katsayı 0,03. Arıza sayısına bağlı katsayı artışı kapsam dışı (alt sınır).`,
       ],
       ...(options.costChange
         ? [

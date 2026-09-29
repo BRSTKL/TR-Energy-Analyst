@@ -30,7 +30,8 @@ describe("KÜPST (sapma tutarı)", () => {
     expect(kupstForHour(hour(t2024, 100, 70), "RES")).toBeCloseTo(9 * 2400 * 0.03, 6);
     // Rejim açıkça verilirse o kullanılır
     expect(kupstForHour(hour(t2024, 100, 70), "RES", KUPST_REGIMES[1])).toBeCloseTo(13 * 2400 * 0.03, 6);
-    // 2026: tolerans 15 → 15 MWh
-    expect(kupstForHour(hour(new Date(Date.UTC(2026, 5, 1, 12)), 100, 70), "RES")).toBeCloseTo(15 * 2400 * 0.03, 6);
+    // 2026: tolerans 15 → 15 MWh; fiyat katsayısı 0,05 (EPDK 2026 taslağı)
+    expect(kupstRegimeAt(new Date(Date.UTC(2026, 0, 1, 0))).priceCoef).toBe(0.05);
+    expect(kupstForHour(hour(new Date(Date.UTC(2026, 5, 1, 12)), 100, 70), "RES")).toBeCloseTo(15 * 2400 * 0.05, 6);
   });
 });

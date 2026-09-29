@@ -172,7 +172,7 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh }: { sapma: SapmaSum
             tone="text-rose-600"
             chip={<Chip kind="exact" />}
           />
-          <Tile label="KÜPST (sapma bedeli)" value={tl(sapma.kupst.totalTl)} sub="Tolerans dışı sapma × max(PTF, SMF) × 0,03" tone="text-rose-700" chip={<Chip kind="estimate" />} />
+          <Tile label="KÜPST (sapma bedeli)" value={tl(sapma.kupst.totalTl)} sub="Tolerans dışı sapma × max(PTF, SMF) × katsayı (2025: 0,03; 2026: 0,05)" tone="text-rose-700" chip={<Chip kind="estimate" />} />
           <Tile
             label={ex ? "Sapma yükü · ana senaryo" : "Sapma yükü"}
             value={tl(load.a2025)}

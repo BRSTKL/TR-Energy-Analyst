@@ -15,7 +15,7 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.1";
+const VERSION = "1.2";
 const VERSION_DATE = "29 Eylül 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
@@ -226,20 +226,22 @@ MWh başına risk = Σ risk / Σ gerçekleşen üretim`}
             <p>Lisanslı üretici, dengesizlik tutarından ayrı olarak, planından tolerans payını aşan sapması için sapma tutarı öder:</p>
             <F>
               {`KÜPSM (saat) = max(0, |UEVM − KÜP| − tolerans × KÜP)
-KÜPST (saat) = KÜPSM × max(PTF, SMF) × 0,03`}
+KÜPST (saat) = KÜPSM × max(PTF, SMF) × n                n: fiyat katsayısı`}
             </F>
             <Table
-              head={["Dönem", "Rüzgâr", "Güneş", "Diğer"]}
+              head={["Dönem", "Tolerans: rüzgâr", "Güneş", "Depolamalı ve diğer", "Katsayı n (yenilenebilir)"]}
               rows={[
-                ["2025 öncesi", "%21", "%12", "—"],
-                ["2025", "%17", "%10", "%5"],
-                ["2026'dan itibaren", "%15", "%8", "%5"],
+                ["2025 öncesi", "%21", "%12", "%5", "0,03"],
+                ["2025", "%17", "%10", "%5", "0,03 (aylık arıza ≥ 40 ise 0,05)"],
+                ["2026'dan itibaren", "%15", "%8", "%5 (iletimden bağlı lisanssız %20)", "0,05 (aylık arıza ≥ 30 ise 0,08)"],
               ]}
             />
             <p>
               KÜPST santral (uzlaştırma birimi) bazında hesaplanır; şirket ya da toplayıcı portföyünde netleşmez. Toleransın plana oranlandığı
-              varsayılmıştır (resmi formül görsel olarak yayımlanmıştır); arıza sayısına bağlı katsayı artışı kapsam dışıdır. 2026 oranlarının
-              kurul kararı metni görülmemiştir. Bu nedenlerle KÜPST her yerde <Tag kind="estimate" /> olarak etiketlenir.
+              varsayılmıştır (resmi formül görsel olarak yayımlanmıştır). Arıza kayıtları açık veride olmadığından arıza sayısına bağlı katsayı
+              artışı uygulanmaz: hesap bir alt sınırdır. 2026 değerleri EPDK kurul kararı taslağından alınmıştır (nihai karar sayısı
+              görülmedi). 2026&apos;da hem tolerans genişler hem katsayı 0,03&apos;ten 0,05&apos;e çıkar; toleransı aşan sapmanın bedeli artar.
+              Bu nedenlerle KÜPST her yerde <Tag kind="estimate" /> olarak etiketlenir.
             </p>
             <p>
               <b>Sapma yükü</b> = dengesizlik riski + tahmini KÜPST. Raporda &quot;santralin plandan sapmasının toplam bedeli&quot; olarak
@@ -510,14 +512,25 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
                   <span key="s3" className={STATUS_STYLE.source}>taslak metni doğrulandı; nihai kurul kararının sayısı görülmedi</span>,
                 ],
                 [
-                  "KÜPST formülü ve 2025 tolerans oranları",
-                  "Dengeleme ve Uzlaştırma Yönetmeliği; EPDK 21.11.2024 tarihli, 13025 sayılı kurul kararı",
-                  <span key="s4" className={STATUS_STYLE.source}>kaynak</span>,
+                  "KÜPST formülü; kaynak bazlı katsayı yetkisi; toplayıcı portföyünde KÜPST",
+                  "Dengeleme ve Uzlaştırma Yönetmeliği md. 110 (3)–(6)",
+                  <span key="s4a" className={STATUS_STYLE.verified}>doğrulandı (yönetmelik metni)</span>,
                 ],
                 [
-                  "KÜPST 2026 tolerans oranları",
-                  "EPDK taslak metni ve basın; kurul kararının resmi metni görülmedi",
-                  <span key="s5" className={STATUS_STYLE.check}>teyit edilmeli</span>,
+                  "KÜPST 2025: tolerans %17 / %10 / %5, katsayı 0,03",
+                  "EPDK 21.11.2024 tarihli, 13025 sayılı kurul kararı (RG 17.12.2024), yürürlük 01.01.2025",
+                  <span key="s4" className={STATUS_STYLE.verified}>doğrulandı (karar metni)</span>,
+                ],
+                [
+                  "KÜPST 2026: tolerans %15 / %8 / %5, iletimden bağlı lisanssız %20; katsayı 0,05",
+                  <span key="5">
+                    EPDK, &quot;KÜPSM değerinin ve KÜPSM ile KÜPST hesaplamalarında kullanılacak katsayıların belirlenmesi hakkında kurul kararı
+                    taslağı&quot; (13025 sayılı kararı kaldırır, yürürlük 01.01.2026),{" "}
+                    <a className="text-indigo-700 underline" href="https://www.epdk.gov.tr/Detay/Icerik/4-16180/elektrik-piyasasina-iliskin-cesitli-mevzuatlarda-" target="_blank" rel="noreferrer">
+                      epdk.gov.tr
+                    </a>
+                  </span>,
+                  <span key="s5" className={STATUS_STYLE.source}>taslak metni doğrulandı; nihai karar sayısı görülmedi</span>,
                 ],
                 [
                   "YEKDEM portföy uzlaştırması",
@@ -538,6 +551,11 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.2",
+                  "29 Eylül 2026",
+                  "KÜPST 2026 fiyat katsayısı 0,03'ten 0,05'e çıkarıldı (EPDK 2026 taslağı; tolerans oranları zaten bu taslaktan alınıyordu). 2026 KÜPST tutarları yaklaşık %67 arttı. 2025 değerleri 13025 sayılı karar metniyle doğrulandı.",
+                ],
                 [
                   "1.1",
                   "29 Eylül 2026",

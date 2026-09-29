@@ -179,6 +179,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 ## 4. İlerleme kaydı
 | Tarih | Adım | Commit | Not |
 |---|---|---|---|
+| 29.09.2026 | Mevzuat doğrulaması (k/l, KÜPST) | `96dd059`, (bu commit) | k/l: DUY md. 110'da k negatif, l pozitif; EPDK 2026 tablosu uygulamayla aynı, testle sabitlendi. KÜPST: 2025 oranları 13025 karar metniyle doğrulandı. EPDK 2026 taslağında katsayı 0,05, uygulamada 0,03'tü; düzeltildi. Gain 2026 KÜPST 2,9 → 4,8 M, sapma yükü 13,4 → 15,4 M; sektör 2026 KÜPST medyanları yeniden hesaplandı (rüzgâr 14 → 24 TL/MWh). |
 | 29.09.2026 | Aşama 6 (6.1–6.3) | `368b19b`, `6403675`, (bu commit) | Ana sayfa gerçek veriyle, proje kartlarında göstergeler, tr-TR biçim ve jargon temizliği. 300 test. |
 | 29.09.2026 | 4.3 Hidro karnesi | — (veri) | 2025: 529 HES (medyan 57), 2026: 598 HES (medyan 79). Gece VPN DE'ye geçince toplama durdu; VPN GB ile tamamlandı. Gain hidroları: ağırlıklı 60 TL/MWh (sektör medyanı 79). Aşama 4 tamamen kapandı. |
 | 28.09.2026 | 5.2 Metodoloji sayfası | (bu commit) | `/methodology` + PDF (8 sayfa A4) + sayfalardan "Yöntem" bağlantıları. Kaynakçada teyit bekleyen 2 satır. |

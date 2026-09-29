@@ -127,11 +127,12 @@ describe("Santral raporu verisi", () => {
     expect(e.exitingPlants).toEqual(["Çıkan"]);
     // KÜPST (RES %17, plan 10 → tolerans 1,7 MWh): D sapma 2 → 0,3; Çıkan 3 → 1,3; Kalan 4 → 2,3; fiyat max(2000,1800) × 0,03
     const k = (excess: number) => excess * 2000 * 0.03;
+    const k26 = (excess: number) => excess * 2000 * 0.05; // 2026 fiyat katsayısı (EPDK 2026 taslağı)
     expect(e.kupstDirectTl).toBeCloseTo(k(0.3), 6);
     expect(e.kupstYekdemTl).toBeCloseTo(k(1.3) + k(2.3), 6);
-    // 2026 projeksiyonu 2026 oranlarıyla (RES %15 → tolerans 1,5 MWh): D 0,5; Çıkan 1,5; Kalan 2,5
-    expect(e.kupstExposure2026Tl).toBeCloseTo(k(0.5) + k(1.5), 6);
-    expect(r.kupst.next2026Tl).toBeCloseTo(k(0.5) + k(1.5) + k(2.5), 6);
+    // 2026 projeksiyonu 2026 oranlarıyla (RES %15 → tolerans 1,5 MWh, katsayı 0,05): D 0,5; Çıkan 1,5; Kalan 2,5
+    expect(e.kupstExposure2026Tl).toBeCloseTo(k26(0.5) + k26(1.5), 6);
+    expect(r.kupst.next2026Tl).toBeCloseTo(k26(0.5) + k26(1.5) + k26(2.5), 6);
     expect(r.kupst.totalTl).toBeCloseTo(k(0.3) + k(1.3) + k(2.3), 6);
     expect(e.stayingPlants).toEqual(["Kalan"]);
     expect(r.coverage).toEqual([{ company: "Şirket 1", inProject: 3, total: 4, missing: ["Eksik RES"] }]);
@@ -143,8 +144,8 @@ describe("Santral raporu verisi", () => {
     const r = buildPlantReport(project([{ name: "A", type: "RES", hourly }]), {}, { intraday: false });
     const rp = r.riskPremium!;
     const per26 = 2000 - 1800 * 0.94; // MWh başına 2026 dengesizlik bedeli
-    // KÜPST (2026, RES %15 → tolerans 1,5): sapma 1..6 → aşan 0, 0,5, 1,5, 2,5, 3,5, 4,5 × 2000 × 0,03
-    const kupst = [0, 0.5, 1.5, 2.5, 3.5, 4.5].map((x) => x * 2000 * 0.03);
+    // KÜPST (2026, RES %15 → tolerans 1,5; katsayı 0,05): sapma 1..6 → aşan 0, 0,5, 1,5, 2,5, 3,5, 4,5 × 2000 × 0,05
+    const kupst = [0, 0.5, 1.5, 2.5, 3.5, 4.5].map((x) => x * 2000 * 0.05);
     const months = [0, 1, 2, 3, 4, 5].map((m) => ((1 + m) * per26 + kupst[m]) / (11 + m));
     expect(rp.portfolio.months.map((m) => m.tlPerMwh)).toEqual(months.map((v) => expect.closeTo(v, 6)));
     const totalMwh = [11, 12, 13, 14, 15, 16].reduce((a, b) => a + b, 0);
