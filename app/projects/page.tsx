@@ -46,6 +46,56 @@ import { EpiasPlantPicker } from "@/components/epias-plant-picker";
 import { ReportDownloadDialog } from "@/components/report-download-dialog";
 import type { EpiasPowerPlant } from "@/lib/epias-plant/plant-data";
 import { ImbalancePricingProfile } from "@/lib/calculations/types";
+import type { ProjectKpis } from "@/lib/services/project-kpis";
+
+const nfTr = (v: number, d = 0) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
+const tlShort = (v: number) => (Math.abs(v) >= 1e6 ? `${nfTr(v / 1e6, 1)} M ₺` : `${nfTr(v / 1e3, 0)} bin ₺`);
+const MONTHS_SHORT = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
+const TECH_TR: Record<string, string> = { RES: "Rüzgâr", GES: "Güneş", HES: "Hidro" };
+const MAX_PLANT_CHIPS = 8;
+
+/**
+ * Kartın gösterge bloğu: bir trader'ın ilk bakacağı dört bilgi (Dengesizlik Karnesi ile aynı motordan, /api/compare).
+ * undefined: yükleniyor; null: projede fiyat eşleşmiş saatlik veri yok.
+ */
+function ProjectKpiBlock({ k }: { k: ProjectKpis | null | undefined }) {
+  if (k === undefined) return <div className="h-[92px] animate-pulse rounded-lg bg-slate-100" />;
+  if (k === null)
+    return <p className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-500">Henüz fiyat eşleşmiş üretim verisi yok.</p>;
+  const cell = (label: string, value: React.ReactNode, sub?: React.ReactNode) => (
+    <div>
+      <p className="text-[11px] text-slate-500">{label}</p>
+      <p className="text-sm font-semibold tabular-nums text-slate-900">{value}</p>
+      {sub && <p className="text-[11px] text-slate-500">{sub}</p>}
+    </div>
+  );
+  const unit = k.companies.length === 1 ? k.companies[0] : `${k.companies.length} şirket, şirket bazında`;
+  return (
+    <div className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-lg border border-slate-200 bg-white p-3">
+      {cell("Sapma yükü (dönem)", tlShort(k.load.a2025), k.load.a2026 !== null ? <span className="text-rose-700">2026 kurallarıyla {tlShort(k.load.a2026)}</span> : "ana senaryo")}
+      {cell("MWh başına", `${nfTr(k.unitLoadTl)} TL`, "tüm santraller piyasada")}
+      {cell(
+        "Sektördeki yer",
+        k.sector.length ? (
+          k.sector.map((x) => (
+            <span key={x.type} className={`block ${x.rankPct <= 50 ? "text-emerald-700" : "text-rose-700"}`}>
+              {TECH_TR[x.type] ?? x.type}: {x.rankPct <= 50 ? `en iyi %${nfTr(Math.max(1, x.rankPct))}` : `en kötü %${nfTr(Math.max(1, 100 - x.rankPct))}`}
+            </span>
+          ))
+        ) : (
+          <span className="font-normal text-slate-400">karne yok</span>
+        )
+      )}
+      {cell(
+        "Veri",
+        k.dataGaps.length === 0 ? <span className="text-emerald-700">Tam</span> : <span className="text-amber-700">{k.dataGaps.length} eksik ay</span>,
+        <span className="line-clamp-1" title={unit}>
+          Uzlaştırma: {unit}
+        </span>
+      )}
+    </div>
+  );
+}
 
 interface PlantSummary {
   id: string;
@@ -106,6 +156,7 @@ export default function ProjectsPage() {
   const [plantSource, setPlantSource] = useState<"epias" | "manual">("epias");
   const [epiasPlants, setEpiasPlants] = useState<EpiasPowerPlant[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
+  const [kpis, setKpis] = useState<Record<string, ProjectKpis | null>>({});
   const router = useRouter();
 
   const fetchProjects = useCallback(async () => {
@@ -127,6 +178,31 @@ export default function ProjectsPage() {
   useEffect(() => {
     fetchProjects();
   }, [fetchProjects]);
+
+  // Kart göstergeleri: raporla aynı motordan, 8'erli gruplar hâlinde (her proje tüm saatlik veriyi okur)
+  useEffect(() => {
+    if (!projects.length) return;
+    let cancelled = false;
+    (async () => {
+      const ids = projects.map((p) => p.id);
+      for (let i = 0; i < ids.length; i += 8) {
+        const chunk = ids.slice(i, i + 8);
+        try {
+          const d = await fetch(`/api/compare?ids=${chunk.join(",")}`).then((r) => r.json());
+          if (cancelled) return;
+          const next: Record<string, ProjectKpis | null> = {};
+          for (const id of chunk) next[id] = null;
+          for (const row of (d.rows ?? []) as ProjectKpis[]) next[row.id] = row;
+          setKpis((prev) => ({ ...prev, ...next }));
+        } catch {
+          // gösterge alınamazsa kart göstergesiz kalır
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projects]);
 
   const setPlantCount = (count: number) => {
     const n = Math.min(MAX_PLANTS, Math.max(1, Math.floor(count) || 1));
@@ -208,7 +284,8 @@ export default function ProjectsPage() {
   const totalProjects = projects.length;
   const totalPlants = projects.reduce((sum, p) => sum + p.plantCount, 0);
   const totalCapacity = projects.reduce((sum, p) => sum + p.totalCapacityMw, 0);
-  const totalRecords = projects.reduce((sum, p) => sum + p.totalRecords, 0);
+  const kpiList = Object.values(kpis).filter((k): k is ProjectKpis => !!k);
+  const completeCount = kpiList.filter((k) => k.dataGaps.length === 0).length;
 
   return (
     <div className="min-h-screen bg-slate-50/60 pb-16">
@@ -463,7 +540,7 @@ export default function ProjectsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-slate-900">{totalProjects}</div>
-              <p className="mt-1 text-xs text-slate-500">Kayıtlı analiz oturumu</p>
+              <p className="mt-1 text-xs text-slate-500">Kayıtlı proje</p>
             </CardContent>
           </Card>
 
@@ -475,7 +552,7 @@ export default function ProjectsPage() {
               <Zap className="h-4 w-4 text-indigo-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-slate-900">{totalPlants} Adet</div>
+              <div className="text-2xl font-bold text-slate-900">{totalPlants} santral</div>
               <p className="mt-1 text-xs text-slate-500">RES, GES ve HES portföyü</p>
             </CardContent>
           </Card>
@@ -489,24 +566,24 @@ export default function ProjectsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-slate-900">
-                {totalCapacity.toFixed(1)} MW
+                {nfTr(totalCapacity)} MW
               </div>
-              <p className="mt-1 text-xs text-slate-500">Aktif kurulu üretim kapasitesi</p>
+              <p className="mt-1 text-xs text-slate-500">Projelerdeki kurulu güç</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-xs font-medium text-slate-500">
-                Saatlik Veri Noktası
+                Veri bütünlüğü
               </CardTitle>
               <Database className="h-4 w-4 text-emerald-600" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-slate-900">
-                {totalRecords.toLocaleString("tr-TR")}
+                {kpiList.length ? `${completeCount} / ${kpiList.length}` : "—"}
               </div>
-              <p className="mt-1 text-xs text-slate-500">İşlenen saatlik uzlaştırma kaydı</p>
+              <p className="mt-1 text-xs text-slate-500">Hiç eksik ayı olmayan proje</p>
             </CardContent>
           </Card>
         </div>
@@ -558,10 +635,15 @@ export default function ProjectsPage() {
                         <Calendar className="h-3 w-3" />
                         {formattedDate}
                       </span>
-                      <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-[10px] text-slate-600">
-                        {project.totalRecords > 0
-                          ? `${project.totalRecords} Kayıt`
-                          : "Yeni Proje"}
+                      <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
+                        {kpis[project.id]?.period
+                          ? (() => {
+                              const pr = kpis[project.id]!.period!;
+                              return `${MONTHS_SHORT[Number(pr.start.slice(5, 7)) - 1]}–${MONTHS_SHORT[Number(pr.end.slice(5, 7)) - 1]} ${pr.end.slice(0, 4)}`;
+                            })()
+                          : project.totalRecords > 0
+                            ? `${nfTr(project.totalRecords)} saatlik kayıt`
+                            : "Veri yok"}
                       </span>
                     </div>
 
@@ -577,25 +659,22 @@ export default function ProjectsPage() {
                   </CardHeader>
 
                   <CardContent className="space-y-4">
-                    {/* Piyasa Profili Bilgisi */}
+                    <ProjectKpiBlock k={project.totalRecords > 0 ? kpis[project.id] : null} />
+
+                    {/* Piyasa profili (fiyatlama kuralı) */}
                     {project.pricingProfile && (
-                      <div className="flex items-center justify-between rounded-md border border-indigo-100 bg-indigo-50/50 px-2.5 py-1 text-[11px] text-slate-700">
-                        <span className="font-medium text-indigo-900 truncate">
-                          {project.pricingProfile.name}
-                        </span>
-                        <span className="font-mono text-[10px] text-slate-500 shrink-0">
-                          +{project.pricingProfile.positiveSurplusCoef}/{project.pricingProfile.positiveOtherCoef} | -{project.pricingProfile.negativeDeficitCoef}/{project.pricingProfile.negativeOtherCoef}
-                        </span>
-                      </div>
+                      <p className="truncate text-[11px] text-slate-500">
+                        Fiyatlama: <span className="text-slate-700">{project.pricingProfile.name}</span>
+                      </p>
                     )}
 
                     {/* Santral Listesi */}
                     <div className="space-y-1.5 rounded-lg border border-slate-100 bg-slate-50/70 p-3">
                       <div className="text-[11px] font-semibold text-slate-500">
-                        Santraller ({project.plantCount}) • Toplam {project.totalCapacityMw} MW
+                        Santraller ({project.plantCount}) · toplam {nfTr(project.totalCapacityMw)} MW
                       </div>
                       <div className="flex flex-wrap gap-1.5 pt-1">
-                        {project.plants.map((pl) => (
+                        {project.plants.slice(0, MAX_PLANT_CHIPS).map((pl) => (
                           <span
                             key={pl.id}
                             className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
@@ -609,9 +688,14 @@ export default function ProjectsPage() {
                             {pl.type === "RES" && <Wind className="h-2.5 w-2.5" />}
                             {pl.type === "GES" && <Sun className="h-2.5 w-2.5" />}
                             {pl.type === "HES" && <Zap className="h-2.5 w-2.5" />}
-                            {pl.name} ({pl.capacityMw} MW)
+                            {pl.name} ({nfTr(pl.capacityMw)} MW)
                           </span>
                         ))}
+                        {project.plants.length > MAX_PLANT_CHIPS && (
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
+                            +{project.plants.length - MAX_PLANT_CHIPS} santral
+                          </span>
+                        )}
                       </div>
                     </div>
                   </CardContent>
@@ -660,26 +744,27 @@ export default function ProjectsPage() {
                       <ReportDownloadDialog projectId={project.id} label="PPT (.pptx)" compact className="w-full" />
                     </div>
 
-                    <Button
-                      asChild
-                      variant="outline"
-                      size="sm"
-                      className="w-full gap-1.5 border-emerald-600 bg-emerald-50/50 text-emerald-700 hover:bg-emerald-100 text-xs font-semibold"
-                    >
-                      <Link href={`/projects/${project.id}/import`}>
-                        <UploadCloud className="h-3.5 w-3.5 text-emerald-600" />
-                        Üretim Verisi Yükle (.xlsx / .csv)
-                      </Link>
-                    </Button>
-
-                    <Button
-                      asChild
-                      variant="ghost"
-                      size="sm"
-                      className="w-full text-xs text-slate-600 hover:text-slate-900 border border-slate-200"
-                    >
-                      <Link href={`/projects/${project.id}/plants`}>Santralleri Düzenle</Link>
-                    </Button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        asChild
+                        variant="ghost"
+                        size="sm"
+                        className="w-full gap-1 border border-slate-200 text-xs text-slate-600 hover:text-slate-900"
+                      >
+                        <Link href={`/projects/${project.id}/import`}>
+                          <UploadCloud className="h-3.5 w-3.5" />
+                          Veri yükle
+                        </Link>
+                      </Button>
+                      <Button
+                        asChild
+                        variant="ghost"
+                        size="sm"
+                        className="w-full border border-slate-200 text-xs text-slate-600 hover:text-slate-900"
+                      >
+                        <Link href={`/projects/${project.id}/plants`}>Santraller</Link>
+                      </Button>
+                    </div>
 
                     <PricingProfileDialog
                       projectId={project.id}
@@ -691,7 +776,7 @@ export default function ProjectsPage() {
                           size="sm"
                           className="w-full text-xs text-slate-600 hover:text-slate-900 border border-slate-200"
                         >
-                          Piyasa Profili Ayarları
+                          Fiyatlama ayarları
                         </Button>
                       }
                     />
