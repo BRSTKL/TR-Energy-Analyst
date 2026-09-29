@@ -54,6 +54,7 @@ import { EpiasSyncDialog } from "@/components/epias-sync-dialog";
 import { DataQualityBanner } from "@/components/data-quality-banner";
 import { MarketDataUploadDialog } from "@/components/market-data-upload-dialog";
 
+import { nf } from "@/lib/format";
 interface PlantInsight {
   plantId: string;
   plantName: string;
@@ -547,13 +548,13 @@ export default function ProjectInsightsPage() {
                           </span>
                         </TableCell>
                         <TableCell className="text-right font-mono">
-                          {hour.forecastMwh.toFixed(1)}
+                          {nf(hour.forecastMwh, 1)}
                         </TableCell>
                         <TableCell className="text-right font-mono">
-                          {hour.actualMwh.toFixed(1)}
+                          {nf(hour.actualMwh, 1)}
                         </TableCell>
                         <TableCell className="text-right font-mono font-medium text-amber-700">
-                          %{(hour.errorRate * 100).toFixed(1)}
+                          %{nf(hour.errorRate * 100, 1)}
                         </TableCell>
                         <TableCell className="text-right font-mono font-bold text-rose-600">
                           -
@@ -756,7 +757,7 @@ export default function ProjectInsightsPage() {
                     <div className="rounded-md border bg-white p-2">
                       <span className="text-2xs block text-slate-500">Kayıp Oranı</span>
                       <strong className="font-mono text-xs text-amber-700">
-                        %{comp.imbalanceCostRatio.toFixed(1)}
+                        %{nf(comp.imbalanceCostRatio, 1)}
                       </strong>
                     </div>
                   </div>

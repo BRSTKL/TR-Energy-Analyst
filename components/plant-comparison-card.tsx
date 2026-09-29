@@ -107,7 +107,7 @@ export function PlantComparisonCard({ comparison, yekdemPlants = [] }: { compari
                 <TableHead className="text-right">Capture Rate</TableHead>
                 <TableHead className="text-right">Birim Gelir (₺/MWh)</TableHead>
                 <TableHead className="text-right">Birim Deng. Maliyeti (₺/MWh)</TableHead>
-                <TableHead className="text-right">Maliyet / Fiktif Gelir</TableHead>
+                <TableHead className="text-right">Maliyet / tam tahmin geliri</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

@@ -161,10 +161,10 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 - **Teslim:** Başvuruya eklenecek paket.
 - **Kabul:** Paketi okuyan biri uygulamayı açmadan değerini anlayabiliyor.
 
-### Aşama 6: Görünüm
-- [ ] **6.1 Ana sayfa.** Örnek tablo yerine gerçek portföy özeti ve piyasa özeti (A1).
-- [ ] **6.2 Proje kartları.** Sapma yükü, TL/MWh, sektör sırası ve veri bütünlüğü kartta görünür (P1).
-- [ ] **6.3 Biçim ve dil.** tr-TR sayı biçimi, M ₺ grafik eksenleri, iç jargonun kaldırılması (A2–A4, L5, R7).
+### Aşama 6: Görünüm ✅ (29.09.2026)
+- [x] **6.1 Ana sayfa.** ✅ 29.09.2026 · `368b19b`. Gerçek veriden: piyasa (makas, PTF, sıfır fiyatlı saat, sistem yönü; bir önceki yılın aynı dönemiyle), projeler (sapma yükü, MWh başına, sektördeki yer, veri, PPT), sektör medyanları (rüzgâr, güneş, hidro) ve veri durumu. Kaldırılanlar: "Örnek" kartlar ve tablo, kaydetmeyen "Yeni Santral Ekle" penceresi, "SQLite Dev DB" rozeti, jenerik strateji ve mimari sekmeleri.
+- [x] **6.2 Proje kartları.** ✅ 29.09.2026 · `6403675`. Kartta gösterge bloğu (sapma yükü, MWh başına, sektördeki yer, veri ve uzlaştırma birimi); kayıt sayısı yerine dönem; santral listesi 8 ile sınırlı; ikincil düğmeler sadeleşti. Üst özet: "Saatlik veri noktası" yerine "Veri bütünlüğü (eksik ayı olmayan proje)".
+- [x] **6.3 Biçim ve dil.** ✅ 29.09.2026. Ortak biçimlendirici `lib/format.ts` (testli): tr-TR sayılar, kısa TL (499,0 M ₺; tam tutar üzerine gelince), eksenler "35 M ₺". Sonuç, planlama ve içgörü sayfalarındaki nokta ondalıklar ve "k ₺" eksenleri düzeltildi. Jargon: "Faz 7 Motoru / Simülasyon Çıktısı" kaldırıldı; "fiktif gelir" → "tam tahmin geliri" (sayfa, karşılaştırma kartı, Excel başlığı). "Net uzlaştırma alacağı" ana sayfayla birlikte kalktı.
 
 ---
 
@@ -179,6 +179,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 ## 4. İlerleme kaydı
 | Tarih | Adım | Commit | Not |
 |---|---|---|---|
+| 29.09.2026 | Aşama 6 (6.1–6.3) | `368b19b`, `6403675`, (bu commit) | Ana sayfa gerçek veriyle, proje kartlarında göstergeler, tr-TR biçim ve jargon temizliği. 300 test. |
 | 29.09.2026 | 4.3 Hidro karnesi | — (veri) | 2025: 529 HES (medyan 57), 2026: 598 HES (medyan 79). Gece VPN DE'ye geçince toplama durdu; VPN GB ile tamamlandı. Gain hidroları: ağırlıklı 60 TL/MWh (sektör medyanı 79). Aşama 4 tamamen kapandı. |
 | 28.09.2026 | 5.2 Metodoloji sayfası | (bu commit) | `/methodology` + PDF (8 sayfa A4) + sayfalardan "Yöntem" bağlantıları. Kaynakçada teyit bekleyen 2 satır. |
 | 28.09.2026 | 5.1a Rapor düzeltmeleri, 5.5 kararı | (bu commit) | Rapor: ana senaryo tutarlılığı (%20; YEKDEM dahil %36), dönem ifadeleri, önemliliğe göre karne başlığı, köprü açıklaması, "Büyüme fırsatı" slaytı. Aday taraması portföy kapsamı (varsayılan ana senaryo). 5.1 kullanıcıda; 5.3 ve 5.4 sonraya; 5.5 = B. |

@@ -84,6 +84,7 @@ import { GipScenarioPanel } from "@/components/gip-scenario-panel";
 import { DataQualityBanner } from "@/components/data-quality-banner";
 import { MarketDataUploadDialog } from "@/components/market-data-upload-dialog";
 
+import { nf, tlAxis } from "@/lib/format";
 const MONTH_NAMES_TR = [
   "Ocak",
   "Şubat",
@@ -465,7 +466,7 @@ export default function PlanningEfficiencyPage() {
             Planlama Verimliliği & Simülasyon Hesaplanıyor...
           </h2>
           <p className="max-w-sm text-sm text-slate-500">
-            Saatlik fiili ve fiktif gelirler kıyaslanıyor, sistematik yanlılıklar ve gün-saat
+            Saatlik gerçekleşen gelir ile tam tahmin geliri kıyaslanıyor, sistematik yanlılıklar ve gün-saat
             ısı haritası çıkarılıyor.
           </p>
         </div>
@@ -530,12 +531,9 @@ export default function PlanningEfficiencyPage() {
               <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
                 Planlama Verimliliği & Simülasyon
               </h1>
-              <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-700">
-                Faz 7 Motoru
-              </span>
             </div>
             <p className="mt-1 text-xs text-slate-600 sm:text-sm">
-              {data.project.name} • Fiili vs Fiktif gelir oranı, tahmin yanlılığı tespiti ve
+              {data.project.name} · gerçekleşen gelirin tam tahmin gelirine oranı, tahmin yanlılığı tespiti ve
               &quot;Ne Olurdu?&quot; gelir artışı simülasyonu.
             </p>
           </div>
@@ -701,7 +699,7 @@ export default function PlanningEfficiencyPage() {
             <CardContent>
               <div className="flex items-baseline gap-2">
                 <div className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                  %{currentView.summary.efficiencyPercent.toFixed(1)}
+                  %{nf(currentView.summary.efficiencyPercent, 1)}
                 </div>
                 <span
                   className={`rounded-full px-2 py-0.5 text-2xs font-semibold ${
@@ -720,7 +718,7 @@ export default function PlanningEfficiencyPage() {
                 </span>
               </div>
               <p className="mt-1 text-xs text-slate-500">
-                Fiili Gelir / Fiktif (Mükemmel) Gelir oranı (1.0 = sıfır dengesizlik maliyeti).
+                Gerçekleşen gelir / tam tahmin geliri (plan kusursuz olsaydı elde edilecek gelir). %100 = sıfır dengesizlik maliyeti.
               </p>
               <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-xs text-slate-600">
                 <span>Fiili Gelir:</span>
@@ -750,7 +748,7 @@ export default function PlanningEfficiencyPage() {
                 Tahmin sapmaları ve cezalı katsayılar nedeniyle kaybedilen potansiyel tutar.
               </p>
               <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-xs text-slate-600">
-                <span>Fiktif Tavan Gelir:</span>
+                <span>Tam tahmin geliri:</span>
                 <span className="font-mono font-medium text-emerald-700">
                   {currentView.summary.fictiveRevenue.toLocaleString("tr-TR")} ₺
                 </span>
@@ -890,7 +888,7 @@ export default function PlanningEfficiencyPage() {
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="rounded-md bg-indigo-500/20 px-2 py-0.5 text-xs font-semibold text-indigo-200 border border-indigo-400/30">
-                      Faz 7 Simülasyon Çıktısı
+                      Simülasyon
                     </span>
                     <h2 className="text-xl font-bold tracking-tight text-white">
                       &quot;Ne Olurdu?&quot; Tahmin Kalibrasyon Senaryosu
@@ -1003,11 +1001,12 @@ export default function PlanningEfficiencyPage() {
                       tickLine={false}
                     />
                     <YAxis
+                      width={72}
                       stroke="#64748b"
                       fontSize={11}
                       tickLine={false}
                       axisLine={false}
-                      tickFormatter={(val) => `${(val / 1000000).toFixed(1)}M ₺`}
+                      tickFormatter={(val) => tlAxis(Number(val))}
                     />
                     <Tooltip
                       formatter={(val: any) => [
@@ -1053,12 +1052,12 @@ export default function PlanningEfficiencyPage() {
                     Aylık Verimlilik Trendi (%)
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    Ay bazında fiili gelir / fiktif gelir oranı seyri
+                    Ay bazında gerçekleşen gelir / tam tahmin geliri oranı
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-sky-600 font-semibold bg-sky-50 px-2.5 py-1 rounded-md">
                   <TrendingUp className="h-3.5 w-3.5" />
-                  Ortalama: %{currentView.summary.efficiencyPercent.toFixed(1)}
+                  Ortalama: %{nf(currentView.summary.efficiencyPercent, 1)}
                 </div>
               </div>
             </CardHeader>
@@ -1089,7 +1088,7 @@ export default function PlanningEfficiencyPage() {
                     />
                     <Tooltip
                       formatter={(val: any, name: any) => {
-                        if (name === "verimlilik") return [`%${Number(val || 0).toFixed(2)}`, "Verimlilik Oranı"];
+                        if (name === "verimlilik") return [`%${nf(Number(val || 0), 1)}`, "Verimlilik oranı"];
                         return [`${Number(val || 0).toLocaleString("tr-TR")} ₺`, name];
                       }}
                       labelFormatter={(label, payload) => {
@@ -1193,9 +1192,7 @@ export default function PlanningEfficiencyPage() {
                                 cell.efficiencyRatio,
                                 cell.count
                               )}`}
-                              title={`${cell.dayName} ${cell.hourStr} — Verimlilik: %${(
-                                cell.efficiencyRatio * 100
-                              ).toFixed(1)}`}
+                              title={`${cell.dayName} ${cell.hourStr} — Verimlilik: %${nf(cell.efficiencyRatio * 100, 1)}`}
                             />
                           ))}
                         </div>
@@ -1215,7 +1212,7 @@ export default function PlanningEfficiencyPage() {
                           <span>
                             Verimlilik:{" "}
                             <strong className="text-slate-900">
-                              %{(hoveredCell.efficiencyRatio * 100).toFixed(1)}
+                              %{nf(hoveredCell.efficiencyRatio * 100, 1)}
                             </strong>
                           </span>
                           <span>•</span>
@@ -1338,7 +1335,7 @@ export default function PlanningEfficiencyPage() {
                               : "bg-rose-50 text-rose-700"
                           }`}
                         >
-                          %{(day.efficiencyRatio * 100).toFixed(1)}
+                          %{nf(day.efficiencyRatio * 100, 1)}
                         </span>
                       </TableCell>
                       <TableCell className="text-right font-mono text-xs text-slate-700">
@@ -1358,7 +1355,7 @@ export default function PlanningEfficiencyPage() {
                           }
                         >
                           {netDiffMwh > 0 ? "+" : ""}
-                          {netDiffMwh.toFixed(1)} MWh
+                          {nf(netDiffMwh, 1)} MWh
                         </span>
                       </TableCell>
                       <TableCell className="text-center text-xs">
@@ -1541,10 +1538,11 @@ export default function PlanningEfficiencyPage() {
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                             <XAxis dataKey="ay" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={{ stroke: "#cbd5e1" }} />
                             <YAxis
+                      width={72}
                               tick={{ fontSize: 11, fill: "#64748b" }}
                               axisLine={false}
                               tickLine={false}
-                              tickFormatter={(v) => `${(v / 1000).toFixed(0)}k ₺`}
+                              tickFormatter={(v) => tlAxis(Number(v))}
                             />
                             <Tooltip
                               formatter={(value: any, name?: any) => [
@@ -1624,7 +1622,7 @@ export default function PlanningEfficiencyPage() {
                               tick={{ fontSize: 11, fill: "#64748b" }}
                               axisLine={false}
                               tickLine={false}
-                              tickFormatter={(v) => `${v.toFixed(0)} ₺`}
+                              tickFormatter={(v) => `${nf(Number(v))} ₺`}
                             />
                             <Tooltip
                               formatter={(value: any, name?: any) => [
@@ -1804,7 +1802,7 @@ export default function PlanningEfficiencyPage() {
                         Kayıp: {selectedDayDetail.lossTl.toLocaleString("tr-TR")} ₺
                       </div>
                       <div className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-                        Verim: %{(selectedDayDetail.efficiencyRatio * 100).toFixed(1)}
+                        Verim: %{nf(selectedDayDetail.efficiencyRatio * 100, 1)}
                       </div>
                     </div>
                   </div>
@@ -1846,9 +1844,9 @@ export default function PlanningEfficiencyPage() {
                         }}
                         formatter={(val: any, name: any) => {
                           if (name === "Gerçekleşen MWh" || name === "Tahmin MWh") {
-                            return [`${Number(val || 0).toFixed(2)} MWh`, name];
+                            return [`${nf(Number(val || 0), 1)} MWh`, name];
                           }
-                          return [`${Number(val || 0).toFixed(2)} ₺/MWh`, name];
+                          return [`${nf(Number(val || 0), 1)} ₺/MWh`, name];
                         }}
                       />
                       <Legend verticalAlign="top" height={36} />

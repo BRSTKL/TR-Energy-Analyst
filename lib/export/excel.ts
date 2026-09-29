@@ -144,7 +144,7 @@ export async function exportToExcel(
     { header: "GÖP Satış Tutarı [₺]", key: "dayAheadSales", width: 22 }, // O (15)
     { header: "Toplam Gelir [₺]", key: "totalRevenue", width: 20 }, // P (16)
     { header: "Birim Gelir [₺/MWh]", key: "unitRevenue", width: 20 }, // Q (17)
-    { header: "Fiktif Gelir [₺]", key: "fictiveRevenue", width: 20 }, // R (18)
+    { header: "Tam Tahmin Geliri [₺]", key: "fictiveRevenue", width: 20 }, // R (18)
     { header: "Dengesizlik Maliyeti [₺]", key: "imbalanceCost", width: 24 }, // S (19)
     { header: "Birim Maliyet [₺/MWh]", key: "unitImbalanceCost", width: 22 }, // T (20)
   ];

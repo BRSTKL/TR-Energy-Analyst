@@ -74,6 +74,7 @@ import { SapmaYukuCard, type SapmaSummary } from "@/components/sapma-yuku-card";
 import type { NettingResult } from "@/lib/analysis/portfolio-netting";
 
 import { MethodLink } from "@/components/method-link";
+import { energy, nf, tlAxis, tlCompact } from "@/lib/format";
 interface PlantResult {
   plantId: string;
   plantName: string;
@@ -687,11 +688,7 @@ export default function ProjectResultsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-slate-900">
-                  {currentKPI.totalActualMwh.toLocaleString("tr-TR", {
-                    minimumFractionDigits: 1,
-                    maximumFractionDigits: 2,
-                  })}{" "}
-                  <span className="text-sm font-normal text-slate-500">MWh</span>
+                  <span title={`${nf(currentKPI.totalActualMwh, 1)} MWh`}>{energy(currentKPI.totalActualMwh)}</span>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
                   {currentKPI.name} gerçekleşen üretim hacmi
@@ -708,16 +705,11 @@ export default function ProjectResultsPage() {
                 <ArrowDownRight className="h-4 w-4 text-emerald-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-slate-900">
-                  {currentKPI.totalRevenue.toLocaleString("tr-TR", { maximumFractionDigits: 0 })}{" "}
-                  <span className="text-sm font-normal text-slate-500">₺</span>
+                <div className="text-2xl font-bold text-slate-900" title={`${nf(currentKPI.totalRevenue)} ₺`}>
+                  {tlCompact(currentKPI.totalRevenue)}
                 </div>
                 <p className="mt-1 flex items-center gap-1 text-xs font-medium text-emerald-600">
-                  Birim Gelir:{" "}
-                  {currentKPI.unitRevenue.toLocaleString("tr-TR", {
-                    maximumFractionDigits: 2,
-                  })}{" "}
-                  ₺/MWh
+                  Birim gelir: {nf(currentKPI.unitRevenue, 1)} ₺/MWh
                 </p>
                 {(data.sapma?.yekdem?.plantNames.length ?? 0) > 0 && (
                   <p className="mt-1 text-2xs text-slate-500">
@@ -736,19 +728,13 @@ export default function ProjectResultsPage() {
                 <Flame className="h-4 w-4 text-rose-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-rose-600">
-                  {currentKPI.totalImbalanceCost.toLocaleString("tr-TR", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}{" "}
-                  <span className="text-sm font-normal text-slate-500">₺</span>
+                <div className="text-2xl font-bold text-rose-600" title={`${nf(currentKPI.totalImbalanceCost)} ₺`}>
+                  {tlCompact(currentKPI.totalImbalanceCost)}
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
                   {selectedPlantId === "all"
                     ? data?.sapma && data.sapma.settlement.sameCompanyNettingTl > 0
-                      ? `Şirket bazında uzlaştırma (santral bazında ${Math.round(
-                          data.sapma.settlement.plantLevelCostTl
-                        ).toLocaleString("tr-TR")} ₺)`
+                      ? `Şirket bazında uzlaştırma (santral bazında ${tlCompact(data.sapma.settlement.plantLevelCostTl)})`
                       : "Şirket bazında uzlaştırma"
                     : "Santral tek başına uzlaştırılsaydı"}
                 </p>
@@ -765,11 +751,7 @@ export default function ProjectResultsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-slate-900">
-                  {currentKPI.unitImbalanceCost.toLocaleString("tr-TR", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}{" "}
-                  <span className="text-sm font-normal text-slate-500">₺/MWh</span>
+                  {nf(currentKPI.unitImbalanceCost, 1)} <span className="text-sm font-normal text-slate-500">₺/MWh</span>
                 </div>
                 <p className="mt-1 text-xs font-medium text-amber-700">
                   Üretim ağırlıklı ortalama (∑Maliyet / ∑MWh)
@@ -809,9 +791,10 @@ export default function ProjectResultsPage() {
                     />
                     <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#64748b" />
                     <YAxis
+                      width={72}
                       tick={{ fontSize: 11 }}
                       stroke="#64748b"
-                      tickFormatter={(val) => `${(val / 1000).toFixed(0)}k ₺`}
+                      tickFormatter={(val) => tlAxis(Number(val))}
                     />
                     <Tooltip
                       formatter={(val: any) =>
@@ -864,7 +847,7 @@ export default function ProjectResultsPage() {
                     <YAxis
                       tick={{ fontSize: 11 }}
                       stroke="#64748b"
-                      tickFormatter={(val) => `${val.toFixed(0)} ₺`}
+                      tickFormatter={(val) => `${nf(Number(val))} ₺`}
                     />
                     <Tooltip
                       formatter={(val: any) =>
