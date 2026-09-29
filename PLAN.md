@@ -176,6 +176,9 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 
 ---
 
+## Bekleyen işler
+- [ ] **KÜPST için son KGÜP (mevzuat denetimi 3/3).** 13025 sayılı karar KÜPST'ü gün içi piyasası kapandıktan sonra güncellenen (son) KGÜP'e göre hesaplatıyor; uygulama ilk KGÜP'ü kullanıyor (KÜPST olduğundan yüksek görünebilir). Kullanıcı kararıyla sonraya bırakıldı (29.09.2026). Önerilen: yalnız Gain projelerinin 12 santrali için son KGÜP'ü çekmek (birkaç dakika; ilk − son plan farkı gün içi düzeltmeleri de gösterir). Sektör karnesi isteğe bağlı (~3 saat, VPN).
+
 ## 4. İlerleme kaydı
 | Tarih | Adım | Commit | Not |
 |---|---|---|---|
