@@ -92,3 +92,23 @@ describe("DSG senaryo analizi", () => {
     expect(r.offsettingHourShare).toBeCloseTo(0.5, 6);
   });
 });
+
+describe("32'den fazla üye (toplayıcı portföyü)", () => {
+  // 40 üye: i. üye yalnız i. saatte (i + 1) MWh fazla üretir; tek başına maliyeti (i + 1) × 60 ₺
+  const members = Array.from({ length: 40 }, (_, i) =>
+    plant(`P${i}`, "RES", Array.from({ length: 40 }, (_, h) => hour(h % 24, 10, h === i ? 11 + i : 10, 1 + Math.floor(h / 24))))
+  );
+
+  it("üyeler karışmaz: 32. üye 0. üyeyle aynı sayılmaz", () => {
+    const r = analyzeDsgScenario(members, members.map((m) => m.plantId), DEFAULT_IMBALANCE_PROFILE);
+    // Hiçbir saatte iki üye birlikte sapmıyor: grup maliyeti tek başına toplamına eşit
+    const expected = Array.from({ length: 40 }, (_, i) => (i + 1) * 60).reduce((a, b) => a + b, 0);
+    expect(r.selection!.standaloneCost).toBeCloseTo(expected, 6);
+    expect(r.selection!.nettedCost).toBeCloseTo(expected, 6);
+    const m0 = r.marginal.find((m) => m.plantId === "P0")!;
+    const m32 = r.marginal.find((m) => m.plantId === "P32")!;
+    expect(m0.inGroup && m32.inGroup).toBe(true);
+    expect(m0.benefitChangeTl).toBeCloseTo(0, 6);
+    expect(m32.benefitChangeTl).toBeCloseTo(0, 6);
+  });
+});

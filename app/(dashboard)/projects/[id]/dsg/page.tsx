@@ -38,6 +38,10 @@ const tl = (v: number) => `${v < -0.5 ? "−" : ""}${Math.abs(Math.round(v)).toL
 const pct = (ratio: number, digits = 1) =>
   `${ratio < 0 ? "−" : ""}%${Math.abs(ratio * 100).toLocaleString("tr-TR", { maximumFractionDigits: digits })}`;
 
+/** Uzun ad listeleri (toplayıcı portföyünde onlarca santral): ilk birkaç ad ve kalan sayısı */
+const shortList = (names: string[], max = 5) =>
+  names.length <= max ? names.join(", ") : `${names.slice(0, max).join(", ")} ve ${names.length - max} santral daha`;
+
 export default function DsgScenarioPage() {
   const params = useParams();
   const projectId = params.id as string;
@@ -129,7 +133,7 @@ export default function DsgScenarioPage() {
                 </CardDescription>
                 {data.yekdemPlants.length > 0 && (
                   <p className="mt-2 text-xs text-slate-600">
-                    YEKDEM&apos;deki santraller ({data.yekdemPlants.join(", ")}) de gruba dahildir: YEKDEM katılımcısı üretimini serbest
+                    YEKDEM&apos;deki {data.yekdemPlants.length} santral ({shortList(data.yekdemPlants)}) de gruba dahildir: YEKDEM katılımcısı üretimini serbest
                     piyasada kendisi satar, dengesizliği kendisine aittir (YEK Yönetmeliği md. 15/1, 23/1).
                   </p>
                 )}
@@ -189,7 +193,7 @@ export default function DsgScenarioPage() {
             )}
             {data.unknownOwnerPlants.length > 0 && (
               <p className="text-xs text-slate-500">
-                Sahibi bilinmeyen santraller ayrı üye sayıldı: {data.unknownOwnerPlants.join(", ")}. Aynı şirketin
+                Sahibi bilinmeyen {data.unknownOwnerPlants.length} santral ayrı üye sayıldı: {shortList(data.unknownOwnerPlants)}. Aynı şirketin
                 santralleriyse sonuç sayfasındaki &ldquo;EPİAŞ bilgilerini güncelle&rdquo; ile sahiplerini doldurun.
               </p>
             )}

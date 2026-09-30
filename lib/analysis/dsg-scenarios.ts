@@ -121,7 +121,14 @@ function align(plants: NettingPlantInput[]): Aligned {
   };
 }
 
+/** Seçim içi (en fazla MAX_EXACT_PLANTS üye) yerel maske */
 const bitsOf = (mask: number, n: number) => Array.from({ length: n }, (_, i) => i).filter((i) => mask & (1 << i));
+/**
+ * Tüm üyeler üzerindeki maskeler BigInt'tir: JavaScript'in bit işlemleri 32 bitliktir (1 << 32 === 1). Toplayıcı
+ * portföyünde 55 sahip olunca 32. üye 0. üyeyle çakışıyor, katkılar ikişer ikişer aynı ve toplam şişik çıkıyordu.
+ */
+const bit = (i: number) => 1n << BigInt(i);
+const membersOf = (mask: bigint, n: number) => Array.from({ length: n }, (_, i) => i).filter((i) => (mask & bit(i)) !== 0n);
 
 export function analyzeDsgScenario(
   plantsIn: NettingPlantInput[],
@@ -154,19 +161,19 @@ export function analyzeDsgScenario(
     ).imbalanceCost;
   };
 
-  const cache = new Map<number, number>();
-  const cost = (mask: number) => {
+  const cache = new Map<bigint, number>();
+  const cost = (mask: bigint) => {
     const hit = cache.get(mask);
     if (hit !== undefined) return hit;
-    const members = bitsOf(mask, n);
+    const members = membersOf(mask, n);
     let c = 0;
     for (let k = 0; k < data.samples.length; k++) c += hourCost(members, k);
     cache.set(mask, c);
     return c;
   };
-  const standalone = (i: number) => cost(1 << i);
-  const subsetResult = (mask: number): SubsetResult => {
-    const members = bitsOf(mask, n);
+  const standalone = (i: number) => cost(bit(i));
+  const subsetResult = (mask: bigint): SubsetResult => {
+    const members = membersOf(mask, n);
     const st = members.reduce((s, i) => s + standalone(i), 0);
     const netted = cost(mask);
     return {
@@ -178,10 +185,10 @@ export function analyzeDsgScenario(
       benefitRatio: st > 0 ? (st - netted) / st : 0,
     };
   };
-  const benefit = (mask: number) => (mask === 0 ? 0 : subsetResult(mask).benefitTl);
+  const benefit = (mask: bigint) => (mask === 0n ? 0 : subsetResult(mask).benefitTl);
 
-  const selMask = plants.reduce((m, p, i) => (selectedIds.includes(p.plantId) ? m | (1 << i) : m), 0);
-  const selMembers = bitsOf(selMask, n);
+  const selMask = plants.reduce((m, p, i) => (selectedIds.includes(p.plantId) ? m | bit(i) : m), 0n);
+  const selMembers = membersOf(selMask, n);
   const selection = selMembers.length >= 2 ? subsetResult(selMask) : null;
 
   // Zıt yönlü saat payı ve aylık fayda (yalnızca seçim için)
@@ -223,8 +230,8 @@ export function analyzeDsgScenario(
   // Marjinal değer
   const baseBenefit = benefit(selMask);
   const marginal: MarginalValue[] = plants.map((p, i) => {
-    const inGroup = (selMask & (1 << i)) !== 0;
-    const other = inGroup ? selMask & ~(1 << i) : selMask | (1 << i);
+    const inGroup = (selMask & bit(i)) !== 0n;
+    const other = inGroup ? selMask & ~bit(i) : selMask | bit(i);
     return {
       plantId: p.plantId,
       plantName: p.plantName,
@@ -236,16 +243,16 @@ export function analyzeDsgScenario(
 
   // En iyi alt gruplar: az santralde hepsi, çok santralde çiftler ve üçlüler
   const subsetsExhaustive = n <= MAX_EXACT_PLANTS;
-  const candidateMasks: number[] = [];
+  const candidateMasks: bigint[] = [];
   if (subsetsExhaustive) {
-    for (let mask = 1; mask < 1 << n; mask++) if (bitsOf(mask, n).length >= 2) candidateMasks.push(mask);
+    for (let mask = 1n; mask < bit(n); mask++) if (membersOf(mask, n).length >= 2) candidateMasks.push(mask);
   } else {
     // Çiftler her zaman; üçlüler en fazla MAX_TRIPLE_PLANTS santrale kadar (C(20,3) = 1.140 grup yavaş kalır)
     for (let i = 0; i < n; i++)
       for (let j = i + 1; j < n; j++) {
-        candidateMasks.push((1 << i) | (1 << j));
+        candidateMasks.push(bit(i) | bit(j));
         if (n > MAX_TRIPLE_PLANTS) continue;
-        for (let k = j + 1; k < n; k++) candidateMasks.push((1 << i) | (1 << j) | (1 << k));
+        for (let k = j + 1; k < n; k++) candidateMasks.push(bit(i) | bit(j) | bit(k));
       }
   }
   const topSubsets = candidateMasks
@@ -263,7 +270,7 @@ export function analyzeDsgScenario(
     const total = cost(selMask);
     const fact = (x: number): number => (x <= 1 ? 1 : x * fact(x - 1));
     // Seçimin alt kümelerini seçimin kendi indeksleriyle dolaş
-    const subMask = (local: number) => selMembers.reduce((m, gi, li) => (local & (1 << li) ? m | (1 << gi) : m), 0);
+    const subMask = (local: number) => selMembers.reduce((m, gi, li) => (local & (1 << li) ? m | bit(gi) : m), 0n);
 
     const shapley = selMembers.map((_, li) => {
       let s = 0;
