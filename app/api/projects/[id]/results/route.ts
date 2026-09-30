@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { findProjectWithRecords } from "@/lib/services/project-records";
 import { hourProfile } from "@/lib/analysis/hour-profile";
 import { displayDescription } from "@/lib/projects/description";
 import { prisma } from "@/lib/prisma";
@@ -28,24 +29,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     const projectId = params.id;
 
     // 1. Projeyi, bağlı santralleri, fiyat profilini ve ilişkili piyasa verilerini çek
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        pricingProfiles: true,
-        plants: {
-          include: {
-            records: {
-              include: {
-                marketData: true,
-              },
-              orderBy: {
-                timestamp: "asc",
-              },
-            },
-          },
-        },
-      },
-    });
+    const project = await findProjectWithRecords(projectId);
 
     if (!project) {
       return NextResponse.json(

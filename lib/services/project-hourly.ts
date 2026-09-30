@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { findProjectWithRecords } from "@/lib/services/project-records";
 import { processHourlyRecord } from "@/lib/calculations/engine";
 import { HourlyResult, ImbalancePricingProfile, SystemDirection, toPricingProfile } from "@/lib/calculations/types";
 import { parseAggregatorPortfolio, settlementIdentity, type AggregatorPortfolio } from "@/lib/projects/aggregator";
@@ -37,16 +37,7 @@ export interface ProjectHourly {
  * projenin profiliyle hesaplama motorundan geçirir (GİP fiyatı dahil). Proje yoksa null.
  */
 export async function loadProjectHourly(projectId: string): Promise<ProjectHourly | null> {
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    include: {
-      pricingProfiles: true,
-      plants: {
-        include: { records: { include: { marketData: true }, orderBy: { timestamp: "asc" } } },
-        orderBy: { createdAt: "asc" },
-      },
-    },
-  });
+  const project = await findProjectWithRecords(projectId, { plantOrder: "createdAt" });
   if (!project) return null;
 
   const profile = toPricingProfile(project.pricingProfiles?.[0]);

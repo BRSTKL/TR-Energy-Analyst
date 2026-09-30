@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { findProjectWithRecords } from "@/lib/services/project-records";
 import { settleByCompany } from "@/lib/report/plant-report";
 import { settlementIdentity } from "@/lib/projects/aggregator";
 import { displayDescription } from "@/lib/projects/description";
@@ -130,24 +131,7 @@ export async function GET(
   try {
     const projectId = params.id;
 
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        pricingProfiles: true,
-        plants: {
-          include: {
-            records: {
-              include: {
-                marketData: true,
-              },
-              orderBy: {
-                timestamp: "asc",
-              },
-            },
-          },
-        },
-      },
-    });
+    const project = await findProjectWithRecords(projectId);
 
     if (!project) {
       return NextResponse.json(
