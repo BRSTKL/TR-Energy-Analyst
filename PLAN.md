@@ -183,17 +183,17 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 
 ### Aşama 8: Rapor profesyonelleştirme (toplayıcı raporu) · karar 30.09.2026
 **Amaç:** Inavitas raporunu bir toplayıcı yöneticisine gönderilebilir, uzman itirazına dayanıklı ve ayırt edici hale getirmek.
-- [ ] **8.1 Toplayıcı adı.** "Inavıtas" hatası (Türkçe küçük harf kuralı); kalıcı düzeltme ve mevcut proje adı.
-- [ ] **8.2 Yeni santraller.** Dönem içinde devreye giren santraller "devreye alma" etiketiyle sıralamalardan çıkar (karne, sektör, sistematik sapma, fırsatlar).
-- [ ] **8.3 Tek portföy değeri.** Köprü: santraller tek tek → aynı sahibin netleşmesi → toplayıcının kattığı değer → portföy.
-- [ ] **8.4 Gerçekçi fırsat.** Tahmin iyileştirme kazancı netleşmiş portföy üzerinden (santral tek başına üst sınır değil).
-- [ ] **8.5 Dönem etiketi.** Kısmi yılda "2026" yerine "Ocak–Ağustos 2026".
-- [ ] **8.6 KÜPST son KGÜP ile** (mevzuat denetimi 3/3): son KGÜP havuza çekilir, KÜPST ve toleransı son plana göre.
-- [ ] **8.7 Toplayıcılar arası kıyas slaytı.** 30 toplayıcının netleşme oranı ve MWh başına netleşmiş maliyeti.
-- [ ] **8.8 Üretici katkısı slaytı.** Portföye en çok / en az değer katan sahipler (ayrılırsa kaybedilecek fayda, TL/MWh).
-- [ ] **8.9 Gün içi etkinlik slaytı.** İlk plan ile son plan: gün içi düzeltmelerin sapmayı ne kadar azalttığı.
-- [ ] **8.10 Anonim sürüm ve 1 sayfalık özet.**
-- [ ] **Kabul:** Inavitas raporu yeniden üretilir, slaytlar görsel kontrol edilir, ana rakamlar bağımsız betikle doğrulanır.
+- [x] **8.1 Toplayıcı adı.** "Inavıtas" hatası (Türkçe küçük harf kuralı); kalıcı düzeltme ve mevcut proje adı.
+- [x] **8.2 Yeni santraller.** Dönem içinde devreye giren santraller "devreye alma" etiketiyle sıralamalardan çıkar (karne, sektör, sistematik sapma, fırsatlar).
+- [x] **8.3 Tek portföy değeri.** Köprü: santraller tek tek → aynı sahibin netleşmesi → toplayıcının kattığı değer → portföy.
+- [x] **8.4 Gerçekçi fırsat.** Tahmin iyileştirme kazancı netleşmiş portföy üzerinden (santral tek başına üst sınır değil).
+- [x] **8.5 Dönem etiketi.** Kısmi yılda "2026" yerine "Ocak–Ağustos 2026".
+- [x] **8.6 KÜPST son KGÜP ile** (mevzuat denetimi 3/3): son KGÜP havuza çekilir, KÜPST ve toleransı son plana göre.
+- [x] **8.7 Toplayıcılar arası kıyas slaytı.** 30 toplayıcının netleşme oranı ve MWh başına netleşmiş maliyeti.
+- [x] **8.8 Üretici katkısı slaytı.** Portföye en çok / en az değer katan sahipler (ayrılırsa kaybedilecek fayda, TL/MWh).
+- [x] **8.9 Gün içi etkinlik slaytı.** İlk plan ile son plan: gün içi düzeltmelerin sapmayı ne kadar azalttığı.
+- [x] **8.10 Anonim sürüm ve 1 sayfalık özet.**
+- [x] **Kabul:** ✅ 30.09.2026. Inavitas raporu 16 slayt; görsel kontrol (Keynote). Bağımsız betikle: portföy 246,51 M, değer 270,67 M, KÜPST son planla 59,62 M (ilk planla 69,30), sapma yükü 306,1 M, gün içi 246,5 → 204,9 M (%17). Fırsat 102,5 M üst sınır → 37,0 M (netleşmiş + KÜPST). Toplayıcı kıyası: netleşme değerinde 2./22, MWh başına 8./22. Anonim sürümde 136 ad + 10 aday tarandı, sızıntı 0. Son KGÜP 67 santral havuza çekildi. **Mevzuat denetimi 3/3 kapandı.**
 
 ---
 
@@ -206,7 +206,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 ---
 
 ## Bekleyen işler
-- [ ] **KÜPST için son KGÜP (mevzuat denetimi 3/3).** 13025 sayılı karar KÜPST'ü gün içi piyasası kapandıktan sonra güncellenen (son) KGÜP'e göre hesaplatıyor; uygulama ilk KGÜP'ü kullanıyor (KÜPST olduğundan yüksek görünebilir). Kullanıcı kararıyla sonraya bırakıldı (29.09.2026). Önerilen: yalnız Gain projelerinin 12 santrali için son KGÜP'ü çekmek (birkaç dakika; ilk − son plan farkı gün içi düzeltmeleri de gösterir). Sektör karnesi isteğe bağlı (~3 saat, VPN).
+- [x] **KÜPST için son KGÜP (mevzuat denetimi 3/3).** ✅ 30.09.2026 (Aşama 8.6). 13025 sayılı karar KÜPST'ü gün içi piyasası kapandıktan sonra güncellenen (son) KGÜP'e göre hesaplatıyor; uygulama ilk KGÜP'ü kullanıyor (KÜPST olduğundan yüksek görünebilir). Kullanıcı kararıyla sonraya bırakıldı (29.09.2026). Önerilen: yalnız Gain projelerinin 12 santrali için son KGÜP'ü çekmek (birkaç dakika; ilk − son plan farkı gün içi düzeltmeleri de gösterir). Sektör karnesi isteğe bağlı (~3 saat, VPN).
 
 ## 4. İlerleme kaydı
 | Tarih | Adım | Commit | Not |

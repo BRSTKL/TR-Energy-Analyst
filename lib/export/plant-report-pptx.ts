@@ -263,8 +263,8 @@ export async function exportPlantReportPptx(
     kpis.forEach(([v, l, color], i) => {
       const x = M + i * (kw + 0.2);
       round(s, x, 1.65, kw, 1.45, C.panel);
-      text(s, v, { x: x + 0.2, y: 1.78, w: kw - 0.4, h: 0.6, fontSize: 26, bold: true, fontFace: FONT_HEAD, color });
-      text(s, l, { x: x + 0.2, y: 2.4, w: kw - 0.4, h: 0.62, fontSize: 10, color: C.sub, valign: "top" });
+      text(s, v.replace(" milyon TL", " M TL").replace(" milyar TL", " mr TL"), { x: x + 0.2, y: 1.78, w: kw - 0.4, h: 0.6, fontSize: 24, bold: true, fontFace: FONT_HEAD, color, fit: "shrink" });
+      text(s, l, { x: x + 0.2, y: 2.42, w: kw - 0.4, h: 0.62, fontSize: 10, color: C.sub, valign: "top" });
     });
     // Bulgular ve aksiyonlar
     const worst = [...r.monthly].sort((a, b) => b.imbalanceCostTl - a.imbalanceCostTl)[0];
@@ -1100,7 +1100,7 @@ export async function exportPlantReportPptx(
     // Sağ: santral bazında sistematik sapma (sapan çubuklar, sıfır ortada)
     const px = M + lw + 0.6;
     const pw = W - M - px;
-    const plantsBias = [...established].sort((x, y) => y.biasPct - x.biasPct).slice(0, 12);
+    const plantsBias = [...established].sort((x, y) => y.biasPct - x.biasPct).slice(0, 11);
     const overCount = established.filter((p) => p.biasPct > 1).length;
     text(s, "Santral bazında sistematik sapma", { x: px, y: 1.9, w: pw, h: 0.35, fontSize: 14, bold: true, fontFace: FONT_HEAD });
     text(s, `Plan, ${isFullYear(r) ? "yıl" : "dönem"} boyunca gerçekleşen üretimden ne kadar fazla (+) ya da az (−)`, { x: px, y: 2.25, w: pw, h: 0.3, fontSize: 10.5, color: C.sub });
@@ -1135,7 +1135,7 @@ export async function exportPlantReportPptx(
       overCount > established.length / 2
         ? `${established.length} santralin ${overCount} tanesinde plan sistematik olarak yüksek: plan kalibrasyonu en hızlı kazanç kalemlerinden biri.`
         : "Belirgin bir sistematik sapma yok; maliyet saatlik tahmin hatasından kaynaklanıyor.",
-      { x: px, y: Math.max(yEnd + 0.2, 5.75), w: pw, h: 0.5, fontSize: 11.5, valign: "top" }
+      { x: px, y: Math.min(Math.max(yEnd + 0.2, 5.75), 6.2), w: pw, h: 0.5, fontSize: 11.5, valign: "top" }
     );
     // Olası arıza / kısıntı: tahmin yüksekken üretim ~0 olan bloklar tahmin hatası değildir
     const ev = r.outages.plants.flatMap((o) => o.events);
@@ -1147,7 +1147,7 @@ export async function exportPlantReportPptx(
           `dengesizlik riskinin %${nf(r.outages.sharePct, 1)} kadarı` +
           (concurrent ? `; ${concurrent} blok birden çok santralde aynı anda (olası kısıntı).` : ".") +
           " Tahmin hatası değil; arıza mı YAT talimatı mı teyit edilmeli.",
-        { x: px, y: Math.max(yEnd + 0.75, 6.3), w: pw, h: 0.55, fontSize: 9.5, color: C.sub, valign: "top" }
+        { x: M, y: 6.6, w: CW, h: 0.4, fontSize: 9, color: C.sub, valign: "top" }
       );
     }
   }
@@ -1883,7 +1883,7 @@ export async function exportPlantReportPptx(
       ],
       [
         "KÜPST (tahmini)",
-        `Saatlik |gerçekleşen − plan| sapmanın tolerans payını aşan kısmı × max(PTF, SMF) × katsayı; santral bazında, YEKDEM santralleri dahil ${unit.dat} ait. Tolerans plana oranlandı. 2025: rüzgâr %17, güneş %10, diğer %5, katsayı 0,03 (EPDK 13025). 2026'dan itibaren: rüzgâr %15, güneş %8, diğer %5, katsayı 0,05 (EPDK kurul kararı taslağı; nihai karar sayısı görülmedi). 2025 öncesi %21 / %12, katsayı 0,03. Arıza sayısına bağlı katsayı artışı kapsam dışı (alt sınır).`,
+        `Saatlik |gerçekleşen − KÜP| sapmanın tolerans payını aşan kısmı × max(PTF, SMF) × katsayı; KÜP gün içi piyasası kapandıktan sonraki son KGÜP'tür (havuzda yoksa ilk plan); santral bazında, YEKDEM santralleri dahil ${unit.dat} ait. Tolerans plana oranlandı. 2025: rüzgâr %17, güneş %10, diğer %5, katsayı 0,03 (EPDK 13025). 2026'dan itibaren: rüzgâr %15, güneş %8, diğer %5, katsayı 0,05 (EPDK kurul kararı taslağı; nihai karar sayısı görülmedi). 2025 öncesi %21 / %12, katsayı 0,03. Arıza sayısına bağlı katsayı artışı kapsam dışı (alt sınır).`,
       ],
       ...(options.costChange
         ? [
