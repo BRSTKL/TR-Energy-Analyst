@@ -277,6 +277,8 @@ export interface MonthCoverage {
   kgupHours: number;
   uevmHours: number;
   bothHours: number;
+  /** Santralin ilk verisinden önceki ay (işletmeye girmeden önce): eksik veri sayılmaz */
+  preOperation?: boolean;
 }
 
 export interface PlantSeriesCheck {
@@ -344,15 +346,25 @@ export function mergePlantSeries(kgup: HourlySeries, uevm: HourlySeries, startDa
   }
 
   const coverage = Array.from(months.values());
+  // Dönemin başındaki hiç verisiz aylar: santral henüz işletmede değil (yeni santral); eksik veri uyarısı üretmez
+  const firstActive = coverage.findIndex((c) => c.kgupHours > 0 || c.uevmHours > 0);
+  if (firstActive > 0) for (let i = 0; i < firstActive; i++) coverage[i].preOperation = true;
+  const active = coverage.filter((c) => !c.preOperation);
   const correlation = pearson(xs, ys);
   const checks: PlantSeriesCheck[] = [];
-  const totalHours = coverage.reduce((s, c) => s + c.hours, 0);
+  const totalHours = active.reduce((s, c) => s + c.hours, 0);
 
   if (rows.length === 0) {
     checks.push({ level: "error", message: "Seçilen aralıkta KGÜP ve UEVM'nin birlikte bulunduğu saat yok." });
   } else {
-    const missingK = coverage.filter((c) => c.kgupHours < c.hours * 0.95).map((c) => monthLabel(c.month));
-    const missingU = coverage.filter((c) => c.uevmHours < c.hours * 0.95).map((c) => monthLabel(c.month));
+    if (firstActive > 0) {
+      checks.push({
+        level: "ok",
+        message: `Santralin verisi ${monthLabel(coverage[firstActive].month)} ayında başlıyor (yeni santral); öncesi eksik sayılmadı.`,
+      });
+    }
+    const missingK = active.filter((c) => c.kgupHours < c.hours * 0.95).map((c) => monthLabel(c.month));
+    const missingU = active.filter((c) => c.uevmHours < c.hours * 0.95).map((c) => monthLabel(c.month));
     if (missingK.length) checks.push({ level: "warning", message: `KGÜP eksik aylar: ${missingK.join(", ")}.` });
     if (missingU.length) checks.push({ level: "warning", message: `UEVM eksik aylar: ${missingU.join(", ")}.` });
     const ratio = kTotal > 0 ? uTotal / kTotal : 0;
@@ -368,7 +380,7 @@ export function mergePlantSeries(kgup: HourlySeries, uevm: HourlySeries, startDa
         message: `Saatlik plan ile gerçekleşen zayıf ilişkili (korelasyon ${correlation.toFixed(2)}). Farklı birimler eşleşmiş olabilir.`,
       });
     }
-    if (checks.length === 0) {
+    if (checks.every((c) => c.level === "ok")) {
       checks.push({
         level: "ok",
         message: `${rows.length.toLocaleString("tr-TR")} / ${totalHours.toLocaleString("tr-TR")} saat eşleşti; plan ile gerçekleşen tutarlı (toplam farkı %${Math.abs(Math.round((ratio - 1) * 1000) / 10)}${correlation !== null ? `, korelasyon ${correlation.toFixed(2)}` : ""}).`,

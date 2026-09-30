@@ -257,7 +257,7 @@ function EpiasPlantImport() {
       selected
         .map((p) => {
           const m = merged[p.id];
-          const months = m ? m.series.coverage.filter((c) => c.hours > 0 && c.bothHours < c.hours * 0.9) : [];
+          const months = m ? m.series.coverage.filter((c) => c.hours > 0 && !c.preOperation && c.bothHours < c.hours * 0.9) : [];
           return { name: plantDisplayName(p), months };
         })
         .filter((g) => g.months.length > 0),
@@ -736,9 +736,15 @@ function PlantReview({
               return (
                 <span
                   key={m.month}
-                  title={`${m.month}: KGÜP ${m.kgupHours}, UEVM ${m.uevmHours}, eşleşen ${m.bothHours} / ${m.hours} saat`}
+                  title={
+                    m.preOperation
+                      ? `${m.month}: santral henüz işletmede değil (veri yok)`
+                      : `${m.month}: KGÜP ${m.kgupHours}, UEVM ${m.uevmHours}, eşleşen ${m.bothHours} / ${m.hours} saat`
+                  }
                   className={`rounded px-1.5 py-0.5 text-2xs font-semibold ${
-                    r >= 0.95 ? "bg-emerald-500 text-white" : r > 0 ? "bg-amber-400 text-amber-950" : "bg-rose-400 text-white"
+                    m.preOperation
+                      ? "bg-slate-200 text-slate-500"
+                      : r >= 0.95 ? "bg-emerald-500 text-white" : r > 0 ? "bg-amber-400 text-amber-950" : "bg-rose-400 text-white"
                   }`}
                 >
                   {m.month.slice(5)}.{m.month.slice(2, 4)}

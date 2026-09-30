@@ -125,7 +125,8 @@ describe("eksik tamamlama", () => {
     const log: string[] = [];
     const a = await ensurePlantCoverage(5, "2026-01-01", "2026-10-31", "FIRST", { now, fetchers: fakeFetchers(log) });
     expect(a.months.map((m) => m.source)).toEqual([...Array(9).fill("epias"), "future"]);
-    expect(log.filter((l) => l === "uevcb")).toHaveLength(1);
+    // Birimler bir kez çözülür: dönem başı ve sonu (yeni santrale sonradan birim eklenebilir)
+    expect(log.filter((l) => l === "uevcb")).toHaveLength(2);
     // KGÜP iki birimin toplamı
     expect(a.kgup.values.get(Date.UTC(2026, 0, 1, 1))).toBe(4);
     expect(a.uevm.values.get(Date.UTC(2026, 0, 1, 1))).toBe(3);
@@ -155,5 +156,39 @@ describe("eksik tamamlama", () => {
     expect(b.months.map((m) => m.source)).toEqual(["pool", "epias", "epias"]);
     expect(log.filter((l) => l.includes("2025-01"))).toEqual([]);
     delete process.env.POOL_DIR;
+  });
+});
+
+describe("yeni santral", () => {
+  it("dönem başındaki verisiz aylar işletme öncesi sayılır, eksik uyarısı üretmez", async () => {
+    const { mergePlantSeries } = await import("@/lib/epias-plant/plant-data");
+    const k = new Map<number, number>();
+    const u = new Map<number, number>();
+    for (let t = Date.UTC(2026, 1, 1); t < Date.UTC(2026, 3, 1); t += 3_600_000) { k.set(t, 1); u.set(t, 1); }
+    const m = mergePlantSeries(
+      { values: k, byFuel: {}, skipped: 0 }, { values: u, byFuel: {}, skipped: 0 }, "2026-01-01", "2026-03-31"
+    );
+    expect(m.coverage.map((c) => Boolean(c.preOperation))).toEqual([true, false, false]);
+    expect(m.checks.some((c) => c.level === "warning")).toBe(false);
+    expect(m.checks[0].message).toContain("Şubat 2026");
+  });
+
+  it("KGÜP boş, UEVM dolu: uzlaştırma birimleri ay sonuna göre yeniden bulunur", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "pool-new-"));
+    process.env.POOL_DIR = dir;
+    const { ensurePlantCoverage } = await import("@/lib/pool/pool-sync");
+    const lists: Record<string, Array<{ id: number; name: string }>> = { "2026-03-01": [{ id: 1, name: "eski" }] };
+    const c = await ensurePlantCoverage(9, "2026-03-01", "2026-03-31", "FIRST", {
+      now: new Date("2026-09-30T09:00:00Z"),
+      fetchers: {
+        listUevcbs: async (_: number, d: string) => lists[d] ?? [{ id: 1, name: "eski" }, { id: 2, name: "yeni" }],
+        kgup: async (id: number, s: string) => (id === 2 ? [{ date: `${s}T00:00:00+03:00`, time: "01:00", toplam: 5 }] : []),
+        uevm: async (_: number, s: string) => [{ date: `${s}T00:00:00+03:00`, hour: "01:00", total: 4 }],
+      },
+    });
+    expect(c.uevcbs.map((u) => u.id)).toEqual([1, 2]);
+    expect(c.kgup.values.get(Date.UTC(2026, 2, 1, 1))).toBe(5);
+    delete process.env.POOL_DIR;
+    rmSync(dir, { recursive: true, force: true });
   });
 });

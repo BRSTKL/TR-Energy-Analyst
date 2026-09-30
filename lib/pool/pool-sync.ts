@@ -38,6 +38,19 @@ const todayTr = (now: Date) => new Date(now.getTime() + 3 * 3_600_000).toISOStri
 /** Tür biliniyor ama kaynak kırılımı yoksa (sektör önbelleğinden aktarılan aylar) tür tespiti için eşdeğer kırılım */
 const FUEL_OF_TYPE = { RES: "wind", GES: "sun", HES: "river" } as const;
 
+/** Verilen günlerdeki uzlaştırma birimlerinin birleşimi (yeni santrale sonradan birim eklenir); santral tanımına yazılır */
+async function resolveUevcbs(
+  epiasPlantId: number,
+  days: string[],
+  fetchers: PoolFetchers,
+  now: Date,
+  known: NonNullable<PoolPlantInfo["uevcbs"]> = []
+): Promise<PoolPlantInfo> {
+  const byId = new Map(known.map((u) => [u.id, u]));
+  for (const day of [...new Set(days)]) for (const u of await fetchers.listUevcbs(epiasPlantId, day)) byId.set(u.id, u);
+  return writePoolPlantInfo({ epiasPlantId, uevcbs: [...byId.values()], uevcbsAt: now.toISOString() });
+}
+
 export async function ensurePlantCoverage(
   epiasPlantId: number,
   startDay: string,
@@ -57,6 +70,7 @@ export async function ensurePlantCoverage(
   const months: PlantCoverage["months"] = [];
   // EPİAŞ hatası çoğu zaman bağlantı veya erişim engelidir (VPN, 403): ilk hatadan sonra kalan aylar denenmez
   let abort: string | null = null;
+  let reResolved = false;
   for (const { year, month } of monthsInRange(startDay, endDay)) {
     const first = `${year}-${pad(month)}-01`;
     if (first > today) {
@@ -76,9 +90,8 @@ export async function ensurePlantCoverage(
     }
     try {
       if (needK && !info?.uevcbs?.length) {
-        const uevcbs = await fetchers.listUevcbs(epiasPlantId, startDay);
-        if (!uevcbs.length) throw new Error("Uzlaştırma birimi (UEVÇB) bulunamadı; KGÜP çekilemez.");
-        info = await writePoolPlantInfo({ epiasPlantId, uevcbs, uevcbsAt: now.toISOString() });
+        info = await resolveUevcbs(epiasPlantId, [startDay, endDay < today ? endDay : today], fetchers, now);
+        if (!info.uevcbs?.length) throw new Error("Uzlaştırma birimi (UEVÇB) bulunamadı; KGÜP çekilemez.");
       }
       const last = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
       const to = last < today ? last : today;
@@ -87,8 +100,17 @@ export async function ensurePlantCoverage(
         needU ? fetchers.uevm(epiasPlantId, first, to) : null,
       ]);
       const target = doc ?? emptyYear(epiasPlantId, year);
-      if (kLists) {
-        const k = sumSeries(kLists.map(parseKgupItems));
+      let k = kLists ? sumSeries(kLists.map(parseKgupItems)) : null;
+      // UEVM var ama KGÜP yok: santrale sonradan yeni uzlaştırma birimi eklenmiş olabilir; ayın sonuna göre bir kez yeniden bak
+      if (k && k.values.size === 0 && uItems && uItems.length > 0 && !reResolved) {
+        reResolved = true;
+        const before = info!.uevcbs!.length;
+        info = await resolveUevcbs(epiasPlantId, [to], fetchers, now, info!.uevcbs);
+        if (info.uevcbs!.length > before) {
+          k = sumSeries((await Promise.all(info.uevcbs!.map((u) => fetchers.kgup(u.id, first, to, version)))).map(parseKgupItems));
+        }
+      }
+      if (k) {
         writeMonth(target, kSeries, month, [...k.values].map(([t, value]) => ({ timestamp: new Date(t), value })), now);
       }
       if (uItems) {

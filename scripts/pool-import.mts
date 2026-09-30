@@ -6,7 +6,7 @@
  * 1. Sektör önbelleği (.cache/epias/sector-<yıl>-hourly): plan = ilk KGÜP, gerçekleşen = UEVM. Çekilme anı olarak
  *    dosyanın tarihi yazılır; son 90 gün içindeki aylar böylece geçici sayılır ve ilk ihtiyaçta yeniden kontrol edilir.
  * 2. EPİAŞ'tan eklenmiş proje santrallerinin kayıtları: yalnız havuzda hâlâ eksik olan aylar.
- * Havuzda zaten olan ay üzerine yazılmaz; betik tekrar çalıştırılabilir.
+ * Havuzda zaten olan ay üzerine yazılmaz; betik tekrar çalıştırılabilir. Önbellekte verisi olmayan ay işaretlenmez.
  */
 
 import { promises as fs } from "node:fs";
@@ -40,6 +40,9 @@ async function importRows(epiasPlantId: number, rows: Row[], kSeries: PoolSeries
     for (const [series, pick] of [[kSeries, (r: Row) => r.kgup], ["uevm", (r: Row) => r.uevm]] as const) {
       if (monthStatus(doc, series, month) !== "missing") continue;
       const values = monthRows.flatMap((r) => (pick(r) === null ? [] : [{ timestamp: new Date(r.t), value: pick(r)! }]));
+      // Önbellek yalnız plan ve gerçekleşenin birlikte olduğu saatleri tutar: verisiz ay "çekildi" sayılmaz, gerektiğinde
+      // EPİAŞ'tan çekilir (ör. uzlaştırma birimi dönem başında olmayan yeni santralin yalnız UEVM'si olan ayları)
+      if (values.length === 0) continue;
       writeMonth(doc, series, month, values, fetchedAt);
       written++;
     }
