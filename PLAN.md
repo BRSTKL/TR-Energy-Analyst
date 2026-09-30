@@ -200,6 +200,12 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 - [ ] 9.2 Toplayıcı ayrıntı sayfası (santraller, aylık netleşme, üretici katkısı). Sonra.
 - [ ] 9.3 Satırdan "1 sayfa özet üret". Sonra.
 
+### Aşama 10: Veri otomasyonu ve hız · karar 30.09.2026
+- [x] **10.1 Otomatik veri.** Havuz her zaman ilk KGÜP, son KGÜP ve UEVM'yi birlikte tutar (ensurePlantCoverage); proje oluşturulurken üçü de çekilir. `syncProjectData` (piyasa, resmi fiyat, santraller), `/api/projects/[id]/sync-data`, sonuç sayfasında "EPİAŞ verilerini tamamla", `scripts/pool-backfill.mts`.
+- [x] **10.2 Önbellek.** Proje hesapları veri sürümüne göre bellekte (`lib/services/response-cache.ts`: withProjectCache, cachedForProject); sürüm: proje/santral/profil zamanları, piyasa senkronu, havuz dosyaları, sektör ve toplayıcı kıyası dosyaları.
+- [x] **10.3 Küçük düzeltmeler.** Karşılaştırmada iki netleşme tanımı ayrı; küçük toplayıcılar kendi ölçek bandıyla kıyaslanır; DSG anahtar uyarısı.
+- [ ] 10.4 Planlama sayfası yalnız seçilen santralin ayrıntısını alsın (8,6 MB). İsteğe bağlı.
+
 ---
 
 ## 3. Karar noktaları (sizin onayınız gerekiyor)
