@@ -170,10 +170,20 @@ export async function POST(request: Request) {
 
     const idByName = new Map(createdPlants.map((p) => [plantNameKey(p.name), p.id]));
     const profile = target ? toPricingProfile(target.pricingProfiles?.[0]) : DEFAULT_IMBALANCE_PROFILE;
-    const written = await writePlantImports(
-      plants.map((p) => ({ plantId: idByName.get(plantNameKey(p.input.name))!, rows: p.rows })),
-      profile
-    );
+    let written: Awaited<ReturnType<typeof writePlantImports>>;
+    try {
+      written = await writePlantImports(
+        plants.map((p) => ({ plantId: idByName.get(plantNameKey(p.input.name))!, rows: p.rows })),
+        profile
+      );
+    } catch (err) {
+      // Saatlik kayıt yazılamadıysa boş proje veya santral bırakma
+      const ids = createdPlants.map((p) => p.id);
+      await prisma.generationRecord.deleteMany({ where: { plantId: { in: ids } } });
+      await prisma.powerPlant.deleteMany({ where: { id: { in: ids } } });
+      if (!target) await prisma.project.delete({ where: { id: projectId } });
+      throw err;
+    }
 
     return NextResponse.json({
       success: true,

@@ -29,9 +29,18 @@ export async function writePlantImports(
   const withRows = imports.filter((i) => i.rows.length > 0);
   if (withRows.length === 0) return [];
 
-  const allTimes = withRows.flatMap((i) => i.rows.map((r) => r.timestamp.getTime()));
-  const start = new Date(Math.min(...allTimes));
-  const end = new Date(Math.max(...allTimes));
+  // Math.min(...dizi) yüz binlerce saatte çağrı yığınını taşırır (61 santral × 5.800 saat): döngüyle
+  let minT = Infinity;
+  let maxT = -Infinity;
+  for (const i of withRows) {
+    for (const r of i.rows) {
+      const t = r.timestamp.getTime();
+      if (t < minT) minT = t;
+      if (t > maxT) maxT = t;
+    }
+  }
+  const start = new Date(minT);
+  const end = new Date(maxT);
 
   const marketRecords = await prisma.marketData.findMany({
     where: { timestamp: { gte: start, lte: end } },
