@@ -166,6 +166,20 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 - [x] **6.2 Proje kartları.** ✅ 29.09.2026 · `6403675`. Kartta gösterge bloğu (sapma yükü, MWh başına, sektördeki yer, veri ve uzlaştırma birimi); kayıt sayısı yerine dönem; santral listesi 8 ile sınırlı; ikincil düğmeler sadeleşti. Üst özet: "Saatlik veri noktası" yerine "Veri bütünlüğü (eksik ayı olmayan proje)".
 - [x] **6.3 Biçim ve dil.** ✅ 29.09.2026. Ortak biçimlendirici `lib/format.ts` (testli): tr-TR sayılar, kısa TL (499,0 M ₺; tam tutar üzerine gelince), eksenler "35 M ₺". Sonuç, planlama ve içgörü sayfalarındaki nokta ondalıklar ve "k ₺" eksenleri düzeltildi. Jargon: "Faz 7 Motoru / Simülasyon Çıktısı" kaldırıldı; "fiktif gelir" → "tam tahmin geliri" (sayfa, karşılaştırma kartı, Excel başlığı). "Net uzlaştırma alacağı" ana sayfayla birlikte kalktı.
 
+### Aşama 7: Veri havuzu (basit versiyon) · karar 30.09.2026
+**Amaç:** EPİAŞ santral verisi bir kez çekilir, tek yerde (havuz) durur; projeler, sektör karnesi ve toplayıcı analizleri aynı veriyi kullanır. Proje açmak saniyeler sürer, sadece havuzda olmayan santral ve aylar EPİAŞ'tan çekilir.
+**Neden şimdi:** Her proje aynı santralin verisini yeniden çekiyor (61 santrallik Inavitas projesi yüzlerce istek, VPN ve 403 riski). Aynı veri sektör önbelleğinde de var ama proje oluşturma ona bakmıyor. Disk: `dev.db` 62 MB (≈41 MB boş sayfa), `prisma/backups` ≈400 MB (her senkronizasyonda tam kopya).
+**Tasarım kararı:** Havuz veritabanında değil, dosyada: `data/pool/<epiasPlantId>/<yıl>.json.gz` (saat sırasıyla dizi: ilk KGÜP, son KGÜP, UEVM) ve ay ay çekim kaydı. Neden: 1.400 santral × 3 yıl SQLite'ta birkaç GB ve her yedekte kopyalanır; sıkıştırılmış dosyada ≈50 MB. Mevcut sektör önbelleği biçimiyle aynı mantık (`lib/sector/hourly-store.ts`). Docker/Postgres sonraya (aşağıdaki not).
+- [x] **7.1 Havuz deposu.** ✅ 30.09.2026 (`lib/pool/pool-codec.ts`, `pool-store.ts`, 7 test). Okuma/yazma modülü (SAF kodlama + dosya G/Ç), ay ay çekim kaydı (çekilme tarihi, kesin/geçici). Son 3 ay "geçici": bir sonraki senkronizasyonda yeniden çekilir (EPİAŞ UEVM düzeltmeleri). Testli.
+- [ ] **7.2 Eksik tamamlama.** `ensureCoverage(santraller, dönem, kgüpSürümü)`: havuzda olmayan veya geçici santral-aylarını EPİAŞ'tan çeker, havuza yazar; 403'te kaldığı aydan devam eder. *Yeniden kullanılan:* `fetchKgup`, `fetchUevm`, `listUevcbsForPlant`.
+- [ ] **7.3 Mevcut verinin aktarılması.** Sektör önbelleği (2025, 2026 saatlik) ve mevcut EPİAŞ projelerinin kayıtları havuza aktarılır; EPİAŞ'a gidilmez.
+- [ ] **7.4 Proje oluşturma havuzdan.** "EPİAŞ'tan seç" akışı önce havuza bakar, sadece eksiği çeker; ekranda "havuzdan N santral, EPİAŞ'tan M santral" görünür.
+- [ ] **7.5 Sektör ve toplayıcı betikleri havuzdan.** `sector-collect` havuza yazar ve havuzdan okur; toplayıcı portföy özeti havuzdan.
+- [ ] **7.6 Temizlik.** Veritabanı sıkıştırma (VACUUM), yedek yalnız silme ve toplu değişiklikten önce, en fazla 5 kopya; eski yedekler kullanıcı onayıyla silinir.
+- [ ] **Kabul kontrolü.** Inavitas projesi (61 santral, Oca–Ağu 2026) lisanslı santraller için EPİAŞ'a gitmeden kurulur; netleşme değeri toplayıcı Excel'iyle (≈280 M TL, %54) tutarlı.
+- **Kapsam dışı (şimdilik):** Projelerin saatlik kaydı tutmaması (okuyan ≈10 yer değişir; havuz oturunca ayrıca karar), Docker ve Postgres, sunucuda gece senkronizasyonu.
+- **Docker/Postgres ne zaman:** Uygulama başka bir makinede ya da sunucuda çalışacaksa, toplayıcı her gece kendiliğinden çalışacaksa (VPS ile VPN derdi biter; EPİAŞ veri merkezi IP'lerini engelliyor mu önce denenmeli) veya birden fazla kişi kullanacaksa. Havuz dosya tabanlı olduğu için geçiş kolay: aynı klasör konteynere bağlanır.
+
 ---
 
 ## 3. Karar noktaları (sizin onayınız gerekiyor)

@@ -50,3 +50,6 @@ Icon?
 
 # Geçici analiz betikleri
 scripts/tmp/
+
+# Veri havuzu (PLAN 7)
+/data/
