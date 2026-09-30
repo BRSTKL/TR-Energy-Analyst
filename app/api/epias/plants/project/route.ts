@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { backupDatabase } from "@/lib/db-backup";
 import { writePlantImports } from "@/lib/import/persist";
 import { syncEpiasToDatabase } from "@/lib/services/epias-service";
 import { DEFAULT_IMBALANCE_PROFILE, toPricingProfile } from "@/lib/calculations/types";
@@ -146,8 +145,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 3. Proje (veya mevcut proje) ve santraller; 4. saatlik kayıtlar (öncesinde yedek)
-    await backupDatabase(prisma, "epias-plant-import");
+    // 3. Proje (veya mevcut proje) ve santraller; 4. dosya kaynaklı santrallerin saatlik kayıtları (havuz santralleri kayıt yazmaz)
 
     const dayOf = (t: number) => new Date(t).toISOString().slice(0, 10);
     let projectId: string;

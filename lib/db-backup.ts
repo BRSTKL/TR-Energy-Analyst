@@ -16,7 +16,12 @@ import path from "node:path";
 import type { PrismaClient } from "@prisma/client";
 
 export const BACKUP_DIR = path.join(process.cwd(), "prisma", "backups");
-export const MAX_BACKUPS = 20;
+/**
+ * Tutulan en fazla yedek (her biri veritabanının tam kopyası). Yedek yalnız veri silen ya da kullanıcı verisini değiştiren
+ * işlemlerden önce alınır (proje/santral silme, dosya yükleme) ve geliştirme sunucusu açılışında; EPİAŞ'tan yeniden
+ * çekilebilen piyasa verisi senkronizasyonunda alınmaz (20 yedek ≈ 600 MB'a çıkmıştı, PLAN 7.6).
+ */
+export const MAX_BACKUPS = 5;
 
 /** Yalnızca SQLite dosya veritabanında yedek alınır (PostgreSQL'e geçilirse no-op). */
 function isSqlite(): boolean {
@@ -43,11 +48,10 @@ function reasonSlug(reason: string): string {
 /** Yedek dosyalarını en yeniden en eskiye sıralı döndürür. */
 export function listBackups(dir = BACKUP_DIR): string[] {
   if (!fs.existsSync(dir)) return [];
-  return fs
-    .readdirSync(dir)
-    .filter((f) => f.endsWith(".db"))
-    .sort()
-    .reverse();
+  // Dosya tarihine göre (elle adlandırılmış "dev-before-…" yedekleri ada göre sıralamada en yeni görünüyordu); eşitlikte ad
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".db"));
+  const mtime = new Map(files.map((f) => [f, fs.statSync(path.join(dir, f)).mtimeMs]));
+  return files.sort((a, b) => mtime.get(b)! - mtime.get(a)! || b.localeCompare(a));
 }
 
 /** En yeni `keep` yedek dışındakileri siler; silinen dosya adlarını döndürür. */
