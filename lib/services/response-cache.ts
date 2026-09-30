@@ -19,9 +19,14 @@ import { poolDir } from "@/lib/pool/pool-store";
 import { projectPeriod } from "@/lib/services/project-records";
 
 const MAX_ENTRIES = 120;
-const store = new Map<string, { version: string; value: unknown }>();
+// Geliştirme sunucusu modülleri yeniden yükler ve rotalar ayrı paketlenebilir: önbellek süreç genelinde tek olsun
+const g = globalThis as unknown as {
+  __trResponseCache?: Map<string, { version: string; value: unknown }>;
+  __trResponseInflight?: Map<string, Promise<unknown>>;
+};
+const store = (g.__trResponseCache ??= new Map());
 /** Aynı anda gelen aynı istekler tek hesap yapar */
-const inflight = new Map<string, Promise<unknown>>();
+const inflight = (g.__trResponseInflight ??= new Map());
 
 async function mtime(file: string): Promise<number> {
   try {

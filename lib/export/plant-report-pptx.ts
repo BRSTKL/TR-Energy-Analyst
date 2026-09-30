@@ -1019,7 +1019,7 @@ export async function exportPlantReportPptx(
     );
     text(
       s,
-      `Endeks = portföyde netleşmiş dengesizlik / Σ üretim × teknolojinin sektör medyanı (rüzgâr, güneş, hidro; santral tek başına); 1'in altı daha iyi, karışımdan bağımsız. Grup: ${pe.label} üretimi ${formatEnergy(pe.minProductionMwh)} üstü toplayıcılar (diğer ${pe.othersCount} toplayıcı daha küçük). ` +
+      `Endeks = portföyde netleşmiş dengesizlik / Σ üretim × teknolojinin sektör medyanı (rüzgâr, güneş, hidro; santral tek başına); 1'in altı daha iyi, karışımdan bağımsız. Grup: ${pe.label} üretimi ${pe.maxProductionMwh ? `${formatEnergy(pe.minProductionMwh)}–${formatEnergy(pe.maxProductionMwh)} arası` : `${formatEnergy(pe.minProductionMwh)} üstü`} toplayıcılar (diğer ${pe.othersCount} toplayıcı farklı ölçekte). ` +
         `EPİAŞ'ın ${pe.membershipAsOf} tarihli toplayıcı listeleri (santraller dönem boyunca portföydeymiş gibi), santral bazında üretimi yayımlanan lisanslı santraller, resmi dengesizlik fiyatı, ilk KGÜP, KÜPST hariç.`,
       { x: M, y: 6.35, w: CW, h: 0.6, fontSize: 9, color: C.sub, valign: "top" }
     );

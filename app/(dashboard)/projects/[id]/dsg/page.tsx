@@ -304,12 +304,12 @@ export default function DsgScenarioPage() {
                     <CardContent>
                       <table className="w-full text-sm">
                         <tbody>
-                          {data.topSubsets.map((s) => {
+                          {data.topSubsets.map((s, i) => {
                             const isCurrent =
                               s.plantIds.length === (selected?.length ?? 0) &&
                               s.plantIds.every((id) => selected?.includes(id));
                             return (
-                              <tr key={s.plantIds.join(",")} className="border-b last:border-0">
+                              <tr key={`${i}-${s.plantIds.join(",")}`} className="border-b last:border-0">
                                 <td className="py-2 pr-2 text-slate-900">{s.plantNames.join(" + ")}</td>
                                 <td className="py-2 pr-2 text-right font-semibold text-emerald-700">{tl(s.benefitTl)}</td>
                                 <td className="py-2 pr-2 text-right text-xs text-slate-500">{pct(s.benefitRatio)}</td>

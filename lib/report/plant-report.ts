@@ -253,6 +253,8 @@ export interface PlantReportData {
     rows: AggregatorBenchmarkRow[];
     /** Grubun alt üretim sınırı (MWh) ve gruba girmeyen toplayıcı sayısı */
     minProductionMwh: number;
+    /** Orta ölçek grubunda üst sınır (MWh); büyük grupta null */
+    maxProductionMwh: number | null;
     othersCount: number;
     /** Sıralar rows içinde: endeks (1 = en iyi), netleşme değeri, netleşme oranı, ham TL/MWh */
     rankIndex: number;
@@ -812,8 +814,14 @@ export function buildPlantReport(
     const self = bench.aggregators.find((a) => a.id === selfId)!;
     const ym = (d: string) => Number(d.slice(0, 4)) * 12 + Number(d.slice(5, 7));
     const months = Math.max(1, ym(bench.period.end) - ym(bench.period.start) + 1);
-    let minProduction = 1_000_000 * (months / 8);
-    let group = bench.aggregators.filter((a) => a.productionMwh >= minProduction || a.id === selfId);
+    // Ölçek bantları (8 ayda): büyük ≥ 1.000 GWh, orta 300–1.000 GWh; toplayıcı kendi bandındakilerle kıyaslanır
+    const large = 1_000_000 * (months / 8);
+    const mid = 300_000 * (months / 8);
+    const selfLarge = self.productionMwh >= large;
+    let minProduction = selfLarge ? large : mid;
+    let group = bench.aggregators.filter(
+      (a) => a.id === selfId || (selfLarge ? a.productionMwh >= large : a.productionMwh >= mid && a.productionMwh < large)
+    );
     if (group.length < 4) {
       group = [...bench.aggregators].sort((a, b) => Math.abs(a.productionMwh - self.productionMwh) - Math.abs(b.productionMwh - self.productionMwh)).slice(0, 6);
       minProduction = Math.min(...group.map((a) => a.productionMwh));
@@ -829,6 +837,7 @@ export function buildPlantReport(
       selfId,
       rows,
       minProductionMwh: minProduction,
+      maxProductionMwh: selfLarge || group.some((a) => a.productionMwh >= large) ? null : large,
       othersCount: bench.aggregators.length - rows.length,
       rankIndex: rank(rows),
       rankValue: rank([...rows].sort((a, b) => b.nettingValueTl - a.nettingValueTl)),

@@ -23,6 +23,11 @@ export interface ProjectKpis {
   imbalancePlantLevelTl: number;
   imbalanceCompanyLevelTl: number;
   nettingTl: number;
+  /** Toplayıcı projesinde toplayıcının kattığı değer: sahipler tek başına → portföy (raporla aynı tanım) */
+  aggregatorValue: { ownerLevelTl: number; benefitTl: number; benefitPct: number } | null;
+  /** MWh başına dengesizlik: santraller tek tek ve uzlaştırma biriminde netleşmiş */
+  unitPlantLevelTl: number;
+  unitNettedTl: number;
   kupstTl: number;
   /** Sapma yükü (dengesizlik + KÜPST, tüm santraller): veri döneminin kurallarıyla; veri 2026 öncesiyse 2026 kurallarıyla da */
   load: { current: number; next2026: number | null };
@@ -60,6 +65,11 @@ export async function projectKpis(projectId: string): Promise<ProjectKpis | null
     imbalancePlantLevelTl: r.settlement.plantLevelCostTl,
     imbalanceCompanyLevelTl: r.settlement.companyLevelCostTl,
     nettingTl: r.settlement.sameCompanyNettingTl,
+    aggregatorValue: r.aggregator
+      ? { ownerLevelTl: r.aggregator.standaloneCostTl, benefitTl: r.aggregator.benefitTl, benefitPct: r.aggregator.benefitPct }
+      : null,
+    unitPlantLevelTl: r.totals.actualMwh > 0 ? r.settlement.plantLevelCostTl / r.totals.actualMwh : 0,
+    unitNettedTl: r.totals.actualMwh > 0 ? r.settlement.companyLevelCostTl / r.totals.actualMwh : 0,
     kupstTl: r.kupst.totalTl,
     load,
     unitLoadTl: r.totals.actualMwh > 0 ? load.current / r.totals.actualMwh : 0,

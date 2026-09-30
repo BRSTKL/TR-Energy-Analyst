@@ -75,10 +75,25 @@ const METRICS: Metric[] = [
   },
   { label: "Şirket bazında (netleşmiş)", text: (k) => mTl(k.imbalanceCompanyLevelTl) },
   {
-    label: "Portföy içi netleşme kazancı",
+    label: "Toplam netleşme (santraller tek tek → netleşmiş)",
+    hint: "Aynı sahibin santrallerinin kendi arasındaki netleşmesi dahil",
     text: (k) => `${mTl(k.nettingTl)} (%${nf(k.imbalancePlantLevelTl > 0 ? (k.nettingTl / k.imbalancePlantLevelTl) * 100 : 0)})`,
     value: (k) => (k.imbalancePlantLevelTl > 0 ? k.nettingTl / k.imbalancePlantLevelTl : null),
     better: "high",
+  },
+  {
+    label: "Toplayıcının kattığı değer (sahipler tek başına → portföy)",
+    hint: "Raporla aynı tanım: toplayıcı olmasa da gerçekleşecek aynı sahip netleşmesi sayılmaz",
+    text: (k) => (k.aggregatorValue ? `${mTl(k.aggregatorValue.benefitTl)} (%${nf(k.aggregatorValue.benefitPct)})` : "Toplayıcı değil"),
+    value: (k) => k.aggregatorValue?.benefitPct ?? null,
+    better: "high",
+  },
+  {
+    label: "MWh başına: netleşme öncesi → sonrası",
+    hint: "Santraller tek tek ve uzlaştırma biriminde netleşmiş; küçük netleşme kazancı iyi tahminden de gelebilir",
+    text: (k) => `${nf(k.unitPlantLevelTl)} → ${nf(k.unitNettedTl)} TL/MWh`,
+    value: (k) => k.unitNettedTl,
+    better: "low",
   },
   { label: "KÜPST (tahmini)", text: (k) => mTl(k.kupstTl) },
   {
