@@ -192,3 +192,32 @@ describe("yeni santral", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 });
+
+describe("proje ekranı veri kontrolleri", () => {
+  const series = (f: (t: number) => number | undefined, from: number, to: number) => {
+    const values = new Map<number, number>();
+    for (let t = from; t < to; t += 3_600_000) { const v = f(t); if (v !== undefined) values.set(t, v); }
+    return { values, byFuel: {}, skipped: 0 };
+  };
+  const jan = Date.UTC(2026, 0, 1), mar = Date.UTC(2026, 2, 1), apr = Date.UTC(2026, 3, 1);
+
+  it("dönem sonunda UEVM'si olmayan ay yayımlanmamış sayılır", async () => {
+    const { mergePlantSeries } = await import("@/lib/epias-plant/plant-data");
+    const m = mergePlantSeries(
+      series(() => 1, jan, apr), series(() => 1, jan, mar), "2026-01-01", "2026-03-31", new Date("2026-04-10T00:00:00Z")
+    );
+    expect(m.coverage.map((c) => Boolean(c.unpublished))).toEqual([false, false, true]);
+    expect(m.checks.some((c) => c.level === "warning")).toBe(false);
+    expect(m.checks.some((c) => c.message.includes("Mart 2026") && c.message.includes("yayımlamadı"))).toBe(true);
+  });
+
+  it("çoğu saatte sıfır plan: eşleşme uyarısı yerine eksik plan uyarısı", async () => {
+    const { mergePlantSeries } = await import("@/lib/epias-plant/plant-data");
+    const k = series((t) => ((t / 3_600_000) % 3 === 0 ? 1 : 0), jan, mar);
+    const u = series(() => 1, jan, mar);
+    const m = mergePlantSeries(k, u, "2026-01-01", "2026-02-28");
+    const warnings = m.checks.filter((c) => c.level === "warning").map((c) => c.message);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("Plan eksik bildirilmiş");
+  });
+});
