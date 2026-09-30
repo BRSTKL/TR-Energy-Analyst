@@ -10,6 +10,7 @@ import { SECTOR_TECHS, type Distribution, type HydroKind, type SectorBenchmark, 
 import type { SectorPlant } from "@/lib/services/sector";
 
 import { MethodLink } from "@/components/method-link";
+import { AggregatorBenchmarkTab } from "@/components/aggregator-benchmark-tab";
 type Tech = SectorTech;
 type HydroFilter = "all" | HydroKind | "unknown";
 
@@ -195,6 +196,8 @@ export default function SectorPage() {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: "unitTl", asc: true });
   const [selected, setSelected] = useState<string[]>([]);
+  /** Santraller (karne) ya da Toplayıcılar (toplayıcılar arası kıyas; PLAN 9.1) */
+  const [tab, setTab] = useState<"plants" | "aggregators">("plants");
 
   useEffect(() => {
     setError(null);
@@ -298,6 +301,27 @@ export default function SectorPage() {
       </header>
 
       <main className="mx-auto max-w-7xl space-y-6 px-4 pt-6 sm:px-6 lg:px-8">
+        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
+          {(
+            [
+              ["plants", "Santraller"],
+              ["aggregators", "Toplayıcılar"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              className={`rounded-md px-4 py-1.5 text-sm font-medium ${tab === id ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {tab === "aggregators" ? (
+          <AggregatorBenchmarkTab year={data.year} />
+        ) : (
+        <>
         <div className="flex flex-wrap items-center gap-2">
           {techs.map((t) => (
             <Button
@@ -471,6 +495,8 @@ export default function SectorPage() {
           kalitesinin kıyasıdır. KÜPST EPDK 13025 tolerans oranlarıyla tahmindir. MW, santralin yıl içindeki en yüksek saatlik
           üretimidir (kurulu güç yaklaşığı). Şirket rakamı, şirketin kıyaslamadaki santrallerinin üretim ağırlıklı ortalamasıdır.
         </p>
+        </>
+        )}
       </main>
     </div>
   );

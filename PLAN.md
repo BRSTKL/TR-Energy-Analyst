@@ -195,6 +195,11 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 - [x] **8.10 Anonim sürüm ve 1 sayfalık özet.**
 - [x] **Kabul:** ✅ 30.09.2026. Inavitas raporu 16 slayt; görsel kontrol (Keynote). Bağımsız betikle: portföy 246,51 M, değer 270,67 M, KÜPST son planla 59,62 M (ilk planla 69,30), sapma yükü 306,1 M, gün içi 246,5 → 204,9 M (%17). Fırsat 102,5 M üst sınır → 37,0 M (netleşmiş + KÜPST). Toplayıcı kıyası: netleşme değerinde 2./22, MWh başına 8./22. Anonim sürümde 136 ad + 10 aday tarandı, sızıntı 0. Son KGÜP 67 santral havuza çekildi. **Mevzuat denetimi 3/3 kapandı.**
 
+### Aşama 9: Sektör karnesinde toplayıcılar · karar 30.09.2026
+- [x] **9.1 Toplayıcılar sekmesi.** ✅ 30.09.2026. `/sector` sayfasında "Santraller | Toplayıcılar": kıyas tablosu (santral kapsamı, üretim, karışım, netleşme değeri ve oranı, TL/MWh, karışıma göre düzeltilmiş endeks), ölçek ve teknoloji süzgeçleri, sıralama, büyüklük–endeks grafiği, kapsam uyarıları, CSV, metodoloji bağlantısı. Veri: `.cache/epias/aggregator-benchmark-<yıl>.json`.
+- [ ] 9.2 Toplayıcı ayrıntı sayfası (santraller, aylık netleşme, üretici katkısı). Sonra.
+- [ ] 9.3 Satırdan "1 sayfa özet üret". Sonra.
+
 ---
 
 ## 3. Karar noktaları (sizin onayınız gerekiyor)
