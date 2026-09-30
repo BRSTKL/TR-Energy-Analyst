@@ -269,7 +269,7 @@ export function EpiasPlantPicker({
       {selected.length > 0 && (
         <div className="space-y-1">
           <p className="text-xs font-semibold text-slate-700">Seçilen santraller ({selected.length})</p>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex max-h-48 flex-wrap gap-1.5 overflow-y-auto pr-1">
             {selected.map((p) => (
               <span
                 key={p.id}
