@@ -67,9 +67,12 @@ export function EpiasPlantPicker({
   onChange,
   disabled = false,
   compact = false,
+  onAddCompany,
 }: {
   selected: EpiasPowerPlant[];
   onChange: (plants: EpiasPowerPlant[]) => void;
+  /** Bir şirketin santrallerinin hepsi eklendiğinde (toplayıcı portföyü önerisi için) */
+  onAddCompany?: (org: EpiasOrganization) => void;
   disabled?: boolean;
   /** Pencere içinde daha küçük yazı ve sonuç listesi */
   compact?: boolean;
@@ -245,7 +248,10 @@ export function EpiasPlantPicker({
                           <button
                             type="button"
                             disabled={disabled || addable.length === 0}
-                            onClick={() => addAll(addable)}
+                            onClick={() => {
+                              addAll(addable);
+                              onAddCompany?.(o);
+                            }}
                             className="rounded border border-indigo-200 bg-white px-2 py-0.5 text-2xs font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-40"
                           >
                             RES/HES/GES olanları ekle ({addable.length})

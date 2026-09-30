@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Loader2, Scale, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { describePortfolioMix, type AggregatorPortfolio } from "@/lib/projects/aggregator";
+import { aggregatorDisplayName, describePortfolioMix, type AggregatorPortfolio } from "@/lib/projects/aggregator";
 
 interface AggregatorOption {
   id: number;
@@ -63,10 +63,7 @@ export function SettlementUnitCard({ projectId }: { projectId: string }) {
     setPicked(o);
     setOptions([]);
     // Kısa ad yoksa unvanın ilk iki kelimesi + "Toplayıcı" (ör. "GAİN TOPLAYICILIK …" → "Gain Toplayıcı")
-    if (!name.trim()) {
-      const first = (o.shortName ?? o.name).split(/\s+/)[0] ?? "";
-      setName(`${first.charAt(0)}${first.slice(1).toLocaleLowerCase("tr-TR")} Toplayıcı`);
-    }
+    if (!name.trim()) setName(aggregatorDisplayName(o.name, o.shortName));
   }
 
   async function save() {

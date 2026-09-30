@@ -32,6 +32,12 @@ export function settlementIdentity(
 /** EPİAŞ katılımcı adı toplayıcı mı ("… A.Ş. (TOPLAYICI)") */
 export const isAggregatorName = (name: string | null | undefined) => !!name && /\(TOPLAYICI\)\s*$/i.test(name.trim());
 
+/** Raporda görünecek kısa ad: unvanın ilk kelimesi + "Toplayıcı" ("GAİN TOPLAYICILIK …" → "Gain Toplayıcı") */
+export function aggregatorDisplayName(orgName: string, shortName?: string | null): string {
+  const first = (shortName || orgName).trim().split(/\s+/)[0] ?? "";
+  return `${first.charAt(0)}${first.slice(1).toLocaleLowerCase("tr-TR")} Toplayıcı`;
+}
+
 /**
  * Toplayıcının EPİAŞ'taki portföyü (toplayıcı seçildiğinde kaydedilir). Rapordaki kapsam cümlesinin dayanağıdır:
  * "Gain Toplayıcı portföyündeki 40 santralden 6'sı".

@@ -55,9 +55,16 @@ export interface NettingGroupResult {
 export interface NettingResult {
   portfolio: NettingGroupResult | null;
   technologies: NettingGroupResult[];
-  /** Fayda TL'sine göre azalan sırada santral çiftleri */
+  /** Fayda TL'sine göre azalan sırada santral çiftleri (en fazla MAX_PAIRS) */
   pairs: NettingGroupResult[];
+  /** Çiftler yalnız tek başına maliyeti en yüksek bu kadar santral arasında arandıysa (çok santralli portföy); değilse null */
+  pairsAmongTop: number | null;
 }
+
+/** Çift taraması en fazla bu kadar santral arasında (n² çift: 61 santralde 1.830 çift ~10 sn sürüyordu) */
+export const PAIR_SCAN_PLANTS = 12;
+/** Döndürülen en iyi çift sayısı */
+export const MAX_PAIRS = 10;
 
 const safeDiv = (a: number, b: number) => (b === 0 ? 0 : a / b);
 
@@ -164,11 +171,16 @@ export function analyzePortfolioNetting(
       )
     );
 
+  const standalone = (p: NettingPlantInput) => p.hourly.reduce((s, h) => s + h.imbalanceCost, 0);
+  const scan =
+    withData.length > PAIR_SCAN_PLANTS
+      ? [...withData].sort((a, b) => standalone(b) - standalone(a)).slice(0, PAIR_SCAN_PLANTS)
+      : withData;
   const pairs: NettingGroupResult[] = [];
-  for (let i = 0; i < withData.length; i++) {
-    for (let j = i + 1; j < withData.length; j++) {
-      const a = withData[i];
-      const b = withData[j];
+  for (let i = 0; i < scan.length; i++) {
+    for (let j = i + 1; j < scan.length; j++) {
+      const a = scan[i];
+      const b = scan[j];
       pairs.push(
         analyzeGroupNetting(
           [a, b],
@@ -180,5 +192,10 @@ export function analyzePortfolioNetting(
   }
   pairs.sort((x, y) => y.benefitTl - x.benefitTl);
 
-  return { portfolio, technologies, pairs };
+  return {
+    portfolio,
+    technologies,
+    pairs: pairs.slice(0, MAX_PAIRS),
+    pairsAmongTop: scan.length < withData.length ? scan.length : null,
+  };
 }

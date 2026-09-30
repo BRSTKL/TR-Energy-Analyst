@@ -21,6 +21,7 @@ import {
   sumSeries,
 } from "@/lib/epias-plant/plant-data";
 import { DateChunk, monthChunks } from "@/lib/date-chunks";
+import { aggregatorDisplayName, isAggregatorName } from "@/lib/projects/aggregator";
 
 interface Uevcb {
   id: number;
@@ -91,6 +92,12 @@ function EpiasPlantImport() {
 
   // 2. Santraller
   const [selected, setSelected] = useState<EpiasPowerPlant[]>([]);
+  /** Bir toplayıcının santrallerinin hepsi eklendiyse proje o toplayıcının portföyü olarak açılır (tek dengede netleşme) */
+  const [aggregator, setAggregator] = useState<{ id: number; name: string; use: boolean } | null>(() => {
+    const id = Number(params.get("aggId"));
+    const name = params.get("aggName");
+    return Number.isInteger(id) && id > 0 && name && isAggregatorName(name) ? { id, name, use: true } : null;
+  });
   const [presetError, setPresetError] = useState<string | null>(null);
 
   // 3. Dönem ve çekim
@@ -309,6 +316,7 @@ function EpiasPlantImport() {
     try {
       const d = await postJson<{ projectId: string; noOverlapWithExisting: boolean; added: boolean }>("/api/epias/plants/project", {
         ...(target === "existing" ? { targetProjectId } : { projectName, description }),
+        ...(target === "new" && aggregator?.use ? { aggregator: { orgId: aggregator.id, orgName: aggregator.name } } : {}),
         plants: selected.map((p) => {
           const f = forms[p.id];
           const j = jobs[p.id];
@@ -439,7 +447,29 @@ function EpiasPlantImport() {
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> {presetError}
               </div>
             )}
-            <EpiasPlantPicker selected={selected} onChange={setSelected} disabled={fetching || creating} />
+            <EpiasPlantPicker
+              selected={selected}
+              onChange={setSelected}
+              disabled={fetching || creating}
+              onAddCompany={(o) => {
+                if (isAggregatorName(o.name)) setAggregator({ id: o.id, name: o.name, use: true });
+              }}
+            />
+            {target === "new" && aggregator && (
+              <label className="mt-3 flex items-start gap-2 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-900">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={aggregator.use}
+                  onChange={(e) => setAggregator({ ...aggregator, use: e.target.checked })}
+                />
+                <span>
+                  <strong>Toplayıcı portföyü:</strong> {aggregator.name}. Santraller sahiplerine göre değil, toplayıcının
+                  tek dengesinde netleşir (raporda &quot;{aggregatorDisplayName(aggregator.name)}&quot;). Sonuç sayfasındaki
+                  &quot;Uzlaştırma birimi&quot; kartından sonra da değiştirilebilir.
+                </span>
+              </label>
+            )}
           </CardContent>
         </Card>
 

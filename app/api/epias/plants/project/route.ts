@@ -6,6 +6,8 @@ import { syncEpiasToDatabase } from "@/lib/services/epias-service";
 import { DEFAULT_IMBALANCE_PROFILE, toPricingProfile } from "@/lib/calculations/types";
 import { plantNameKey, validatePlantInput, type PlantInput } from "@/lib/plants/validation";
 import { monthChunks } from "@/lib/date-chunks";
+import { aggregatorDisplayName, isAggregatorName } from "@/lib/projects/aggregator";
+import { fetchAggregatorPortfolio } from "@/lib/services/epias-plants";
 import type { ParsedGenerationRow } from "@/lib/parsers/generation-parser";
 
 export const dynamic = "force-dynamic";
@@ -185,9 +187,26 @@ export async function POST(request: Request) {
       throw err;
     }
 
+    // Yeni proje bir toplayıcının portföyü olarak açıldıysa: tek dengede uzlaştırma ve EPİAŞ portföy özeti (kapsam cümlesi)
+    let aggregatorWarning: string | null = null;
+    const agg = body.aggregator;
+    if (!target && agg && Number.isInteger(agg.orgId) && agg.orgId > 0 && isAggregatorName(agg.orgName)) {
+      let aggregatorPortfolio: string | null = null;
+      try {
+        aggregatorPortfolio = JSON.stringify(await fetchAggregatorPortfolio(agg.orgId, String(agg.orgName).slice(0, 200)));
+      } catch (e) {
+        aggregatorWarning = `Toplayıcının EPİAŞ portföyü alınamadı (${e instanceof Error ? e.message : "bağlantı"}).`;
+      }
+      await prisma.project.update({
+        where: { id: projectId },
+        data: { aggregatorName: aggregatorDisplayName(agg.orgName), aggregatorPortfolio },
+      });
+    }
+
     return NextResponse.json({
       success: true,
       projectId,
+      aggregatorWarning,
       added: Boolean(target),
       plants: written.map((w) => ({
         name: createdPlants.find((p) => p.id === w.plantId)?.name,

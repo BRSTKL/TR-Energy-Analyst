@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { hourProfile } from "@/lib/analysis/hour-profile";
 import { displayDescription } from "@/lib/projects/description";
 import { prisma } from "@/lib/prisma";
 import {
@@ -190,7 +191,8 @@ export async function GET(_request: Request, { params }: { params: { id: string 
         name: "EPİAŞ Standart Profil",
         ...DEFAULT_IMBALANCE_PROFILE,
       },
-      plants: plantResults,
+      // Santral başına saatlik seri gönderilmez (61 santralde ~225 MB); sayfa saat profilini kullanır
+      plants: plantResults.map(({ hourly, ...p }) => ({ ...p, hourProfile: hourProfile(hourly) })),
       // Başlık altındaki sade özet: şirket(ler), santral sayısı, kurulu güç ve veri kaynağı
       summary: {
         plantCount: project.plants.length,

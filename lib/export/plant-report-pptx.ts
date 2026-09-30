@@ -26,7 +26,7 @@
 import pptxgen from "pptxgenjs";
 import { deviationLoad, type PlantReportData } from "@/lib/report/plant-report";
 import { monthlyRange } from "@/lib/report/deviation-load";
-import { describeGap } from "@/lib/analysis/data-completeness";
+import { describeGap, describeLateStart } from "@/lib/analysis/data-completeness";
 import { COST_FACTORS } from "@/lib/analysis/cost-change";
 import type { ReportCostChange } from "@/lib/services/cost-change";
 import type { ProjectCandidates } from "@/lib/services/candidates";
@@ -84,6 +84,9 @@ export function formatTlShort(v: number, digits = 1): string {
 }
 /** Grafik etiketleri için kısa: "101,4 M" */
 const mShort = (v: number) => (Math.abs(v) >= 1e6 ? `${nf(v / 1e6, 1)} M` : `${nf(v / 1e3, 0)} B`);
+/** Uzun ad listelerini slaytta taşırmamak için: ilk `max` öğe ve kalan sayısı */
+const listOf = (items: string[], max: number, sep = "; ") =>
+  items.length <= max ? items.join(sep) : `${items.slice(0, max).join(sep)} ve ${items.length - max} tane daha`;
 const formatEnergy = (mwh: number) => (mwh >= 10_000 ? `${nf(mwh / 1000, 0)} GWh` : `${nf(mwh, 0)} MWh`);
 const monthLabel = (ym: string) => {
   const [y, m] = ym.split("-").map(Number);
@@ -360,11 +363,13 @@ export async function exportPlantReportPptx(
     });
     const cov = r.coverage.filter((c) => c.missing.length > 0);
     // Eksik ay varsa önce o söylenir: rakamlar o ay olmadan hesaplandı
-    const gapNote = r.dataGaps.length ? `Veri eksik (hesaba girmedi): ${r.dataGaps.map(describeGap).join("; ")}. ` : "";
+    const gapNote =
+      (r.dataGaps.length ? `Veri eksik (hesaba girmedi): ${listOf(r.dataGaps.map(describeGap), 3)}. ` : "") +
+      (r.lateStarts?.length ? `Dönem içinde devreye giren: ${listOf(r.lateStarts.map(describeLateStart), 4)}. ` : "");
     const scope =
       gapNote +
       (cov.length
-        ? `Kapsam: ${cov.map((c) => `${c.company} şirketinin EPİAŞ'ta üretimi yayımlanan ${c.total} santralinden ${c.total - c.missing.length} tanesi (eksik: ${c.missing.join(", ")})`).join("; ")}. `
+        ? `Kapsam: ${cov.map((c) => `${c.company} şirketinin EPİAŞ'ta üretimi yayımlanan ${c.total} santralinden ${c.total - c.missing.length} tanesi (eksik: ${listOf(c.missing, 4, ", ")})`).join("; ")}. `
         : "") + "Sapma yükü = dengesizlik riski (gün içi işlemler öncesi) + tahmini KÜPST.";
     text(s, scope, { x: M, y: 6.68, w: CW, h: 0.32, fontSize: 9, color: cov.length || gapNote ? C.scenTx : C.sub, valign: "top" });
   }
@@ -630,16 +635,19 @@ export async function exportPlantReportPptx(
     const worst = main.list[0];
     // Başlık önemliliğe göre: MWh başına en kötü santral küçük olabilir (ör. 1 MW). Ölçüte (sektör medyanı; karne yoksa
     // teknoloji ortalaması) inse en çok TL kazandıracak santral öne çıkar (MWh başına sıralama grafikte kalır). Sektör
-    // medyanı, sektör ve fırsatlar slaytlarıyla aynı ölçüttür.
-    const sectorMedian = r.sector?.types.find((x) => x.type === main.type)?.unitImbalanceTl.median ?? null;
-    const ref = sectorMedian ?? main.avg;
-    const excess = (p: (typeof r.plants)[number]) => Math.max(0, p.unitCostTl - ref) * p.actualMwh;
-    const biggest = [...main.list].sort((a, b) => excess(b) - excess(a))[0];
+    // medyanı, sektör ve fırsatlar slaytlarıyla aynı ölçüttür. Her santral kendi teknolojisinin ölçütüyle karşılaştırılır.
+    const refOf = (type: string) => {
+      const med = r.sector?.types.find((x) => x.type === type)?.unitImbalanceTl.median ?? null;
+      return { value: med ?? groups.find((g) => g.type === type)!.avg, sector: med !== null };
+    };
+    const excess = (p: (typeof r.plants)[number]) => Math.max(0, p.unitCostTl - refOf(p.type).value) * p.actualMwh;
+    const biggest = [...r.plants].sort((a, b) => excess(b) - excess(a))[0];
+    const bigRef = refOf(biggest.type);
     const title =
-      main.list.length > 1 && excess(biggest) > 0
+      r.plants.length > 1 && excess(biggest) > 0
         ? `En büyük iyileştirme alanı ${biggest.name}: MWh başına ${nf(biggest.unitCostTl, 0)} TL; ${
-            sectorMedian !== null ? "sektör medyanına" : `${main.type} ortalamasına`
-          } (${nf(ref, 0)}) inse ≈ ${formatTlShort(excess(biggest))}`
+            bigRef.sector ? "sektör medyanına" : `${biggest.type} ortalamasına`
+          } (${nf(bigRef.value, 0)}) inse ≈ ${formatTlShort(excess(biggest))}`
         : main.list.length > 1
           ? `${main.type} santralleri arasında en yüksek risk ${worst.name}: MWh başına ${nf(worst.unitCostTl, 0)} TL (${main.type} ortalaması ${nf(main.avg, 0)} TL)`
           : `${worst.name}: MWh başına ${nf(worst.unitCostTl, 0)} TL dengesizlik riski`;
@@ -650,14 +658,21 @@ export async function exportPlantReportPptx(
         `${unit.netting} toplamı düşürür ama santraller arası sıralamayı değiştirmez.`
     );
     type Row = { kind: "head"; type: string; avg: number; count: number } | { kind: "plant"; p: (typeof r.plants)[number]; avg: number };
-    const rowsAll: Row[] = [];
-    for (const g of groups) {
-      rowsAll.push({ kind: "head", type: g.type, avg: g.avg, count: g.list.length });
-      for (const p of g.list) rowsAll.push({ kind: "plant", p, avg: g.avg });
-    }
     const MAX_ROWS = 13;
-    const rows = rowsAll.slice(0, MAX_ROWS);
-    const hidden = rowsAll.slice(MAX_ROWS).filter((x) => x.kind === "plant").length;
+    const allRows = groups.length + r.plants.length;
+    // Çok santralde (toplayıcı portföyü) her teknolojiden önemliliğe göre (ölçütün üstündeki TL) en önemli santraller
+    // gösterilir; tamamı Ek A'da. Az santralde hepsi MWh başına sıralı.
+    const compact = allRows > MAX_ROWS;
+    const perGroup = Math.max(2, Math.floor((MAX_ROWS - groups.length) / groups.length));
+    const rows: Row[] = [];
+    for (const g of groups) {
+      const list = compact
+        ? [...g.list].sort((a, b) => excess(b) - excess(a) || b.unitCostTl - a.unitCostTl).slice(0, perGroup)
+        : g.list;
+      rows.push({ kind: "head", type: g.type, avg: g.avg, count: g.list.length });
+      for (const p of compact ? [...list].sort((a, b) => b.unitCostTl - a.unitCostTl) : list) rows.push({ kind: "plant", p, avg: g.avg });
+    }
+    const hidden = r.plants.length - rows.filter((x) => x.kind === "plant").length;
     const top = 2.2;
     const rowH = Math.min(0.36, 4.1 / rows.length);
     const nameW = 2.7;
@@ -710,11 +725,12 @@ export async function exportPlantReportPptx(
       text(s, mShort(p.imbalanceCostTl), { x: colX, y, w: 1.5, h: rowH, fontSize: 11, align: "right", valign: "middle" });
       text(s, nf(p.capacityMw, 0), { x: colX + 1.55, y, w: 0.6, h: rowH, fontSize: 11, align: "right", valign: "middle", color: C.sub });
     });
-    const y1 = top + rows.length * rowH;
-    if (hidden > 0) text(s, `+${hidden} santral daha (Ek A)`, { x: M, y: y1 + 0.1, w: 3, h: 0.28, fontSize: 10, color: C.sub });
     text(
       s,
-      `Kırmızı: kendi teknolojisinin ortalamasından %10'dan fazla yüksek. Santral tek başına uzlaştırılsaydı oluşacak risktir; ${unit.netting}yle toplam daha düşüktür.`,
+      (hidden > 0
+        ? `Her teknolojiden ölçütün üstünde en çok TL kaybettiren ${perGroup} santral; diğer ${hidden} santral Ek A'da. `
+        : "") +
+        `Kırmızı: kendi teknolojisinin ortalamasından %10'dan fazla yüksek. Santral tek başına uzlaştırılsaydı oluşacak risktir; ${unit.netting}yle toplam daha düşüktür.`,
       { x: M, y: 6.45, w: CW, h: 0.45, fontSize: 10, color: C.sub, valign: "top" }
     );
   }
@@ -765,24 +781,43 @@ export async function exportPlantReportPptx(
       text(s, `Medyan ${nf(d.median, 0)}`, { x: xOf(d.median) - 0.8, y: bandY + 0.2, w: 1.6, h: 0.24, fontSize: 9.5, bold: true, align: "center", color: C.navy });
       text(s, `P10 ${nf(d.p10, 0)}`, { x: xOf(d.p10) - 0.6, y: bandY + 0.2, w: 1.2, h: 0.22, fontSize: 8.5, align: "center", color: C.muted });
       text(s, `P90 ${nf(d.p90, 0)}`, { x: xOf(d.p90) - 0.6, y: bandY + 0.2, w: 1.2, h: 0.22, fontSize: 8.5, align: "center", color: C.muted });
-      // Portföy ortalaması: bandın üstünde üçgen
-      const px = xOf(t.portfolioUnitTl);
-      s.addShape(pptx.ShapeType.triangle, { x: px - 0.12, y: bandY - 0.72, w: 0.24, h: 0.2, fill: { color: C.risk }, line: { color: C.risk, width: 0 }, rotate: 180 });
-      text(s, `Portföyünüz ${nf(t.portfolioUnitTl, 0)} TL`, { x: px - 1.2, y: bandY - 1.0, w: 2.4, h: 0.26, fontSize: 10, bold: true, align: "center", color: C.risk });
-      // Santraller: noktalar ve üstünde sıra numarası (yakın noktalarda numaralar iki sıraya dağılır)
+      // Numaralı liste ancak bandın altında yer varsa çizilir; yoksa (üç teknoloji ya da çok santral) tek satırlık özet
+      const listTop = bandY + 0.55;
       const shown = t.plants.slice(0, 15);
-      shown.forEach((p, pi) => {
+      const cols = shown.length > 10 ? 3 : shown.length > 5 ? 2 : 1;
+      const perCol = Math.ceil(shown.length / cols);
+      const listRoom = top + rowH - listTop;
+      const numbered = listRoom >= perCol * 0.17;
+      // Portföy ortalaması: bandın üstünde üçgen (numara yoksa banda daha yakın)
+      const px = xOf(t.portfolioUnitTl);
+      const triY = numbered ? bandY - 0.72 : bandY - 0.42;
+      s.addShape(pptx.ShapeType.triangle, { x: px - 0.12, y: triY, w: 0.24, h: 0.2, fill: { color: C.risk }, line: { color: C.risk, width: 0 }, rotate: 180 });
+      text(s, `Portföyünüz ${nf(t.portfolioUnitTl, 0)} TL`, { x: px - 1.2, y: triY - 0.28, w: 2.4, h: 0.26, fontSize: 10, bold: true, align: "center", color: C.risk });
+      // Santraller: noktalar ve üstünde sıra numarası (yakın noktalarda numaralar iki sıraya dağılır)
+      const dots = numbered ? shown : t.plants;
+      dots.forEach((p, pi) => {
         const x = xOf(p.unitTl);
         const above = p.unitTl > d.median;
         s.addShape(pptx.ShapeType.ellipse, { x: x - 0.07, y: bandY - 0.07, w: 0.14, h: 0.14, fill: { color: above ? C.cost : C.gain }, line: { color: C.white, width: 0.75 } });
-        text(s, String(pi + 1), { x: x - 0.15, y: bandY - 0.42 - (pi % 2) * 0.16, w: 0.3, h: 0.18, fontSize: 8, bold: true, align: "center", color: above ? C.cost : C.gain });
+        if (numbered)
+          text(s, String(pi + 1), { x: x - 0.15, y: bandY - 0.42 - (pi % 2) * 0.16, w: 0.3, h: 0.18, fontSize: 8, bold: true, align: "center", color: above ? C.cost : C.gain });
       });
+      if (!numbered) {
+        const best = t.plants.filter((p) => p.rankPct <= 25).length;
+        const worstQ = t.plants.filter((p) => p.rankPct >= 75).length;
+        const worst2 = [...t.plants].sort((a, b) => b.unitTl - a.unitTl).slice(0, 2);
+        text(
+          s,
+          `${t.plants.length} santral: ${best} tanesi en iyi çeyrekte, ${worstQ} tanesi en kötü çeyrekte · en yüksek: ${worst2
+            .map((p) => `${p.name} ${nf(p.unitTl, 0)} TL`)
+            .join(", ")}`,
+          { x: left, y: bandY + 0.42, w: width, h: 0.22, fontSize: 9, color: C.sub, valign: "middle" }
+        );
+        return;
+      }
       // Liste: sıra, ad, TL/MWh, sektörün yüzde kaçından iyi
-      const listTop = bandY + 0.55;
-      const cols = shown.length > 10 ? 3 : shown.length > 5 ? 2 : 1;
-      const perCol = Math.ceil(shown.length / cols);
       const colW = CW / 3;
-      const lineH = Math.min(0.22, (rowH - 1.6) / Math.max(perCol, 1));
+      const lineH = Math.min(0.22, listRoom / Math.max(perCol, 1));
       shown.forEach((p, pi) => {
         const col = Math.floor(pi / perCol);
         const row = pi % perCol;
@@ -1079,7 +1114,15 @@ export async function exportPlantReportPptx(
     const head = ["Santral", "Beklenen", "P90", "En kötü ay"].map((h, i) =>
       cell(h, { bold: true, color: C.white, fill: { color: C.navy }, align: i === 0 ? "left" : "right" })
     );
-    const rows = rp.plants.slice(0, 11).map((p, i) => {
+    // Tablo ve PPA kutusu slayta sığsın; çok santralde yalnız en az 3 aylık verisi olan santraller (devreye giriş ayları
+    // ya da birkaç günlük veri primi uç değerlere taşır, ör. P90 7.000 TL)
+    const mpBox = r.marketProfile.baseloadPtfTl > 0;
+    const MAX_PLANT_ROWS = mpBox ? 7 : 11;
+    const late = new Set((r.lateStarts ?? []).map((l) => l.plantName));
+    const eligible =
+      rp.plants.length > MAX_PLANT_ROWS ? rp.plants.filter((p) => p.months.length >= 3 && !late.has(p.name)) : rp.plants;
+    const tablePlants = eligible.slice(0, MAX_PLANT_ROWS);
+    const rows = tablePlants.map((p, i) => {
       const fill = i % 2 ? { fill: { color: C.panel } } : {};
       return [
         cell(p.name, fill),
@@ -1088,14 +1131,20 @@ export async function exportPlantReportPptx(
         cell(`${nf(p.worstMonth.tlPerMwh, 0)} · ${shortMonth(p.worstMonth.month)}`, { ...fill, align: "right" }),
       ];
     });
-    text(s, "Santral bazında (santral tek başına, TL/MWh)", { x: tx, y: 1.9, w: tw, h: 0.28, fontSize: 11, bold: true, fontFace: FONT_HEAD });
+    text(
+      s,
+      rp.plants.length > tablePlants.length
+        ? `Santral bazında en yüksek ${tablePlants.length} (${rp.plants.length} santralden; tek başına, TL/MWh)`
+        : "Santral bazında (santral tek başına, TL/MWh)",
+      { x: tx, y: 1.9, w: tw, h: 0.28, fontSize: 11, bold: true, fontFace: FONT_HEAD }
+    );
     // PPA göstergesi: profil indirimi (yakalanan fiyat / baz PTF) + beklenen dengesizlik primi
     const mp = r.marketProfile;
     if (mp.baseloadPtfTl > 0) {
       const profileDisc = 100 - mp.captureRatePct;
       const premiumPct = (pf.expectedTlPerMwh / mp.baseloadPtfTl) * 100;
       const ppaPct = 100 - profileDisc - premiumPct;
-      const py = 2.25 + (Math.min(rp.plants.length, 11) + 1) * 0.3 + 0.3;
+      const py = 2.25 + (tablePlants.length + 1) * 0.3 + 0.25;
       round(s, tx, py, tw, 1.2, C.panel);
       text(s, `PPA göstergesi: baz PTF'nin ~%${nf(ppaPct, 1)} kadarı`, { x: tx + 0.2, y: py + 0.1, w: tw - 0.4, h: 0.32, fontSize: 13, bold: true, fontFace: FONT_HEAD, color: C.navy });
       text(
@@ -1291,7 +1340,11 @@ export async function exportPlantReportPptx(
       value: weakGain,
       body:
         (weak.length
-          ? `${weak.length} santral (${weak.map((w) => w.name).join(", ")}) sektör medyanının üstünde; medyana inmeleri ${formatTlShort(
+          ? `${weak.length} santral (${listOf(
+              [...weak].sort((a, b) => b.gain - a.gain).map((w) => w.name),
+              4,
+              ", "
+            )}) sektör medyanının üstünde; medyana inmeleri ${formatTlShort(
               weakGain
             )} eder (santral tek başına, netleşme öncesi; dengesizlik + KÜPST). `
           : `Riskin %${nf(r.alignment.sameDirectionCostPct, 0)} kadarı sistemle aynı yöndeki sapmalardan geliyor. `) +
@@ -1424,7 +1477,8 @@ export async function exportPlantReportPptx(
   {
     const s = contentSlide("Ek A", "Santral detayları", "exact");
     s.addNotes("Ayrıntı isteyenler için: santral bazında kurulu güç, üretim, tek başına maliyet, birim maliyet, gelir payı ve plan farkı.");
-    const MAX_ROWS = 14;
+    // Toplam, portföy ve "diğer" satırlarıyla birlikte dipnota yer kalsın (tablo en fazla ~5,8 inç)
+    const MAX_ROWS = r.plants.length > 14 ? 12 : 14;
     const shown = r.plants.slice(0, MAX_ROWS);
     const rest = r.plants.slice(MAX_ROWS);
     const head = ["Santral", "Tür", "MW", "Üretim", "Dengesizlik (tek başına)", "TL/MWh", "KÜPST (tahmini)", "Plan farkı"];
@@ -1495,17 +1549,26 @@ export async function exportPlantReportPptx(
     const tableBottom = 1.75 + rows.length * rowH;
     const missingNote = r.coverage
       .filter((c) => c.missing.length)
-      .map((c) => ` Şirketin EPİAŞ'ta üretimi yayımlanan ${c.total} santralinden projede olmayanlar: ${c.missing.join(", ")}.`)
+      .map((c) => ` Şirketin EPİAŞ'ta üretimi yayımlanan ${c.total} santralinden projede olmayanlar: ${listOf(c.missing, 6, ", ")}.`)
       .join("");
     const ownerGroups = new Map<string, string[]>();
     for (const p of r.plants) ownerGroups.set(p.organizationName ?? "sahibi bulunamadı", [...(ownerGroups.get(p.organizationName ?? "sahibi bulunamadı") ?? []), p.name]);
+    // Çok sahipli portföyde (toplayıcı) her sahibin santral listesi slaytı taşırıyordu: sahip sayısı ve en büyükleri
+    const ownerList = Array.from(ownerGroups.entries()).sort((a, b) => b[1].length - a[1].length);
     const owners = agg
-      ? `Santraller ${agg.name} portföyünde tek dengede uzlaştırıldı. Lisans sahipleri: ${Array.from(ownerGroups.entries())
-          .map(([o, ps]) => `${o} (${ps.join(", ")})`)
-          .join("; ")}.`
+      ? ownerList.length > 6
+        ? `Santraller ${agg.name} portföyünde tek dengede uzlaştırıldı. ${ownerList.length} lisans sahibi; en çok santrali olanlar: ${ownerList
+            .slice(0, 4)
+            .map(([o, ps]) => `${o} (${ps.length})`)
+            .join("; ")}.`
+        : `Santraller ${agg.name} portföyünde tek dengede uzlaştırıldı. Lisans sahipleri: ${ownerList
+            .map(([o, ps]) => `${o} (${ps.join(", ")})`)
+            .join("; ")}.`
       : singleCompany
       ? `Tüm santraller ${singleCompany} şirketine ait; uzlaştırmada birlikte netleşir.${missingNote}`
-      : `Şirketler: ${r.settlement.companies.map((c) => `${c.name ?? "sahibi bulunamadı"} (${c.plantNames.join(", ")})`).join("; ")}.${missingNote}`;
+      : r.settlement.companies.length > 6
+        ? `${r.settlement.companies.length} şirket; her şirketin santralleri kendi dengesinde netleşir.${missingNote}`
+        : `Şirketler: ${r.settlement.companies.map((c) => `${c.name ?? "sahibi bulunamadı"} (${c.plantNames.join(", ")})`).join("; ")}.${missingNote}`;
     text(
       s,
       `${owners} KÜPST santral bazındadır ve ${unit.loc} netleşmez. Plan farkı: saatlik |gerçekleşen − plan| toplamının gerçekleşen üretime oranı.`,
@@ -1551,8 +1614,9 @@ export async function exportPlantReportPptx(
           (r.yekdem
             ? " YEKDEM santralleri dahildir: YEKDEM katılımcısı üretimini serbest piyasada kendisi satar ve dengesizliği kendisine aittir (YEK Yönetmeliği md. 15/1, 23/1; YEKDEM portföyü dengesizliğini düzenleyen md. 16–17 29.4.2016'da kaldırıldı); yalnızca geliri PTF yerine YEK fiyatından oluşur."
             : "") +
+          (r.lateStarts?.length ? ` Dönem içinde devreye giren santraller (öncesi eksik sayılmadı): ${listOf(r.lateStarts.map(describeLateStart), 6)}.` : "") +
           (r.dataGaps.length
-            ? ` Eksik veri: ${r.dataGaps.map(describeGap).join("; ")}; bu aylar santral ve portföy rakamlarına girmedi.`
+            ? ` Eksik veri: ${listOf(r.dataGaps.map(describeGap), 4)}; bu aylar santral ve portföy rakamlarına girmedi.`
             : "") +
           (r.outages.plants.length
             ? ` Olası arıza/kısıntı blokları (tahmin ≥ kurulu gücün %30'u, üretim ≤ %2, ≥ 3 saat) riskin %${nf(r.outages.sharePct, 1)} kadarı; hesaplardan çıkarılmadı.`

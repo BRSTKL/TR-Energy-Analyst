@@ -21,8 +21,8 @@
  * Her iki ölçü de dengesizlik maliyetinden pay ister; planlama iyileştirmesi ve DSG netleştirmesiyle TOPLANAMAZ.
  */
 
-import { HourlyResult, ImbalancePricingProfile, SystemDirection } from "@/lib/calculations/types";
-import { processHourlyRecord, pricedMarket } from "@/lib/calculations/engine";
+import { HourlyResult, ImbalancePricingProfile, SystemDirection, resolveImbalanceProfile } from "@/lib/calculations/types";
+import { calculateImbalanceAmount, imbalancePrices, processHourlyRecord, pricedMarket } from "@/lib/calculations/engine";
 
 export interface ArbitrageAggregate {
   period: string; // "YYYY-MM" veya "YYYY"
@@ -797,11 +797,14 @@ export function persistenceTradeGain(
     s = Math.sign(s) * Math.min(Math.abs(s), cap);
   }
   const { price } = realisticTradePrice(h, s > 0 ? "sell" : "buy", realism.stressHaircutPercent);
+  // Dengesizlik fiyatları plana bağlı değildir: bir kez bulunur (motoru her çağrıda çalıştırmak backtest'i yavaşlatıyordu).
+  // Gelir(f) = f·PTF + tutar(gerçekleşen − f) olduğundan gelir farkı + s·(fiyat − PTF) = tutar farkı + s·fiyat
   const market = pricedMarket(h);
-  const revenue = (forecastMwh: number) =>
-    processHourlyRecord({ timestamp: h.timestamp, actualMwh: h.actualMwh, forecastMwh }, market, profile).totalRevenue;
+  const { positive, negative } = imbalancePrices(market, resolveImbalanceProfile(profile, h.timestamp));
+  const amount = (d: number) => calculateImbalanceAmount(d, positive, negative);
+  const imbalance = h.actualMwh - h.forecastMwh;
   return {
-    gainTl: revenue(h.forecastMwh + s) - revenue(h.forecastMwh) + s * (price - h.ptf),
+    gainTl: amount(imbalance - s) - amount(imbalance) + s * price,
     tradeMwh: s,
   };
 }

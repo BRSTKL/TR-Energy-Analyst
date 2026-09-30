@@ -43,6 +43,7 @@ import { PricingProfileDialog } from "@/components/pricing-profile-dialog";
 import { EpiasSyncDialog } from "@/components/epias-sync-dialog";
 import { DeleteProjectDialog } from "@/components/delete-project-dialog";
 import { EpiasPlantPicker } from "@/components/epias-plant-picker";
+import { isAggregatorName } from "@/lib/projects/aggregator";
 import { ReportDownloadDialog } from "@/components/report-download-dialog";
 import type { EpiasPowerPlant } from "@/lib/epias-plant/plant-data";
 import { ImbalancePricingProfile } from "@/lib/calculations/types";
@@ -155,6 +156,8 @@ export default function ProjectsPage() {
   /** Santraller EPİAŞ'tan seçilip verisi otomatik çekilir mi, yoksa elle tanımlanıp dosyadan mı yüklenir */
   const [plantSource, setPlantSource] = useState<"epias" | "manual">("epias");
   const [epiasPlants, setEpiasPlants] = useState<EpiasPowerPlant[]>([]);
+  /** Pencerede bir toplayıcının santrallerinin hepsi eklendiyse EPİAŞ sayfasına aktarılır (toplayıcı portföyü önerisi) */
+  const [epiasAggregator, setEpiasAggregator] = useState<{ id: number; name: string } | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [kpis, setKpis] = useState<Record<string, ProjectKpis | null>>({});
   const router = useRouter();
@@ -229,6 +232,7 @@ export default function ProjectsPage() {
     setProjectDesc("");
     setNewPlants([emptyPlant()]);
     setEpiasPlants([]);
+    setEpiasAggregator(null);
     setFormError(null);
   };
 
@@ -242,6 +246,7 @@ export default function ProjectsPage() {
         name: projectName.trim(),
         desc: projectDesc.trim(),
         ids: epiasPlants.map((p) => p.id).join(","),
+        ...(epiasAggregator ? { aggId: String(epiasAggregator.id), aggName: epiasAggregator.name } : {}),
       });
       setDialogOpen(false);
       resetForm();
@@ -424,7 +429,14 @@ export default function ProjectsPage() {
                           gerçekleşen üretimi (UEVM) EPİAŞ&apos;tan çekeceksiniz. Projeye daha sonra başka santral de
                           ekleyebilirsiniz.
                         </p>
-                        <EpiasPlantPicker selected={epiasPlants} onChange={setEpiasPlants} compact />
+                        <EpiasPlantPicker
+                          selected={epiasPlants}
+                          onChange={setEpiasPlants}
+                          compact
+                          onAddCompany={(o) => {
+                            if (isAggregatorName(o.name)) setEpiasAggregator({ id: o.id, name: o.name });
+                          }}
+                        />
                       </div>
                     )}
 

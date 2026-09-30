@@ -160,7 +160,9 @@ export function NettingCard({
               ))}
               <TableRow>
                 <TableCell colSpan={7} className="pt-4 text-xs font-semibold text-slate-500">
-                  Santral Çiftleri (faydaya göre sıralı)
+                  {netting.pairsAmongTop
+                    ? `En iyi ${netting.pairs.length} santral çifti (tek başına maliyeti en yüksek ${netting.pairsAmongTop} santral arasında)`
+                    : `En iyi ${netting.pairs.length} santral çifti (faydaya göre sıralı)`}
                 </TableCell>
               </TableRow>
               {netting.pairs.map((g) => (

@@ -107,15 +107,18 @@ export function priceHours(hourly: HourlyResult[], profile: ImbalancePricingProf
   });
 }
 
-/** Tahmin k ile çarpıldığında saatin dengesizlik maliyeti */
-export function costWithMultiplier(h: PricedHour, k: number, profile: ImbalancePricingProfile): number {
+/**
+ * Tahmin k ile çarpıldığında saatin dengesizlik maliyeti. Dengesizlik fiyatları plana bağlı değildir (saatin piyasa
+ * verisinden gelir): priceHours'ta bir kez bulunan fiyatlarla motorun formülü doğrudan uygulanır
+ * (maliyet = Δ·(PTF − pozitif fiyat), Δ < 0 ise |Δ|·(negatif fiyat − PTF)). Her k için motoru yeniden çağırmak
+ * 61 santrallik projede backtest'i 4,5 dakikaya çıkarıyordu.
+ */
+export function costWithMultiplier(h: PricedHour, k: number, _profile?: ImbalancePricingProfile): number {
   if (k === 1) return h.baselineCost;
   const s = h.source;
-  return processHourlyRecord(
-    { timestamp: s.timestamp, actualMwh: s.actualMwh, forecastMwh: s.forecastMwh * k },
-    pricedMarket(s),
-    profile
-  ).imbalanceCost;
+  const delta = s.actualMwh - s.forecastMwh * k;
+  if (delta === 0) return 0;
+  return delta > 0 ? delta * (s.ptf - h.positivePrice) : -delta * (h.negativePrice - s.ptf);
 }
 
 const K_GRID = Array.from({ length: 41 }, (_, i) => Number((0.8 + i * 0.01).toFixed(2)));

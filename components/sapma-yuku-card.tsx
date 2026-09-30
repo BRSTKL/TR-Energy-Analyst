@@ -76,11 +76,21 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh }: { sapma: SapmaSum
   const unitLabel = agg ? `${agg.name} portföyünde` : "şirket bazında";
   const nettingPlace = agg ? "portföy içinde" : "şirket içinde";
 
+  // Çok santralli projede uzun ad listeleri uyarıyı okunmaz yapıyor: ilk birkaç ad ve toplam sayı
+  const names = (list: string[], max = 5) =>
+    list.length <= max ? list.join(", ") : `${list.slice(0, max).join(", ")} ve ${list.length - max} santral daha`;
   const warnings: string[] = [];
-  for (const m of sapma.check.missing) warnings.push(`${m.company} şirketinin ${m.plants.length} santrali projede yok: ${m.plants.join(", ")}.`);
+  for (const m of sapma.check.missing) warnings.push(`${m.company} şirketinin ${m.plants.length} santrali projede yok: ${names(m.plants)}.`);
   if (sapma.check.unknownOwner.length)
-    warnings.push(`Sahibi bilinmeyen santral: ${sapma.check.unknownOwner.join(", ")}. Ayrı şirket sayıldı; aynı şirketin santralleriyse risk olduğundan yüksek görünür.`);
-  if (sapma.check.yekdemNextUnknown.length) warnings.push(`YEKDEM'den çıkış yılı bilinmeyen santral: ${sapma.check.yekdemNextUnknown.join(", ")}.`);
+    warnings.push(
+      agg
+        ? `Sahibi bilinmeyen ${sapma.check.unknownOwner.length} santral: ${names(sapma.check.unknownOwner)}. Uzlaştırma toplayıcı portföyünde olduğu için dengesizlik etkilenmez; yalnız sahiplere göre paylaştırmada ayrı sahip sayılır.`
+        : `Sahibi bilinmeyen santral: ${names(sapma.check.unknownOwner)}. Ayrı şirket sayıldı; aynı şirketin santralleriyse risk olduğundan yüksek görünür.`
+    );
+  if (sapma.check.yekdemNextUnknown.length)
+    warnings.push(
+      `YEKDEM'den çıkış yılı bilinmeyen ${sapma.check.yekdemNextUnknown.length} santral (sonraki yılın YEKDEM listesi henüz yayımlanmamış olabilir): ${names(sapma.check.yekdemNextUnknown)}.`
+    );
 
   const updateEpias = async () => {
     setUpdating(true);

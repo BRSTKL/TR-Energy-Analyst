@@ -34,3 +34,18 @@ describe("Veri bütünlüğü", () => {
     expect(findDataGaps([])).toEqual([]);
   });
 });
+
+describe("dönem içinde devreye giren santral", () => {
+  it("ilk veriden önceki aylar eksik sayılmaz, yeni santral ayrıca bildirilir", async () => {
+    const { findDataGaps, findLateStarts, describeLateStart } = await import("@/lib/analysis/data-completeness");
+    const H = 3_600_000;
+    const range = (a: number, b: number) => Array.from({ length: (b - a) / H }, (_, i) => a + i * H);
+    const old = range(Date.UTC(2026, 0, 1), Date.UTC(2026, 3, 1));
+    const fresh = range(Date.UTC(2026, 2, 4), Date.UTC(2026, 3, 1));
+    const plants = [{ plantName: "ESKİ", timestamps: old }, { plantName: "YENİ", timestamps: fresh }];
+    expect(findDataGaps(plants)).toEqual([]);
+    const late = findLateStarts(plants);
+    expect(late).toEqual([{ plantName: "YENİ", firstDay: "2026-03-04" }]);
+    expect(describeLateStart(late[0])).toBe("YENİ (4 Mart 2026)");
+  });
+});

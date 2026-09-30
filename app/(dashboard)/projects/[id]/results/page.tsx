@@ -74,13 +74,14 @@ import { SapmaYukuCard, type SapmaSummary } from "@/components/sapma-yuku-card";
 import type { NettingResult } from "@/lib/analysis/portfolio-netting";
 
 import { MethodLink } from "@/components/method-link";
+import { sumHourProfiles, type HourBucket } from "@/lib/analysis/hour-profile";
 import { energy, nf, tlAxis, tlCompact } from "@/lib/format";
 interface PlantResult {
   plantId: string;
   plantName: string;
   plantType: string;
   capacityMw: number;
-  hourly: HourlyResult[];
+  hourProfile: HourBucket[];
   monthly: MonthlyAggregate[];
   yearly: YearlyAggregate;
 }
@@ -105,6 +106,11 @@ interface ApiResponse {
   /** Şirket bazında uzlaştırma, KÜPST ve YEKDEM varsayımları (Dengesizlik Karnesi ile aynı motor) */
   sapma?: SapmaSummary | null;
 }
+
+/** Bu sayıdan fazla santralde seçici düğmeler yerine açılır liste */
+const PLANT_BUTTONS_MAX = 8;
+/** Trend grafiğinde en fazla bu kadar santral çizgisi (fazlası okunmaz) */
+const TREND_MAX_LINES = 6;
 
 export default function ProjectResultsPage() {
   const params = useParams();
@@ -204,6 +210,17 @@ export default function ProjectResultsPage() {
     });
   }, [data, selectedPlantId]);
 
+  // Grafik 2'de çizilecek santraller: seçili santral; yoksa az santralde hepsi, çok santralde toplam dengesizlik
+  // maliyeti en yüksek TREND_MAX_LINES santral (61 çizgi ve lejant okunmuyordu)
+  const trendPlants = useMemo(() => {
+    if (!data) return [];
+    if (selectedPlantId !== "all") return data.plants.filter((p) => p.plantId === selectedPlantId);
+    if (data.plants.length <= TREND_MAX_LINES) return data.plants;
+    return [...data.plants]
+      .sort((a, b) => b.yearly.totalImbalanceCost - a.yearly.totalImbalanceCost)
+      .slice(0, TREND_MAX_LINES);
+  }, [data, selectedPlantId]);
+
   // Grafik 2: Aylık Birim Dengesizlik Maliyeti Trendi (Tüm santraller kıyaslamalı)
   const unitCostTrendChartData = useMemo(() => {
     if (!data) return [];
@@ -215,8 +232,8 @@ export default function ProjectResultsPage() {
     return allMonths.map((ym) => {
       const row: Record<string, string | number> = { month: ym };
 
-      // Her santral için birim maliyet
-      data.plants.forEach((plant) => {
+      // Çizilen santraller için birim maliyet
+      trendPlants.forEach((plant) => {
         const m = plant.monthly.find((item) => item.yearMonth === ym);
         row[plant.plantName] = m?.unitImbalanceCost || 0;
       });
@@ -227,42 +244,22 @@ export default function ProjectResultsPage() {
 
       return row;
     });
-  }, [data]);
+  }, [data, trendPlants]);
 
   // Grafik 3: Saatlik Dengesizlik Dağılımı (00:00 - 23:00 saatlik sapma yoğunluğu)
   const hourlyDistributionChartData = useMemo(() => {
     if (!data) return [];
 
-    const hourlyRecords =
+    const buckets =
       selectedPlantId === "all"
-        ? data.plants.flatMap((p) => p.hourly)
-        : data.plants.find((p) => p.plantId === selectedPlantId)?.hourly || [];
-
-    // 00 - 23 saatlik kovalara ayır
-    const hours = Array.from({ length: 24 }, (_, i) => {
-      const hStr = i < 10 ? `0${i}:00` : `${i}:00`;
-      return {
-        hour: hStr,
-        pozitifMwh: 0,
-        negatifMwh: 0,
-        netMwh: 0,
-        count: 0,
-      };
-    });
-
-    hourlyRecords.forEach((rec) => {
-      const date = new Date(rec.timestamp);
-      const h = date.getUTCHours();
-      if (hours[h]) {
-        if (rec.imbalanceMwh > 0) {
-          hours[h].pozitifMwh += rec.imbalanceMwh;
-        } else if (rec.imbalanceMwh < 0) {
-          hours[h].negatifMwh += Math.abs(rec.imbalanceMwh);
-        }
-        hours[h].netMwh += rec.imbalanceMwh;
-        hours[h].count += 1;
-      }
-    });
+        ? sumHourProfiles(data.plants.map((p) => p.hourProfile))
+        : data.plants.find((p) => p.plantId === selectedPlantId)?.hourProfile ?? [];
+    const hours = buckets.map((b) => ({
+      hour: `${String(b.hour).padStart(2, "0")}:00`,
+      pozitifMwh: b.positiveMwh,
+      negatifMwh: b.negativeMwh,
+      netMwh: b.netMwh,
+    }));
 
     return hours.map((h) => ({
       hour: h.hour,
@@ -432,11 +429,11 @@ export default function ProjectResultsPage() {
     );
   }
 
-  // Renk paleti
-  const plantColors: Record<string, string> = {
-    "Karaburun RES": "#0284c7",
-    "Toroslar GES": "#f59e0b",
-  };
+  // Trend çizgilerine sırayla ayırt edilebilir renkler (portföy çizgisi yeşil kesikli)
+  const TREND_COLORS = ["#0284c7", "#f59e0b", "#e11d48", "#7c3aed", "#0d9488", "#ea580c"];
+  const plantColors: Record<string, string> = Object.fromEntries(
+    trendPlants.map((p, i) => [p.plantName, TREND_COLORS[i % TREND_COLORS.length]])
+  );
 
   return (
     <div className="min-h-screen bg-slate-50/60 pb-16">
@@ -643,7 +640,24 @@ export default function ProjectResultsPage() {
               Tüm Portföy ({data.plants.length} Santral)
             </Button>
 
-            {data.plants.map((plant) => (
+            {data.plants.length > PLANT_BUTTONS_MAX ? (
+              <select
+                aria-label="Santral seç"
+                value={selectedPlantId === "all" ? "" : selectedPlantId}
+                onChange={(e) => setSelectedPlantId(e.target.value || "all")}
+                className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-800 shadow-sm"
+              >
+                <option value="">Santral seçin…</option>
+                {[...data.plants]
+                  .sort((a, b) => a.plantName.localeCompare(b.plantName, "tr"))
+                  .map((plant) => (
+                    <option key={plant.plantId} value={plant.plantId}>
+                      {plant.plantName} · {plant.plantType} · {plant.capacityMw} MW
+                    </option>
+                  ))}
+              </select>
+            ) : (
+              data.plants.map((plant) => (
               <Button
                 key={plant.plantId}
                 variant={selectedPlantId === plant.plantId ? "default" : "outline"}
@@ -662,7 +676,8 @@ export default function ProjectResultsPage() {
                 )}
                 {plant.plantName} ({plant.capacityMw} MW)
               </Button>
-            ))}
+              ))
+            )}
           </div>
 
           <div className="text-xs text-slate-500">
@@ -827,8 +842,9 @@ export default function ProjectResultsPage() {
                 Aylık Birim Dengesizlik Maliyeti Trendi (₺/MWh)
               </CardTitle>
               <CardDescription>
-                Farklı santrallerin MWh başına oluşan dengesizlik maliyeti performansının
-                zaman içindeki kıyaslaması.
+                {selectedPlantId === "all" && data.plants.length > TREND_MAX_LINES
+                  ? `Portföy ortalaması ve toplam dengesizlik maliyeti en yüksek ${TREND_MAX_LINES} santral (${data.plants.length} santralden). Diğer santraller için yukarıdan santral seçin.`
+                  : "Santrallerin MWh başına dengesizlik maliyetinin zaman içindeki kıyaslaması."}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -855,7 +871,7 @@ export default function ProjectResultsPage() {
                       }
                     />
                     <Legend wrapperStyle={{ paddingTop: 10, fontSize: 12 }} />
-                    {data.plants.map((plant) => (
+                    {trendPlants.map((plant) => (
                       <Line
                         key={plant.plantId}
                         isAnimationActive={false}

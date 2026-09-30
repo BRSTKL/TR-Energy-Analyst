@@ -15,7 +15,7 @@
 import { processHourlyRecord } from "@/lib/calculations/engine";
 import { aggregateMonthly } from "@/lib/calculations/aggregate";
 import { HourlyResult, ImbalancePricingProfile, REGULATORY_IMBALANCE_REGIMES } from "@/lib/calculations/types";
-import { findDataGaps, type PlantDataGap } from "@/lib/analysis/data-completeness";
+import { findDataGaps, findLateStarts, type LateStart, type PlantDataGap } from "@/lib/analysis/data-completeness";
 import { describeAggregatorScope } from "@/lib/projects/aggregator";
 import { detectOutages, markConcurrent, type PlantOutages } from "@/lib/analysis/outage-detection";
 import { analyzeDsgScenario, MAX_EXACT_PLANTS } from "@/lib/analysis/dsg-scenarios";
@@ -201,6 +201,8 @@ export interface PlantReportData {
   } | null;
   /** Veri döneminde ayı eksik olan santraller (ör. EPİAŞ'ta bir ay yayımlanmamış); eksik ay hesaplara girmez */
   dataGaps: PlantDataGap[];
+  /** Dönem içinde devreye giren santraller (ilk verisinden önceki saatler eksik sayılmaz) */
+  lateStarts: LateStart[];
   /**
    * Olası arıza / kısıntı: tahmin yüksekken üretimin ~0 olduğu ≥3 saatlik bloklar (yalnızca bloğu olan santraller).
    * concurrent blok birden çok santralde aynı anda: olası kısıntı (YAT); diğerleri olası arıza. Maliyet santral bazında.
@@ -764,7 +766,10 @@ export function buildPlantReport(
     outages,
     marketProfile,
     fairShare,
-    dataGaps: findDataGaps(data.plants.map((p) => ({ plantName: p.plantName, timestamps: p.hourly.map((h) => new Date(h.timestamp).getTime()) }))),
+    ...(() => {
+      const stamps = data.plants.map((p) => ({ plantName: p.plantName, timestamps: p.hourly.map((h) => new Date(h.timestamp).getTime()) }));
+      return { dataGaps: findDataGaps(stamps), lateStarts: findLateStarts(stamps) };
+    })(),
     intraday,
   };
 }

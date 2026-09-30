@@ -53,20 +53,55 @@ export function findDataGaps(plants: Array<{ plantName: string; timestamps: numb
   for (const p of plants) {
     const have = new Map<string, number>();
     const seen = new Set<number>();
+    let first = Infinity;
     for (const t of p.timestamps) {
       if (seen.has(t)) continue; // yinelenen saat bir kez sayılır
       seen.add(t);
+      if (t < first) first = t;
       const k = monthKey(t);
       have.set(k, (have.get(k) ?? 0) + 1);
     }
+    // Dönem içinde devreye giren santral: ilk verisinden önceki saatler eksik sayılmaz (findLateStarts ayrıca bildirir)
+    const expectedFor = new Map(expected);
+    if (Number.isFinite(first) && first > start) {
+      for (const k of Array.from(expectedFor.keys())) if (k < monthKey(first)) expectedFor.delete(k);
+      const firstMonthEnd = Date.UTC(new Date(first).getUTCFullYear(), new Date(first).getUTCMonth() + 1, 1);
+      expectedFor.set(monthKey(first), Math.round((Math.min(firstMonthEnd, end + HOUR) - first) / HOUR));
+    }
     const gapMonths: MonthGap[] = [];
-    for (const [month, exp] of expected) {
+    for (const [month, exp] of expectedFor) {
       const hours = have.get(month) ?? 0;
       if (hours < exp * minMonthShare) gapMonths.push({ month, hours, expectedHours: exp });
     }
     if (gapMonths.length > 0) gaps.push({ plantName: p.plantName, hours: seen.size, expectedHours: expectedTotal, gapMonths });
   }
   return gaps;
+}
+
+/** Dönem başladıktan sonra (en az bir gün) ilk verisi gelen santraller: yeni santral, eksik veri değil */
+export interface LateStart {
+  plantName: string;
+  /** İlk veri günü "YYYY-MM-DD" */
+  firstDay: string;
+}
+
+export function findLateStarts(plants: Array<{ plantName: string; timestamps: number[] }>): LateStart[] {
+  let start = Infinity;
+  const firsts = plants.map((p) => {
+    let f = Infinity;
+    for (const t of p.timestamps) if (t < f) f = t;
+    if (f < start) start = f;
+    return { plantName: p.plantName, first: f };
+  });
+  return firsts
+    .filter((p) => Number.isFinite(p.first) && p.first - start >= 24 * HOUR)
+    .map((p) => ({ plantName: p.plantName, firstDay: new Date(p.first).toISOString().slice(0, 10) }));
+}
+
+/** "YENİ GES (4 Ağustos 2026)" */
+export function describeLateStart(l: LateStart): string {
+  const [y, m, d] = l.firstDay.split("-").map(Number);
+  return `${l.plantName} (${d} ${MONTHS_TR[m - 1]} ${y})`;
 }
 
 const MONTHS_TR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
