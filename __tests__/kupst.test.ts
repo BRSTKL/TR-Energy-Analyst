@@ -35,3 +35,17 @@ describe("KÜPST (sapma tutarı)", () => {
     expect(kupstForHour(hour(new Date(Date.UTC(2026, 5, 1, 12)), 100, 70), "RES")).toBeCloseTo(15 * 2400 * 0.05, 6);
   });
 });
+
+describe("KÜPST son KGÜP ile", () => {
+  it("son plan varsa tolerans ve sapma son plana göre hesaplanır", async () => {
+    const { kupstForHour, KUPST_REGIMES } = await import("@/lib/calculations/kupst");
+    const r2026 = KUPST_REGIMES[2];
+    const base = { timestamp: "2026-03-01T10:00:00Z", actualMwh: 80, forecastMwh: 100, ptf: 3000, smf: 2000 } as any;
+    // İlk plan: |80 − 100| − 0,15 × 100 = 5 MWh → 5 × 3000 × 0,05 = 750
+    expect(kupstForHour(base, "RES", r2026)).toBeCloseTo(750, 6);
+    // Son plan 90: |80 − 90| − 0,15 × 90 = −3,5 → 0
+    expect(kupstForHour({ ...base, forecastFinalMwh: 90 }, "RES", r2026)).toBe(0);
+    // Son plan null: ilk plana düşer
+    expect(kupstForHour({ ...base, forecastFinalMwh: null }, "RES", r2026)).toBeCloseTo(750, 6);
+  });
+});

@@ -16,11 +16,19 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { poolPlantRows } from "@/lib/pool/pool-hours";
 
-export type ProjectWithRecords = Prisma.ProjectGetPayload<{
+type ProjectWithRecordsBase = Prisma.ProjectGetPayload<{
   include: { pricingProfiles: true; plants: { include: { records: { include: { marketData: true } } } } };
 }>;
+/** Kayıtlar: havuz santrallerinde son KGÜP de taşınır (veritabanı kayıtlarında null) */
+export type ProjectWithRecords = Omit<ProjectWithRecordsBase, "plants"> & {
+  plants: Array<
+    Omit<ProjectWithRecordsBase["plants"][number], "records"> & {
+      records: Array<ProjectWithRecordsBase["plants"][number]["records"][number] & { forecastFinalMwh: number | null }>;
+    }
+  >;
+};
 type Plant = Prisma.PowerPlantGetPayload<object>;
-type GenRecord = Prisma.GenerationRecordGetPayload<object>;
+type GenRecord = Prisma.GenerationRecordGetPayload<object> & { forecastFinalMwh?: number | null };
 
 const day = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -55,6 +63,7 @@ async function plantRecords(plant: Plant, period: { start: string; end: string }
     actualMwh: r.actualMwh,
     imbalanceMwh: r.actualMwh - r.forecastMwh,
     imbalanceCostTl: 0,
+    forecastFinalMwh: r.forecastFinalMwh,
     createdAt: plant.createdAt,
     updatedAt: plant.updatedAt,
   }));
@@ -95,7 +104,7 @@ export async function findProjectWithRecords(
       records: (recordsByPlant.get(plant.id) ?? []).map((r) => {
         // Havuz kaydı piyasaya saatle, veritabanı kaydı kayıtlı bağlantıyla eşleşir
         const m = plant.poolBacked ? marketByTime.get(r.timestamp.getTime()) : r.marketDataId ? marketById.get(r.marketDataId) : undefined;
-        return { ...r, marketDataId: m?.id ?? r.marketDataId, marketData: m ?? null };
+        return { ...r, forecastFinalMwh: r.forecastFinalMwh ?? null, marketDataId: m?.id ?? r.marketDataId, marketData: m ?? null };
       }),
     })),
   };

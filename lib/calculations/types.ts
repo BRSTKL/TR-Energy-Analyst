@@ -145,6 +145,8 @@ export interface HourlyRecord {
   timestamp: Date | string;
   actualMwh: number;
   forecastMwh: number;
+  /** Son KGÜP (gün içi piyasası kapandıktan sonraki plan); KÜPST buna göre hesaplanır. Yoksa ilk plan kullanılır */
+  forecastFinalMwh?: number | null;
   plantId?: string;
   plantName?: string;
 }
@@ -165,6 +167,8 @@ export interface HourlyResult extends OfficialImbalancePrices {
   timestamp: Date | string;
   actualMwh: number;
   forecastMwh: number;
+  /** Son KGÜP (varsa); dengesizlik riski ilk plana, KÜPST son plana göredir */
+  forecastFinalMwh?: number | null;
   ptf: number;
   smf: number;
   systemDirection: SystemDirection;

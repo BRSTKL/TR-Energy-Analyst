@@ -23,6 +23,7 @@ import { combineBacktests, MIN_FEASIBLE_LAG_HOURS, persistenceStrategy, runBackt
 import { KUPST_REGIMES, kupstForHour, kupstTotal } from "@/lib/calculations/kupst";
 import { percentileRank, quantile, type Distribution } from "@/lib/sector/benchmark";
 import type { ProjectHourly } from "@/lib/services/project-hourly";
+import type { AggregatorBenchmarkRow } from "@/lib/analysis/aggregator-benchmark";
 
 export interface ReportPlantRow {
   name: string;
@@ -109,6 +110,13 @@ export interface ReportContext {
     /** "2025" ya da "2026 (Ocak–Ağustos)" */
     label?: string;
     byType: Partial<Record<string, { unitImbalanceTl: Distribution; unitKupstTl: Distribution; values: number[]; kupstValues: number[] }>>;
+  };
+  /** Toplayıcılar arası kıyas (scripts/aggregator-benchmark.mts; PLAN 8.7) */
+  aggregatorBenchmark?: {
+    year: number;
+    period: { start: string; end: string };
+    membershipAsOf: string;
+    aggregators: AggregatorBenchmarkRow[];
   };
 }
 
@@ -201,6 +209,52 @@ export interface PlantReportData {
   } | null;
   /** Veri döneminde ayı eksik olan santraller (ör. EPİAŞ'ta bir ay yayımlanmamış); eksik ay hesaplara girmez */
   dataGaps: PlantDataGap[];
+  /**
+   * Toplayıcılar arası kıyas (yalnız toplayıcı projelerinde, kıyas aynı yıl için varsa): 300 GWh üstü toplayıcılar ve
+   * projenin toplayıcısının sıraları. Kıyas aynı yöntemle havuzdan hesaplanır (santral listesi EPİAŞ üyeliğine göre).
+   */
+  /**
+   * Toplayıcı portföyünde sahiplerin katkısı (PLAN 8.8): sahip portföyden ayrılsa netleşme değeri ne kadar azalır
+   * ([portföy − sahip] netleşmiş + sahip tek başına − portföy netleşmiş). Katkılar toplanamaz (portföy değeri
+   * etkileşimlerden oluşur). Yalnız toplayıcı projelerinde; en az 3 sahip gerekir.
+   */
+  /**
+   * Gün içi etkinlik (PLAN 8.9): ilk plan (gün öncesi) ile son plan (gün içi piyasası kapandıktan sonra) aynı fiyatlarla.
+   * Son plan, gün içi işlemlerle düzeltilmiş pozisyondur; aradaki fark gün içi düzeltmelerin dengesizliği ne kadar
+   * azalttığıdır (gün içi işlem fiyatlarının kâr/zararı hariç). Son planı olan saatlerle sınırlıdır; yoksa null.
+   */
+  intradayEffect: {
+    hoursWithFinal: number;
+    coveragePct: number;
+    firstCostTl: number;
+    finalCostTl: number;
+    reductionPct: number;
+    absDevFirstMwh: number;
+    absDevFinalMwh: number;
+    /** Planı gün içinde hiç güncellenmeyen santraller (saatlerin %1'inden azında fark) */
+    staticPlants: string[];
+    /** Planı en çok güncellenen santraller: sapma azalması (%) */
+    topAdjusters: Array<{ name: string; reductionPct: number }>;
+  } | null;
+  ownerContributions: Array<{
+    name: string;
+    plantCount: number;
+    productionMwh: number;
+    /** Sahip tek başına (kendi santralleri netleşmiş) MWh başına dengesizlik */
+    standaloneTlPerMwh: number;
+    contributionTl: number;
+    contributionTlPerMwh: number;
+  }> | null;
+  peers: {
+    label: string;
+    membershipAsOf: string;
+    selfId: number;
+    rows: AggregatorBenchmarkRow[];
+    /** MWh başına netleşmiş maliyette sıra (1 = en düşük) ve netleşme değerinde sıra (1 = en büyük), rows içinde */
+    rankUnit: number;
+    rankValue: number;
+    rankPct: number;
+  } | null;
   /**
    * Tahmin iyileştirme fırsatı (8.4): sektör medyanının üstündeki santraller (devreye alma dönemi hariç) medyana inseydi.
    * standaloneGainTl santral tek başına (üst sınır); nettedGainTl uzlaştırma birimlerinde netleşmiş dengesizlikte
@@ -743,6 +797,138 @@ export function buildPlantReport(
     if (types.length) sector = { year: sectorCtx.year, label: sectorCtx.label ?? String(sectorCtx.year), types };
   }
 
+  // Toplayıcılar arası kıyas: 300 GWh üstü toplayıcılar (küçük portföylerde oran anlamsız) ve projenin toplayıcısı
+  let peers: PlantReportData["peers"] = null;
+  const bench = context.aggregatorBenchmark;
+  const selfId = data.aggregator?.portfolio?.orgId;
+  if (bench && selfId && bench.year === new Date(start).getUTCFullYear() && bench.aggregators.some((a) => a.id === selfId)) {
+    const rows = bench.aggregators.filter((a) => a.productionMwh >= 300_000 || a.id === selfId).sort((a, b) => a.nettedTlPerMwh - b.nettedTlPerMwh);
+    const byValue = [...rows].sort((a, b) => b.nettingValueTl - a.nettingValueTl);
+    const byPct = [...rows].sort((a, b) => b.nettingPct - a.nettingPct);
+    const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+    const m = (d: string) => MONTHS[Number(d.slice(5, 7)) - 1];
+    peers = {
+      label: `${m(bench.period.start)}–${m(bench.period.end)} ${bench.year}`,
+      membershipAsOf: bench.membershipAsOf,
+      selfId,
+      rows,
+      rankUnit: rows.findIndex((a) => a.id === selfId) + 1,
+      rankValue: byValue.findIndex((a) => a.id === selfId) + 1,
+      rankPct: byPct.findIndex((a) => a.id === selfId) + 1,
+    };
+  }
+
+  // Gün içi etkinlik: uzlaştırma birimi içinde saatlik toplam sapma, ilk ve son planla (aynı saatlik fiyatlar)
+  let intradayEffect: PlantReportData["intradayEffect"] = null;
+  {
+    const hourCost = (d: number, h: HourlyResult) =>
+      d > 0 ? d * (h.ptf - h.positivePrice) : d < 0 ? -d * (h.negativePrice - h.ptf) : 0;
+    const units = new Map<string, Map<number, { first: number; final: number; h: HourlyResult }>>();
+    let total = 0;
+    let withFinal = 0;
+    let absFirst = 0;
+    let absFinal = 0;
+    const staticPlants: string[] = [];
+    const adjusters: Array<{ name: string; reductionPct: number }> = [];
+    for (const p of withData) {
+      const key = p.organizationId !== null ? `org:${p.organizationId}` : `plant:${p.plantId}`;
+      const u = units.get(key) ?? units.set(key, new Map()).get(key)!;
+      let changed = 0;
+      let pf = 0;
+      let pl = 0;
+      let n = 0;
+      for (const h of p.hourly) {
+        total++;
+        if (h.forecastFinalMwh === null || h.forecastFinalMwh === undefined) continue;
+        withFinal++;
+        n++;
+        const d1 = h.actualMwh - h.forecastMwh;
+        const d2 = h.actualMwh - h.forecastFinalMwh;
+        if (Math.abs(h.forecastFinalMwh - h.forecastMwh) > 0.001) changed++;
+        absFirst += Math.abs(d1);
+        absFinal += Math.abs(d2);
+        pf += Math.abs(d1);
+        pl += Math.abs(d2);
+        const t = new Date(h.timestamp).getTime();
+        const b = u.get(t) ?? { first: 0, final: 0, h };
+        b.first += d1;
+        b.final += d2;
+        u.set(t, b);
+      }
+      if (n > 0 && changed < 0.01 * n) staticPlants.push(p.plantName);
+      else if (n > 0 && pf > 0) adjusters.push({ name: p.plantName, reductionPct: (1 - pl / pf) * 100 });
+    }
+    if (withFinal > 0.5 * total) {
+      let firstCost = 0;
+      let finalCost = 0;
+      for (const u of Array.from(units.values()))
+        for (const b of Array.from(u.values())) {
+          firstCost += hourCost(b.first, b.h);
+          finalCost += hourCost(b.final, b.h);
+        }
+      intradayEffect = {
+        hoursWithFinal: withFinal,
+        coveragePct: (withFinal / total) * 100,
+        firstCostTl: firstCost,
+        finalCostTl: finalCost,
+        reductionPct: firstCost > 0 ? (1 - finalCost / firstCost) * 100 : 0,
+        absDevFirstMwh: absFirst,
+        absDevFinalMwh: absFinal,
+        staticPlants,
+        topAdjusters: adjusters.sort((a, b) => b.reductionPct - a.reductionPct).slice(0, 5),
+      };
+    }
+  }
+
+  // Sahiplerin portföye katkısı: saatlik sapma dizileriyle (fiyatlar saatin kendi fiyatı)
+  let ownerContributions: PlantReportData["ownerContributions"] = null;
+  if (data.aggregator && withData.length > 2) {
+    const hourCost = (d: number, h: HourlyResult) =>
+      d > 0 ? d * (h.ptf - h.positivePrice) : d < 0 ? -d * (h.negativePrice - h.ptf) : 0;
+    const samples = new Map<number, HourlyResult>();
+    const total = new Map<number, number>();
+    const owners = new Map<string, { name: string; plants: number; mwh: number; d: Map<number, number> }>();
+    for (const p of withData) {
+      const ownerId = p.ownerOrganizationId ?? null;
+      const key = ownerId !== null ? `org:${ownerId}` : `plant:${p.plantId}`;
+      const o = owners.get(key) ?? owners.set(key, { name: ownerId !== null ? p.ownerName ?? `Şirket ${ownerId}` : p.plantName, plants: 0, mwh: 0, d: new Map() }).get(key)!;
+      o.plants++;
+      for (const h of p.hourly) {
+        const t = new Date(h.timestamp).getTime();
+        const d = h.actualMwh - h.forecastMwh;
+        if (!samples.has(t)) samples.set(t, h);
+        total.set(t, (total.get(t) ?? 0) + d);
+        o.d.set(t, (o.d.get(t) ?? 0) + d);
+        o.mwh += h.actualMwh;
+      }
+    }
+    if (owners.size >= 3) {
+      let portfolioCost = 0;
+      for (const [t, d] of Array.from(total.entries())) portfolioCost += hourCost(d, samples.get(t)!);
+      ownerContributions = Array.from(owners.values())
+        .map((o) => {
+          let alone = 0;
+          let without = 0;
+          for (const [t, d] of Array.from(total.entries())) {
+            const od = o.d.get(t) ?? 0;
+            const h = samples.get(t)!;
+            if (od !== 0) alone += hourCost(od, h);
+            without += hourCost(d - od, h);
+          }
+          const contribution = without + alone - portfolioCost;
+          return {
+            name: o.name,
+            plantCount: o.plants,
+            productionMwh: o.mwh,
+            standaloneTlPerMwh: o.mwh > 0 ? alone / o.mwh : 0,
+            contributionTl: contribution,
+            contributionTlPerMwh: o.mwh > 0 ? contribution / o.mwh : 0,
+          };
+        })
+        .sort((a, b) => b.contributionTl - a.contributionTl);
+    }
+  }
+
   const stamps = data.plants.map((p) => ({ plantName: p.plantName, timestamps: p.hourly.map((h) => new Date(h.timestamp).getTime()) }));
   const lateStarts = findLateStarts(stamps);
 
@@ -778,7 +964,9 @@ export function buildPlantReport(
             const g = hourCost(d, h) - hourCost(d * sc, h);
             standaloneGain += g;
             gainByPlant.set(p.plantName, (gainByPlant.get(p.plantName) ?? 0) + g);
-            kupstGain += kupstForHour(h, p.plantType) - kupstForHour({ ...h, actualMwh: h.forecastMwh + d * sc }, p.plantType);
+            // KÜPST son plana göre: son plandan sapma da aynı oranda küçültülür
+            const kup = h.forecastFinalMwh ?? h.forecastMwh;
+            kupstGain += kupstForHour(h, p.plantType) - kupstForHour({ ...h, actualMwh: kup + (h.actualMwh - kup) * sc }, p.plantType);
           }
         }
       }
@@ -833,6 +1021,9 @@ export function buildPlantReport(
     dataGaps: findDataGaps(stamps),
     lateStarts,
     forecastUpside,
+    intradayEffect,
+    ownerContributions,
+    peers,
     intraday,
   };
 }

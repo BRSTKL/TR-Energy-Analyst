@@ -7,6 +7,8 @@
  * EPİAŞ'a yalnızca santral adları için (önbellekli liste) bağlanır; bağlantı yoksa adlar yerine kimlikler kullanılır.
  */
 
+import fs from "node:fs";
+import path from "node:path";
 import { companyPlantIdsFromCache, listUevmPowerPlants } from "@/lib/services/epias-plants";
 import { loadSectorBenchmark } from "@/lib/services/sector";
 import { SECTOR_TECHS, sectorPeriodLabel } from "@/lib/sector/benchmark";
@@ -43,6 +45,7 @@ export async function buildReportContext(plants: ReportPlantMeta[], year: number
   };
   const context: ReportContext = { missingCompanyPlants: new Map(), companyPlantTotals: new Map() };
   context.sector = await loadSectorContext(year);
+  context.aggregatorBenchmark = loadAggregatorBenchmark(year);
 
   const byOrg = await companyPlantIdsFromCache(year);
   if (!byOrg) return { context, check };
@@ -68,6 +71,15 @@ export async function buildReportContext(plants: ReportPlantMeta[], year: number
     if (missingNames.length) check.missing.push({ company: o.name, plants: missingNames });
   }
   return { context, check };
+}
+
+/** Toplayıcılar arası kıyas (scripts/aggregator-benchmark.mts ile üretilir); yoksa undefined */
+function loadAggregatorBenchmark(year: number): ReportContext["aggregatorBenchmark"] {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(process.cwd(), ".cache", "epias", `aggregator-benchmark-${year}.json`), "utf8"));
+  } catch {
+    return undefined;
+  }
 }
 
 /** Sektör karnesi özeti (scripts/sector-collect.mts ile üretilir); yoksa undefined */

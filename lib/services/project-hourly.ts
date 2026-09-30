@@ -60,7 +60,7 @@ export async function loadProjectHourly(projectId: string): Promise<ProjectHourl
         r.marketData
           ? [
               processHourlyRecord(
-                { timestamp: r.timestamp, actualMwh: r.actualMwh, forecastMwh: r.forecastMwh, plantId: plant.id, plantName: plant.name },
+                { timestamp: r.timestamp, actualMwh: r.actualMwh, forecastMwh: r.forecastMwh, forecastFinalMwh: r.forecastFinalMwh, plantId: plant.id, plantName: plant.name },
                 {
                   timestamp: r.marketData.timestamp,
                   ptf: r.marketData.ptf,

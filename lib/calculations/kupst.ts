@@ -52,8 +52,10 @@ const toleranceFor = (regime: KupstRegime, plantType: string) =>
 
 /** Bir saatin KÜPST tutarı (TL). `regime` verilmezse saatin tarihine göre seçilir. */
 export function kupstForHour(h: HourlyResult, plantType: string, regime: KupstRegime = kupstRegimeAt(h.timestamp)): number {
-  const plan = Math.max(h.forecastMwh, 0);
-  const excess = Math.max(0, Math.abs(h.actualMwh - h.forecastMwh) - toleranceFor(regime, plantType) * plan);
+  // Mevzuat: KÜP, gün içi piyasası kapandıktan sonra güncellenen (son) plandır; havuzda yoksa ilk plan (üst sınıra yakın)
+  const kup = h.forecastFinalMwh ?? h.forecastMwh;
+  const plan = Math.max(kup, 0);
+  const excess = Math.max(0, Math.abs(h.actualMwh - kup) - toleranceFor(regime, plantType) * plan);
   return excess * Math.max(h.ptf, h.smf) * regime.priceCoef;
 }
 

@@ -13,6 +13,8 @@ export interface PoolHourRow {
   timestamp: Date;
   forecastMwh: number;
   actualMwh: number;
+  /** Son KGÜP (havuzda o ay çekildiyse); ilk plan sürümünde KÜPST için */
+  forecastFinalMwh: number | null;
 }
 
 export interface PoolPlantRef {
@@ -31,7 +33,7 @@ export async function poolPlantRows(plant: PoolPlantRef, periodStart: string, pe
   for (const r of readRange(docs, periodStart, periodEnd)) {
     const f = r[series];
     if (f === null || r.uevm === null) continue;
-    out.push({ timestamp: r.timestamp, forecastMwh: f, actualMwh: r.uevm });
+    out.push({ timestamp: r.timestamp, forecastMwh: f, actualMwh: r.uevm, forecastFinalMwh: r.kgupFinal });
   }
   return out;
 }

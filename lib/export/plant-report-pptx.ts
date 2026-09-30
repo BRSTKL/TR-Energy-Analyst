@@ -875,6 +875,126 @@ export async function exportPlantReportPptx(
   }
 
   // ---------------------------------------------------------------------------------------------
+  // 4c. TOPLAYICILAR ARASI KIYAS (toplayıcı projelerinde; PLAN 8.7)
+  // ---------------------------------------------------------------------------------------------
+  if (r.peers && agg) {
+    const pe = r.peers;
+    const self = pe.rows.find((a) => a.id === pe.selfId)!;
+    // Kısa ad: unvanın ilk kelimesi; aynı ilk kelimeyi taşıyanlarda ilk iki kelime (Enerjisa Müşteri / Enerjisa Doğal)
+    const firstWord = (n: string) => n.trim().split(/\s+/)[0];
+    const cap = (w: string) => `${w.charAt(0)}${w.slice(1).replace(/İ/g, "i").toLowerCase()}`;
+    const dup = new Set(pe.rows.map((a) => firstWord(a.name)).filter((w, i, arr) => arr.indexOf(w) !== i));
+    const short = (a: (typeof pe.rows)[number]) => {
+      const ws = a.name.trim().split(/\s+/);
+      return dup.has(ws[0]) ? `${cap(ws[0])} ${cap(ws[1] ?? "")}` : cap(ws[0]);
+    };
+    const n = pe.rows.length;
+    const title = `${agg.name}: netleşme değerinde ${pe.rankValue}., MWh başına netleşmiş maliyette ${n} toplayıcı içinde ${pe.rankUnit}.`;
+    const s = contentSlide("Toplayıcılar arası kıyas", title, "exact");
+    s.addNotes(
+      "Bu kıyas bütün toplayıcılar için aynı yöntemle, EPİAŞ açık verisiyle yapıldı: portföydeki lisanslı santrallerin saatlik sapması, resmi dengesizlik fiyatı; " +
+        "sahipler tek başına ile toplayıcı portföyünde tek denge karşılaştırıldı. MWh başına maliyet portföyün teknoloji karışımına bağlıdır: hidro ağırlıklı portföyler doğal olarak düşük çıkar. " +
+        "Toplayıcıların gün içi işlemleri ve ikili anlaşmaları açık veride yoktur; bu, gün içi işlemler öncesi karşılaştırmadır."
+    );
+    // Sol: MWh başına netleşmiş maliyet çubukları (küçükten büyüğe)
+    const top = 1.95;
+    const lw = 7.4;
+    const nameW = 1.9;
+    const barX = M + nameW + 0.1;
+    const barMax = lw - nameW - 1.2;
+    const rowH = Math.min(0.24, 4.35 / n);
+    const maxU = Math.max(...pe.rows.map((a) => a.nettedTlPerMwh), 1);
+    text(s, "MWh başına netleşmiş dengesizlik (TL, düşük daha iyi)", { x: M, y: top - 0.35, w: lw, h: 0.28, fontSize: 10, bold: true, color: C.sub });
+    pe.rows.forEach((a, i) => {
+      const y = top + i * rowH;
+      const me = a.id === pe.selfId;
+      if (me) rect(s, M - 0.05, y, lw + 0.1, rowH, C.exactBg);
+      text(s, short(a), { x: M, y, w: nameW, h: rowH, fontSize: 9, bold: me, color: me ? C.exactTx : C.ink, valign: "middle" });
+      const w = Math.max((a.nettedTlPerMwh / maxU) * barMax, 0.02);
+      rect(s, barX, y + rowH * 0.2, w, rowH * 0.6, me ? C.gain : "A7B4C2");
+      text(s, `${nf(a.nettedTlPerMwh, 0)}  ·  %${nf(a.nettingPct, 0)}`, {
+        x: barX + w + 0.06,
+        y,
+        w: 1.3,
+        h: rowH,
+        fontSize: 8.5,
+        bold: me,
+        color: me ? C.exactTx : C.sub,
+        valign: "middle",
+      });
+    });
+    // Sağ: üç gösterge
+    const rx = M + lw + 0.5;
+    const rw = W - M - rx;
+    const stats: Array<[string, string]> = [
+      [formatTlShort(self.nettingValueTl), `Netleşme değeri · ${n} toplayıcı içinde ${pe.rankValue}.`],
+      [`%${nf(self.nettingPct, 0)}`, `Netleşme oranı (sahipler tek başına maliyetine göre) · ${pe.rankPct}.`],
+      [`${nf(self.nettedTlPerMwh, 0)} TL/MWh`, `Netleşmiş maliyet · ${pe.rankUnit}. (en düşük ${nf(pe.rows[0].nettedTlPerMwh, 0)} TL, ${short(pe.rows[0])})`],
+    ];
+    stats.forEach(([v, l], i) => {
+      const y = top + i * 1.3;
+      round(s, rx, y, rw, 1.1, C.panel);
+      text(s, v, { x: rx + 0.25, y: y + 0.12, w: rw - 0.5, h: 0.5, fontSize: 24, bold: true, fontFace: FONT_HEAD, color: C.gain });
+      text(s, l, { x: rx + 0.25, y: y + 0.62, w: rw - 0.5, h: 0.4, fontSize: 10, color: C.sub, valign: "top" });
+    });
+    text(
+      s,
+      `Çubuk yanında: MWh başına netleşmiş maliyet · netleşme oranı. ${pe.label} üretimi 300 GWh üstündeki toplayıcılar; EPİAŞ'ın ${pe.membershipAsOf} tarihli toplayıcı listeleri (santraller dönem boyunca portföydeymiş gibi), santral bazında üretimi yayımlanan lisanslı santraller, resmi dengesizlik fiyatı, ilk KGÜP (gün içi işlemler öncesi), KÜPST hariç. Teknoloji karışımı sonucu etkiler (hidro ağırlıklı portföyler düşük maliyetli).`,
+      { x: M, y: 6.4, w: CW, h: 0.55, fontSize: 9, color: C.sub, valign: "top" }
+    );
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // 4d. ÜRETİCİLERİN PORTFÖYE KATKISI (toplayıcı projelerinde; PLAN 8.8)
+  // ---------------------------------------------------------------------------------------------
+  if (r.ownerContributions && agg) {
+    const oc = r.ownerContributions;
+    const top = oc[0];
+    const title = `Portföye en çok değer katan üretici ${top.name.split(/\s+/).slice(0, 2).join(" ")}: ayrılsa netleşme değeri ${formatTlShort(top.contributionTl)} azalır`;
+    const s = contentSlide("Üreticilerin katkısı", title, "exact");
+    s.addNotes(
+      "Her üretici için soru şu: bu üretici portföyden ayrılsa toplayıcının netleşme değeri ne kadar azalır? Katkı, üreticinin sapmasının diğerlerini dengelediği saatlerden gelir. " +
+        "MWh başına katkı, üreticiye sunulabilecek fiyat ya da indirim için ölçüdür: katkısı yüksek üretici portföy için daha değerlidir. Katkılar toplanamaz (değer etkileşimlerden oluşur)."
+    );
+    const cell = (v: string, o: Record<string, unknown> = {}) => ({ text: v, options: { fontSize: 9.5, fontFace: FONT_BODY, color: C.ink, ...o } });
+    const head = ["Üretici", "Santral", "Üretim", "Tek başına TL/MWh", "Katkı", "Katkı TL/MWh"].map((h, i) =>
+      cell(h, { bold: true, color: C.white, fill: { color: C.navy }, align: i === 0 ? "left" : "right" })
+    );
+    const shown = oc.slice(0, 10);
+    const rows = shown.map((o, i) => {
+      const fill = i % 2 ? { fill: { color: C.panel } } : {};
+      return [
+        cell(o.name.length > 48 ? `${o.name.slice(0, 47)}…` : o.name, fill),
+        cell(String(o.plantCount), { ...fill, align: "right" }),
+        cell(formatEnergy(o.productionMwh), { ...fill, align: "right" }),
+        cell(nf(o.standaloneTlPerMwh, 0), { ...fill, align: "right" }),
+        cell(formatTlShort(o.contributionTl), { ...fill, align: "right", bold: true, color: C.gain }),
+        cell(nf(o.contributionTlPerMwh, 0), { ...fill, align: "right" }),
+      ];
+    });
+    s.addTable([head, ...rows] as any, {
+      x: M,
+      y: 1.95,
+      w: CW,
+      colW: [CW - 6.3, 0.9, 1.2, 1.6, 1.3, 1.3],
+      rowH: 0.3,
+      border: { type: "none" },
+      margin: [0, 0.08, 0, 0.08],
+      valign: "middle",
+    });
+    // En düşük MWh başına katkı (üretimi portföyün %1'inden büyük sahipler arasında)
+    const bigEnough = oc.filter((o) => o.productionMwh >= 0.01 * r.totals.actualMwh);
+    const low = [...bigEnough].sort((a, b) => a.contributionTlPerMwh - b.contributionTlPerMwh).slice(0, 3);
+    text(
+      s,
+      `${oc.length} üretici. MWh başına en düşük katkı: ${low.map((o) => `${o.name.split(/\s+/).slice(0, 2).join(" ")} (${nf(o.contributionTlPerMwh, 0)} TL)`).join(", ")}; ` +
+        "bu üreticilerin sapması portföyün geri kalanıyla aynı yöne gitme eğiliminde. Katkı: üretici ayrılsa portföyün netleşme değerindeki azalma (" +
+        `${periodTag(r)}, resmi dengesizlik fiyatı, gün içi işlemler öncesi); katkılar toplanamaz.`,
+      { x: M, y: 1.95 + (shown.length + 1) * 0.3 + 0.25, w: CW, h: 0.6, fontSize: 10, color: C.sub, valign: "top" }
+    );
+  }
+
+  // ---------------------------------------------------------------------------------------------
   // 5. TAHMİN KALİTESİ
   // ---------------------------------------------------------------------------------------------
   {
@@ -963,6 +1083,63 @@ export async function exportPlantReportPptx(
         { x: px, y: Math.max(yEnd + 0.75, 6.3), w: pw, h: 0.55, fontSize: 9.5, color: C.sub, valign: "top" }
       );
     }
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // 5b. GÜN İÇİ ETKİNLİK: ilk plan ile son plan (PLAN 8.9)
+  // ---------------------------------------------------------------------------------------------
+  if (r.intradayEffect) {
+    const ie = r.intradayEffect;
+    const cut = ie.firstCostTl - ie.finalCostTl;
+    const devCut = ie.absDevFirstMwh > 0 ? (1 - ie.absDevFinalMwh / ie.absDevFirstMwh) * 100 : 0;
+    const title =
+      ie.reductionPct >= 5
+        ? `Gün içi düzeltmeler dengesizliği %${nf(ie.reductionPct, 0)} azaltıyor: ilk planla ${formatTlShort(ie.firstCostTl)}, son planla ${formatTlShort(ie.finalCostTl)}`
+        : `Planlar gün içinde neredeyse hiç düzeltilmiyor: son planla dengesizlik yalnızca %${nf(ie.reductionPct, 0)} düşük`;
+    const s = contentSlide("Gün içi etkinlik", title, "exact");
+    s.addNotes(
+      "İlk plan gün öncesinde bildirilen, son plan gün içi piyasası kapandıktan sonra güncellenen KGÜP'tür; ikisi de EPİAŞ'ta yayımlanır. " +
+        "Son planla hesaplanan dengesizlik, gün içi işlemlerden sonra kalan (uzlaştırmaya giden) sapmadır. Aradaki fark gün içi düzeltmelerin değeridir; " +
+        "gün içi işlemlerin alım-satım fiyatından doğan kâr ya da zarar açık veride olmadığından hariçtir."
+    );
+    // Sol: iki sütun
+    const bottom = 5.9;
+    const topY = 2.6;
+    const maxV = Math.max(ie.firstCostTl, ie.finalCostTl, 1);
+    const cols: Array<[string, number, string]> = [
+      ["İlk plan (gün öncesi)", ie.firstCostTl, C.navy],
+      ["Son plan (gün içi sonrası)", ie.finalCostTl, C.gain],
+    ];
+    cols.forEach(([label, v, color], i) => {
+      const x = M + 0.4 + i * 2.2;
+      const h = (v / maxV) * (bottom - topY);
+      rect(s, x, bottom - h, 1.3, h, color);
+      text(s, formatTlShort(v), { x: x - 0.4, y: bottom - h - 0.42, w: 2.1, h: 0.36, fontSize: 15, bold: true, align: "center", color: C.ink });
+      text(s, label, { x: x - 0.4, y: bottom + 0.1, w: 2.1, h: 0.5, fontSize: 10.5, align: "center", color: C.sub, valign: "top" });
+    });
+    text(s, `Dengesizlik (${unit.loc} netleşmiş, aynı fiyatlar)`, { x: M, y: 1.95, w: 5, h: 0.3, fontSize: 10, bold: true, color: C.sub });
+    // Sağ: bulgular
+    const rx = M + 5.6;
+    const rw = W - M - rx;
+    const lines: string[] = [
+      `Gün içi düzeltmeler dengesizliği ${formatTlShort(cut)} (%${nf(ie.reductionPct, 0)}), sapma hacmini %${nf(devCut, 0)} azaltıyor.`,
+      ie.staticPlants.length
+        ? `${ie.staticPlants.length} santralin planı gün içinde hiç güncellenmiyor (${listOf(ie.staticPlants, 4, ", ")}): gün içi operasyon kapsamı dışında.`
+        : "Bütün santrallerin planı gün içinde güncelleniyor.",
+      ie.topAdjusters.length
+        ? `Planı en etkin düzeltilen santraller: ${ie.topAdjusters.slice(0, 3).map((a) => `${a.name} (sapma −%${nf(a.reductionPct, 0)})`).join(", ")}.`
+        : "",
+      "Raporun diğer bölümlerindeki dengesizlik riski ilk plana göredir (gün içi işlemler öncesi); KÜPST son plana göre hesaplanır.",
+    ].filter(Boolean);
+    lines.forEach((l, i) => {
+      round(s, rx, 1.95 + i * 1.08, rw, 0.92, C.panel);
+      text(s, l, { x: rx + 0.2, y: 1.95 + i * 1.08 + 0.08, w: rw - 0.4, h: 0.76, fontSize: 11, color: C.ink, valign: "middle" });
+    });
+    text(
+      s,
+      `İlk ve son KGÜP EPİAŞ Şeffaflık Platformu'ndan; son planı olan saatler (%${nf(ie.coveragePct, 0)}). Gün içi işlemlerin fiyat kâr/zararı hariç.`,
+      { x: M, y: 6.5, w: CW, h: 0.3, fontSize: 9, color: C.sub }
+    );
   }
 
   // ---------------------------------------------------------------------------------------------

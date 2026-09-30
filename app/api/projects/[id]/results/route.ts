@@ -59,6 +59,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
           timestamp: record.timestamp,
           actualMwh: record.actualMwh,
           forecastMwh: record.forecastMwh,
+          forecastFinalMwh: record.forecastFinalMwh,
           plantId: plant.id,
           plantName: plant.name,
         };
