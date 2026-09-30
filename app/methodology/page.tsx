@@ -15,8 +15,8 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.4";
-const VERSION_DATE = "29 Eylül 2026";
+const VERSION = "1.5";
+const VERSION_DATE = "30 Eylül 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
   { id: "ozet", title: "Özet" },
@@ -30,8 +30,11 @@ const SECTIONS: Array<{ id: string; title: string }> = [
   { id: "ayristirma", title: "Maliyet neden değişti?" },
   { id: "piyasa", title: "Piyasa göstergeleri" },
   { id: "sektor", title: "Sektör karnesi" },
+  { id: "toplayici-kiyas", title: "Toplayıcılar arası kıyas" },
+  { id: "uretici-katki", title: "Üreticilerin portföye katkısı" },
   { id: "aday", title: "Aday ve hedef santraller" },
   { id: "gip", title: "Gün içi piyasa senaryosu" },
+  { id: "gun-ici-etkinlik", title: "Gün içi etkinlik ve tahmin fırsatı" },
   { id: "kalite", title: "Veri bütünlüğü ve arıza saatleri" },
   { id: "dogrulama", title: "Doğrulamalar" },
   { id: "etiketler", title: "Etiketler, varsayımlar ve sınırlar" },
@@ -173,7 +176,7 @@ export default function MethodologyPage() {
             <Table
               head={["Veri", "Anlamı", "Kullanım"]}
               rows={[
-                ["KGÜP (ilk sürüm)", "Kesinleşmiş günlük üretim programı: santralin gün öncesinde bildirdiği saatlik plan", "Plan; dengesizlik ve KÜPST'ün dayanağı"],
+                ["KGÜP (ilk ve son sürüm)", "Kesinleşmiş günlük üretim programı: gün öncesinde bildirilen (ilk) ve gün içi piyasası kapandıktan sonra güncellenen (son) saatlik plan", "İlk: dengesizlik riski; son: KÜPST ve gün içi etkinlik"],
                 ["UEVM", "Uzlaştırmaya esas veriş miktarı: sayaçtan ölçülen saatlik üretim", "Gerçekleşen üretim"],
                 ["PTF", "Piyasa takas fiyatı (gün öncesi piyasası)", "Satış fiyatı ve dengesizlik fiyatının tabanı"],
                 ["SMF ve sistem yönü", "Sistem marjinal fiyatı (dengeleme güç piyasası) ve saatin enerji açığı / fazlası", "Dengesizlik fiyatı"],
@@ -183,9 +186,10 @@ export default function MethodologyPage() {
               ]}
             />
             <p>
-              KGÜP&apos;ün <b>ilk sürümü</b> kullanılır: dengesizlik ve KÜPST, gün öncesinde kesinleşen plana göre uzlaştırılır; sonradan
-              düzeltilmiş sürüm şirketin gerçekte taahhüt ettiği planı göstermez. Birden çok uzlaştırma birimi olan santralde birimlerin
-              serileri toplanır.
+              <b>Dengesizlik riski</b> KGÜP&apos;ün <b>ilk sürümüne</b> göre hesaplanır: gün öncesi tahminin hatasını, gün içi işlemler
+              öncesinde ölçer. <b>KÜPST</b> mevzuata uygun olarak gün içi piyasası kapandıktan sonra güncellenen <b>son sürüme</b> (KÜP)
+              göredir; son sürüm veri havuzunda yoksa ilk sürüm kullanılır (üst sınıra yakın). İki sürümün farkı gün içi etkinlik bölümünde
+              ölçülür. Birden çok uzlaştırma birimi olan santralde birimlerin serileri toplanır.
             </p>
           </Section>
 
@@ -255,7 +259,8 @@ KÜPST (saat) = KÜPSM × max(PTF, SMF) × n                n: fiyat katsayısı
               ]}
             />
             <p>
-              KÜPST santral (uzlaştırma birimi) bazında hesaplanır; şirket ya da toplayıcı portföyünde netleşmez. Toleransın plana oranlandığı
+              KÜP, gün içi piyasası kapandıktan sonraki son KGÜP&apos;tür. KÜPST santral (uzlaştırma birimi) bazında hesaplanır; şirket ya da
+              toplayıcı portföyünde netleşmez. Toleransın plana oranlandığı
               varsayılmıştır (resmi formül görsel olarak yayımlanmıştır). Arıza kayıtları açık veride olmadığından arıza sayısına bağlı katsayı
               artışı uygulanmaz: hesap bir alt sınırdır. 2026 değerleri EPDK kurul kararı taslağından alınmıştır (nihai karar sayısı
               görülmedi). 2026&apos;da hem tolerans genişler hem katsayı 0,03&apos;ten 0,05&apos;e çıkar; toleransı aşan sapmanın bedeli artar.
@@ -390,6 +395,34 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
             </p>
           </Section>
 
+          <Section id="toplayici-kiyas" n={next()} title="Toplayıcılar arası kıyas">
+            <p>
+              EPİAŞ&apos;taki her toplayıcının santral listesindeki lisanslı santraller için aynı yöntem: saatlik sapma (UEVM − ilk KGÜP),
+              resmi dengesizlik fiyatı. Sahipler tek başına (aynı sahibin santralleri kendi dengesinde netleşir) ile toplayıcı
+              portföyünde tek denge karşılaştırılır:
+            </p>
+            <F>
+              {`Netleşme değeri = Σ sahip tek başına − portföy tek denge
+Netleşme oranı = netleşme değeri / Σ sahip tek başına
+MWh başına netleşmiş maliyet = portföy tek denge / üretim`}
+            </F>
+            <p>
+              Üyelik, listenin alındığı güne göredir (santraller dönem boyunca portföydeymiş gibi); santral bazında üretimi yayımlanmayan
+              lisanssız santraller ve KÜPST hesapta yoktur. Kıyas üretimi 300 GWh üstündeki toplayıcılarla yapılır. MWh başına maliyet
+              teknoloji karışımından etkilenir (hidro ağırlıklı portföyler düşük çıkar). <Tag kind="exact" />
+            </p>
+          </Section>
+
+          <Section id="uretici-katki" n={next()} title="Üreticilerin portföye katkısı">
+            <p>Toplayıcı portföyünde her üretici (lisans sahibi) için: üretici portföyden ayrılsa netleşme değeri ne kadar azalır?</p>
+            <F>{`Katkı_i = [portföy − i] netleşmiş + i tek başına − portföy netleşmiş`}</F>
+            <p>
+              Katkı, üreticinin sapmasının diğerlerini dengelediği saatlerden gelir. MWh başına katkı, üreticiye sunulacak fiyat ya da
+              indirim için ölçüdür. Katkılar toplanamaz: değer üreticilerin etkileşiminden oluşur (paylaştırma için Shapley, bölüm adil
+              prim). <Tag kind="exact" />
+            </p>
+          </Section>
+
           <Section id="aday" n={next()} title="Aday ve hedef santraller">
             <p>Sektör karnesindeki her santral için, portföye eklenseydi ne kadar değer katacağı saat saat hesaplanır:</p>
             <F>
@@ -419,6 +452,22 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
               Kapatma oranı önceki 4 aydan öğrenilir ve sonraki ayda test edilir (ileriye dönük, veri sızıntısı yok). İşlem fiyatı saatin
               gerçekleşen GİP ağırlıklı ortalamasıdır; zor saatlerde daha kötü fiyat varsayılır. Sonuç üst sınırdır: şirket gün içinde zaten
               işlem yapıyorsa kazancın bir kısmı hâlihazırda alınıyordur. &quot;Kusursuz öngörü&quot; ile hesaplanan tavan ayrıca etiketlenir.{" "}
+              <Tag kind="scenario" />
+            </p>
+          </Section>
+
+          <Section id="gun-ici-etkinlik" n={next()} title="Gün içi etkinlik ve tahmin fırsatı">
+            <p>
+              <b>Gün içi etkinlik:</b> uzlaştırma birimindeki saatlik toplam sapma ilk plana ve son plana göre aynı fiyatlarla
+              değerlenir. Son plan gün içi işlemlerden sonra kalan pozisyondur; aradaki fark gün içi düzeltmelerin dengesizliği ne kadar
+              azalttığıdır. Gün içi işlemlerin alım-satım fiyatından doğan kâr ya da zarar açık veride olmadığından hariçtir. Planı gün
+              içinde hiç değişmeyen (saatlerin %1&apos;inden azında) santraller ayrıca listelenir. <Tag kind="exact" />
+            </p>
+            <p>
+              <b>Tahmin iyileştirme fırsatı:</b> sektör medyanının üstündeki santrallerin (dönem içinde devreye girenler hariç) saatlik
+              sapması, MWh başına riskleri medyana inecek oranda küçültülür (dengesizlik fiyatı plana bağlı olmadığından maliyet sapmayla
+              orantılıdır). Kazanç uzlaştırma biriminde yeniden netleştirilerek bulunur; santral tek başına kazanç yalnız bağlam olarak
+              verilir, çünkü portföyde ters sapmalar zaten birbirini dengeler. KÜPST azalması son plana göre ayrıca eklenir.{" "}
               <Tag kind="scenario" />
             </p>
           </Section>
@@ -582,6 +631,11 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.5",
+                  "30 Eylül 2026",
+                  "KÜPST gün içi piyasası kapandıktan sonraki son KGÜP'e göre (mevzuat denetimi 3/3). Yeni bölümler: toplayıcılar arası kıyas, üreticilerin portföye katkısı, gün içi etkinlik ve netleşmiş tahmin fırsatı (eski üst sınır yerine). Dönem içinde devreye giren santraller sıralamalara alınmaz. Raporun anonim sürümü ve tek sayfalık özeti.",
+                ],
                 [
                   "1.4",
                   "29 Eylül 2026",

@@ -16,7 +16,7 @@ describe("rapor anonimleştirme", () => {
       notes: ["En kötü: SARMAŞIK I HES ve SARMAŞIK II HES; sahibi AGE ENERJİ A.Ş.; Inavitas portföyü"],
       totals: { imbalanceCostTl: 123.45 },
     };
-    const { report } = anonymizeReport(r);
+    const report: any = anonymizeReport(r).report;
     const text = JSON.stringify(report);
     for (const n of ["SARMAŞIK", "MERSİN", "AGE ENERJİ", "GALATA", "Inavitas", "INAVITAS", "AKSA"]) expect(text).not.toContain(n);
     expect(report.plants.map((p: any) => p.name)).toEqual(["HES-01", "HES-02", "RES-01"]);
