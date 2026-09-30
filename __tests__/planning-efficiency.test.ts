@@ -160,7 +160,7 @@ describe("Planlama Verimliliği & 'Ne Olurdu?' Simülasyon Motoru Birim Testleri
       expect(bias.direction).toBe("OVER_FORECAST");
       expect(bias.consistency).toBe(0.9); // %90 tutarlılık
       expect(bias.avgBiasPercent).toBeGreaterThan(25);
-      expect(bias.explanation).toContain("yüksek tahmin");
+      expect(bias.explanation).toContain("plan gerçekleşenden yüksek");
     });
 
     it("Sürekli eksik tahmin eden seride UNDER_FORECAST tespit etmelidir", () => {
@@ -187,7 +187,7 @@ describe("Planlama Verimliliği & 'Ne Olurdu?' Simülasyon Motoru Birim Testleri
       expect(bias.direction).toBe("UNDER_FORECAST");
       expect(bias.consistency).toBe(1.0); // %100 tutarlılık
       expect(bias.avgBiasPercent).toBeLessThan(0);
-      expect(bias.explanation).toContain("düşük tahmin");
+      expect(bias.explanation).toContain("plan gerçekleşenden düşük");
     });
 
     it("Dengeli tahminlerde NEUTRAL tespit etmelidir", () => {

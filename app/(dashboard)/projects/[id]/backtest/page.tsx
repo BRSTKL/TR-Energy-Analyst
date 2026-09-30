@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { AlertCircle, AlertTriangle, ArrowLeft, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PlantScopePicker } from "@/components/plant-scope-picker";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { BacktestResult, StrategyBacktest } from "@/lib/analysis/backtest";
 
@@ -107,24 +108,14 @@ export default function BacktestPage() {
         {data && scenario && (
           <>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex flex-wrap gap-2">
-                {(
-                  [
-                    ["portfolio", "Tüm Portföy"],
-                    ...scenario.plants.map((p) => [p.plantId, p.plantName]),
-                  ] as [string, string][]
-                ).map(([id, label]) => (
-                  <Button
-                    key={id}
-                    size="sm"
-                    variant={scope === id ? "default" : "outline"}
-                    onClick={() => setScope(id)}
-                    className={scope === id ? "bg-indigo-600 text-white hover:bg-indigo-700" : ""}
-                  >
-                    {label}
-                  </Button>
-                ))}
-              </div>
+              <PlantScopePicker
+                allId="portfolio"
+                allLabel="Tüm Portföy"
+                label={null}
+                plants={scenario.plants.map((p) => ({ id: p.plantId, name: p.plantName, type: p.plantType }))}
+                value={scope}
+                onChange={setScope}
+              />
               <label className="flex items-center gap-2 text-xs text-slate-600">
                 Fiyat kuralları:
                 <select

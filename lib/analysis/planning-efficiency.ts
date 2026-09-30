@@ -243,11 +243,11 @@ export function detectForecastBias(
   if (overRatio > 0.52 || avgBiasPercent > 2.0) {
     direction = "OVER_FORECAST";
     consistency = Number(overRatio.toFixed(3));
-    explanation = `Santral saatlerin %${(consistency * 100).toFixed(0)}'inde gerçekleşenden daha yüksek tahmin üretmektedir (Ortalama %${Math.abs(avgBiasPercent)} aşırı tahmin).`;
+    explanation = `Saatlerin %${(consistency * 100).toFixed(0)} kadarında plan gerçekleşenden yüksek (ortalama %${Math.abs(avgBiasPercent)} aşırı tahmin).`;
   } else if (underRatio > 0.52 || avgBiasPercent < -2.0) {
     direction = "UNDER_FORECAST";
     consistency = Number(underRatio.toFixed(3));
-    explanation = `Santral saatlerin %${(consistency * 100).toFixed(0)}'inde gerçekleşenden daha düşük tahmin üretmektedir (Ortalama %${Math.abs(avgBiasPercent)} eksik tahmin).`;
+    explanation = `Saatlerin %${(consistency * 100).toFixed(0)} kadarında plan gerçekleşenden düşük (ortalama %${Math.abs(avgBiasPercent)} eksik tahmin).`;
   } else {
     direction = "NEUTRAL";
     consistency = Number(Math.max(overRatio, underRatio).toFixed(3));

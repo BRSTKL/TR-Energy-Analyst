@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PlantScopePicker } from "@/components/plant-scope-picker";
 import {
   Table,
   TableBody,
@@ -355,7 +356,7 @@ export default function PlanningEfficiencyPage() {
 
     return [
       {
-        kategori: "Yıllık Toplam Gelir",
+        kategori: "Dönem Toplam Geliri",
         "Fiili Durum": actualRev,
         "Yanlılık Giderilmiş (Simüle)": simulatedRev,
       },
@@ -601,41 +602,13 @@ export default function PlanningEfficiencyPage() {
 
         {/* Kapsam / Santral Seçici */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Analiz Kapsamı:
-            </span>
-            <Button
-              variant={selectedScope === "portfolio" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedScope("portfolio")}
-              className="h-8 gap-1.5 text-xs"
-            >
-              <Layers className="h-3.5 w-3.5" />
-              Tüm Portföy ({data.plants.length} Santral)
-            </Button>
-
-            {data.plants.map((plant) => (
-              <Button
-                key={plant.plantId}
-                variant={selectedScope === plant.plantId ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSelectedScope(plant.plantId)}
-                className="h-8 gap-1.5 text-xs"
-              >
-                {plant.plantType === "RES" && (
-                  <Wind className="h-3.5 w-3.5 text-cyan-600" />
-                )}
-                {plant.plantType === "GES" && (
-                  <Sun className="h-3.5 w-3.5 text-amber-500" />
-                )}
-                {plant.plantType === "HES" && (
-                  <Zap className="h-3.5 w-3.5 text-blue-600" />
-                )}
-                {plant.plantName}
-              </Button>
-            ))}
-          </div>
+          <PlantScopePicker
+            allId="portfolio"
+            allLabel={`Tüm Portföy (${data.plants.length} Santral)`}
+            plants={data.plants.map((p) => ({ id: p.plantId, name: p.plantName, type: p.plantType }))}
+            value={selectedScope}
+            onChange={setSelectedScope}
+          />
 
           <div className="text-xs text-slate-500">
             Aktif Görünüm:{" "}
@@ -898,7 +871,7 @@ export default function PlanningEfficiencyPage() {
                     {upliftOutcome === "gain" ? (
                       <>
                         Eğer santralin sistematik tahmin yanlılığı ({currentView.bias.avgBiasPercent > 0 ? "+" : ""}
-                        {currentView.bias.avgBiasPercent}%) giderilmiş olsaydı, yıllık geliriniz{" "}
+                        {currentView.bias.avgBiasPercent}%) giderilmiş olsaydı, dönem geliriniz{" "}
                         <strong className="text-emerald-300">
                           {formatSignedPercent(currentView.uplift.upliftPercent)} (
                           {formatSignedTl(currentView.uplift.totalUpliftTl)} ₺)

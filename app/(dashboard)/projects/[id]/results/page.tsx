@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PlantScopePicker } from "@/components/plant-scope-picker";
 import {
   Table,
   TableBody,
@@ -107,8 +108,6 @@ interface ApiResponse {
   sapma?: SapmaSummary | null;
 }
 
-/** Bu sayıdan fazla santralde seçici düğmeler yerine açılır liste */
-const PLANT_BUTTONS_MAX = 8;
 /** Trend grafiğinde en fazla bu kadar santral çizgisi (fazlası okunmaz) */
 const TREND_MAX_LINES = 6;
 
@@ -626,59 +625,14 @@ export default function ProjectResultsPage() {
 
         {/* Santral Filtre Seçici */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Görünüm:
-            </span>
-            <Button
-              variant={selectedPlantId === "all" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedPlantId("all")}
-              className="h-8 gap-1.5 text-xs"
-            >
-              <Layers className="h-3.5 w-3.5" />
-              Tüm Portföy ({data.plants.length} Santral)
-            </Button>
-
-            {data.plants.length > PLANT_BUTTONS_MAX ? (
-              <select
-                aria-label="Santral seç"
-                value={selectedPlantId === "all" ? "" : selectedPlantId}
-                onChange={(e) => setSelectedPlantId(e.target.value || "all")}
-                className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-800 shadow-sm"
-              >
-                <option value="">Santral seçin…</option>
-                {[...data.plants]
-                  .sort((a, b) => a.plantName.localeCompare(b.plantName, "tr"))
-                  .map((plant) => (
-                    <option key={plant.plantId} value={plant.plantId}>
-                      {plant.plantName} · {plant.plantType} · {plant.capacityMw} MW
-                    </option>
-                  ))}
-              </select>
-            ) : (
-              data.plants.map((plant) => (
-              <Button
-                key={plant.plantId}
-                variant={selectedPlantId === plant.plantId ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSelectedPlantId(plant.plantId)}
-                className="h-8 gap-1.5 text-xs"
-              >
-                {plant.plantType === "RES" && (
-                  <Wind className="h-3.5 w-3.5 text-cyan-600" />
-                )}
-                {plant.plantType === "GES" && (
-                  <Sun className="h-3.5 w-3.5 text-amber-500" />
-                )}
-                {plant.plantType === "HES" && (
-                  <Zap className="h-3.5 w-3.5 text-blue-600" />
-                )}
-                {plant.plantName} ({plant.capacityMw} MW)
-              </Button>
-              ))
-            )}
-          </div>
+          <PlantScopePicker
+            label="Görünüm:"
+            allId="all"
+            allLabel={`Tüm Portföy (${data.plants.length} Santral)`}
+            plants={data.plants.map((p) => ({ id: p.plantId, name: p.plantName, type: p.plantType, detail: `${p.capacityMw} MW` }))}
+            value={selectedPlantId}
+            onChange={setSelectedPlantId}
+          />
 
           <div className="text-xs text-slate-500">
             Aktif Filtre:{" "}

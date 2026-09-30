@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PlantScopePicker } from "@/components/plant-scope-picker";
 import { ReportDownloadDialog } from "@/components/report-download-dialog";
 import {
   Table,
@@ -275,41 +276,13 @@ export default function ProjectInsightsPage() {
 
         {/* Santral Filtre Seçici */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Analiz Kapsamı:
-            </span>
-            <Button
-              variant={selectedPlantId === "all" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedPlantId("all")}
-              className="h-8 gap-1.5 text-xs"
-            >
-              <Layers className="h-3.5 w-3.5" />
-              Tüm Portföy ({data.plantInsights.length} Santral)
-            </Button>
-
-            {data.plantInsights.map((plant) => (
-              <Button
-                key={plant.plantId}
-                variant={selectedPlantId === plant.plantId ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSelectedPlantId(plant.plantId)}
-                className="h-8 gap-1.5 text-xs"
-              >
-                {plant.plantType === "RES" && (
-                  <Wind className="h-3.5 w-3.5 text-cyan-600" />
-                )}
-                {plant.plantType === "GES" && (
-                  <Sun className="h-3.5 w-3.5 text-amber-500" />
-                )}
-                {plant.plantType === "HES" && (
-                  <Zap className="h-3.5 w-3.5 text-blue-600" />
-                )}
-                {plant.plantName}
-              </Button>
-            ))}
-          </div>
+          <PlantScopePicker
+            allId="all"
+            allLabel={`Tüm Portföy (${data.plantInsights.length} Santral)`}
+            plants={data.plantInsights.map((p) => ({ id: p.plantId, name: p.plantName, type: p.plantType }))}
+            value={selectedPlantId}
+            onChange={setSelectedPlantId}
+          />
 
           <div className="text-xs text-slate-500">
             Filtre:{" "}
