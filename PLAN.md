@@ -181,6 +181,20 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 - **Kapsam dışı (şimdilik):**, Docker ve Postgres, sunucuda gece senkronizasyonu.
 - **Docker/Postgres ne zaman:** Uygulama başka bir makinede ya da sunucuda çalışacaksa, toplayıcı her gece kendiliğinden çalışacaksa (VPS ile VPN derdi biter; EPİAŞ veri merkezi IP'lerini engelliyor mu önce denenmeli) veya birden fazla kişi kullanacaksa. Havuz dosya tabanlı olduğu için geçiş kolay: aynı klasör konteynere bağlanır.
 
+### Aşama 8: Rapor profesyonelleştirme (toplayıcı raporu) · karar 30.09.2026
+**Amaç:** Inavitas raporunu bir toplayıcı yöneticisine gönderilebilir, uzman itirazına dayanıklı ve ayırt edici hale getirmek.
+- [ ] **8.1 Toplayıcı adı.** "Inavıtas" hatası (Türkçe küçük harf kuralı); kalıcı düzeltme ve mevcut proje adı.
+- [ ] **8.2 Yeni santraller.** Dönem içinde devreye giren santraller "devreye alma" etiketiyle sıralamalardan çıkar (karne, sektör, sistematik sapma, fırsatlar).
+- [ ] **8.3 Tek portföy değeri.** Köprü: santraller tek tek → aynı sahibin netleşmesi → toplayıcının kattığı değer → portföy.
+- [ ] **8.4 Gerçekçi fırsat.** Tahmin iyileştirme kazancı netleşmiş portföy üzerinden (santral tek başına üst sınır değil).
+- [ ] **8.5 Dönem etiketi.** Kısmi yılda "2026" yerine "Ocak–Ağustos 2026".
+- [ ] **8.6 KÜPST son KGÜP ile** (mevzuat denetimi 3/3): son KGÜP havuza çekilir, KÜPST ve toleransı son plana göre.
+- [ ] **8.7 Toplayıcılar arası kıyas slaytı.** 30 toplayıcının netleşme oranı ve MWh başına netleşmiş maliyeti.
+- [ ] **8.8 Üretici katkısı slaytı.** Portföye en çok / en az değer katan sahipler (ayrılırsa kaybedilecek fayda, TL/MWh).
+- [ ] **8.9 Gün içi etkinlik slaytı.** İlk plan ile son plan: gün içi düzeltmelerin sapmayı ne kadar azalttığı.
+- [ ] **8.10 Anonim sürüm ve 1 sayfalık özet.**
+- [ ] **Kabul:** Inavitas raporu yeniden üretilir, slaytlar görsel kontrol edilir, ana rakamlar bağımsız betikle doğrulanır.
+
 ---
 
 ## 3. Karar noktaları (sizin onayınız gerekiyor)

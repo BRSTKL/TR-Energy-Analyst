@@ -50,3 +50,12 @@ describe("Aday santral ulaşılabilirliği", () => {
     expect(classifyCandidate(plant(14, "R3-TRABZON-1 RES", null, null), ctx()).kind).toBe("unknown");
   });
 });
+
+describe("toplayıcı görünen adı", () => {
+  it("Latin marka adında I harfi noktasız ı olmaz", async () => {
+    const { aggregatorDisplayName } = await import("@/lib/projects/aggregator");
+    expect(aggregatorDisplayName("INAVITAS TOPLAYICILIK VE ENERJİ TİC. A.Ş. (TOPLAYICI)")).toBe("Inavitas Toplayıcı");
+    expect(aggregatorDisplayName("GAİN TOPLAYICILIK A.Ş. (TOPLAYICI)")).toBe("Gain Toplayıcı");
+    expect(aggregatorDisplayName("ZEROS ENERJİ (TOPLAYICI)")).toBe("Zeros Toplayıcı");
+  });
+});

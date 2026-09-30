@@ -35,7 +35,10 @@ export const isAggregatorName = (name: string | null | undefined) => !!name && /
 /** Raporda görünecek kısa ad: unvanın ilk kelimesi + "Toplayıcı" ("GAİN TOPLAYICILIK …" → "Gain Toplayıcı") */
 export function aggregatorDisplayName(orgName: string, shortName?: string | null): string {
   const first = (shortName || orgName).trim().split(/\s+/)[0] ?? "";
-  return `${first.charAt(0)}${first.slice(1).toLocaleLowerCase("tr-TR")} Toplayıcı`;
+  // Marka adları çoğunlukla Latin: Türkçe kural "I" harfini "ı" yapar ("INAVITAS" → "Inavıtas"). Türkçe "İ" önce "i"
+  // yapılır, gerisi Türkçe olmayan kuralla küçültülür ("GAİN" → "Gain", "INAVITAS" → "Inavitas").
+  const rest = first.slice(1).replace(/İ/g, "i").toLowerCase();
+  return `${first.charAt(0)}${rest} Toplayıcı`;
 }
 
 /**
