@@ -47,3 +47,35 @@ export async function listPoolPlants(): Promise<number[]> {
     throw e;
   }
 }
+
+/** Santralin havuzdaki tanımı: uzlaştırma birimleri (KGÜP bunların toplamıdır) ve biliniyorsa türü */
+export interface PoolPlantInfo {
+  epiasPlantId: number;
+  name?: string;
+  type?: "RES" | "HES" | "GES";
+  uevcbs?: Array<{ id: number; name: string; eic?: string | null }>;
+  /** Uzlaştırma birimlerinin EPİAŞ'tan alındığı an (ISO) */
+  uevcbsAt?: string;
+}
+
+const infoFile = (epiasPlantId: number) => path.join(poolDir(), String(epiasPlantId), "plant.json");
+
+export async function readPoolPlantInfo(epiasPlantId: number): Promise<PoolPlantInfo | null> {
+  try {
+    return JSON.parse(await fs.readFile(infoFile(epiasPlantId), "utf8"));
+  } catch (e: any) {
+    if (e?.code === "ENOENT") return null;
+    throw e;
+  }
+}
+
+/** Var olan tanımla birleştirir (verilmeyen alanlar korunur) */
+export async function writePoolPlantInfo(info: PoolPlantInfo): Promise<PoolPlantInfo> {
+  const merged = { ...(await readPoolPlantInfo(info.epiasPlantId)), ...info };
+  const file = infoFile(info.epiasPlantId);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify(merged));
+  await fs.rename(tmp, file);
+  return merged;
+}

@@ -93,3 +93,63 @@ describe("havuz dosyaları", () => {
     expect(await listPoolPlants()).toEqual([42]);
   });
 });
+
+describe("eksik tamamlama", () => {
+  let dir: string;
+  beforeAll(() => {
+    dir = mkdtempSync(path.join(tmpdir(), "pool-sync-"));
+  });
+  afterAll(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const day = (d: string) => `${d}T00:00:00+03:00`;
+  function fakeFetchers(log: string[], fail?: (start: string) => boolean) {
+    return {
+      listUevcbs: async () => { log.push("uevcb"); return [{ id: 11, name: "U1" }, { id: 12, name: "U2" }]; },
+      kgup: async (u: number, s: string) => { log.push(`kgup:${u}:${s}`); return [{ date: day(s), time: "01:00", toplam: 2 }]; },
+      uevm: async (_: number, s: string) => {
+        log.push(`uevm:${s}`);
+        if (fail?.(s)) throw new Error("403");
+        return [{ date: day(s), hour: "01:00", total: 3, wind: 3 }];
+      },
+    };
+  }
+
+  it("ilk çağrı EPİAŞ'tan çeker, ikinci çağrı havuzdan okur, gelecek ay atlanır", async () => {
+    process.env.POOL_DIR = dir;
+    const { ensurePlantCoverage } = await import("@/lib/pool/pool-sync");
+    const now = new Date("2026-09-30T09:00:00Z");
+    const log: string[] = [];
+    const a = await ensurePlantCoverage(5, "2026-01-01", "2026-10-31", "FIRST", { now, fetchers: fakeFetchers(log) });
+    expect(a.months.map((m) => m.source)).toEqual([...Array(9).fill("epias"), "future"]);
+    expect(log.filter((l) => l === "uevcb")).toHaveLength(1);
+    // KGÜP iki birimin toplamı
+    expect(a.kgup.values.get(Date.UTC(2026, 0, 1, 1))).toBe(4);
+    expect(a.uevm.values.get(Date.UTC(2026, 0, 1, 1))).toBe(3);
+    expect(a.uevm.byFuel.wind).toBe(27);
+
+    log.length = 0;
+    const b = await ensurePlantCoverage(5, "2026-01-01", "2026-03-31", "FIRST", { now, fetchers: fakeFetchers(log) });
+    expect(log).toEqual([]);
+    expect(b.months.every((m) => m.source === "pool")).toBe(true);
+    expect(b.uevcbs.map((u) => u.id)).toEqual([11, 12]);
+    delete process.env.POOL_DIR;
+  });
+
+  it("başarısız ay kaydedilmez, tekrar çağrı sadece onu çeker", async () => {
+    process.env.POOL_DIR = dir;
+    const { ensurePlantCoverage } = await import("@/lib/pool/pool-sync");
+    const now = new Date("2026-09-30T09:00:00Z");
+    const log: string[] = [];
+    const a = await ensurePlantCoverage(6, "2025-01-01", "2025-03-31", "FIRST", {
+      now, fetchers: fakeFetchers(log, (s) => s === "2025-02-01"),
+    });
+    expect(a.months.map((m) => m.source)).toEqual(["epias", "failed", "epias"]);
+    log.length = 0;
+    const b = await ensurePlantCoverage(6, "2025-01-01", "2025-03-31", "FIRST", { now, fetchers: fakeFetchers(log) });
+    expect(b.months.map((m) => m.source)).toEqual(["pool", "epias", "pool"]);
+    expect(log).toEqual(["kgup:11:2025-02-01", "kgup:12:2025-02-01", "uevm:2025-02-01"]);
+    delete process.env.POOL_DIR;
+  });
+});

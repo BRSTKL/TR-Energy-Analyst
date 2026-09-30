@@ -26,6 +26,8 @@ export interface PoolYear {
   uevm: Array<number | null>;
   /** Seri → ay ("01".."12") → çekilme anı (ISO) */
   fetched: Record<PoolSeries, Record<string, string>>;
+  /** Ay → UEVM'nin kaynak kırılımı (MWh; santral türünü bulmak için). Sektör önbelleğinden aktarılan aylarda yok */
+  uevmFuel?: Record<string, Record<string, number>>;
 }
 
 export interface PoolHour {
@@ -65,7 +67,8 @@ export function writeMonth(
   series: PoolSeries,
   month: number,
   rows: Array<{ timestamp: Date | string; value: number }>,
-  fetchedAt: Date
+  fetchedAt: Date,
+  byFuel?: Record<string, number>
 ): PoolYear {
   const t0 = Date.parse(doc.start);
   const from = (Date.UTC(doc.year, month - 1, 1) - t0) / HOUR;
@@ -78,6 +81,7 @@ export function writeMonth(
     arr[i] = round(r.value);
   }
   doc.fetched[series][mm(month)] = fetchedAt.toISOString();
+  if (series === "uevm" && byFuel) (doc.uevmFuel ??= {})[mm(month)] = byFuel;
   return doc;
 }
 
@@ -138,6 +142,17 @@ export function readRange(docs: PoolYear[], startDay: string, endDay: string): P
       if (kgupFirst === null && kgupFinal === null && uevm === null) continue;
       out.push({ timestamp: new Date(t0 + i * HOUR), kgupFirst, kgupFinal, uevm });
     }
+  }
+  return out;
+}
+
+/** Aralığın dokunduğu ayların UEVM kaynak kırılımı toplamı (hiçbir ayda yoksa boş nesne) */
+export function fuelInRange(docs: PoolYear[], startDay: string, endDay: string): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const { year, month } of monthsInRange(startDay, endDay)) {
+    const f = docs.find((d) => d.year === year)?.uevmFuel?.[mm(month)];
+    if (!f) continue;
+    for (const [k, v] of Object.entries(f)) out[k] = (out[k] ?? 0) + v;
   }
   return out;
 }
