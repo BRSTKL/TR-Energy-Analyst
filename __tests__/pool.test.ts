@@ -221,3 +221,17 @@ describe("proje ekranı veri kontrolleri", () => {
     expect(warnings[0]).toContain("Plan eksik bildirilmiş");
   });
 });
+
+describe("ay ortasında devreye giren santral", () => {
+  it("ilk veri saatinden önceki saatler eksik sayılmaz", async () => {
+    const { mergePlantSeries } = await import("@/lib/epias-plant/plant-data");
+    const values = new Map<number, number>();
+    for (let t = Date.UTC(2026, 7, 4); t < Date.UTC(2026, 8, 1); t += 3_600_000) values.set(t, 1);
+    const m = mergePlantSeries(
+      { values, byFuel: {}, skipped: 0 }, { values: new Map(values), byFuel: {}, skipped: 0 }, "2026-07-01", "2026-08-31"
+    );
+    expect(m.coverage.map((c) => [c.month, c.hours, Boolean(c.preOperation)])).toEqual([["2026-07", 744, true], ["2026-08", 672, false]]);
+    expect(m.checks.some((c) => c.level === "warning")).toBe(false);
+    expect(m.checks[0].message).toContain("4 Ağustos 2026");
+  });
+});

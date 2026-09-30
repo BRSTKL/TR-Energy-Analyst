@@ -336,10 +336,15 @@ export function mergePlantSeries(
   let zeroPlanCount = 0;
   let producingHours = 0;
 
+  // İlk veri saati: yeni santral ay ortasında devreye girdiyse o ayın önceki saatleri eksik sayılmaz
+  let firstData = Infinity;
+  for (const m of [kgup.values, uevm.values]) for (const t of m.keys()) if (t >= start && t <= end && t < firstData) firstData = t;
+  const firstDataMonth = Number.isFinite(firstData) ? new Date(firstData).toISOString().slice(0, 7) : null;
+
   for (let t = start; t <= end; t += HOUR) {
     const month = new Date(t).toISOString().slice(0, 7);
     const c = months.get(month) ?? { month, hours: 0, kgupHours: 0, uevmHours: 0, bothHours: 0 };
-    c.hours++;
+    if (!(month === firstDataMonth && t < firstData)) c.hours++;
     const k = kgup.values.get(t);
     const u = uevm.values.get(t);
     if (k !== undefined) c.kgupHours++;
@@ -361,6 +366,7 @@ export function mergePlantSeries(
   // Dönemin başındaki hiç verisiz aylar: santral henüz işletmede değil (yeni santral); eksik veri uyarısı üretmez
   const firstActive = coverage.findIndex((c) => c.kgupHours > 0 || c.uevmHours > 0);
   if (firstActive > 0) for (let i = 0; i < firstActive; i++) coverage[i].preOperation = true;
+  const startsMidMonth = Number.isFinite(firstData) && firstData > start && new Date(firstData).getUTCDate() > 1;
   // Dönem sonundaki planı olup UEVM'si hiç olmayan yakın tarihli aylar (bitişinden 60 günden az geçmiş): gerçekleşen henüz
   // yayımlanmadı. Daha eski aylarda UEVM yoksa gerçek eksiktir.
   const recent = (month: string) => Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 1) > now.getTime() - 60 * 24 * HOUR;
@@ -378,10 +384,11 @@ export function mergePlantSeries(
   if (rows.length === 0) {
     checks.push({ level: "error", message: "Seçilen aralıkta KGÜP ve UEVM'nin birlikte bulunduğu saat yok." });
   } else {
-    if (firstActive > 0) {
+    if (firstActive > 0 || startsMidMonth) {
+      const d = new Date(firstData);
       checks.push({
         level: "ok",
-        message: `Santralin verisi ${monthLabel(coverage[firstActive].month)} ayında başlıyor (yeni santral); öncesi eksik sayılmadı.`,
+        message: `Santralin verisi ${d.getUTCDate()} ${monthLabel(d.toISOString().slice(0, 7))} tarihinde başlıyor (yeni santral); öncesi eksik sayılmadı.`,
       });
     }
     const unpublished = coverage.filter((c) => c.unpublished).map((c) => monthLabel(c.month));
@@ -404,9 +411,12 @@ export function mergePlantSeries(
         message: `Plan eksik bildirilmiş: üretim olan saatlerin %${Math.round(zeroPlanShare * 100)} kadarında KGÜP sıfır; gerçekleşen planın %${Math.round(ratio * 100)} kadarı. Veri hatası değil, santralin planlama zayıflığı (dengesizlik maliyetine yansır).`,
       });
     } else if (ratio < 0.75 || ratio > 1.33) {
+      const newPlant = firstActive > 0 || startsMidMonth;
       checks.push({
         level: "warning",
-        message: `Gerçekleşen toplam, planın %${Math.round(ratio * 100)} kadarı. KGÜP ile UEVM aynı santrale ait olmayabilir.`,
+        message: newPlant
+          ? `Gerçekleşen toplam, planın %${Math.round(ratio * 100)} kadarı. Yeni santralde devreye alma döneminde (test, kısıt, kademeli yük) sık görülür; plan kurulu güce göre verilmiş olabilir.`
+          : `Gerçekleşen toplam, planın %${Math.round(ratio * 100)} kadarı. Plan sistematik olarak sapıyor ya da KGÜP ile UEVM farklı birimlere ait olabilir.`,
       });
     }
     if (!underPlanned && correlation !== null && correlation < 0.5) {

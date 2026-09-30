@@ -93,7 +93,7 @@ describe("EPİAŞ santral verisi", () => {
       uv.push(uevmItem("2025-03-01", h, 10 + (h % 3)));
     }
     const m = mergePlantSeries(parseKgupItems(kg as any), parseUevmItems(uv as any), "2025-03-01", "2025-03-01");
-    expect(m.checks.some((c) => c.message.includes("aynı santrale ait olmayabilir"))).toBe(true);
+    expect(m.checks.some((c) => c.message.includes("farklı birimlere ait olabilir"))).toBe(true);
   });
 
   it("Hiç ortak saat yoksa hata üretir", () => {
