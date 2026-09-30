@@ -35,6 +35,8 @@ const mTl = (v: number) => `${nf(v / 1e6, 1)} M ₺`;
 const gwh = (mwh: number) => `${nf(mwh / 1000, 0)} GWh`;
 /** Kapsam bu oranın altındaysa (santral bazında üretimi yayımlanan santral / listedeki santral) uyarı */
 const LOW_COVERAGE = 0.6;
+/** Teknoloji süzgecinde o teknolojinin üretimdeki en az payı (%) */
+const MIN_TECH_SHARE = 20;
 const TECH_COLOR: Record<string, string> = { HES: "#2563eb", RES: "#0891b2", GES: "#f59e0b" };
 
 function shortName(name: string) {
@@ -93,13 +95,12 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
     if (!data) return [];
     const inScale = (a: AggregatorBenchmarkRow) =>
       scale === "all" || (scale === "large" ? a.productionMwh >= LARGE : scale === "mid" ? a.productionMwh >= MID && a.productionMwh < LARGE : a.productionMwh < MID);
-    const dominant = (a: AggregatorBenchmarkRow) => {
-      const m = mixShare(a);
-      return (Object.entries(m).sort((x, y) => y[1] - x[1])[0] ?? ["", 0])[0];
-    };
+    // Teknoloji süzgeci: o teknoloji üretimin en az MIN_TECH_SHARE payıysa (yalnız en büyük pay değil; ör. %35 rüzgârlı
+    // hidro ağırlıklı portföy de rüzgârda görünür)
+    const hasTech = (a: AggregatorBenchmarkRow, t: string) => mixShare(a)[t] >= MIN_TECH_SHARE;
     const v = (a: AggregatorBenchmarkRow) => (a[sort.key] as number | null) ?? Infinity;
     return data.aggregators
-      .filter((a) => a.productionMwh > 0 && inScale(a) && (mix === "all" || dominant(a) === mix))
+      .filter((a) => a.productionMwh > 0 && inScale(a) && (mix === "all" || hasTech(a, mix)))
       .sort((a, b) => (sort.asc ? v(a) - v(b) : v(b) - v(a)));
   }, [data, scale, mix, sort, LARGE, MID]);
 
@@ -181,7 +182,9 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
             {pill<Scale>("mid", scale, setScale, `Orta (${gwh(MID)}–${gwh(LARGE)})`)}
             {pill<Scale>("small", scale, setScale, "Küçük")}
             {pill<Scale>("all", scale, setScale, "Tümü")}
-            <span className="ml-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Ağırlıklı teknoloji:</span>
+            <span className="ml-3 text-xs font-semibold uppercase tracking-wider text-slate-500" title={`Üretiminin en az %${MIN_TECH_SHARE} kadarı bu teknoloji olan toplayıcılar`}>
+              Teknoloji (üretimin %{MIN_TECH_SHARE}+):
+            </span>
             {pill<Mix>("all", mix, setMix, "Tümü")}
             {pill<Mix>("HES", mix, setMix, "Hidro")}
             {pill<Mix>("RES", mix, setMix, "Rüzgâr")}
@@ -254,7 +257,7 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
                 {rows.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={9} className="py-6 text-center text-sm text-slate-500">
-                      Bu süzgeçte toplayıcı yok.
+                      Bu süzgeçte toplayıcı yok. Ölçek süzgecini &quot;Tümü&quot; yapmayı deneyin.
                     </TableCell>
                   </TableRow>
                 )}
