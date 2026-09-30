@@ -108,9 +108,9 @@ export function guessTechnologyFromName(name: string): PlantTechnology | "OTHER"
   // Açık kodlar önce: "GÜNEŞ HES" bir hidroelektriktir (Güneş özel ad), "RÜZGAR GES" bir güneş santralidir
   if (has("res")) return "RES";
   if (has("ges")) return "GES";
-  if (has("hes", "reg", "regulator", "baraj")) return "HES";
-  if (has("ruzgar")) return "RES";
-  if (has("gunes")) return "GES";
+  if (has("hes", "reg", "regulator", "baraj", "hidroelektrik", "hidroelektrık", "hidro")) return "HES";
+  if (has("ruzgar", "wind")) return "RES";
+  if (has("gunes", "solar")) return "GES";
   if (has("dgkcs", "dgkc", "dgcs", "tes", "kojen", "kojenerasyon", "dogalgaz", "komur", "linyit", "jes", "jeotermal", "bes", "biyokutle", "biyogaz", "cop", "motorin", "fuel"))
     return "OTHER";
   return null;

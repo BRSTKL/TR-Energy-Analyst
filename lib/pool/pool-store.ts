@@ -53,6 +53,8 @@ export interface PoolPlantInfo {
   epiasPlantId: number;
   name?: string;
   type?: "RES" | "HES" | "GES";
+  /** Analiz edilmeyen tür (doğalgaz, biyokütle, jeotermal…) ya da dönemde üretim verisi yok */
+  kind?: "OTHER" | "NODATA";
   uevcbs?: Array<{ id: number; name: string; eic?: string | null }>;
   /** Uzlaştırma birimlerinin EPİAŞ'tan alındığı an (ISO) */
   uevcbsAt?: string;

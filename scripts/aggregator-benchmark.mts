@@ -53,7 +53,19 @@ for (const id of ids) {
     if (r.kgupFirst === null || r.uevm === null) continue;
     hours.set(r.timestamp.getTime(), { d: r.uevm - r.kgupFirst, actual: r.uevm });
   }
-  plants.set(id, { epiasPlantId: id, type: meta.type ?? "?", owner: meta.organizationName ?? null, hours });
+  // Yalnız rüzgâr, güneş ve hidro kıyasa girer (türü sektör karnesinden ya da havuz tanımından; PLAN 10.5)
+  if (!meta.type || !["RES", "GES", "HES"].includes(meta.type)) continue;
+  plants.set(id, { epiasPlantId: id, type: meta.type, owner: meta.organizationName ?? null, hours });
+}
+
+// Dışarıda kalanların sebebi: analiz edilmeyen tür ya da veri yok
+const otherTech = new Set<number>();
+for (const id of ids) {
+  if (plants.has(id)) continue;
+  try {
+    const info = JSON.parse(fs.readFileSync(path.join(process.cwd(), "data", "pool", String(id), "plant.json"), "utf8"));
+    if (info.kind === "OTHER") otherTech.add(id);
+  } catch {}
 }
 
 // Sektör medyanları (santral tek başına TL/MWh): karışıma göre beklenen maliyet için
@@ -62,7 +74,11 @@ const medians: Record<string, number> = {};
 for (const [t, v] of Object.entries(sector.byType ?? {})) medians[t] = (v as any).unitImbalanceTl.median;
 
 const rows = membership.aggregators
-  .map((a) => benchmarkAggregator(a, plants, prices, medians))
+  .map((a) => {
+    const r = benchmarkAggregator(a, plants, prices, medians);
+    const other = a.plantIds.filter((id) => otherTech.has(id)).length;
+    return { ...r, otherTechPlants: other, missingPlants: a.plantIds.length - r.coveredPlants - other };
+  })
   .filter((r) => r.coveredPlants > 0)
   .sort((a, b) => b.productionMwh - a.productionMwh);
 

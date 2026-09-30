@@ -31,6 +31,10 @@ export interface AggregatorBenchmarkRow {
   name: string;
   listedPlants: number;
   coveredPlants: number;
+  /** Listede olup analiz edilmeyen türdeki santraller (doğalgaz, biyokütle, jeotermal, kojenerasyon…) */
+  otherTechPlants?: number;
+  /** Rüzgâr/güneş/hidro olabilecek ama dönemde verisi olmayan ya da üretimi yayımlanmayan santraller */
+  missingPlants?: number;
   byType: Record<string, number>;
   /** Teknoloji → üretim (MWh) */
   byTypeMwh: Record<string, number>;

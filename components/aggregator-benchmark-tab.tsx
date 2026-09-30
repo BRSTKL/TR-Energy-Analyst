@@ -118,14 +118,16 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
     );
 
   const label = `${MONTHS[Number(data.period.start.slice(5, 7)) - 1]}–${MONTHS[Number(data.period.end.slice(5, 7)) - 1]} ${data.year}`;
-  const coverage = (a: AggregatorBenchmarkRow) => (a.listedPlants ? a.coveredPlants / a.listedPlants : 0);
+  // Kapsam, analiz edilen türlerdeki (rüzgâr, güneş, hidro) santrallere göre: biyogaz, jeotermal gibi türler paydada yok
+  const eligible = (a: AggregatorBenchmarkRow) => a.listedPlants - (a.otherTechPlants ?? 0);
+  const coverage = (a: AggregatorBenchmarkRow) => (eligible(a) > 0 ? a.coveredPlants / eligible(a) : 0);
   const best = [...rows].filter((a) => a.mixAdjustedIndex !== null).sort((a, b) => a.mixAdjustedIndex! - b.mixAdjustedIndex!)[0];
   const totalValue = rows.reduce((s, a) => s + a.nettingValueTl, 0);
 
   const headers: Array<{ key: SortKey | null; label: string; right?: boolean; title?: string }> = [
     { key: null, label: "#" },
     { key: null, label: "Toplayıcı" },
-    { key: "coveredPlants", label: "Santral", right: true, title: "Analize giren / EPİAŞ listesindeki" },
+    { key: "coveredPlants", label: "Santral", right: true, title: "Analize giren / listedeki rüzgâr, güneş ve hidro santralleri; + ile başka türler (biyogaz, jeotermal, kojenerasyon…)" },
     { key: "productionMwh", label: "Üretim", right: true },
     { key: null, label: "Karışım (üretim)" },
     { key: "nettingValueTl", label: "Netleşme değeri", right: true },
@@ -233,15 +235,16 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
                         {low && (
                           <span
                             className="ml-1.5 inline-flex items-center gap-0.5 rounded bg-amber-50 px-1 text-2xs font-semibold text-amber-700"
-                            title="Listedeki santrallerin %60'ından azı analizde (çoğu lisanssız); sonuç portföyün tamamını temsil etmeyebilir"
+                            title="Listedeki rüzgâr, güneş ve hidro santrallerinin %60'ından azının verisi var; sonuç portföyün tamamını temsil etmeyebilir"
                           >
                             <AlertTriangle className="h-3 w-3" /> düşük kapsam
                           </span>
                         )}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="text-right tabular-nums" title={`EPİAŞ listesinde ${a.listedPlants} santral: ${eligible(a)} rüzgâr/güneş/hidro, ${a.otherTechPlants ?? 0} başka tür`}>
                         {a.coveredPlants}
-                        <span className="text-slate-400"> / {a.listedPlants}</span>
+                        <span className="text-slate-400"> / {eligible(a)}</span>
+                        {(a.otherTechPlants ?? 0) > 0 && <span className="ml-1 text-2xs text-slate-400">+{a.otherTechPlants}</span>}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{gwh(a.productionMwh)}</TableCell>
                       <TableCell>
@@ -265,8 +268,8 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
             </Table>
           </div>
           <p className="text-2xs text-slate-500">
-            Santral: analize giren / EPİAŞ listesindeki (santral bazında üretimi yayımlanmayan lisanssız santraller analizde yok). Düşük kapsam: listenin
-            %60&apos;ından azı. Netleşme: sahipler tek başına ödeyeceğine göre portföyün kazandırdığı pay. Üyelik listenin tarihine göredir (santraller dönem
+            Santral: analize giren / listedeki rüzgâr, güneş ve hidro santralleri; &quot;+&quot; ile listedeki başka türler (biyogaz, biyokütle,
+            jeotermal, kojenerasyon; analiz edilmez). Düşük kapsam: rüzgâr, güneş ve hidro santrallerinin %60&apos;ından azının verisi var. Netleşme: sahipler tek başına ödeyeceğine göre portföyün kazandırdığı pay. Üyelik listenin tarihine göredir (santraller dönem
             boyunca portföydeymiş gibi).
           </p>
         </CardContent>
