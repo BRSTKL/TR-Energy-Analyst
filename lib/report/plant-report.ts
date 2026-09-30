@@ -201,6 +201,19 @@ export interface PlantReportData {
   } | null;
   /** Veri döneminde ayı eksik olan santraller (ör. EPİAŞ'ta bir ay yayımlanmamış); eksik ay hesaplara girmez */
   dataGaps: PlantDataGap[];
+  /**
+   * Tahmin iyileştirme fırsatı (8.4): sektör medyanının üstündeki santraller (devreye alma dönemi hariç) medyana inseydi.
+   * standaloneGainTl santral tek başına (üst sınır); nettedGainTl uzlaştırma birimlerinde netleşmiş dengesizlikte
+   * gerçekten azalan tutar; kupstGainTl KÜPST'teki azalma (santral bazında, netleşmez). Sektör karnesi yoksa null.
+   */
+  forecastUpside: {
+    plantCount: number;
+    /** Kazancı en büyükten küçüğe santral adları */
+    plantNames: string[];
+    standaloneGainTl: number;
+    nettedGainTl: number;
+    kupstGainTl: number;
+  } | null;
   /** Dönem içinde devreye giren santraller (ilk verisinden önceki saatler eksik sayılmaz) */
   lateStarts: LateStart[];
   /**
@@ -730,6 +743,57 @@ export function buildPlantReport(
     if (types.length) sector = { year: sectorCtx.year, label: sectorCtx.label ?? String(sectorCtx.year), types };
   }
 
+  const stamps = data.plants.map((p) => ({ plantName: p.plantName, timestamps: p.hourly.map((h) => new Date(h.timestamp).getTime()) }));
+  const lateStarts = findLateStarts(stamps);
+
+  // Tahmin iyileştirme fırsatı: santralin her saatteki sapması aynı oranda (s = medyan / MWh başına risk) küçültülür.
+  // Dengesizlik fiyatları plana bağlı olmadığından santralin tek başına maliyeti de s oranında azalır; netleşmiş
+  // kazanç, uzlaştırma birimlerinin saatlik toplam sapması yeniden fiyatlanarak bulunur (portföyde ters sapmalar zaten
+  // birbirini dengelediği için tek başına kazançtan küçüktür).
+  let forecastUpside: PlantReportData["forecastUpside"] = null;
+  if (sector) {
+    const lateNames = new Set(lateStarts.map((l) => l.plantName));
+    const scale = new Map<string, number>();
+    for (const t of sector.types)
+      for (const sp of t.plants) if (sp.unitTl > t.unitImbalanceTl.median && !lateNames.has(sp.name)) scale.set(sp.name, t.unitImbalanceTl.median / sp.unitTl);
+    if (scale.size) {
+      const hourCost = (d: number, h: HourlyResult) =>
+        d > 0 ? d * (h.ptf - h.positivePrice) : d < 0 ? -d * (h.negativePrice - h.ptf) : 0;
+      const units = new Map<string, Map<number, { now: number; improved: number; h: HourlyResult }>>();
+      const gainByPlant = new Map<string, number>();
+      let standaloneGain = 0;
+      let kupstGain = 0;
+      for (const p of withData) {
+        const sc = scale.get(p.plantName) ?? 1;
+        const key = p.organizationId !== null ? `org:${p.organizationId}` : `plant:${p.plantId}`;
+        const u = units.get(key) ?? units.set(key, new Map()).get(key)!;
+        for (const h of p.hourly) {
+          const d = h.actualMwh - h.forecastMwh;
+          const t = new Date(h.timestamp).getTime();
+          const b = u.get(t) ?? { now: 0, improved: 0, h };
+          b.now += d;
+          b.improved += d * sc;
+          u.set(t, b);
+          if (sc < 1) {
+            const g = hourCost(d, h) - hourCost(d * sc, h);
+            standaloneGain += g;
+            gainByPlant.set(p.plantName, (gainByPlant.get(p.plantName) ?? 0) + g);
+            kupstGain += kupstForHour(h, p.plantType) - kupstForHour({ ...h, actualMwh: h.forecastMwh + d * sc }, p.plantType);
+          }
+        }
+      }
+      let nettedGain = 0;
+      for (const u of Array.from(units.values())) for (const b of Array.from(u.values())) nettedGain += hourCost(b.now, b.h) - hourCost(b.improved, b.h);
+      forecastUpside = {
+        plantCount: scale.size,
+        plantNames: Array.from(gainByPlant.entries()).sort((a, b) => b[1] - a[1]).map(([n]) => n),
+        standaloneGainTl: standaloneGain,
+        nettedGainTl: nettedGain,
+        kupstGainTl: kupstGain,
+      };
+    }
+  }
+
   return {
     projectName: data.project.name,
     period: { start: iso(start), end: iso(end), months: monthly.length, hours: hourSet.size },
@@ -766,10 +830,9 @@ export function buildPlantReport(
     outages,
     marketProfile,
     fairShare,
-    ...(() => {
-      const stamps = data.plants.map((p) => ({ plantName: p.plantName, timestamps: p.hourly.map((h) => new Date(h.timestamp).getTime()) }));
-      return { dataGaps: findDataGaps(stamps), lateStarts: findLateStarts(stamps) };
-    })(),
+    dataGaps: findDataGaps(stamps),
+    lateStarts,
+    forecastUpside,
     intraday,
   };
 }

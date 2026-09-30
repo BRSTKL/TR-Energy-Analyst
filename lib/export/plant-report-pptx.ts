@@ -99,6 +99,14 @@ const periodLabel = (r: PlantReportData) => {
   return s === e ? s : `${s} – ${e}`;
 };
 const yearOf = (r: PlantReportData) => r.period.start.slice(0, 4);
+/** Başlıklarda dönem: tam yılda "2026", kısmi yılda "Ocak–Ağustos 2026" (8.5) */
+const periodTag = (r: PlantReportData) => {
+  if (r.monthly.length >= 12) return yearOf(r);
+  const s = r.period.start.slice(0, 7);
+  const e = r.period.end.slice(0, 7);
+  if (s.slice(0, 4) !== e.slice(0, 4)) return periodLabel(r);
+  return s === e ? monthLabel(s) : `${MONTHS_TR[Number(s.slice(5)) - 1]}–${monthLabel(e)}`;
+};
 /** Veri tam bir yılı kapsıyor mu (değilse "yıllık" yerine "dönem" denir: ör. Ocak–Ağustos 2026) */
 const isFullYear = (r: PlantReportData) => r.monthly.length >= 12;
 /** Yılın bulunma eki: "2025'te", "2026'da", "2030'da" (yılın okunuşundaki son sözcüğe göre) */
@@ -154,6 +162,13 @@ export async function exportPlantReportPptx(
   const unit = agg
     ? { gen: "portföyün", dat: "portföye", loc: "portföy içinde", self: "Toplayıcı portföyündeki santraller", netting: "portföy içi netleşme" }
     : { gen: "şirketin", dat: "şirkete", loc: "şirket içinde", self: "Aynı şirketin santralleri", netting: "şirket içi netleşme" };
+  // Dönem içinde devreye giren santraller: ilk aylar devreye alma (test, kısıt, kademeli yük) olduğu için "en kötü"
+  // sıralamalarına alınmaz; toplamlarda kalır (8.2)
+  const late = new Set((r.lateStarts ?? []).map((l) => l.plantName));
+  const established = r.plants.filter((p) => !late.has(p.name));
+  const lateNote = late.size
+    ? `Dönem içinde devreye giren ${late.size} santral (${Array.from(late).join(", ")}) devreye alma dönemindedir; sıralamaya alınmadı, toplamlarda var.`
+    : "";
   let page = 0;
 
   // ---------------------------------------------------------------------------------------------
@@ -282,10 +297,10 @@ export async function exportPlantReportPptx(
     // Toplayıcı başlığı: veri 2026 öncesiyse 2026 projeksiyonuyla, veri zaten 2026 kurallarıyla ise dönemin sapma yüküyle
     const title = agg && agg.benefitTl > 0
       ? load.next2026 !== null
-        ? `${agg.name} portföyünde netleşme riski %${nf(agg.benefitPct, 0)} azaltıyor; sapma yükü 2026'da ${formatTlShort(load.next2026)}`
-        : `${agg.name} portföyünde netleşme riski %${nf(agg.benefitPct, 0)} azaltıyor; ${yearOf(r)} sapma yükü ${formatTlShort(load.current)}`
+        ? `${agg.name} portföyü dengesizlik maliyetini %${nf(agg.benefitPct, 0)} azaltıyor; sapma yükü 2026'da ${formatTlShort(load.next2026)}`
+        : `${agg.name} portföyü dengesizlik maliyetini %${nf(agg.benefitPct, 0)} azaltıyor; ${periodTag(r)} sapma yükü ${formatTlShort(load.current)}`
       : s2026 && load.next2026 !== null
-        ? `${yearOf(r)} sapma yükü ${formatTlShort(load.current)}; aynı üretimle 2026 kurallarında ${formatTlShort(load.next2026)}`
+        ? `${periodTag(r)} sapma yükü ${formatTlShort(load.current)}; aynı üretimle 2026 kurallarında ${formatTlShort(load.next2026)}`
         : `Portföyün sapma yükü ${formatTlShort(load.current)}: dengesizlik riski ve KÜPST`;
     const s = contentSlide("Yönetici özeti", title);
     s.addNotes(
@@ -299,7 +314,7 @@ export async function exportPlantReportPptx(
     const stats: Array<{ value: string; label: string; color: string }> = [];
     stats.push({
       value: formatTlShort(load.current),
-      label: `${yearOf(r)} sapma yükü: dengesizlik ${formatTlShort(cost)} + KÜPST ${formatTlShort(r.kupst.totalTl)}${r.yekdem ? " (YEKDEM santralleri dahil)" : ""}`,
+      label: `${periodTag(r)} sapma yükü: dengesizlik ${formatTlShort(cost)} + KÜPST ${formatTlShort(r.kupst.totalTl)}${r.yekdem ? " (YEKDEM santralleri dahil)" : ""}`,
       color: C.cost,
     });
     if (load.next2026 !== null) stats.push({ value: formatTlShort(load.next2026), label: "2026 · aynı üretim, 2026 katsayıları ve KÜPST oranlarıyla", color: C.risk });
@@ -378,14 +393,22 @@ export async function exportPlantReportPptx(
   // 3. SAPMA YÜKÜ KÖPRÜSÜ (şelale)
   // ---------------------------------------------------------------------------------------------
   {
-    type Step = { label: string; value: number; kind: "total" | "down" | "up" | "assumption" | "kupst" | "scenario" | "target" };
+    type Step = { label: string; value: number; kind: "total" | "down" | "value" | "up" | "assumption" | "kupst" | "scenario" | "target" };
     const steps: Step[] = [];
     let imb2026: number;
-    if (netted) {
+    if (agg) {
+      // Toplayıcı: aynı sahibin santralleri zaten kendi dengesinde netleşir; toplayıcının kattığı değer ayrıca gösterilir
+      // (özet slaytındaki "portföy değeri" ile aynı rakam, 8.3)
       steps.push({ label: "Santraller tek tek uzlaştırılsaydı", value: r.settlement.plantLevelCostTl, kind: "total" });
-      steps.push({ label: agg ? "Portföy içi netleşme" : "Şirket içi netleşme", value: -r.settlement.sameCompanyNettingTl, kind: "down" });
+      const ownerNetting = r.settlement.plantLevelCostTl - agg.standaloneCostTl;
+      if (ownerNetting > 0.005 * r.settlement.plantLevelCostTl)
+        steps.push({ label: "Aynı sahibin santralleri", value: -ownerNetting, kind: "down" });
+      steps.push({ label: "Toplayıcının kattığı değer", value: -agg.benefitTl, kind: "value" });
+    } else if (netted) {
+      steps.push({ label: "Santraller tek tek uzlaştırılsaydı", value: r.settlement.plantLevelCostTl, kind: "total" });
+      steps.push({ label: "Şirket içi netleşme", value: -r.settlement.sameCompanyNettingTl, kind: "down" });
     }
-    steps.push({ label: `Dengesizlik riski ${yearOf(r)}`, value: cost, kind: "total" });
+    steps.push({ label: `Dengesizlik riski ${periodTag(r)}`, value: cost, kind: "total" });
     imb2026 = cost;
     if (s2026) {
       steps.push({ label: "2026 katsayı etkisi", value: s2026.deltaTl, kind: "up" });
@@ -401,7 +424,9 @@ export async function exportPlantReportPptx(
       steps.push({ label: "Ulaşılabilir", value: loadEnd - intradaySaving, kind: "target" });
     }
 
-    const title = s2026
+    const title = agg && !s2026
+      ? `Toplayıcının kattığı değer ${formatTlShort(agg.benefitTl)}; ${periodTag(r)} sapma yükü ${formatTlShort(loadEnd)}`
+      : s2026
       ? `2026'da sapma yükü ${formatTlShort(loadEnd)}${
           intradayOn ? `; gün içi pozisyon güncellemesi en fazla ${formatTlShort(intradaySaving)} azaltabilir` : ""
         }`
@@ -472,7 +497,7 @@ export async function exportPlantReportPptx(
           line: { color: scenario ? C.gain : C.risk, width: 1.25, dashType: "dash" },
         });
       } else {
-        rect(s, cx - barW / 2, y0, barW, h, st.kind === "total" ? C.navy : st.kind === "up" ? C.risk : st.kind === "kupst" ? C.cost : "A7B4C2");
+        rect(s, cx - barW / 2, y0, barW, h, st.kind === "total" ? C.navy : st.kind === "up" ? C.risk : st.kind === "kupst" ? C.cost : st.kind === "value" ? C.gain : "A7B4C2");
       }
       if (i < steps.length - 1) {
         const endLevel = st.kind === "total" || st.kind === "target" ? st.value : st.value >= 0 ? b.hi : b.lo;
@@ -493,7 +518,7 @@ export async function exportPlantReportPptx(
         fontSize: 15,
         bold: true,
         align: "center",
-        color: st.kind === "up" || st.kind === "assumption" ? C.risk : st.kind === "kupst" ? C.cost : scenario ? C.gain : st.kind === "down" ? C.sub : C.ink,
+        color: st.kind === "up" || st.kind === "assumption" ? C.risk : st.kind === "kupst" ? C.cost : scenario || st.kind === "value" ? C.gain : st.kind === "down" ? C.sub : C.ink,
       });
       text(s, st.label, { x: cx - slot / 2 + 0.05, y: bottom + 0.12, w: slot - 0.1, h: 0.6, fontSize: 11, color: C.sub, align: "center", valign: "top" });
     });
@@ -623,7 +648,7 @@ export async function exportPlantReportPptx(
   {
     // Teknolojiler birbirine göre değil kendi içinde karşılaştırılır (RES ile HES'in tahmin zorluğu farklıdır)
     const byType = new Map<string, typeof r.plants>();
-    for (const p of r.plants) byType.set(p.type, [...(byType.get(p.type) ?? []), p]);
+    for (const p of established.length ? established : r.plants) byType.set(p.type, [...(byType.get(p.type) ?? []), p]);
     const groups = Array.from(byType.entries())
       .map(([type, list]) => {
         const actual = list.reduce((a, p) => a + p.actualMwh, 0);
@@ -641,7 +666,7 @@ export async function exportPlantReportPptx(
       return { value: med ?? groups.find((g) => g.type === type)!.avg, sector: med !== null };
     };
     const excess = (p: (typeof r.plants)[number]) => Math.max(0, p.unitCostTl - refOf(p.type).value) * p.actualMwh;
-    const biggest = [...r.plants].sort((a, b) => excess(b) - excess(a))[0];
+    const biggest = [...(established.length ? established : r.plants)].sort((a, b) => excess(b) - excess(a))[0];
     const bigRef = refOf(biggest.type);
     const title =
       r.plants.length > 1 && excess(biggest) > 0
@@ -659,7 +684,7 @@ export async function exportPlantReportPptx(
     );
     type Row = { kind: "head"; type: string; avg: number; count: number } | { kind: "plant"; p: (typeof r.plants)[number]; avg: number };
     const MAX_ROWS = 13;
-    const allRows = groups.length + r.plants.length;
+    const allRows = groups.length + groups.reduce((n, g) => n + g.list.length, 0);
     // Çok santralde (toplayıcı portföyü) her teknolojiden önemliliğe göre (ölçütün üstündeki TL) en önemli santraller
     // gösterilir; tamamı Ek A'da. Az santralde hepsi MWh başına sıralı.
     const compact = allRows > MAX_ROWS;
@@ -672,7 +697,7 @@ export async function exportPlantReportPptx(
       rows.push({ kind: "head", type: g.type, avg: g.avg, count: g.list.length });
       for (const p of compact ? [...list].sort((a, b) => b.unitCostTl - a.unitCostTl) : list) rows.push({ kind: "plant", p, avg: g.avg });
     }
-    const hidden = r.plants.length - rows.filter((x) => x.kind === "plant").length;
+    const hidden = established.length - rows.filter((x) => x.kind === "plant").length;
     const top = 2.2;
     const rowH = Math.min(0.36, 4.1 / rows.length);
     const nameW = 2.7;
@@ -730,6 +755,7 @@ export async function exportPlantReportPptx(
       (hidden > 0
         ? `Her teknolojiden ölçütün üstünde en çok TL kaybettiren ${perGroup} santral; diğer ${hidden} santral Ek A'da. `
         : "") +
+        (lateNote ? `${lateNote} ` : "") +
         `Kırmızı: kendi teknolojisinin ortalamasından %10'dan fazla yüksek. Santral tek başına uzlaştırılsaydı oluşacak risktir; ${unit.netting}yle toplam daha düşüktür.`,
       { x: M, y: 6.45, w: CW, h: 0.45, fontSize: 10, color: C.sub, valign: "top" }
     );
@@ -745,9 +771,10 @@ export async function exportPlantReportPptx(
     const diffPct = ((main.portfolioUnitTl - main.unitImbalanceTl.median) / main.unitImbalanceTl.median) * 100;
     const better = 100 - main.portfolioRankPct;
     // Portföy ikiye ayrılıyorsa (hem en iyi hem en kötü çeyrekte santral var) ortalama yerine dağılımı anlat
-    const topQ = main.plants.filter((p) => p.rankPct <= 25).length;
-    const bottomQ = main.plants.filter((p) => p.rankPct >= 75).length;
-    const split = main.plants.length >= 3 && topQ > 0 && bottomQ > 0;
+    const mainPlants = main.plants.filter((p) => !late.has(p.name));
+    const topQ = mainPlants.filter((p) => p.rankPct <= 25).length;
+    const bottomQ = mainPlants.filter((p) => p.rankPct >= 75).length;
+    const split = mainPlants.length >= 3 && topQ > 0 && bottomQ > 0;
     const title = split
       ? `Portföy ikiye ayrılıyor: ${topQ} santral sektörün en iyi çeyreğinde, ${bottomQ} santral en kötü çeyreğinde`
       : diffPct >= 0
@@ -766,7 +793,7 @@ export async function exportPlantReportPptx(
     sec.types.forEach((t, ti) => {
       const top = 1.85 + ti * rowH;
       const d = t.unitImbalanceTl;
-      const vals = [d.p10, d.p90, ...t.plants.map((p) => p.unitTl), t.portfolioUnitTl];
+      const vals = [d.p10, d.p90, ...t.plants.filter((p) => !late.has(p.name)).map((p) => p.unitTl), t.portfolioUnitTl];
       const lo = Math.max(0, Math.min(...vals) * 0.9);
       const hi = Math.max(...vals) * 1.05;
       const xOf = (v: number) => left + ((v - lo) / (hi - lo)) * width;
@@ -783,7 +810,8 @@ export async function exportPlantReportPptx(
       text(s, `P90 ${nf(d.p90, 0)}`, { x: xOf(d.p90) - 0.6, y: bandY + 0.2, w: 1.2, h: 0.22, fontSize: 8.5, align: "center", color: C.muted });
       // Numaralı liste ancak bandın altında yer varsa çizilir; yoksa (üç teknoloji ya da çok santral) tek satırlık özet
       const listTop = bandY + 0.55;
-      const shown = t.plants.slice(0, 15);
+      const tPlants = t.plants.filter((p) => !late.has(p.name));
+      const shown = tPlants.slice(0, 15);
       const cols = shown.length > 10 ? 3 : shown.length > 5 ? 2 : 1;
       const perCol = Math.ceil(shown.length / cols);
       const listRoom = top + rowH - listTop;
@@ -794,7 +822,7 @@ export async function exportPlantReportPptx(
       s.addShape(pptx.ShapeType.triangle, { x: px - 0.12, y: triY, w: 0.24, h: 0.2, fill: { color: C.risk }, line: { color: C.risk, width: 0 }, rotate: 180 });
       text(s, `Portföyünüz ${nf(t.portfolioUnitTl, 0)} TL`, { x: px - 1.2, y: triY - 0.28, w: 2.4, h: 0.26, fontSize: 10, bold: true, align: "center", color: C.risk });
       // Santraller: noktalar ve üstünde sıra numarası (yakın noktalarda numaralar iki sıraya dağılır)
-      const dots = numbered ? shown : t.plants;
+      const dots = numbered ? shown : tPlants;
       dots.forEach((p, pi) => {
         const x = xOf(p.unitTl);
         const above = p.unitTl > d.median;
@@ -803,12 +831,12 @@ export async function exportPlantReportPptx(
           text(s, String(pi + 1), { x: x - 0.15, y: bandY - 0.42 - (pi % 2) * 0.16, w: 0.3, h: 0.18, fontSize: 8, bold: true, align: "center", color: above ? C.cost : C.gain });
       });
       if (!numbered) {
-        const best = t.plants.filter((p) => p.rankPct <= 25).length;
-        const worstQ = t.plants.filter((p) => p.rankPct >= 75).length;
-        const worst2 = [...t.plants].sort((a, b) => b.unitTl - a.unitTl).slice(0, 2);
+        const best = tPlants.filter((p) => p.rankPct <= 25).length;
+        const worstQ = tPlants.filter((p) => p.rankPct >= 75).length;
+        const worst2 = [...tPlants].sort((a, b) => b.unitTl - a.unitTl).slice(0, 2);
         text(
           s,
-          `${t.plants.length} santral: ${best} tanesi en iyi çeyrekte, ${worstQ} tanesi en kötü çeyrekte · en yüksek: ${worst2
+          `${tPlants.length} santral: ${best} tanesi en iyi çeyrekte, ${worstQ} tanesi en kötü çeyrekte · en yüksek: ${worst2
             .map((p) => `${p.name} ${nf(p.unitTl, 0)} TL`)
             .join(", ")}`,
           { x: left, y: bandY + 0.42, w: width, h: 0.22, fontSize: 9, color: C.sub, valign: "middle" }
@@ -841,7 +869,7 @@ export async function exportPlantReportPptx(
         0
       )} TL (${TECH_TR[main.type] ?? main.type}). Kaynak: EPİAŞ, ${sec.label}; kalite süzgecinden geçen lisanslı santraller.${
         r.plants.some((p) => !sec.types.some((t) => t.type === p.type)) ? " HES ve diğer türler sektör karnesinin kapsamında değil." : ""
-      }`,
+      }${lateNote ? ` ${lateNote}` : ""}`,
       { x: M, y: 6.45, w: CW, h: 0.45, fontSize: 9.5, color: C.sub, valign: "top" }
     );
   }
@@ -885,8 +913,8 @@ export async function exportPlantReportPptx(
     // Sağ: santral bazında sistematik sapma (sapan çubuklar, sıfır ortada)
     const px = M + lw + 0.6;
     const pw = W - M - px;
-    const plantsBias = [...r.plants].sort((x, y) => y.biasPct - x.biasPct).slice(0, 12);
-    const overCount = r.plants.filter((p) => p.biasPct > 1).length;
+    const plantsBias = [...established].sort((x, y) => y.biasPct - x.biasPct).slice(0, 12);
+    const overCount = established.filter((p) => p.biasPct > 1).length;
     text(s, "Santral bazında sistematik sapma", { x: px, y: 1.9, w: pw, h: 0.35, fontSize: 14, bold: true, fontFace: FONT_HEAD });
     text(s, `Plan, ${isFullYear(r) ? "yıl" : "dönem"} boyunca gerçekleşen üretimden ne kadar fazla (+) ya da az (−)`, { x: px, y: 2.25, w: pw, h: 0.3, fontSize: 10.5, color: C.sub });
     const nameW = 2.3;
@@ -917,8 +945,8 @@ export async function exportPlantReportPptx(
     s.addShape(pptx.ShapeType.line, { x: zeroX, y: top - 0.05, w: 0, h: yEnd - top + 0.1, line: { color: C.ink, width: 1 } });
     text(
       s,
-      overCount > r.plants.length / 2
-        ? `${r.plants.length} santralin ${overCount} tanesinde plan sistematik olarak yüksek: plan kalibrasyonu en hızlı kazanç kalemlerinden biri.`
+      overCount > established.length / 2
+        ? `${established.length} santralin ${overCount} tanesinde plan sistematik olarak yüksek: plan kalibrasyonu en hızlı kazanç kalemlerinden biri.`
         : "Belirgin bir sistematik sapma yok; maliyet saatlik tahmin hatasından kaynaklanıyor.",
       { x: px, y: Math.max(yEnd + 0.2, 5.75), w: pw, h: 0.5, fontSize: 11.5, valign: "top" }
     );
@@ -1118,7 +1146,6 @@ export async function exportPlantReportPptx(
     // ya da birkaç günlük veri primi uç değerlere taşır, ör. P90 7.000 TL)
     const mpBox = r.marketProfile.baseloadPtfTl > 0;
     const MAX_PLANT_ROWS = mpBox ? 7 : 11;
-    const late = new Set((r.lateStarts ?? []).map((l) => l.plantName));
     const eligible =
       rp.plants.length > MAX_PLANT_ROWS ? rp.plants.filter((p) => p.months.length >= 3 && !late.has(p.name)) : rp.plants;
     const tablePlants = eligible.slice(0, MAX_PLANT_ROWS);
@@ -1321,34 +1348,22 @@ export async function exportPlantReportPptx(
         effort: "Orta · gün içi operasyon",
       });
     }
-    // Sektör medyanının üstündeki santraller medyana inseydi (santral tek başına; netleşme öncesi, üst sınır). YEKDEM
-    // santralleri dahil (dengesizlikleri kendilerine aittir); KÜPST'ün sapmayla orantılı azaldığı varsayılır.
-    const weak = (r.sector?.types ?? []).flatMap((t) =>
-      t.plants
-        .filter((sp) => sp.unitTl > t.unitImbalanceTl.median)
-        .map((sp) => {
-          const row = r.plants.find((p) => p.name === sp.name);
-          if (!row) return { name: sp.name, gain: 0 };
-          const share = 1 - t.unitImbalanceTl.median / sp.unitTl;
-          return { name: sp.name, gain: (sp.unitTl - t.unitImbalanceTl.median) * row.actualMwh + row.kupstTl * share };
-        })
-    );
-    const weakGain = weak.reduce((a, w) => a + w.gain, 0);
+    // Sektör medyanının üstündeki santraller medyana inseydi (devreye alma dönemi hariç). Değer, uzlaştırma biriminde
+    // netleşmiş dengesizlikteki gerçek azalma + KÜPST azalmasıdır (8.4); santral tek başına kazanç yalnız bağlam olarak
+    // verilir (portföyde ters sapmalar zaten birbirini dengelediği için daha büyüktür).
+    const fu = r.forecastUpside;
+    const fuValue = fu ? fu.nettedGainTl + fu.kupstGainTl : 0;
     items.push({
-      title: weak.length ? "Zayıf santrallerde tahmin iyileştirme" : "En pahalı saatlere odaklı tahmin iyileştirme",
-      impact: weak.length && weakGain > 0 ? `≈ ${formatTlShort(weakGain)} · üst sınır` : "Hesaplanmadı",
-      value: weakGain,
+      title: fu ? "Zayıf santrallerde tahmin iyileştirme" : "En pahalı saatlere odaklı tahmin iyileştirme",
+      impact: fu && fuValue > 0 ? `≈ ${formatTlShort(fuValue)}` : "Hesaplanmadı",
+      value: fuValue,
       body:
-        (weak.length
-          ? `${weak.length} santral (${listOf(
-              [...weak].sort((a, b) => b.gain - a.gain).map((w) => w.name),
-              4,
-              ", "
-            )}) sektör medyanının üstünde; medyana inmeleri ${formatTlShort(
-              weakGain
-            )} eder (santral tek başına, netleşme öncesi; dengesizlik + KÜPST). `
+        (fu
+          ? `${fu.plantCount} santral (${listOf(fu.plantNames, 4, ", ")}) sektör medyanının üstünde; medyana inselerdi ` +
+            `${unit.loc} netleşmiş dengesizlik ${formatTlShort(fu.nettedGainTl)}, KÜPST ${formatTlShort(fu.kupstGainTl)} azalırdı ` +
+            `(santraller tek başına düşünülse ${formatTlShort(fu.standaloneGainTl)}; farkı netleşme zaten karşılıyor). `
           : `Riskin %${nf(r.alignment.sameDirectionCostPct, 0)} kadarı sistemle aynı yöndeki sapmalardan geliyor. `) +
-        (r.plants.filter((p) => p.biasPct > 1).length > r.plants.length / 2 ? "Planlar sistematik olarak yüksek: kalibrasyon ilk adım. " : "") +
+        (established.filter((p) => p.biasPct > 1).length > established.length / 2 ? "Planlar sistematik olarak yüksek: kalibrasyon ilk adım. " : "") +
         "En pahalı saatlerde tahmin sağlayıcıyla hedefli iyileştirme.",
       kind: "scenario",
       effort: "Düşük–orta · tahmin sağlayıcı",
