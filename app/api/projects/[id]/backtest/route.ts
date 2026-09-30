@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withProjectCache } from "@/lib/services/response-cache";
 import { ImbalancePricingProfile, REGULATORY_IMBALANCE_REGIMES } from "@/lib/calculations/types";
 import { BacktestResult, combineBacktests, runBacktest } from "@/lib/analysis/backtest";
 import { loadProjectHourly } from "@/lib/services/project-hourly";
@@ -16,7 +17,7 @@ const TRAIN_MONTHS = 4;
  * Portföy sonucu sonuç sayfası ve raporla aynı tabanda: her uzlaştırma biriminin (şirket ya da toplayıcı) saat saat
  * netleşmiş serisi test edilir ve birimler toplanır. Santral satırları santralin kendi serisiyledir.
  */
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
+async function handleGET(_request: Request, { params }: { params: { id: string } }) {
   try {
     const data = await loadProjectHourly(params.id);
     if (!data) {
@@ -59,3 +60,6 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     );
   }
 }
+
+/** Sonuç projenin veri sürümüne göre önbellekten (PLAN 10.2) */
+export const GET = withProjectCache(handleGET);

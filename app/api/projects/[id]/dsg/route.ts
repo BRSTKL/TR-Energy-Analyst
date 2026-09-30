@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withProjectCache } from "@/lib/services/response-cache";
 import { analyzeDsgScenario } from "@/lib/analysis/dsg-scenarios";
 import { loadProjectHourly } from "@/lib/services/project-hourly";
 import { settleByCompany } from "@/lib/report/plant-report";
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
  * YEKDEM santralleri de dahildir: YEKDEM katılımcısı üretimini serbest piyasada kendisi satar, dengesizliği kendisine
  * aittir (YEK Yönetmeliği md. 15/1, 23/1). `yekdemPlants` yalnızca bilgi içindir.
  */
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+async function handleGET(request: Request, { params }: { params: { id: string } }) {
   try {
     const data = await loadProjectHourly(params.id);
     if (!data) {
@@ -91,3 +92,6 @@ export async function GET(request: Request, { params }: { params: { id: string }
     );
   }
 }
+
+/** Sonuç projenin veri sürümüne göre önbellekten (PLAN 10.2) */
+export const GET = withProjectCache(handleGET);

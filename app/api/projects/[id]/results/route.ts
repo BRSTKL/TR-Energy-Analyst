@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withProjectCache } from "@/lib/services/response-cache";
 import { findProjectWithRecords } from "@/lib/services/project-records";
 import { hourProfile } from "@/lib/analysis/hour-profile";
 import { displayDescription } from "@/lib/projects/description";
@@ -24,7 +25,7 @@ import { parseAggregatorPortfolio, settlementIdentity } from "@/lib/projects/agg
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
+async function handleGET(_request: Request, { params }: { params: { id: string } }) {
   try {
     const projectId = params.id;
 
@@ -211,3 +212,6 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     );
   }
 }
+
+/** Sonuç projenin veri sürümüne göre önbellekten (PLAN 10.2) */
+export const GET = withProjectCache(handleGET);

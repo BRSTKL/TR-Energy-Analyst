@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withProjectCache } from "@/lib/services/response-cache";
 import { displayDescription } from "@/lib/projects/description";
 import { prisma } from "@/lib/prisma";
 import { aggregateMonthly, aggregateYearly } from "@/lib/calculations";
@@ -23,7 +24,7 @@ export const dynamic = "force-dynamic";
  * yani uzlaştırma biriminde (şirket ya da toplayıcı) saat saat netleşmiş dengesizlikle hesaplanır. Böylece portföyün
  * en pahalı saatleri ve önerileri tek tek santral saatlerinden değil, fiilen uzlaştırılan net sapmadan çıkar.
  */
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
+async function handleGET(_request: Request, { params }: { params: { id: string } }) {
   try {
     const projectId = params.id;
     const data = await loadProjectHourly(projectId);
@@ -123,3 +124,6 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     );
   }
 }
+
+/** Sonuç projenin veri sürümüne göre önbellekten (PLAN 10.2) */
+export const GET = withProjectCache(handleGET);

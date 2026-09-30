@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withProjectCache } from "@/lib/services/response-cache";
 import { loadProjectHourly } from "@/lib/services/project-hourly";
 import { DEFAULT_INTRADAY_REALISM, evaluateRealisticClosing, IntradayRealism } from "@/lib/analysis/intraday-arbitrage";
 
@@ -14,7 +15,7 @@ const clampParam = (raw: string | null, fallback: number) => {
  * Gerçekçi GİP kapatma senaryosu: kapatılan pay, saatlik GİP hacmine göre sınır ve zor saatlerde fiyat
  * kayması. Portföyde hacim sınırı aynı saatteki tüm santrallerin toplam isteğine uygulanır.
  */
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+async function handleGET(request: Request, { params }: { params: { id: string } }) {
   try {
     const data = await loadProjectHourly(params.id);
     if (!data) {
@@ -55,3 +56,6 @@ export async function GET(request: Request, { params }: { params: { id: string }
     );
   }
 }
+
+/** Sonuç projenin veri sürümüne göre önbellekten (PLAN 10.2) */
+export const GET = withProjectCache(handleGET);

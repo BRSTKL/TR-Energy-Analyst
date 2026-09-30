@@ -138,11 +138,18 @@ export async function plantHourSummaries(
   for (const project of projects) {
     const pool = project.plants.filter((pl) => pl.poolBacked);
     if (!pool.length) continue;
-    const period = await projectPeriod(project);
-    for (const plant of pool) {
-      const rows = period ? await poolPlantRows(plant, period.start, period.end) : [];
-      out.set(plant.id, { count: rows.length, first: rows[0]?.timestamp ?? null, last: rows[rows.length - 1]?.timestamp ?? null });
-    }
+    // Havuz dosyalarını saymak 60 santralde ~0,5 sn: proje veri sürümüne göre önbellekten (PLAN 10.2)
+    const { cachedForProject } = await import("@/lib/services/response-cache");
+    const counts = await cachedForProject(project.id, "hour-summaries", async () => {
+      const period = await projectPeriod(project);
+      const m: Array<[string, { count: number; first: string | null; last: string | null }]> = [];
+      for (const plant of pool) {
+        const rows = period ? await poolPlantRows(plant, period.start, period.end) : [];
+        m.push([plant.id, { count: rows.length, first: rows[0]?.timestamp.toISOString() ?? null, last: rows[rows.length - 1]?.timestamp.toISOString() ?? null }]);
+      }
+      return m;
+    });
+    for (const [id, c] of counts) out.set(id, { count: c.count, first: c.first ? new Date(c.first) : null, last: c.last ? new Date(c.last) : null });
   }
   for (const project of projects) for (const pl of project.plants) if (!out.has(pl.id)) out.set(pl.id, { count: 0, first: null, last: null });
   return out;

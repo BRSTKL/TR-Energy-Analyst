@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withProjectCache } from "@/lib/services/response-cache";
 import { loadProjectHourly } from "@/lib/services/project-hourly";
 import { settleByCompanyGroups } from "@/lib/report/plant-report";
 import { combineBacktests, intradayClosingStrategy, persistenceStrategy, runBacktest } from "@/lib/analysis/backtest";
@@ -12,7 +13,7 @@ const STRATEGIES = [intradayClosingStrategy(25), persistenceStrategy(1), persist
  * Sabit "%25 kapat" varsayımını, gün içi kalıcılık kurallarıyla (1/2/3 saat önce görülen hata) aynı test
  * aylarında, geriye dönük test ile karşılaştırır. Kapatılan oran her santral için önceki aylardan öğrenilir.
  */
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+async function handleGET(request: Request, { params }: { params: { id: string } }) {
   try {
     const data = await loadProjectHourly(params.id);
     if (!data) {
@@ -66,3 +67,6 @@ export async function GET(request: Request, { params }: { params: { id: string }
     );
   }
 }
+
+/** Sonuç projenin veri sürümüne göre önbellekten (PLAN 10.2) */
+export const GET = withProjectCache(handleGET);

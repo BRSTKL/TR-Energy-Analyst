@@ -78,9 +78,12 @@ export async function ensurePlantCoverage(
       continue;
     }
     const doc = await docOf(year);
-    const needK = needsFetch(doc, kSeries, month, now);
+    // Havuzda her zaman üç seri birlikte tutulur (PLAN 10.1): ilk KGÜP (dengesizlik riski), son KGÜP (KÜPST, gün içi
+    // etkinlik) ve UEVM. İstenen sürüm eksik olmasa da diğeri eksikse o da tamamlanır.
+    const needFirst = needsFetch(doc, "kgupFirst", month, now);
+    const needFinal = needsFetch(doc, "kgupFinal", month, now);
     const needU = needsFetch(doc, "uevm", month, now);
-    if (!needK && !needU) {
+    if (!needFirst && !needFinal && !needU) {
       months.push({ year, month, source: "pool" });
       continue;
     }
@@ -89,33 +92,39 @@ export async function ensurePlantCoverage(
       continue;
     }
     try {
-      if (needK && !info?.uevcbs?.length) {
+      if ((needFirst || needFinal) && !info?.uevcbs?.length) {
         info = await resolveUevcbs(epiasPlantId, [startDay, endDay < today ? endDay : today], fetchers, now);
         if (!info.uevcbs?.length) throw new Error("Uzlaştırma birimi (UEVÇB) bulunamadı; KGÜP çekilemez.");
       }
       const last = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
       const to = last < today ? last : today;
-      const [kLists, uItems] = await Promise.all([
-        needK ? Promise.all(info!.uevcbs!.map((u) => fetchers.kgup(u.id, first, to, version))) : null,
+      const kgupOf = (v: KgupVersion) =>
+        Promise.all(info!.uevcbs!.map((u) => fetchers.kgup(u.id, first, to, v))).then((l) => sumSeries(l.map(parseKgupItems)));
+      const [kFirst, kFinal, uItems] = await Promise.all([
+        needFirst ? kgupOf("FIRST") : null,
+        needFinal ? kgupOf("FINAL") : null,
         needU ? fetchers.uevm(epiasPlantId, first, to) : null,
       ]);
       const target = doc ?? emptyYear(epiasPlantId, year);
-      let k = kLists ? sumSeries(kLists.map(parseKgupItems)) : null;
+      let k1 = kFirst;
+      let k2 = kFinal;
       // UEVM var ama KGÜP yok: santrale sonradan yeni uzlaştırma birimi eklenmiş olabilir; ayın sonuna göre bir kez yeniden bak
-      if (k && k.values.size === 0 && uItems && uItems.length > 0 && !reResolved) {
+      const emptyPlan = (k1 && k1.values.size === 0) || (k2 && k2.values.size === 0);
+      if (emptyPlan && uItems && uItems.length > 0 && !reResolved) {
         reResolved = true;
         const before = info!.uevcbs!.length;
         info = await resolveUevcbs(epiasPlantId, [to], fetchers, now, info!.uevcbs);
         if (info.uevcbs!.length > before) {
-          k = sumSeries((await Promise.all(info.uevcbs!.map((u) => fetchers.kgup(u.id, first, to, version)))).map(parseKgupItems));
+          if (k1) k1 = await kgupOf("FIRST");
+          if (k2) k2 = await kgupOf("FINAL");
         }
       }
-      if (k) {
-        writeMonth(target, kSeries, month, [...k.values].map(([t, value]) => ({ timestamp: new Date(t), value })), now);
-      }
+      const rowsOf = (k: HourlySeries) => [...k.values].map(([t, value]) => ({ timestamp: new Date(t), value }));
+      if (k1) writeMonth(target, "kgupFirst", month, rowsOf(k1), now);
+      if (k2) writeMonth(target, "kgupFinal", month, rowsOf(k2), now);
       if (uItems) {
         const u = parseUevmItems(uItems);
-        writeMonth(target, "uevm", month, [...u.values].map(([t, value]) => ({ timestamp: new Date(t), value })), now, u.byFuel);
+        writeMonth(target, "uevm", month, rowsOf(u), now, u.byFuel);
       }
       await writePoolYear(target);
       docs.set(year, target);

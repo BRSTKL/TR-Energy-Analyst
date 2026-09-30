@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withProjectCache } from "@/lib/services/response-cache";
 import { findProjectWithRecords } from "@/lib/services/project-records";
 import { describeGap, findDataGaps } from "@/lib/analysis/data-completeness";
 
@@ -13,7 +14,7 @@ const VERIFIED_SOURCES = ["EPIAS", "FILE"];
  * Sentetik (SEED), kaynağı doğrulanmamış (LEGACY) veya eksik fiyatlı saatler dashboard'da uyarı olarak gösterilir.
  * Ayrıca ay bazında kapsamı ve doğrulanmış piyasa verisinin son çekilme zamanını döndürür (durum göstergesi için).
  */
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
+async function handleGET(_request: Request, { params }: { params: { id: string } }) {
   try {
     const projectId = params.id;
 
@@ -118,3 +119,6 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     );
   }
 }
+
+/** Sonuç projenin veri sürümüne göre önbellekten (PLAN 10.2) */
+export const GET = withProjectCache(handleGET);

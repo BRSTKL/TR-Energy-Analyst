@@ -62,6 +62,7 @@ import {
 } from "@/lib/calculations/types";
 import { PricingProfileDialog } from "@/components/pricing-profile-dialog";
 import { EpiasSyncDialog } from "@/components/epias-sync-dialog";
+import { ProjectDataSyncButton } from "@/components/project-data-sync-button";
 import { DataQualityBanner } from "@/components/data-quality-banner";
 import { MarketDataStatus } from "@/components/market-data-status";
 import { MarketDataUploadDialog } from "@/components/market-data-upload-dialog";
@@ -542,6 +543,7 @@ export default function ProjectResultsPage() {
                 Santraller
               </Link>
             </Button>
+            <ProjectDataSyncButton projectId={projectId} onDone={fetchData} />
             <EpiasSyncDialog
               projectId={projectId}
               onSyncSuccess={() => fetchData()}

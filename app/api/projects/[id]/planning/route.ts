@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withProjectCache } from "@/lib/services/response-cache";
 import { findProjectWithRecords } from "@/lib/services/project-records";
 import { settleByCompany } from "@/lib/report/plant-report";
 import { settlementIdentity } from "@/lib/projects/aggregator";
@@ -124,7 +125,7 @@ function buildHeatmapMatrix(results: HourlyResult[]): DayHourHeatmapCell[] {
   return cells;
 }
 
-export async function GET(
+async function handleGET(
   _request: Request,
   { params }: { params: { id: string } }
 ) {
@@ -499,3 +500,6 @@ export async function GET(
     );
   }
 }
+
+/** Sonuç projenin veri sürümüne göre önbellekten (PLAN 10.2) */
+export const GET = withProjectCache(handleGET);

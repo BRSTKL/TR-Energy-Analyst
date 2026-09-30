@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { projectKpis, type ProjectKpis } from "@/lib/services/project-kpis";
+import { cachedForProject } from "@/lib/services/response-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,8 @@ export async function GET(request: Request) {
     const skipped: string[] = [];
     // Sırayla: her proje tüm saatlik veriyi belleğe alır
     for (const id of ids) {
-      const k = await projectKpis(id);
+      // Proje göstergeleri veri sürümüne göre önbellekten (PLAN 10.2): ana sayfa ve Projeler sayfası her açılışta çağırır
+      const k = await cachedForProject(id, "kpis", () => projectKpis(id));
       if (k) rows.push(k);
       else skipped.push(id);
     }

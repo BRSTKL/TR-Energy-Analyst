@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withProjectCache } from "@/lib/services/response-cache";
 import { projectCandidates, type AccessFilter, type YekdemFilter } from "@/lib/services/candidates";
 import { SECTOR_TECHS, type SectorTech } from "@/lib/sector/benchmark";
 
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
  * prim (Shapley). sort: total (TL, varsayılan) ya da perMwh (adayın MWh'ı başına). yekdem: all, exclude, only. access: all ya da
  * independent (hedef: toplayıcısız, bağımsız), group, aggregator, retail, unknown. Sektör karnesi ya da saatlik serisi toplanmamışsa 422 ile toplama komutu döner.
  */
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+async function handleGET(request: Request, { params }: { params: { id: string } }) {
   const q = new URL(request.url).searchParams;
   const types = (q.get("types") ?? "")
     .split(",")
@@ -32,3 +33,6 @@ export async function GET(request: Request, { params }: { params: { id: string }
     return NextResponse.json({ success: false, error: error instanceof Error ? error.message : "Aday taraması hesaplanamadı." }, { status: 500 });
   }
 }
+
+/** Sonuç projenin veri sürümüne göre önbellekten (PLAN 10.2) */
+export const GET = withProjectCache(handleGET);

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withProjectCache } from "@/lib/services/response-cache";
 import { findProjectWithRecords } from "@/lib/services/project-records";
 import { analyzePlantAccuracy, computeAccuracyStats } from "@/lib/analysis/forecast-accuracy";
 
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
  * Santral ve portföy bazında fiyattan bağımsız tahmin doğruluğu (bias, WAPE, sistematik hata payı,
  * aylık ve saatlik kırılımlar). Piyasa verisi eşleşmeyen saatler de dahil edilir.
  */
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
+async function handleGET(_request: Request, { params }: { params: { id: string } }) {
   try {
     const project = await findProjectWithRecords(params.id);
 
@@ -40,3 +41,6 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     );
   }
 }
+
+/** Sonuç projenin veri sürümüne göre önbellekten (PLAN 10.2) */
+export const GET = withProjectCache(handleGET);

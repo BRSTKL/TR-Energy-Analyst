@@ -256,3 +256,42 @@ describe("proje saatleri havuzdan (7.7)", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 });
+
+describe("havuz üç seriyi birlikte tutar (10.1)", () => {
+  it("ilk ve son KGÜP ile UEVM birlikte çekilir; yalnız eksik seri tamamlanır", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "pool-both-"));
+    process.env.POOL_DIR = dir;
+    const { ensurePlantCoverage } = await import("@/lib/pool/pool-sync");
+    const log: string[] = [];
+    const fetchers = {
+      listUevcbs: async () => [{ id: 1, name: "U" }],
+      kgup: async (_: number, s: string, _e: string, v: string) => {
+        log.push(`kgup:${v}:${s}`);
+        return [{ date: `${s}T00:00:00+03:00`, time: "01:00", toplam: v === "FINAL" ? 8 : 10 }];
+      },
+      uevm: async (_: number, s: string) => {
+        log.push(`uevm:${s}`);
+        return [{ date: `${s}T00:00:00+03:00`, hour: "01:00", total: 9 }];
+      },
+    };
+    const now = new Date("2026-09-30T09:00:00Z");
+    const c = await ensurePlantCoverage(3, "2026-03-01", "2026-03-31", "FIRST", { now, fetchers });
+    expect(log.sort()).toEqual(["kgup:FINAL:2026-03-01", "kgup:FIRST:2026-03-01", "uevm:2026-03-01"]);
+    expect(c.kgup.values.get(Date.UTC(2026, 2, 1, 1))).toBe(10);
+    const doc = await readPoolYear(3, 2026);
+    const i = (31 + 28) * 24 + 1;
+    expect([doc!.kgupFirst[i], doc!.kgupFinal[i], doc!.uevm[i]]).toEqual([10, 8, 9]);
+
+    // Son KGÜP'ü olmayan eski belge: yalnız son KGÜP çekilir
+    const { emptyYear: ey, writeMonth: wm } = await import("@/lib/pool/pool-codec");
+    const old = ey(4, 2026);
+    wm(old, "kgupFirst", 3, [], new Date("2026-09-01T00:00:00Z"));
+    wm(old, "uevm", 3, [], new Date("2026-09-01T00:00:00Z"));
+    await writePoolYear(old);
+    log.length = 0;
+    await ensurePlantCoverage(4, "2026-03-01", "2026-03-31", "FIRST", { now, fetchers });
+    expect(log).toEqual(["kgup:FINAL:2026-03-01"]);
+    delete process.env.POOL_DIR;
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
