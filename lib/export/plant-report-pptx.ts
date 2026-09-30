@@ -143,7 +143,7 @@ type TextOpts = Parameters<Slide["addText"]>[1];
 export async function exportPlantReportPptx(
   r: PlantReportData,
   author: ReportAuthor = {},
-  options: { costChange?: ReportCostChange | null; growth?: ProjectCandidates | null } = {}
+  options: { costChange?: ReportCostChange | null; growth?: ProjectCandidates | null; summaryOnly?: boolean } = {}
 ): Promise<Buffer> {
   const pptx = new pptxgen();
   pptx.layout = "LAYOUT_WIDE";
@@ -233,6 +233,72 @@ export async function exportPlantReportPptx(
   };
 
   const contactLines = [author.title, author.email, author.phone, author.linkedin].filter((v): v is string => !!v?.trim());
+
+  // ---------------------------------------------------------------------------------------------
+  // TEK SAYFA ÖZET (?summary=1; PLAN 8.10): ilk mesaja eklenecek tek slayt
+  // ---------------------------------------------------------------------------------------------
+  if (options.summaryOnly) {
+    const load = deviationLoad(r);
+    const fu = r.forecastUpside;
+    const ie = r.intradayEffect;
+    const pe = r.peers;
+    const s = pptx.addSlide();
+    page++;
+    s.background = { color: C.white };
+    rect(s, 0, 0, W, 1.35, C.navy);
+    text(s, `DENGESİZLİK KARNESİ · ÖZET · ${periodTag(r).toLocaleUpperCase("tr-TR")}`, { x: M, y: 0.25, w: 9, h: 0.25, fontSize: 10, bold: true, charSpacing: 2, color: "7FD1C7" });
+    text(s, agg ? `${agg.name} portföyü: ${r.plants.length} santral, ${nf(t.capacityMw, 0)} MW, ${formatEnergy(t.actualMwh)}` : `${r.projectName}: ${r.plants.length} santral, ${formatEnergy(t.actualMwh)}`, {
+      x: M, y: 0.55, w: CW, h: 0.6, fontSize: 24, bold: true, fontFace: FONT_HEAD, color: C.white, valign: "middle",
+    });
+    // Dört gösterge
+    const kpis: Array<[string, string, string]> = [
+      [formatTlShort(load.current), `Sapma yükü (dengesizlik + KÜPST) · MWh başına ${nf(load.current / t.actualMwh, 0)} TL`, C.cost],
+      agg ? [formatTlShort(agg.benefitTl), `Toplayıcının kattığı değer · dengesizlik %${nf(agg.benefitPct, 0)} daha az`, C.gain] : [formatTlShort(r.kupst.totalTl), "Tahmini KÜPST", C.cost],
+      pe
+        ? [`${pe.rankValue}. / ${pe.rows.length}`, `Toplayıcılar arasında netleşme değeri sırası · MWh başına maliyette ${pe.rankUnit}.`, C.navy]
+        : [`%${nf(r.alignment.sameDirectionCostPct, 0)}`, "Riskin sistemle aynı yöndeki saatlerden gelen payı", C.navy],
+      fu ? [formatTlShort(fu.nettedGainTl + fu.kupstGainTl), `Tahmin iyileştirme fırsatı · ${fu.plantCount} santral sektör medyanına inse`, C.gain] : [`%${nf(r.alignment.sameDirectionCostPct, 0)}`, "Aynı yönlü saatlerin riskteki payı", C.navy],
+    ];
+    const kw = (CW - 0.6) / 4;
+    kpis.forEach(([v, l, color], i) => {
+      const x = M + i * (kw + 0.2);
+      round(s, x, 1.65, kw, 1.45, C.panel);
+      text(s, v, { x: x + 0.2, y: 1.78, w: kw - 0.4, h: 0.6, fontSize: 26, bold: true, fontFace: FONT_HEAD, color });
+      text(s, l, { x: x + 0.2, y: 2.4, w: kw - 0.4, h: 0.62, fontSize: 10, color: C.sub, valign: "top" });
+    });
+    // Bulgular ve aksiyonlar
+    const worst = [...r.monthly].sort((a, b) => b.imbalanceCostTl - a.imbalanceCostTl)[0];
+    const findings = [
+      `Riskin %${nf(r.alignment.sameDirectionCostPct, 0)} kadarı sapmanın sistemle aynı yönde olduğu saatlerden geliyor; 2026'daki %6 katsayı yalnız bu saatlere uygulanıyor.`,
+      worst ? `En pahalı ay ${monthLabel(worst.month)} (${formatTlShort(worst.imbalanceCostTl)}); maliyet birkaç ay ve saatte yoğunlaşıyor.` : "",
+      ie ? `Gün içi düzeltmeler dengesizliği %${nf(ie.reductionPct, 0)} azaltıyor${ie.staticPlants.length ? `; ${ie.staticPlants.length} santralin planı gün içinde hiç güncellenmiyor` : ""}.` : "",
+      agg && r.ownerContributions?.length ? `Portföye en çok değer katan üretici ${r.ownerContributions[0].name.split(/\s+/).slice(0, 2).join(" ")} (${formatTlShort(r.ownerContributions[0].contributionTl)}).` : "",
+    ].filter(Boolean).slice(0, 3);
+    const actions = [
+      fu ? `Zayıf ${fu.plantCount} santralde tahmin iyileştirme: ≈ ${formatTlShort(fu.nettedGainTl + fu.kupstGainTl)} (netleşmiş portföyde + KÜPST).` : "",
+      intradayOn ? `Gün içi pozisyon güncelleme: en fazla %${nf(r.intraday!.savingPct, 0)} (geriye dönük test, üst sınır).` : "",
+      options.growth && options.growth.result.candidates[0]
+        ? `Büyüme: portföye en çok değer katacak bağımsız aday ${options.growth.result.candidates[0].name} (≈ ${formatTlShort(options.growth.result.candidates[0].gainTl)} netleşme).`
+        : "",
+    ].filter(Boolean);
+    const col = (title: string, items: string[], x: number, w: number) => {
+      text(s, title, { x, y: 3.4, w, h: 0.32, fontSize: 14, bold: true, fontFace: FONT_HEAD });
+      items.forEach((it, i) => {
+        text(s, [{ text: `${i + 1}  `, options: { bold: true, color: C.gain } }, { text: it, options: { color: C.ink } }], {
+          x, y: 3.85 + i * 0.78, w, h: 0.7, fontSize: 11.5, valign: "top",
+        });
+      });
+    };
+    col("Bulgular", findings, M, CW / 2 - 0.3);
+    col("Aksiyonlar", actions, M + CW / 2 + 0.1, CW / 2 - 0.1);
+    text(
+      s,
+      `Veri: EPİAŞ Şeffaflık Platformu (KGÜP, UEVM, resmi dengesizlik fiyatları), ${periodLabel(r)}; hesaplar EPİAŞ uzlaştırmasıyla doğrulandı. Gün içi işlemler ve ikili anlaşmalar açık veride yok.` +
+        (author.name ? ` Hazırlayan: ${[author.name, author.title, author.email, author.linkedin].filter(Boolean).join(" · ")}. Tam rapor ve yöntem notu talep üzerine.` : ""),
+      { x: M, y: 6.55, w: CW, h: 0.6, fontSize: 9, color: C.sub, valign: "top" }
+    );
+    return (await pptx.write({ outputType: "nodebuffer" })) as Buffer;
+  }
 
   // ---------------------------------------------------------------------------------------------
   // 1. KAPAK
@@ -885,6 +951,7 @@ export async function exportPlantReportPptx(
     const cap = (w: string) => `${w.charAt(0)}${w.slice(1).replace(/İ/g, "i").toLowerCase()}`;
     const dup = new Set(pe.rows.map((a) => firstWord(a.name)).filter((w, i, arr) => arr.indexOf(w) !== i));
     const short = (a: (typeof pe.rows)[number]) => {
+      if (!/\(TOPLAYICI\)|A\.Ş\./i.test(a.name)) return a.name; // anonim sürümde takma ad
       const ws = a.name.trim().split(/\s+/);
       return dup.has(ws[0]) ? `${cap(ws[0])} ${cap(ws[1] ?? "")}` : cap(ws[0]);
     };

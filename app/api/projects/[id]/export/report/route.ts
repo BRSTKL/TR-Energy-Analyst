@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { anonymizeReport } from "@/lib/report/anonymize";
 import { loadProjectHourly } from "@/lib/services/project-hourly";
 import { buildPlantReport } from "@/lib/report/plant-report";
 import { buildReportContext } from "@/lib/services/report-context";
@@ -46,8 +47,14 @@ export async function GET(request: Request, { params }: { params: { id: string }
             return null;
           })
       : null;
-    const buffer = await exportPlantReportPptx(buildPlantReport(data, context), author, { costChange, growth });
-    const filename = encodeURIComponent(`Dengesizlik_Karnesi_${data.project.name.replace(/\s+/g, "_")}.pptx`);
+    // Anonim sürüm (?anon=1): herkese açık örnek analiz için santral, üretici ve toplayıcı adları takma adla (PLAN 8.10)
+    const anon = q.get("anon") === "1";
+    const built = buildPlantReport(data, context);
+    const { report, growth: growthOut } = anon ? anonymizeReport(built, growth) : { report: built, growth };
+    const summaryOnly = q.get("summary") === "1";
+    const buffer = await exportPlantReportPptx(report, author, { costChange: anon ? null : costChange, growth: growthOut, summaryOnly });
+    const base = anon ? "Toplayici_Portfoyu_anonim" : data.project.name.replace(/\s+/g, "_");
+    const filename = encodeURIComponent(`${summaryOnly ? "Ozet" : "Dengesizlik_Karnesi"}_${base}.pptx`);
     return new NextResponse(buffer as any, {
       status: 200,
       headers: {

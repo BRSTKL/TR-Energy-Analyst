@@ -59,6 +59,8 @@ export function ReportDownloadDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [author, setAuthor] = useState<Author>(EMPTY);
+  /** Tam rapor, anonim örnek (herkese açık paylaşım) ya da tek sayfalık özet (ilk mesaj için) */
+  const [variant, setVariant] = useState<"full" | "anon" | "summary" | "summaryAnon">("full");
   const [check, setCheck] = useState<ReportCheck | null>(null);
   const [checking, setChecking] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -118,6 +120,12 @@ export function ReportDownloadDialog({
   for (const f of FIELDS) {
     const v = author[f.key].trim();
     if (v) params.set(f.key, v);
+  }
+  if (variant === "anon") params.set("anon", "1");
+  if (variant === "summary") params.set("summary", "1");
+  if (variant === "summaryAnon") {
+    params.set("summary", "1");
+    params.set("anon", "1");
   }
   const query = params.toString();
   const href = `/api/projects/${projectId}/export/report${query ? `?${query}` : ""}`;
@@ -202,6 +210,26 @@ export function ReportDownloadDialog({
             sayfasındaki &ldquo;EPİAŞ&apos;tan santral ekle&rdquo; ile ekleyebilirsiniz.
           </p>
         </div>
+
+        <fieldset className="space-y-1.5 rounded-md border border-slate-200 p-3">
+          <legend className="px-1 text-xs font-semibold text-slate-700">Sürüm</legend>
+          {(
+            [
+              ["full", "Tam rapor", "Santral, üretici ve toplayıcı adlarıyla (şirketin kendisine)"],
+              ["anon", "Anonim örnek", "Adlar takma adla: herkese açık örnek analiz (LinkedIn, özgeçmiş)"],
+              ["summary", "Tek sayfa özet", "İlk mesaja eklenecek tek slayt"],
+              ["summaryAnon", "Tek sayfa özet, anonim", "Herkese açık tek slayt"],
+            ] as const
+          ).map(([id, label, hint]) => (
+            <label key={id} className="flex cursor-pointer items-start gap-2 text-xs">
+              <input type="radio" name="report-variant" className="mt-0.5" checked={variant === id} onChange={() => setVariant(id)} />
+              <span>
+                <span className="font-semibold text-slate-800">{label}</span>
+                <span className="text-slate-500"> · {hint}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
 
         <p className="text-xs text-slate-500">
           Göndermeden önce rakamları gözden geçirin: rapor, şirketin gün içi işlemlerini ve ikili anlaşmalarını içermeyen
