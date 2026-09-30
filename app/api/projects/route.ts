@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { displayDescription } from "@/lib/projects/description";
 import { prisma } from "@/lib/prisma";
+import { plantHourSummaries } from "@/lib/services/project-records";
 import { plantNameKey, validatePlantInput } from "@/lib/plants/validation";
 
 export const dynamic = "force-dynamic";
@@ -10,32 +11,21 @@ export async function GET() {
     const projects = await prisma.project.findMany({
       include: {
         pricingProfiles: true,
-        plants: {
-          select: {
-            id: true,
-            name: true,
-            type: true,
-            capacityMw: true,
-            _count: {
-              select: {
-                records: true,
-              },
-            },
-          },
-        },
+        plants: true,
       },
       orderBy: {
         createdAt: "desc",
       },
     });
 
+    const counts = await plantHourSummaries(projects);
     const enriched = projects.map((p) => {
       const totalCapacityMw = p.plants.reduce(
         (sum, plant) => sum + plant.capacityMw,
         0
       );
       const totalRecords = p.plants.reduce(
-        (sum, plant) => sum + plant._count.records,
+        (sum, plant) => sum + (counts.get(plant.id)?.count ?? 0),
         0
       );
       const plantTypes = Array.from(new Set(p.plants.map((pl) => pl.type)));
@@ -56,7 +46,7 @@ export async function GET() {
           name: pl.name,
           type: pl.type,
           capacityMw: pl.capacityMw,
-          recordCount: pl._count.records,
+          recordCount: counts.get(pl.id)?.count ?? 0,
         })),
       };
     });

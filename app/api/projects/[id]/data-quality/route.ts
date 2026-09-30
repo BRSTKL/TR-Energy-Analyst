@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { findProjectWithRecords } from "@/lib/services/project-records";
 import { describeGap, findDataGaps } from "@/lib/analysis/data-completeness";
 
 export const dynamic = "force-dynamic";
@@ -17,10 +17,8 @@ export async function GET(_request: Request, { params }: { params: { id: string 
   try {
     const projectId = params.id;
 
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      select: { id: true },
-    });
+    // Havuz ve veritabanı santralleri aynı yükleyiciden (piyasa verisi bağlı)
+    const project = await findProjectWithRecords(projectId);
 
     if (!project) {
       return NextResponse.json(
@@ -29,44 +27,30 @@ export async function GET(_request: Request, { params }: { params: { id: string 
       );
     }
 
-    const projectRecords = { plant: { projectId } };
-
-    const [totalHours, missingPriceHours, sourceRows, range] = await Promise.all([
-      prisma.generationRecord.count({ where: projectRecords }),
-      prisma.generationRecord.count({ where: { ...projectRecords, marketDataId: null } }),
-      prisma.marketData.findMany({
-        where: { records: { some: projectRecords } },
-        select: { source: true, _count: { select: { records: { where: projectRecords } } } },
-      }),
-      prisma.generationRecord.aggregate({
-        where: projectRecords,
-        _min: { timestamp: true },
-        _max: { timestamp: true },
-      }),
-    ]);
-
+    const records = project.plants.flatMap((p) => p.records.map((r) => ({ ...r, plantId: p.id })));
+    const totalHours = records.length;
+    let missingPriceHours = 0;
     const hoursBySource: Record<string, number> = {};
-    for (const row of sourceRows) {
-      hoursBySource[row.source] = (hoursBySource[row.source] || 0) + row._count.records;
+    for (const r of records) {
+      if (!r.marketData) missingPriceHours++;
+      else hoursBySource[r.marketData.source] = (hoursBySource[r.marketData.source] || 0) + 1;
     }
 
+    let firstHour = Infinity;
+    let lastHour = -Infinity;
+    for (const r of records) {
+      const t = r.timestamp.getTime();
+      if (t < firstHour) firstHour = t;
+      if (t > lastHour) lastHour = t;
+    }
     const verifiedHours = VERIFIED_SOURCES.reduce((sum, s) => sum + (hoursBySource[s] || 0), 0);
     const unverifiedHours = totalHours - verifiedHours - missingPriceHours;
 
-    // Takvim saati ve ay bazında kapsam, son çekim zamanı (göstergede hangi ayların eksik olduğunu görmek için)
-    const rows = await prisma.generationRecord.findMany({
-      where: projectRecords,
-      select: {
-        timestamp: true,
-        plantId: true,
-        marketData: { select: { source: true, syncedAt: true, createdAt: true } },
-      },
-    });
     // Takvim saati bazında: bir saat, o saatteki tüm santral kayıtları doğrulanmış fiyatlıysa "tamam" sayılır
     // (santral × saat sayısı 4 santralde yılda 35.040 eder; kullanıcıya 8.760 takvim saati gösterilir)
     const byHour = new Map<number, { verified: boolean; missing: boolean }>();
     let lastSyncedAt: Date | null = null;
-    for (const r of rows) {
+    for (const r of records) {
       const t = r.timestamp.getTime();
       const h = byHour.get(t) ?? { verified: true, missing: false };
       if (!r.marketData) {
@@ -83,7 +67,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     }
     const monthMap = new Map<string, { month: string; hours: number; verifiedHours: number; missingHours: number }>();
     let calendarVerified = 0;
-    for (const [t, h] of byHour) {
+    for (const [t, h] of Array.from(byHour.entries())) {
       const month = new Date(t).toISOString().slice(0, 7);
       const m = monthMap.get(month) ?? { month, hours: 0, verifiedHours: 0, missingHours: 0 };
       m.hours++;
@@ -97,10 +81,9 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     const months = Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month));
 
     // Santral × ay üretim verisi bütünlüğü: bir santralin ayı eksikse o ay hesaplardan sessizce düşer
-    const plants = await prisma.powerPlant.findMany({ where: { projectId }, select: { id: true, name: true } });
-    const stampsByPlant = new Map<string, number[]>(plants.map((p) => [p.id, []]));
-    for (const r of rows) stampsByPlant.get(r.plantId)?.push(r.timestamp.getTime());
-    const generationGaps = findDataGaps(plants.map((p) => ({ plantName: p.name, timestamps: stampsByPlant.get(p.id) ?? [] }))).map(describeGap);
+    const generationGaps = findDataGaps(
+      project.plants.map((p) => ({ plantName: p.name, timestamps: p.records.map((r) => r.timestamp.getTime()) }))
+    ).map(describeGap);
 
     return NextResponse.json({
       success: true,
@@ -120,8 +103,8 @@ export async function GET(_request: Request, { params }: { params: { id: string 
       isFullyVerified: totalHours > 0 && verifiedHours === totalHours,
       generationGaps,
       dateRange: {
-        start: range._min.timestamp,
-        end: range._max.timestamp,
+        start: byHour.size ? new Date(firstHour) : null,
+        end: byHour.size ? new Date(lastHour) : null,
       },
     });
   } catch (error) {

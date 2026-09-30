@@ -6,6 +6,8 @@ import { syncEpiasToDatabase } from "@/lib/services/epias-service";
 import { DEFAULT_IMBALANCE_PROFILE, toPricingProfile } from "@/lib/calculations/types";
 import { plantNameKey, validatePlantInput, type PlantInput } from "@/lib/plants/validation";
 import { monthChunks } from "@/lib/date-chunks";
+import { poolPlantRows } from "@/lib/pool/pool-hours";
+import { projectPeriod } from "@/lib/services/project-records";
 import { aggregatorDisplayName, isAggregatorName } from "@/lib/projects/aggregator";
 import { fetchAggregatorPortfolio } from "@/lib/services/epias-plants";
 import type { ParsedGenerationRow } from "@/lib/parsers/generation-parser";
@@ -52,6 +54,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Proje adı gerekli." }, { status: 400 });
     }
     const payloads: PlantPayload[] = Array.isArray(body.plants) ? body.plants : [];
+    // Dönem ("YYYY-MM-DD"): verilirse EPİAŞ santralleri havuzdan okunur ve proje dönemi olarak kaydedilir
+    const isDay = (x: unknown): x is string => typeof x === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x);
+    const period = isDay(body.period?.start) && isDay(body.period?.end) && body.period.start <= body.period.end
+      ? { start: body.period.start as string, end: body.period.end as string }
+      : null;
     if (payloads.length === 0) return NextResponse.json({ success: false, error: "En az bir santral gerekli." }, { status: 400 });
 
     const target = targetProjectId
@@ -75,13 +82,26 @@ export async function POST(request: Request) {
       kgupVersion?: string;
       uevcbIds?: string;
     };
-    const plants: Array<{ input: PlantInput & EpiasFields; rows: ParsedGenerationRow[]; source: PlantPayload["source"] }> = [];
+    const plants: Array<{
+      input: PlantInput & EpiasFields & { poolBacked: boolean };
+      rows: ParsedGenerationRow[];
+      hours: number;
+      source: PlantPayload["source"];
+    }> = [];
     for (const p of payloads) {
       const v = validatePlantInput({ name: p.plantName, type: p.type, capacityMw: p.capacityMw }, taken);
       if (!v.ok) return NextResponse.json({ success: false, error: `Santral: ${v.error}.` }, { status: 400 });
       const rows = parseRows(p.rows);
-      if (rows.length === 0) {
-        return NextResponse.json({ success: false, error: `${v.value.name}: yazılacak saatlik veri yok.` }, { status: 400 });
+      // EPİAŞ santrali dönem verildiyse havuzdan okunur (PLAN 7.7): saatlik veri gönderilmez, havuzda olduğu doğrulanır
+      const poolBacked = !!period && Number.isInteger(p.source?.powerPlantId);
+      const hours = poolBacked
+        ? await poolPlantRows({ epiasPlantId: p.source!.powerPlantId!, kgupVersion: p.source?.kgupVersion }, period!.start, period!.end)
+        : rows;
+      if (hours.length === 0) {
+        return NextResponse.json(
+          { success: false, error: `${v.value.name}: ${poolBacked ? "veri havuzunda bu dönem için saatlik veri yok; önce veriyi çekin" : "yazılacak saatlik veri yok"}.` },
+          { status: 400 }
+        );
       }
       taken.add(plantNameKey(v.value.name));
       const epias: EpiasFields = {};
@@ -95,12 +115,12 @@ export async function POST(request: Request) {
       }
       if (typeof p.meta?.yekdem === "boolean") epias.yekdem = p.meta.yekdem;
       if (typeof p.meta?.yekdemNextYear === "boolean") epias.yekdemNextYear = p.meta.yekdemNextYear;
-      plants.push({ input: { ...v.value, ...epias }, rows, source: p.source });
+      plants.push({ input: { ...v.value, ...epias, poolBacked }, rows: poolBacked ? [] : rows, hours: hours.length, source: p.source });
     }
 
     // 2. Piyasa fiyatı eksik ayları senkronla
-    let minT = Infinity;
-    let maxT = -Infinity;
+    let minT = period ? Date.parse(`${period.start}T00:00:00Z`) : Infinity;
+    let maxT = period ? Math.min(Date.parse(`${period.end}T23:00:00Z`), Date.now() + 3 * 3_600_000) : -Infinity;
     for (const p of plants) {
       for (const r of p.rows) {
         const t = r.timestamp.getTime();
@@ -129,17 +149,18 @@ export async function POST(request: Request) {
     // 3. Proje (veya mevcut proje) ve santraller; 4. saatlik kayıtlar (öncesinde yedek)
     await backupDatabase(prisma, "epias-plant-import");
 
+    const dayOf = (t: number) => new Date(t).toISOString().slice(0, 10);
     let projectId: string;
     let createdPlants: Array<{ id: string; name: string }>;
     let overlap: number | null = null;
     if (target) {
       // Portföy analizleri (DSG) ortak saatlere bakar: mevcut santrallerle hiç ortak saat yoksa uyar
-      overlap =
-        target.plants.length === 0
-          ? null
-          : await prisma.generationRecord.count({
-              where: { plantId: { in: target.plants.map((p) => p.id) }, timestamp: { gte: new Date(minT), lte: new Date(maxT) } },
-            });
+      const tp = target.plants.length === 0 ? null : await projectPeriod(target);
+      overlap = tp === null ? null : tp.start <= dayOf(maxT) && tp.end >= dayOf(minT) ? 1 : 0;
+      // Proje dönemi iki dönemin birleşimi olur (havuz santralleri bu aralıktan okunur)
+      const start = tp && tp.start < dayOf(minT) ? tp.start : dayOf(minT);
+      const end = tp && tp.end > dayOf(maxT) ? tp.end : dayOf(maxT);
+      await prisma.project.update({ where: { id: target.id }, data: { periodStart: start, periodEnd: end } });
       createdPlants = [];
       for (const p of plants) {
         createdPlants.push(
@@ -152,6 +173,8 @@ export async function POST(request: Request) {
         data: {
           name: projectName,
           description: description || null,
+          periodStart: period?.start ?? dayOf(minT),
+          periodEnd: period?.end ?? dayOf(maxT),
           pricingProfiles: {
             create: {
               name: "EPİAŞ Standart Profil",
@@ -175,7 +198,7 @@ export async function POST(request: Request) {
     let written: Awaited<ReturnType<typeof writePlantImports>>;
     try {
       written = await writePlantImports(
-        plants.map((p) => ({ plantId: idByName.get(plantNameKey(p.input.name))!, rows: p.rows })),
+        plants.filter((p) => !p.input.poolBacked).map((p) => ({ plantId: idByName.get(plantNameKey(p.input.name))!, rows: p.rows })),
         profile
       );
     } catch (err) {
@@ -208,11 +231,14 @@ export async function POST(request: Request) {
       projectId,
       aggregatorWarning,
       added: Boolean(target),
-      plants: written.map((w) => ({
-        name: createdPlants.find((p) => p.id === w.plantId)?.name,
-        written: w.written,
-        missingMarketHours: w.missingMarketHours,
-      })),
+      plants: [
+        ...written.map((w) => ({
+          name: createdPlants.find((p) => p.id === w.plantId)?.name,
+          written: w.written,
+          missingMarketHours: w.missingMarketHours,
+        })),
+        ...plants.filter((p) => p.input.poolBacked).map((p) => ({ name: p.input.name, written: 0, poolHours: p.hours })),
+      ],
       noOverlapWithExisting: overlap === 0,
       syncErrors,
     });

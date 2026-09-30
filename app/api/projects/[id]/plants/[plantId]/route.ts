@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { projectPeriod } from "@/lib/services/project-records";
+import { poolPlantRows } from "@/lib/pool/pool-hours";
 import { backupDatabase } from "@/lib/db-backup";
 import { plantNameKey, removePlantFromTemplate, validatePlantInput } from "@/lib/plants/validation";
 
@@ -49,12 +51,23 @@ export async function PATCH(request: Request, { params }: Params) {
     const updated = await prisma.powerPlant.update({
       where: { id: plant.id },
       data: result.value,
-      select: { id: true, name: true, type: true, capacityMw: true, _count: { select: { records: true } } },
     });
 
     const warnings: string[] = [];
-    const peak = await prisma.generationRecord.aggregate({ where: { plantId: plant.id }, _max: { actualMwh: true } });
-    const peakMwh = peak._max.actualMwh ?? 0;
+    // Kayıt sayısı ve en yüksek saatlik üretim: havuzdan okunan santralde havuzdan (PLAN 7.7)
+    let recordCount: number;
+    let peakMwh: number;
+    const project = await prisma.project.findUnique({ where: { id: params.id }, select: { id: true, periodStart: true, periodEnd: true } });
+    const period = updated.poolBacked && project ? await projectPeriod(project) : null;
+    if (updated.poolBacked) {
+      const rows = period ? await poolPlantRows(updated, period.start, period.end) : [];
+      recordCount = rows.length;
+      peakMwh = rows.reduce((m, r) => Math.max(m, r.actualMwh), 0);
+    } else {
+      const agg = await prisma.generationRecord.aggregate({ where: { plantId: plant.id }, _max: { actualMwh: true }, _count: { _all: true } });
+      recordCount = agg._count._all;
+      peakMwh = agg._max.actualMwh ?? 0;
+    }
     if (peakMwh > updated.capacityMw * 1.05) {
       warnings.push(
         `Kayıtlardaki en yüksek saatlik üretim (${peakMwh.toLocaleString("tr-TR")} MWh) yeni kurulu gücün ` +
@@ -69,7 +82,7 @@ export async function PATCH(request: Request, { params }: Params) {
         name: updated.name,
         type: updated.type,
         capacityMw: updated.capacityMw,
-        recordCount: updated._count.records,
+        recordCount,
       },
       warnings,
     });

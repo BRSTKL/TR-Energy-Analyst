@@ -7,6 +7,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { projectPeriod } from "@/lib/services/project-records";
 import { decomposeCostChange, type CostChangePeriodInput, type CostChangeResult } from "@/lib/analysis/cost-change";
 import { loadProjectHourly, type ProjectHourly } from "@/lib/services/project-hourly";
 import { loadSectorBenchmark } from "@/lib/services/sector";
@@ -68,15 +69,15 @@ export async function findPreviousYearProject(data: ProjectHourly): Promise<{ id
   const year = new Date(start).getUTCFullYear();
   const candidates = await prisma.project.findMany({
     where: { id: { not: data.project.id }, plants: { some: { epiasPlantId: { in: ids } } } },
-    select: { id: true, name: true, plants: { select: { epiasPlantId: true } } },
+    select: { id: true, name: true, periodStart: true, periodEnd: true, plants: { select: { epiasPlantId: true } } },
   });
   let best: { id: string; name: string; overlap: number } | null = null;
   for (const c of candidates) {
     const own = new Set(c.plants.map((p) => p.epiasPlantId));
     const overlap = ids.filter((id) => own.has(id)).length / ids.length;
     if (overlap < 0.8 || (best && overlap <= best.overlap)) continue;
-    const first = await prisma.generationRecord.aggregate({ where: { plant: { projectId: c.id }, marketDataId: { not: null } }, _min: { timestamp: true } });
-    if (first._min.timestamp?.getUTCFullYear() === year - 1) best = { id: c.id, name: c.name, overlap };
+    const period = await projectPeriod(c);
+    if (period && Number(period.start.slice(0, 4)) === year - 1) best = { id: c.id, name: c.name, overlap };
   }
   return best ? { id: best.id, name: best.name } : null;
 }

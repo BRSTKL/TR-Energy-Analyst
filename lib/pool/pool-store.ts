@@ -79,3 +79,30 @@ export async function writePoolPlantInfo(info: PoolPlantInfo): Promise<PoolPlant
   await fs.rename(tmp, file);
   return merged;
 }
+
+/**
+ * Önbellekli okuma: sayfalar aynı santral-yılı art arda okur (sonuç, DSG, rapor). Dosya değişince (mtime) yeniden
+ * okunur; en fazla CACHE_MAX belge tutulur (eski girilen önce çıkar).
+ */
+const CACHE_MAX = 400;
+const cache = new Map<string, { mtimeMs: number; doc: PoolYear }>();
+
+export async function readPoolYearCached(epiasPlantId: number, year: number): Promise<PoolYear | null> {
+  const file = yearFile(epiasPlantId, year);
+  let mtimeMs: number;
+  try {
+    mtimeMs = (await fs.stat(file)).mtimeMs;
+  } catch (e: any) {
+    if (e?.code === "ENOENT") return null;
+    throw e;
+  }
+  const key = `${poolDir()}|${epiasPlantId}|${year}`;
+  const hit = cache.get(key);
+  if (hit && hit.mtimeMs === mtimeMs) return hit.doc;
+  const doc = await readPoolYear(epiasPlantId, year);
+  if (!doc) return null;
+  cache.delete(key);
+  cache.set(key, { mtimeMs, doc });
+  if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value!);
+  return doc;
+}

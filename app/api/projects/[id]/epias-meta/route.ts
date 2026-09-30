@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { projectPeriod } from "@/lib/services/project-records";
 import { listUevmPowerPlants, resolvePlantMeta } from "@/lib/services/epias-plants";
 import { normalizePlantName } from "@/lib/epias-plant/plant-data";
 
@@ -17,13 +18,9 @@ export async function POST(_request: Request, { params }: { params: { id: string
     const project = await prisma.project.findUnique({ where: { id: params.id }, include: { plants: true } });
     if (!project) return NextResponse.json({ success: false, error: "Proje bulunamadı." }, { status: 404 });
 
-    const plantIds = project.plants.map((p) => p.id);
-    const [first, last] = await Promise.all([
-      prisma.generationRecord.findFirst({ where: { plantId: { in: plantIds } }, orderBy: { timestamp: "asc" }, select: { timestamp: true } }),
-      prisma.generationRecord.findFirst({ where: { plantId: { in: plantIds } }, orderBy: { timestamp: "desc" }, select: { timestamp: true } }),
-    ]);
-    const year = (first?.timestamp ?? new Date()).getUTCFullYear();
-    const lastYear = (last?.timestamp ?? new Date()).getUTCFullYear();
+    const period = await projectPeriod(project);
+    const year = period ? Number(period.start.slice(0, 4)) : new Date().getUTCFullYear();
+    const lastYear = period ? Number(period.end.slice(0, 4)) : year;
 
     const fromNotes = new Map<string, number>();
     for (const m of (project.description ?? "").matchAll(/EPİAŞ: (.+?): .*?Santral kimliği (\d+)/g)) {

@@ -326,9 +326,11 @@ function EpiasPlantImport() {
             capacityMw: Number(f.capacity.replace(",", ".")),
             source: { powerPlantId: p.id, uevcbIds: j.uevcbs.map((u) => u.id), kgupVersion: j.version },
             meta: meta[p.id] ?? null,
-            rows: merged[p.id].series.rows.map((r) => [r.timestamp.getTime(), r.forecastMwh, r.actualMwh]),
+            // Saatlik veri veri havuzunda: sunucu dönemden okur (PLAN 7.7), gönderilmez
+            rows: [],
           };
         }),
+        period: { start: startDay, end: endDay },
       });
       if (d.added && d.noOverlapWithExisting) {
         // Ortak saat yoksa sonuç sayfasına geçmeden uyar: DSG analizi bu santralleri diğerleriyle birlikte göremez

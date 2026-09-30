@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { findProjectWithRecords } from "@/lib/services/project-records";
 import { analyzePlantAccuracy, computeAccuracyStats } from "@/lib/analysis/forecast-accuracy";
 
 export const dynamic = "force-dynamic";
@@ -11,19 +11,7 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
   try {
-    const project = await prisma.project.findUnique({
-      where: { id: params.id },
-      include: {
-        plants: {
-          include: {
-            records: {
-              select: { timestamp: true, forecastMwh: true, actualMwh: true },
-              orderBy: { timestamp: "asc" },
-            },
-          },
-        },
-      },
-    });
+    const project = await findProjectWithRecords(params.id);
 
     if (!project) {
       return NextResponse.json(

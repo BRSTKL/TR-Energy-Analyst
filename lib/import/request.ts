@@ -4,6 +4,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { plantHourSummaries } from "@/lib/services/project-records";
 import { ImbalancePricingProfile, toPricingProfile } from "@/lib/calculations/types";
 import { PlantImportMapping, PlantImportResult, applyPlantMapping, validateMappingSet, ImportIssue } from "@/lib/import/column-mapping";
 import { SheetGrid, SheetPreview, buildSheetPreview, dataRows, readWorkbookGrids } from "@/lib/import/workbook-preview";
@@ -97,7 +98,7 @@ export async function readImportRequest(request: Request, projectId: string): Pr
     where: { id: projectId },
     include: {
       pricingProfiles: true,
-      plants: { select: { id: true, name: true, type: true, capacityMw: true, _count: { select: { records: true } } } },
+      plants: true,
     },
   });
   if (!project) throw new ImportRequestError(`ID'si '${projectId}' olan proje bulunamadı.`, 404);
@@ -133,12 +134,13 @@ export async function readImportRequest(request: Request, projectId: string): Pr
       : buildSheetPreview(s);
   });
 
+  const counts = await plantHourSummaries([project]);
   const plants = project.plants.map((p) => ({
     id: p.id,
     name: p.name,
     type: p.type,
     capacityMw: p.capacityMw,
-    recordCount: p._count.records,
+    recordCount: counts.get(p.id)?.count ?? 0,
   }));
 
   const profile: ImbalancePricingProfile = toPricingProfile(project.pricingProfiles?.[0]);

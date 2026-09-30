@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { displayDescription } from "@/lib/projects/description";
 import { prisma } from "@/lib/prisma";
+import { plantHourSummaries } from "@/lib/services/project-records";
 import { backupDatabase } from "@/lib/db-backup";
 import { parseAggregatorPortfolio } from "@/lib/projects/aggregator";
 import { fetchAggregatorPortfolio } from "@/lib/services/epias-plants";
@@ -16,10 +17,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
   const project = await prisma.project.findUnique({
     where: { id: params.id },
     include: {
-      plants: {
-        select: { id: true, name: true, type: true, capacityMw: true, _count: { select: { records: true } } },
-        orderBy: { createdAt: "asc" },
-      },
+      plants: { orderBy: { createdAt: "asc" } },
     },
   });
 
@@ -30,17 +28,16 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     );
   }
 
-  // Üretim verisinin kapsadığı tarih aralığı (duvar saati; UTC alanlarında saklanır)
-  const range = await prisma.generationRecord.aggregate({
-    where: { plant: { projectId: project.id } },
-    _min: { timestamp: true },
-    _max: { timestamp: true },
-  });
-  const day = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
-  const dataRange =
-    range._min.timestamp && range._max.timestamp
-      ? { start: day(range._min.timestamp), end: day(range._max.timestamp) }
-      : null;
+  // Üretim verisinin kapsadığı tarih aralığı (duvar saati; UTC alanlarında saklanır): havuz ve veritabanı santralleri
+  const counts = await plantHourSummaries([project]);
+  let first: Date | null = null;
+  let last: Date | null = null;
+  for (const c of Array.from(counts.values())) {
+    if (c.first && (!first || c.first < first)) first = c.first;
+    if (c.last && (!last || c.last > last)) last = c.last;
+  }
+  const day = (d: Date) => d.toISOString().slice(0, 10);
+  const dataRange = first && last ? { start: day(first), end: day(last) } : null;
 
   return NextResponse.json({
     success: true,
@@ -57,7 +54,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
         name: p.name,
         type: p.type,
         capacityMw: p.capacityMw,
-        recordCount: p._count.records,
+        recordCount: counts.get(p.id)?.count ?? 0,
       })),
     },
   });

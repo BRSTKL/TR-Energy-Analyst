@@ -235,3 +235,24 @@ describe("ay ortasında devreye giren santral", () => {
     expect(m.checks[0].message).toContain("4 Ağustos 2026");
   });
 });
+
+describe("proje saatleri havuzdan (7.7)", () => {
+  it("KGÜP sürümüne göre okur, yalnız plan ve gerçekleşenin birlikte olduğu saatleri döndürür", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "pool-hours-"));
+    process.env.POOL_DIR = dir;
+    const { poolPlantRows } = await import("@/lib/pool/pool-hours");
+    const doc = emptyYear(77, 2026);
+    const at = new Date("2026-09-01T00:00:00Z");
+    writeMonth(doc, "kgupFirst", 3, [{ timestamp: h("2026-03-01T00"), value: 5 }, { timestamp: h("2026-03-01T01"), value: 6 }], at);
+    writeMonth(doc, "kgupFinal", 3, [{ timestamp: h("2026-03-01T00"), value: 4 }], at);
+    writeMonth(doc, "uevm", 3, [{ timestamp: h("2026-03-01T00"), value: 4.5 }, { timestamp: h("2026-03-02T00"), value: 1 }], at);
+    await writePoolYear(doc);
+    const first = await poolPlantRows({ epiasPlantId: 77, kgupVersion: "FIRST" }, "2026-03-01", "2026-03-31");
+    expect(first.map((r) => [r.timestamp.toISOString(), r.forecastMwh, r.actualMwh])).toEqual([["2026-03-01T00:00:00.000Z", 5, 4.5]]);
+    const final = await poolPlantRows({ epiasPlantId: 77, kgupVersion: "FINAL" }, "2026-03-01", "2026-03-31");
+    expect(final[0].forecastMwh).toBe(4);
+    expect(await poolPlantRows({ epiasPlantId: 77 }, "2026-04-01", "2026-04-30")).toEqual([]);
+    delete process.env.POOL_DIR;
+    rmSync(dir, { recursive: true, force: true });
+  });
+});

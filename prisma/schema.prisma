@@ -25,6 +25,10 @@ model Project {
   aggregatorName  String?
   /// Toplayıcının EPİAŞ portföy özeti (JSON: orgId, orgName, asOf, plantCount, byType, plantIds); kapsam cümlesi için
   aggregatorPortfolio String?
+  /// Projenin veri dönemi ("YYYY-MM-DD", gün dahil). Havuzdan okunan santrallerin saatleri bu aralıktan alınır (PLAN 7.7);
+  /// boşsa dönem kayıtlardan çıkarılır (eski ve dosyadan yüklenen projeler)
+  periodStart     String?
+  periodEnd       String?
   createdAt       DateTime                  @default(now())
   updatedAt       DateTime                  @updatedAt
 }
@@ -47,6 +51,9 @@ model PowerPlant {
   /// Verinin son yılından sonraki yıl YEKDEM'de mi: yekdem=true ve bu alan false ise santral YEKDEM'den çıkıyor
   /// (piyasa fiyatına ve dengesizliğe doğrudan maruz kalıyor); null ise sonraki yılın listesi alınamadı
   yekdemNextYear   Boolean?
+  /// Saatlik veri veri havuzundan okunur (data/pool; PLAN 7.7): GenerationRecord yazılmaz. false: kayıtlar veritabanında
+  /// (dosyadan yüklenen santraller ve 7.7 öncesi projeler)
+  poolBacked       Boolean  @default(false)
   projectId   String?
   project     Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
   records     GenerationRecord[]

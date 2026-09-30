@@ -94,6 +94,8 @@ export async function writePlantImports(
         for (let i = 0; i < records.length; i += CHUNK_SIZE) {
           await tx.generationRecord.createMany({ data: records.slice(i, i + CHUNK_SIZE) });
         }
+        // Dosyadan veri yüklenen santral bundan sonra veritabanından okunur (havuz verisi yerine yüklenen dosya; PLAN 7.7)
+        await tx.powerPlant.update({ where: { id: plantId }, data: { poolBacked: false } });
 
         results.push({
           plantId,
