@@ -43,13 +43,15 @@ describe("havuz biçimi", () => {
     expect(monthStatus(doc, "kgupFirst", 1)).toBe("final");
   });
 
-  it("yeniden çekme: eksik ve bayat geçici evet, taze geçici ve kesin hayır", () => {
+  it("yeniden çekme: eksik evet; biten geçici ay haftada bir, devam eden ay günde bir; kesin hayır", () => {
     const doc = emptyYear(1, 2026);
     const now = new Date("2026-09-30T12:00:00Z");
     expect(needsFetch(doc, "uevm", 8, now)).toBe(true);
-    writeMonth(doc, "uevm", 8, [], new Date("2026-09-30T08:00:00Z"));
+    writeMonth(doc, "uevm", 8, [], new Date("2026-09-29T08:00:00Z"));
     expect(needsFetch(doc, "uevm", 8, now)).toBe(false);
-    expect(needsFetch(doc, "uevm", 8, new Date("2026-10-02T00:00:00Z"))).toBe(true);
+    expect(needsFetch(doc, "uevm", 8, new Date("2026-10-06T09:00:00Z"))).toBe(true);
+    writeMonth(doc, "uevm", 9, [], new Date("2026-09-29T08:00:00Z"));
+    expect(needsFetch(doc, "uevm", 9, now)).toBe(true);
     writeMonth(doc, "uevm", 1, [], new Date("2026-09-01T00:00:00Z"));
     expect(needsFetch(doc, "uevm", 1, now)).toBe(false);
   });
@@ -145,11 +147,13 @@ describe("eksik tamamlama", () => {
     const a = await ensurePlantCoverage(6, "2025-01-01", "2025-03-31", "FIRST", {
       now, fetchers: fakeFetchers(log, (s) => s === "2025-02-01"),
     });
-    expect(a.months.map((m) => m.source)).toEqual(["epias", "failed", "epias"]);
+    // İlk hatadan sonra kalan aylar denenmez
+    expect(a.months.map((m) => m.source)).toEqual(["epias", "failed", "failed"]);
+    expect(log.filter((l) => l.includes("2025-03"))).toEqual([]);
     log.length = 0;
     const b = await ensurePlantCoverage(6, "2025-01-01", "2025-03-31", "FIRST", { now, fetchers: fakeFetchers(log) });
-    expect(b.months.map((m) => m.source)).toEqual(["pool", "epias", "pool"]);
-    expect(log).toEqual(["kgup:11:2025-02-01", "kgup:12:2025-02-01", "uevm:2025-02-01"]);
+    expect(b.months.map((m) => m.source)).toEqual(["pool", "epias", "epias"]);
+    expect(log.filter((l) => l.includes("2025-01"))).toEqual([]);
     delete process.env.POOL_DIR;
   });
 });

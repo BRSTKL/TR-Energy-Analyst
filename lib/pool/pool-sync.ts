@@ -55,6 +55,8 @@ export async function ensurePlantCoverage(
 
   let info = await readPoolPlantInfo(epiasPlantId);
   const months: PlantCoverage["months"] = [];
+  // EPİAŞ hatası çoğu zaman bağlantı veya erişim engelidir (VPN, 403): ilk hatadan sonra kalan aylar denenmez
+  let abort: string | null = null;
   for (const { year, month } of monthsInRange(startDay, endDay)) {
     const first = `${year}-${pad(month)}-01`;
     if (first > today) {
@@ -66,6 +68,10 @@ export async function ensurePlantCoverage(
     const needU = needsFetch(doc, "uevm", month, now);
     if (!needK && !needU) {
       months.push({ year, month, source: "pool" });
+      continue;
+    }
+    if (abort) {
+      months.push({ year, month, source: "failed", error: abort });
       continue;
     }
     try {
@@ -93,7 +99,9 @@ export async function ensurePlantCoverage(
       docs.set(year, target);
       months.push({ year, month, source: "epias" });
     } catch (e) {
-      months.push({ year, month, source: "failed", error: e instanceof Error ? e.message : "EPİAŞ verisi alınamadı." });
+      const error = e instanceof Error ? e.message : "EPİAŞ verisi alınamadı.";
+      months.push({ year, month, source: "failed", error });
+      abort = `Önceki ay başarısız olduğu için denenmedi (${error}).`;
     }
   }
 

@@ -53,6 +53,9 @@ interface PlantJob {
   failed: Array<DateChunk & { error: string }>;
   error: string | null;
   running: boolean;
+  /** Havuzdan okunan ve EPİAŞ'tan çekilip havuza eklenen ay sayısı */
+  fromPool: number;
+  fromEpias: number;
 }
 
 /** Kullanıcının düzenleyebildiği santral bilgileri (öneriler bir kez doldurulur, sonra ezilmez) */
@@ -157,41 +160,41 @@ function EpiasPlantImport() {
       return { ...prev, [id]: { ...cur, ...(typeof patch === "function" ? patch(cur) : patch) } };
     });
 
-  /** Bir santral için verilen ayları çeker; başarısız aylar job.failed'e yazılır */
-  const fetchChunks = async (plant: EpiasPowerPlant, uevcbs: Uevcb[], chunks: DateChunk[], version: KgupVersion) => {
-    const failures: Array<DateChunk & { error: string }> = [];
-    for (let i = 0; i < chunks.length; i++) {
-      const c = chunks[i];
-      setProgress(`${plantDisplayName(plant)} · ${c.label} (${i + 1}/${chunks.length})`);
-      try {
-        const d = await postJson<{ kgup: SerializedSeries; uevm: SerializedSeries }>("/api/epias/plants/fetch", {
-          powerPlantId: plant.id,
-          uevcbIds: uevcbs.map((u) => u.id),
-          startDay: c.start,
-          endDay: c.end,
-          kgupVersion: version,
-        });
-        const k = deserializeSeries(d.kgup);
-        const u = deserializeSeries(d.uevm);
-        updateJob(plant.id, (j) => ({ kgupParts: [...j.kgupParts, k], uevmParts: [...j.uevmParts, u] }));
-      } catch (e) {
-        failures.push({ ...c, error: e instanceof Error ? e.message : "hata" });
-      }
-    }
-    updateJob(plant.id, { failed: failures, running: false });
-  };
-
+  /**
+   * Santralin dönem verisi veri havuzundan gelir; havuzda eksik aylar sunucuda EPİAŞ'tan çekilip havuza yazılır
+   * (PLAN 7.4). Başarısız aylar job.failed'e yazılır; tekrar deneme aynı çağrıdır (başarılı aylar havuzda kalır).
+   */
   const fetchPlant = async (plant: EpiasPowerPlant) => {
     setJobs((prev) => ({
       ...prev,
-      [plant.id]: { key: fetchKey, version: kgupVersion, uevcbs: [], kgupParts: [], uevmParts: [], failed: [], error: null, running: true },
+      [plant.id]: {
+        key: fetchKey, version: kgupVersion, uevcbs: prev[plant.id]?.uevcbs ?? [], kgupParts: [], uevmParts: [],
+        failed: [], error: null, running: true, fromPool: 0, fromEpias: 0,
+      },
     }));
     try {
-      setProgress(`${plantDisplayName(plant)} · uzlaştırma birimleri`);
-      const d = await postJson<{ uevcbs: Uevcb[] }>("/api/epias/plants/resolve", { powerPlantId: plant.id, startDay });
-      if (!d.uevcbs.length) throw new Error("Uzlaştırma birimi (UEVÇB) bulunamadı; KGÜP çekilemez.");
-      updateJob(plant.id, { uevcbs: d.uevcbs });
-      await fetchChunks(plant, d.uevcbs, monthChunks(startDay, endDay), kgupVersion);
+      setProgress(`${plantDisplayName(plant)} · veri havuzu (eksik aylar EPİAŞ'tan)`);
+      const d = await postJson<{
+        uevcbs: Uevcb[];
+        months: Array<{ year: number; month: number; source: "pool" | "epias" | "failed" | "future"; error?: string }>;
+        kgup: SerializedSeries;
+        uevm: SerializedSeries;
+      }>("/api/pool/plant", { powerPlantId: plant.id, startDay, endDay, kgupVersion });
+      const chunks = monthChunks(startDay, endDay);
+      const chunkOf = (y: number, m: number) => chunks.find((c) => c.start.slice(0, 7) === `${y}-${String(m).padStart(2, "0")}`);
+      const failed = d.months.flatMap((m) => {
+        const c = m.source === "failed" ? chunkOf(m.year, m.month) : undefined;
+        return c ? [{ ...c, error: m.error ?? "hata" }] : [];
+      });
+      updateJob(plant.id, {
+        uevcbs: d.uevcbs,
+        kgupParts: [deserializeSeries(d.kgup)],
+        uevmParts: [deserializeSeries(d.uevm)],
+        failed,
+        running: false,
+        fromPool: d.months.filter((m) => m.source === "pool").length,
+        fromEpias: d.months.filter((m) => m.source === "epias").length,
+      });
     } catch (e) {
       updateJob(plant.id, { error: e instanceof Error ? e.message : "Veri çekilemedi.", running: false });
     }
@@ -232,11 +235,7 @@ function EpiasPlantImport() {
     const job = jobs[plant.id];
     if (!job) return;
     setFetching(true);
-    if (job.error || job.uevcbs.length === 0) await fetchPlant(plant);
-    else {
-      updateJob(plant.id, { running: true });
-      await fetchChunks(plant, job.uevcbs, job.failed, job.version);
-    }
+    await fetchPlant(plant);
     setProgress(null);
     setFetching(false);
   };
@@ -714,7 +713,9 @@ function PlantReview({
             Plan (KGÜP) {num(merged.series.kgupTotalMwh)} MWh · Gerçekleşen (UEVM) {num(merged.series.uevmTotalMwh)} MWh ·
             Eşleşen saat {num(merged.series.rows.length)}
             {merged.skipped > 0 && ` · okunamayan kayıt ${num(merged.skipped)}`}
-            {job && ` · UEVÇB: ${job.uevcbs.map((u) => u.name).join(", ")} · KGÜP ${KGUP_VERSION_LABELS[job.version].toLocaleLowerCase("tr-TR")}`}
+            {job && job.uevcbs.length > 0 && ` · UEVÇB: ${job.uevcbs.map((u) => u.name).join(", ")}`}
+            {job && ` · KGÜP ${KGUP_VERSION_LABELS[job.version].toLocaleLowerCase("tr-TR")}`}
+            {job && ` · Veri havuzu: ${job.fromPool} ay havuzdan${job.fromEpias > 0 ? `, ${job.fromEpias} ay EPİAŞ'tan eklendi` : ""}`}
           </p>
           <div className="mt-2 space-y-1">
             {merged.series.checks.map((c, i) => (

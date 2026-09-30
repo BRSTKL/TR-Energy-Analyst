@@ -98,16 +98,24 @@ export function monthStatus(doc: PoolYear | null, series: PoolSeries, month: num
   return isFinalFetch(doc!.year, month, at) ? "final" : "provisional";
 }
 
+/** Ay henüz bitmeden çekilen veri (eksik günler var) bu kadar gün sonra, biten ama kesinleşmemiş ay bu kadar gün sonra yenilenir */
+export const REFRESH_DAYS_PARTIAL = 1;
+export const REFRESH_DAYS_PROVISIONAL = 7;
+
 /**
- * Yeniden çekilmesi gereken ay mı: eksikse evet; geçiciyse, ay kesinleşme süresini doldurduysa veya son çekimden
- * bu yana en az minAgeDays gün geçtiyse evet (aynı gün içinde tekrar tekrar çekilmesin).
+ * Yeniden çekilmesi gereken ay mı: eksikse evet; kesinse hayır. Geçici ay: ay bitmeden çekildiyse (yeni günler
+ * eklenecek) REFRESH_DAYS_PARTIAL, bittikten sonra çekildiyse (EPİAŞ düzeltmesi beklenir) REFRESH_DAYS_PROVISIONAL
+ * gün geçince evet. Böylece aynı hafta açılan projeler EPİAŞ'a tekrar gitmez.
  */
-export function needsFetch(doc: PoolYear | null, series: PoolSeries, month: number, now: Date, minAgeDays = 1): boolean {
+export function needsFetch(doc: PoolYear | null, series: PoolSeries, month: number, now: Date): boolean {
   const status = monthStatus(doc, series, month);
   if (status === "missing") return true;
   if (status === "final") return false;
   const at = Date.parse(doc!.fetched[series][mm(month)]);
-  return now.getTime() - at >= minAgeDays * 24 * HOUR;
+  // Duvar saatiyle ayın bitişi (UTC alanında) → gerçek an: 3 saat önce
+  const partial = at < Date.UTC(doc!.year, month, 1) - 3 * HOUR;
+  const days = partial ? REFRESH_DAYS_PARTIAL : REFRESH_DAYS_PROVISIONAL;
+  return now.getTime() - at >= days * 24 * HOUR;
 }
 
 /** [startDay, endDay] (gün dahil, "YYYY-MM-DD") aralığının dokunduğu yıl-aylar */
