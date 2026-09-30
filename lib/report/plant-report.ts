@@ -249,11 +249,16 @@ export interface PlantReportData {
     label: string;
     membershipAsOf: string;
     selfId: number;
+    /** Benzer ölçekli toplayıcılar, karışıma göre düzeltilmiş endekse göre (en iyi önce) */
     rows: AggregatorBenchmarkRow[];
-    /** MWh başına netleşmiş maliyette sıra (1 = en düşük) ve netleşme değerinde sıra (1 = en büyük), rows içinde */
-    rankUnit: number;
+    /** Grubun alt üretim sınırı (MWh) ve gruba girmeyen toplayıcı sayısı */
+    minProductionMwh: number;
+    othersCount: number;
+    /** Sıralar rows içinde: endeks (1 = en iyi), netleşme değeri, netleşme oranı, ham TL/MWh */
+    rankIndex: number;
     rankValue: number;
     rankPct: number;
+    rankUnit: number;
   } | null;
   /**
    * Tahmin iyileştirme fırsatı (8.4): sektör medyanının üstündeki santraller (devreye alma dönemi hariç) medyana inseydi.
@@ -802,9 +807,20 @@ export function buildPlantReport(
   const bench = context.aggregatorBenchmark;
   const selfId = data.aggregator?.portfolio?.orgId;
   if (bench && selfId && bench.year === new Date(start).getUTCFullYear() && bench.aggregators.some((a) => a.id === selfId)) {
-    const rows = bench.aggregators.filter((a) => a.productionMwh >= 300_000 || a.id === selfId).sort((a, b) => a.nettedTlPerMwh - b.nettedTlPerMwh);
-    const byValue = [...rows].sort((a, b) => b.nettingValueTl - a.nettingValueTl);
-    const byPct = [...rows].sort((a, b) => b.nettingPct - a.nettingPct);
+    // Benzer ölçek: 1.000 GWh üstü (dönem); grup 4'ten küçük kalırsa üretimi en yakın 6 toplayıcı (8 ayda; kısa dönemde
+    // eşik orantılanır). Karışıma göre düzeltilmiş endeks: portföy maliyeti / Σ üretim × teknoloji medyanı.
+    const self = bench.aggregators.find((a) => a.id === selfId)!;
+    const ym = (d: string) => Number(d.slice(0, 4)) * 12 + Number(d.slice(5, 7));
+    const months = Math.max(1, ym(bench.period.end) - ym(bench.period.start) + 1);
+    let minProduction = 1_000_000 * (months / 8);
+    let group = bench.aggregators.filter((a) => a.productionMwh >= minProduction || a.id === selfId);
+    if (group.length < 4) {
+      group = [...bench.aggregators].sort((a, b) => Math.abs(a.productionMwh - self.productionMwh) - Math.abs(b.productionMwh - self.productionMwh)).slice(0, 6);
+      minProduction = Math.min(...group.map((a) => a.productionMwh));
+    }
+    const idx = (a: AggregatorBenchmarkRow) => a.mixAdjustedIndex ?? Infinity;
+    const rows = [...group].sort((a, b) => idx(a) - idx(b));
+    const rank = (sorted: AggregatorBenchmarkRow[]) => sorted.findIndex((a) => a.id === selfId) + 1;
     const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
     const m = (d: string) => MONTHS[Number(d.slice(5, 7)) - 1];
     peers = {
@@ -812,9 +828,12 @@ export function buildPlantReport(
       membershipAsOf: bench.membershipAsOf,
       selfId,
       rows,
-      rankUnit: rows.findIndex((a) => a.id === selfId) + 1,
-      rankValue: byValue.findIndex((a) => a.id === selfId) + 1,
-      rankPct: byPct.findIndex((a) => a.id === selfId) + 1,
+      minProductionMwh: minProduction,
+      othersCount: bench.aggregators.length - rows.length,
+      rankIndex: rank(rows),
+      rankValue: rank([...rows].sort((a, b) => b.nettingValueTl - a.nettingValueTl)),
+      rankPct: rank([...rows].sort((a, b) => b.nettingPct - a.nettingPct)),
+      rankUnit: rank([...rows].sort((a, b) => a.nettedTlPerMwh - b.nettedTlPerMwh)),
     };
   }
 

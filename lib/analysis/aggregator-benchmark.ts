@@ -32,6 +32,8 @@ export interface AggregatorBenchmarkRow {
   listedPlants: number;
   coveredPlants: number;
   byType: Record<string, number>;
+  /** Teknoloji → üretim (MWh) */
+  byTypeMwh: Record<string, number>;
   productionMwh: number;
   plantLevelCostTl: number;
   ownerLevelCostTl: number;
@@ -42,6 +44,13 @@ export interface AggregatorBenchmarkRow {
   nettingPct: number;
   /** portfolio / üretim (TL/MWh) */
   nettedTlPerMwh: number;
+  /**
+   * Karışıma göre beklenen maliyet: her santralin üretimi × kendi teknolojisinin sektör medyanı (TL/MWh, santral tek
+   * başına). "Sektörün ortalama santralleri bu karışımla tek başına ne öderdi"; medyanı olmayan tür hesaba girmez.
+   */
+  expectedCostTl: number;
+  /** portfolio / expected: karışımdan bağımsız performans endeksi (1'in altı daha iyi); beklenen yoksa null */
+  mixAdjustedIndex: number | null;
 }
 
 const cost = (d: number, p: BenchmarkHourPrice) => (d > 0 ? d * (p.ptf - p.pos) : d < 0 ? -d * (p.neg - p.ptf) : 0);
@@ -49,13 +58,17 @@ const cost = (d: number, p: BenchmarkHourPrice) => (d > 0 ? d * (p.ptf - p.pos) 
 export function benchmarkAggregator(
   agg: { id: number; name: string; plantIds: number[] },
   plants: Map<number, BenchmarkPlant>,
-  prices: Map<number, BenchmarkHourPrice>
+  prices: Map<number, BenchmarkHourPrice>,
+  /** Teknoloji → sektör medyanı TL/MWh (santral tek başına) */
+  sectorMedians: Record<string, number> = {}
 ): AggregatorBenchmarkRow {
   const members = agg.plantIds.map((id) => plants.get(id)).filter((p): p is BenchmarkPlant => !!p && p.hours.size > 0);
   const portfolio = new Map<number, number>();
   const owners = new Map<string, Map<number, number>>();
   const byType: Record<string, number> = {};
+  const byTypeMwh: Record<string, number> = {};
   let production = 0;
+  let expected = 0;
   let plantLevel = 0;
   for (const p of members) {
     byType[p.type] = (byType[p.type] ?? 0) + 1;
@@ -65,6 +78,9 @@ export function benchmarkAggregator(
       const price = prices.get(t);
       if (!price) continue;
       production += h.actual;
+      byTypeMwh[p.type] = (byTypeMwh[p.type] ?? 0) + h.actual;
+      const med = sectorMedians[p.type];
+      if (med !== undefined) expected += h.actual * med;
       plantLevel += cost(h.d, price);
       portfolio.set(t, (portfolio.get(t) ?? 0) + h.d);
       o.set(t, (o.get(t) ?? 0) + h.d);
@@ -84,6 +100,7 @@ export function benchmarkAggregator(
     listedPlants: agg.plantIds.length,
     coveredPlants: members.length,
     byType,
+    byTypeMwh,
     productionMwh: production,
     plantLevelCostTl: plantLevel,
     ownerLevelCostTl: ownerLevel,
@@ -91,5 +108,7 @@ export function benchmarkAggregator(
     nettingValueTl: ownerLevel - portfolioCost,
     nettingPct: ownerLevel > 0 ? ((ownerLevel - portfolioCost) / ownerLevel) * 100 : 0,
     nettedTlPerMwh: production > 0 ? portfolioCost / production : 0,
+    expectedCostTl: expected,
+    mixAdjustedIndex: expected > 0 ? portfolioCost / expected : null,
   };
 }

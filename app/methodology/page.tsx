@@ -15,7 +15,7 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.5";
+const VERSION = "1.6";
 const VERSION_DATE = "30 Eylül 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
@@ -404,12 +404,17 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
             <F>
               {`Netleşme değeri = Σ sahip tek başına − portföy tek denge
 Netleşme oranı = netleşme değeri / Σ sahip tek başına
-MWh başına netleşmiş maliyet = portföy tek denge / üretim`}
+MWh başına netleşmiş maliyet = portföy tek denge / üretim
+Beklenen maliyet = Σ_teknoloji üretim × sektör medyanı (TL/MWh, santral tek başına)
+Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`}
             </F>
             <p>
               Üyelik, listenin alındığı güne göredir (santraller dönem boyunca portföydeymiş gibi); santral bazında üretimi yayımlanmayan
-              lisanssız santraller ve KÜPST hesapta yoktur. Kıyas üretimi 300 GWh üstündeki toplayıcılarla yapılır. MWh başına maliyet
-              teknoloji karışımından etkilenir (hidro ağırlıklı portföyler düşük çıkar). <Tag kind="exact" />
+              lisanssız santraller ve KÜPST hesapta yoktur. Ham MWh başına maliyet teknoloji karışımından etkilenir (hidro ağırlıklı
+              portföyler doğal olarak düşük çıkar); bu yüzden sıralama <b>endekse</b> göredir: portföy, aynı karışımdaki sektör ortalaması
+              santrallerin tek başına ödeyeceğinin ne kadarını ödüyor. Endeksi hem iyi tahmin hem netleşme düşürür. Kıyas <b>benzer
+              ölçekli</b> toplayıcılarla yapılır: dönem üretimi 8 ayda 1.000 GWh üstü (dönemle orantılı); grup 4&apos;ten küçükse
+              üretimi en yakın 6 toplayıcı. <Tag kind="exact" />
             </p>
           </Section>
 
@@ -631,6 +636,11 @@ MWh başına netleşmiş maliyet = portföy tek denge / üretim`}
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.6",
+                  "30 Eylül 2026",
+                  "Toplayıcılar arası kıyas benzer ölçekli toplayıcılarla ve teknoloji karışımına göre düzeltilmiş endeksle (portföy maliyeti / aynı karışımdaki sektör medyanı maliyeti); tabloda santral sayısı, üretim ve karışım.",
+                ],
                 [
                   "1.5",
                   "30 Eylül 2026",

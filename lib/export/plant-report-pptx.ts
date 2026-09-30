@@ -255,7 +255,7 @@ export async function exportPlantReportPptx(
       [formatTlShort(load.current), `Sapma yükü (dengesizlik + KÜPST) · MWh başına ${nf(load.current / t.actualMwh, 0)} TL`, C.cost],
       agg ? [formatTlShort(agg.benefitTl), `Toplayıcının kattığı değer · dengesizlik %${nf(agg.benefitPct, 0)} daha az`, C.gain] : [formatTlShort(r.kupst.totalTl), "Tahmini KÜPST", C.cost],
       pe
-        ? [`${pe.rankValue}. / ${pe.rows.length}`, `Toplayıcılar arasında netleşme değeri sırası · MWh başına maliyette ${pe.rankUnit}.`, C.navy]
+        ? [`${pe.rankIndex}. / ${pe.rows.length}`, `Benzer ölçekli toplayıcılar içinde karışıma göre düzeltilmiş maliyet sırası (endeks ${nf(pe.rows.find((x) => x.id === pe.selfId)?.mixAdjustedIndex ?? 0, 2)})`, C.navy]
         : [`%${nf(r.alignment.sameDirectionCostPct, 0)}`, "Riskin sistemle aynı yöndeki saatlerden gelen payı", C.navy],
       fu ? [formatTlShort(fu.nettedGainTl + fu.kupstGainTl), `Tahmin iyileştirme fırsatı · ${fu.plantCount} santral sektör medyanına inse`, C.gain] : [`%${nf(r.alignment.sameDirectionCostPct, 0)}`, "Aynı yönlü saatlerin riskteki payı", C.navy],
     ];
@@ -956,58 +956,72 @@ export async function exportPlantReportPptx(
       return dup.has(ws[0]) ? `${cap(ws[0])} ${cap(ws[1] ?? "")}` : cap(ws[0]);
     };
     const n = pe.rows.length;
-    const title = `${agg.name}: netleşme değerinde ${pe.rankValue}., MWh başına netleşmiş maliyette ${n} toplayıcı içinde ${pe.rankUnit}.`;
+    const best = pe.rows[0];
+    const title =
+      pe.rankIndex === 1
+        ? `Benzer ölçekli ${n} toplayıcı içinde teknoloji karışımına göre en düşük dengesizlik maliyeti ${agg.name}'da`
+        : `Benzer ölçekli ${n} toplayıcı içinde ${agg.name}: karışıma göre düzeltilmiş maliyette ${pe.rankIndex}., netleşme değerinde ${pe.rankValue}.`;
     const s = contentSlide("Toplayıcılar arası kıyas", title, "exact");
     s.addNotes(
-      "Bu kıyas bütün toplayıcılar için aynı yöntemle, EPİAŞ açık verisiyle yapıldı: portföydeki lisanslı santrallerin saatlik sapması, resmi dengesizlik fiyatı; " +
-        "sahipler tek başına ile toplayıcı portföyünde tek denge karşılaştırıldı. MWh başına maliyet portföyün teknoloji karışımına bağlıdır: hidro ağırlıklı portföyler doğal olarak düşük çıkar. " +
-        "Toplayıcıların gün içi işlemleri ve ikili anlaşmaları açık veride yoktur; bu, gün içi işlemler öncesi karşılaştırmadır."
+      "Kıyas benzer büyüklükteki toplayıcılarla ve teknoloji karışımından arındırılarak yapıldı. Hidro santralleri doğal olarak rüzgâr ve güneşten ucuzdur; " +
+        "bu yüzden ham TL/MWh adil değildir. Endeks, portföyün netleşmiş maliyetinin, aynı karışımdaki sektör ortalaması santrallerin tek başına ödeyeceği tutara oranıdır: " +
+        "0,50 demek, sektörün ortalama santrallerinin ödeyeceğinin yarısını ödüyor demektir. Endeksi hem iyi tahmin hem iyi netleşme düşürür. " +
+        "Veri EPİAŞ açık verisi; gün içi işlemler öncesi, KÜPST hariç."
     );
-    // Sol: MWh başına netleşmiş maliyet çubukları (küçükten büyüğe)
-    const top = 1.95;
-    const lw = 7.4;
-    const nameW = 1.9;
-    const barX = M + nameW + 0.1;
-    const barMax = lw - nameW - 1.2;
-    const rowH = Math.min(0.24, 4.35 / n);
-    const maxU = Math.max(...pe.rows.map((a) => a.nettedTlPerMwh), 1);
-    text(s, "MWh başına netleşmiş dengesizlik (TL, düşük daha iyi)", { x: M, y: top - 0.35, w: lw, h: 0.28, fontSize: 10, bold: true, color: C.sub });
-    pe.rows.forEach((a, i) => {
-      const y = top + i * rowH;
+    const cell = (v: string, o: Record<string, unknown> = {}) => ({ text: v, options: { fontSize: 10, fontFace: FONT_BODY, color: C.ink, ...o } });
+    const head = ["Toplayıcı", "Santral", "Üretim", "Karışım (üretim)", "Netleşme değeri", "Netleşme", "TL/MWh", "Endeks"].map((h, i) =>
+      cell(h, { bold: true, color: C.white, fill: { color: C.navy }, align: i === 0 || i === 3 ? "left" : "right" })
+    );
+    const mixText = (a: (typeof pe.rows)[number]) => {
+      const tot = Object.values(a.byTypeMwh ?? {}).reduce((x, y) => x + y, 0) || 1;
+      return ["HES", "RES", "GES"]
+        .map((t) => [t, ((a.byTypeMwh?.[t] ?? 0) / tot) * 100] as const)
+        .filter(([, v]) => v >= 1)
+        .map(([t, v]) => `${t} %${nf(v, 0)}`)
+        .join(" · ");
+    };
+    const rows = pe.rows.map((a) => {
       const me = a.id === pe.selfId;
-      if (me) rect(s, M - 0.05, y, lw + 0.1, rowH, C.exactBg);
-      text(s, short(a), { x: M, y, w: nameW, h: rowH, fontSize: 9, bold: me, color: me ? C.exactTx : C.ink, valign: "middle" });
-      const w = Math.max((a.nettedTlPerMwh / maxU) * barMax, 0.02);
-      rect(s, barX, y + rowH * 0.2, w, rowH * 0.6, me ? C.gain : "A7B4C2");
-      text(s, `${nf(a.nettedTlPerMwh, 0)}  ·  %${nf(a.nettingPct, 0)}`, {
-        x: barX + w + 0.06,
-        y,
-        w: 1.3,
-        h: rowH,
-        fontSize: 8.5,
-        bold: me,
-        color: me ? C.exactTx : C.sub,
-        valign: "middle",
-      });
+      const o = me ? { bold: true, color: C.exactTx, fill: { color: C.exactBg } } : {};
+      return [
+        cell(short(a), o),
+        cell(String(a.coveredPlants), { ...o, align: "right" }),
+        cell(formatEnergy(a.productionMwh), { ...o, align: "right" }),
+        cell(mixText(a), { ...o, fontSize: 9 }),
+        cell(formatTlShort(a.nettingValueTl), { ...o, align: "right" }),
+        cell(`%${nf(a.nettingPct, 0)}`, { ...o, align: "right" }),
+        cell(nf(a.nettedTlPerMwh, 0), { ...o, align: "right" }),
+        cell(a.mixAdjustedIndex !== null ? nf(a.mixAdjustedIndex, 2) : "–", { ...o, align: "right", bold: true }),
+      ];
     });
-    // Sağ: üç gösterge
-    const rx = M + lw + 0.5;
-    const rw = W - M - rx;
-    const stats: Array<[string, string]> = [
-      [formatTlShort(self.nettingValueTl), `Netleşme değeri · ${n} toplayıcı içinde ${pe.rankValue}.`],
-      [`%${nf(self.nettingPct, 0)}`, `Netleşme oranı (sahipler tek başına maliyetine göre) · ${pe.rankPct}.`],
-      [`${nf(self.nettedTlPerMwh, 0)} TL/MWh`, `Netleşmiş maliyet · ${pe.rankUnit}. (en düşük ${nf(pe.rows[0].nettedTlPerMwh, 0)} TL, ${short(pe.rows[0])})`],
+    const rowH = Math.min(0.36, 3.9 / (n + 1));
+    s.addTable([head, ...rows] as any, {
+      x: M,
+      y: 1.95,
+      w: CW,
+      colW: [2.0, 0.85, 1.15, 3.1, 1.55, 1.05, 1.0, CW - 10.7],
+      rowH,
+      border: { type: "none" },
+      margin: [0, 0.08, 0, 0.08],
+      valign: "middle",
+    });
+    const yBelow = 1.95 + (n + 1) * rowH + 0.25;
+    const facts = [
+      `Endeks ${nf(self.mixAdjustedIndex ?? 0, 2)}: sektörün ortalama santralleri aynı karışımla tek başına ${formatTlShort(self.expectedCostTl)} öderdi; ${agg.name} portföyü ${formatTlShort(self.portfolioCostTl)} ödüyor.`,
+      pe.rankIndex === 1
+        ? `Grupta en iyi endeks. Netleşme değerinde ${pe.rankValue}., netleşme oranında ${pe.rankPct}.`
+        : `Grupta en iyi endeks ${short(best)} (${nf(best.mixAdjustedIndex ?? 0, 2)}). Netleşme değerinde ${pe.rankValue}., netleşme oranında ${pe.rankPct}., ham TL/MWh'te ${pe.rankUnit}.`,
     ];
-    stats.forEach(([v, l], i) => {
-      const y = top + i * 1.3;
-      round(s, rx, y, rw, 1.1, C.panel);
-      text(s, v, { x: rx + 0.25, y: y + 0.12, w: rw - 0.5, h: 0.5, fontSize: 24, bold: true, fontFace: FONT_HEAD, color: C.gain });
-      text(s, l, { x: rx + 0.25, y: y + 0.62, w: rw - 0.5, h: 0.4, fontSize: 10, color: C.sub, valign: "top" });
-    });
+    facts.forEach((f, i) =>
+      text(s, [{ text: "▸  ", options: { color: C.gain, bold: true } }, { text: f, options: { color: C.ink } }], {
+        x: M, y: yBelow + i * 0.36, w: CW, h: 0.34, fontSize: 11.5, valign: "middle",
+      })
+    );
     text(
       s,
-      `Çubuk yanında: MWh başına netleşmiş maliyet · netleşme oranı. ${pe.label} üretimi 300 GWh üstündeki toplayıcılar; EPİAŞ'ın ${pe.membershipAsOf} tarihli toplayıcı listeleri (santraller dönem boyunca portföydeymiş gibi), santral bazında üretimi yayımlanan lisanslı santraller, resmi dengesizlik fiyatı, ilk KGÜP (gün içi işlemler öncesi), KÜPST hariç. Teknoloji karışımı sonucu etkiler (hidro ağırlıklı portföyler düşük maliyetli).`,
-      { x: M, y: 6.4, w: CW, h: 0.55, fontSize: 9, color: C.sub, valign: "top" }
+      `Endeks = portföyde netleşmiş dengesizlik / Σ üretim × teknolojinin sektör medyanı (rüzgâr, güneş, hidro; santral tek başına); 1'in altı daha iyi, karışımdan bağımsız. Grup: ${pe.label} üretimi ${formatEnergy(pe.minProductionMwh)} üstü toplayıcılar (diğer ${pe.othersCount} toplayıcı daha küçük). ` +
+        `EPİAŞ'ın ${pe.membershipAsOf} tarihli toplayıcı listeleri (santraller dönem boyunca portföydeymiş gibi), santral bazında üretimi yayımlanan lisanslı santraller, resmi dengesizlik fiyatı, ilk KGÜP, KÜPST hariç.`,
+      { x: M, y: 6.35, w: CW, h: 0.6, fontSize: 9, color: C.sub, valign: "top" }
     );
   }
 

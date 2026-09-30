@@ -56,15 +56,20 @@ for (const id of ids) {
   plants.set(id, { epiasPlantId: id, type: meta.type ?? "?", owner: meta.organizationName ?? null, hours });
 }
 
+// Sektör medyanları (santral tek başına TL/MWh): karışıma göre beklenen maliyet için
+const sector = JSON.parse(fs.readFileSync(path.join(CACHE, `sector-${year}.json`), "utf8"));
+const medians: Record<string, number> = {};
+for (const [t, v] of Object.entries(sector.byType ?? {})) medians[t] = (v as any).unitImbalanceTl.median;
+
 const rows = membership.aggregators
-  .map((a) => benchmarkAggregator(a, plants, prices))
+  .map((a) => benchmarkAggregator(a, plants, prices, medians))
   .filter((r) => r.coveredPlants > 0)
   .sort((a, b) => b.productionMwh - a.productionMwh);
 
-const out = { year, period: { start, end }, membershipAsOf: membership.asOf, generatedAt: new Date().toISOString(), aggregators: rows };
+const out = { year, period: { start, end }, membershipAsOf: membership.asOf, sectorMedians: medians, generatedAt: new Date().toISOString(), aggregators: rows };
 fs.writeFileSync(path.join(CACHE, `aggregator-benchmark-${year}.json`), JSON.stringify(out, null, 1));
 for (const r of rows)
   console.log(
-    `${r.name.slice(0, 40).padEnd(40)} ${String(r.coveredPlants).padStart(3)}/${String(r.listedPlants).padEnd(3)} ${(r.productionMwh / 1000).toFixed(0).padStart(6)} GWh  değer ${(r.nettingValueTl / 1e6).toFixed(1).padStart(6)} M  %${r.nettingPct.toFixed(0).padStart(2)}  ${r.nettedTlPerMwh.toFixed(0).padStart(4)} TL/MWh`
+    `${r.name.slice(0, 40).padEnd(40)} ${String(r.coveredPlants).padStart(3)}/${String(r.listedPlants).padEnd(3)} ${(r.productionMwh / 1000).toFixed(0).padStart(6)} GWh  değer ${(r.nettingValueTl / 1e6).toFixed(1).padStart(6)} M  %${r.nettingPct.toFixed(0).padStart(2)}  ${r.nettedTlPerMwh.toFixed(0).padStart(4)} TL/MWh  endeks ${r.mixAdjustedIndex?.toFixed(2) ?? "-"}`
   );
 await prisma.$disconnect();
