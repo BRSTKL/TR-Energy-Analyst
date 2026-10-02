@@ -51,19 +51,32 @@ const mixShare = (a: AggregatorBenchmarkRow) => {
   return Object.fromEntries(["HES", "RES", "GES"].map((t) => [t, ((a.byTypeMwh?.[t] ?? 0) / tot) * 100])) as Record<string, number>;
 };
 
+const TECH_NAME: Record<string, string> = { HES: "Hidro", RES: "Rüzgâr", GES: "Güneş" };
+
+/** Teknoloji karışımı: yalnız çubuk; yüzdeler üzerine gelince (renk açıklaması tablonun üstünde) */
 function MixBar({ a }: { a: AggregatorBenchmarkRow }) {
   const m = mixShare(a);
+  const title = (["HES", "RES", "GES"] as const)
+    .filter((t) => m[t] >= 1)
+    .map((t) => `${TECH_NAME[t]} %${nf(m[t])}`)
+    .join(" · ");
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex h-2.5 w-28 overflow-hidden rounded-full bg-slate-100">
-        {(["HES", "RES", "GES"] as const).map((t) => (m[t] > 0 ? <div key={t} style={{ width: `${m[t]}%`, background: TECH_COLOR[t] }} /> : null))}
+    <div className="flex h-2 w-32 overflow-hidden rounded-full bg-slate-100" title={title}>
+      {(["HES", "RES", "GES"] as const).map((t) => (m[t] > 0 ? <div key={t} style={{ width: `${m[t]}%`, background: TECH_COLOR[t] }} /> : null))}
+    </div>
+  );
+}
+
+/** Endeks: sayı ve altında ince çubuk (1,0 = sektör ortalaması); düşük = iyi */
+function IndexCell({ v }: { v: number | null }) {
+  if (v === null) return <span className="text-slate-400">–</span>;
+  const tone = v < 0.8 ? "bg-emerald-500" : v <= 1 ? "bg-teal-400" : "bg-amber-500";
+  return (
+    <div className="ml-auto w-20 text-right">
+      <div className="font-semibold tabular-nums text-slate-900">{nf(v, 2)}</div>
+      <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-slate-100" title="Çubuk tamamı = sektör ortalamasının 1,25 katı">
+        <div className={`h-full rounded-full ${tone}`} style={{ width: `${Math.min(100, (v / 1.25) * 100)}%` }} />
       </div>
-      <span className="text-2xs text-slate-500">
-        {(["HES", "RES", "GES"] as const)
-          .filter((t) => m[t] >= 1)
-          .map((t) => `${t} %${nf(m[t])}`)
-          .join(" · ")}
-      </span>
     </div>
   );
 }
@@ -128,13 +141,13 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
   const headers: Array<{ key: SortKey | null; label: string; right?: boolean; title?: string }> = [
     { key: null, label: "#" },
     { key: null, label: "Toplayıcı" },
-    { key: "coveredPlants", label: "Santral", right: true, title: "Analize giren / listedeki rüzgâr, güneş ve hidro santralleri; + ile başka türler (biyogaz, jeotermal, kojenerasyon…)" },
+    { key: "coveredPlants", label: "Santral", right: true, title: "Analize giren rüzgâr, güneş ve hidro santrali; + ile listedeki başka türler (biyogaz, jeotermal, kojenerasyon…)" },
     { key: "productionMwh", label: "Üretim", right: true },
-    { key: null, label: "Karışım (üretim)" },
-    { key: "nettingValueTl", label: "Netleşme değeri", right: true },
-    { key: "nettingPct", label: "Netleşme", right: true, title: "Netleşme değeri / sahipler tek başına" },
+    { key: null, label: "Karışım" },
+    { key: "nettingValueTl", label: "Netleşme değeri", right: true, title: "Sahipler tek başına ödeyeceğine göre portföyün kazandırdığı tutar; altında oranı" },
     { key: "nettedTlPerMwh", label: "TL/MWh", right: true, title: "Portföyde netleşmiş dengesizlik / üretim" },
     { key: "mixAdjustedIndex", label: "Endeks", right: true, title: "Portföy maliyeti / aynı karışımdaki sektör medyanı maliyeti; 1'in altı daha iyi" },
+    { key: null, label: "" },
   ];
   const toggleSort = (key: SortKey) =>
     setSort((s) => (s.key === key ? { key, asc: !s.asc } : { key, asc: key === "mixAdjustedIndex" || key === "nettedTlPerMwh" }));
@@ -197,6 +210,7 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
             </Button>
           </div>
           {rows.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm text-slate-700">
               {rows.length} toplayıcı; toplam netleşme değeri <b>{mTl(totalValue)}</b>.
               {best && (
@@ -207,6 +221,14 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
                 </>
               )}
             </p>
+            <div className="flex items-center gap-3 text-xs text-slate-500" aria-label="Karışım renkleri">
+              {(["HES", "RES", "GES"] as const).map((t) => (
+                <span key={t} className="inline-flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full" style={{ background: TECH_COLOR[t] }} /> {TECH_NAME[t]}
+                </span>
+              ))}
+            </div>
+            </div>
           )}
           <div className="overflow-x-auto">
             <Table>
@@ -229,42 +251,47 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
                 {rows.map((a, i) => {
                   const low = coverage(a) < LOW_COVERAGE;
                   return (
-                    <TableRow key={a.id}>
-                      <TableCell className="text-xs text-slate-500">{i + 1}</TableCell>
-                      <TableCell className="font-medium" title={a.name}>
-                        <Link href={`/sector/aggregators/${a.id}?year=${data.year}`} className="hover:text-teal-700 hover:underline">
+                    <TableRow key={a.id} className="group">
+                      <TableCell className="w-8 text-xs text-slate-400">{i + 1}</TableCell>
+                      <TableCell className="py-3 font-medium" title={a.name}>
+                        <Link href={`/sector/aggregators/${a.id}?year=${data.year}`} className="text-slate-900 hover:text-teal-700 hover:underline">
                           {shortName(a.name)}
                         </Link>
-                        <a
-                          href={`/api/sector/aggregators/${a.id}/summary?year=${data.year}`}
-                          className="ml-1.5 inline-block align-middle text-slate-400 hover:text-teal-700"
-                          title="1 sayfa özet (PPTX) indir"
-                          aria-label={`${shortName(a.name)} için 1 sayfa özet indir`}
-                        >
-                          <FileDown className="h-3.5 w-3.5" />
-                        </a>
-                        {low && (
-                          <span
-                            className="ml-1.5 inline-flex items-center gap-0.5 rounded bg-amber-50 px-1 text-2xs font-semibold text-amber-700"
-                            title="Listedeki rüzgâr, güneş ve hidro santrallerinin %60'ından azının verisi var; sonuç portföyün tamamını temsil etmeyebilir"
-                          >
-                            <AlertTriangle className="h-3 w-3" /> düşük kapsam
-                          </span>
-                        )}
                       </TableCell>
                       <TableCell className="text-right tabular-nums" title={`EPİAŞ listesinde ${a.listedPlants} santral: ${eligible(a)} rüzgâr/güneş/hidro, ${a.otherTechPlants ?? 0} başka tür`}>
+                        {low && (
+                          <span
+                            className="mr-1 inline-block align-middle text-amber-500"
+                            title={`Listedeki ${eligible(a)} rüzgâr, güneş ve hidro santralinin yalnız ${a.coveredPlants} tanesinin verisi var; sonuç portföyün tamamını temsil etmeyebilir`}
+                          >
+                            <AlertTriangle className="h-3.5 w-3.5" aria-label="Düşük kapsam" />
+                          </span>
+                        )}
                         {a.coveredPlants}
-                        <span className="text-slate-400"> / {eligible(a)}</span>
-                        {(a.otherTechPlants ?? 0) > 0 && <span className="ml-1 text-2xs text-slate-400">+{a.otherTechPlants}</span>}
+                        {a.coveredPlants < eligible(a) && <span className="text-slate-400"> / {eligible(a)}</span>}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{gwh(a.productionMwh)}</TableCell>
                       <TableCell>
                         <MixBar a={a} />
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{mTl(a.nettingValueTl)}</TableCell>
-                      <TableCell className="text-right tabular-nums">%{nf(a.nettingPct)}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="font-medium tabular-nums">{mTl(a.nettingValueTl)}</div>
+                        <div className="text-2xs tabular-nums text-slate-500">%{nf(a.nettingPct)}</div>
+                      </TableCell>
                       <TableCell className="text-right tabular-nums">{nf(a.nettedTlPerMwh)}</TableCell>
-                      <TableCell className="text-right font-semibold tabular-nums">{a.mixAdjustedIndex !== null ? nf(a.mixAdjustedIndex, 2) : "–"}</TableCell>
+                      <TableCell>
+                        <IndexCell v={a.mixAdjustedIndex} />
+                      </TableCell>
+                      <TableCell className="w-8 text-right">
+                        <a
+                          href={`/api/sector/aggregators/${a.id}/summary?year=${data.year}`}
+                          className="inline-block text-slate-300 transition-colors hover:text-teal-700 group-hover:text-slate-500"
+                          title="1 sayfa özet (PPTX) indir"
+                          aria-label={`${shortName(a.name)} için 1 sayfa özet indir`}
+                        >
+                          <FileDown className="h-4 w-4" />
+                        </a>
+                      </TableCell>
                     </TableRow>
                   );
                 })}
@@ -278,10 +305,10 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
               </TableBody>
             </Table>
           </div>
-          <p className="text-2xs text-slate-500">
-            Santral: analize giren / listedeki rüzgâr, güneş ve hidro santralleri; &quot;+&quot; ile listedeki başka türler (biyogaz, biyokütle,
-            jeotermal, kojenerasyon; analiz edilmez). Düşük kapsam: rüzgâr, güneş ve hidro santrallerinin %60&apos;ından azının verisi var. Netleşme: sahipler tek başına ödeyeceğine göre portföyün kazandırdığı pay. Üyelik listenin tarihine göredir (santraller dönem
-            boyunca portföydeymiş gibi).
+          <p className="text-2xs leading-relaxed text-slate-500">
+            Santral: analize giren rüzgâr, güneş ve hidro santrali (listedeki başka türler analiz edilmez); ⚠ rüzgâr, güneş ve hidro santrallerinin
+            %60&apos;ından azının verisi var. Netleşme değerinin altındaki oran: sahipler tek başına ödeyeceğine göre portföyün kazandırdığı pay.
+            Üyelik listenin tarihine göredir (santraller dönem boyunca portföydeymiş gibi).
           </p>
         </CardContent>
       </Card>
