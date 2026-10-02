@@ -5,14 +5,15 @@
  *   node --env-file=.env node_modules/.bin/tsx scripts/sector-collect.mts [yıl=2025] [dönem sonu, YYYY-AA-GG] [--hes] [--rebuild]
  *
  *   --hes      hidroelektrik santralleri de toplar (hidro karnesi; yaklaşık bir saat ek süre)
- *   --rebuild  EPİAŞ'a bağlanmadan, diskteki saatlik serilerden ve veritabanındaki güncel piyasa fiyatlarından karneyi
+ *   --rebuild  EPİAŞ'a bağlanmadan, havuzdaki saatlik serilerden ve veritabanındaki güncel piyasa fiyatlarından karneyi
  *              yeniden kurar (ör. piyasa verisi yeniden çekildikten sonra)
  *
  * Dönem sonu verilmezse geçmiş yıllarda 31 Aralık, içinde bulunulan yılda geçen ayın son günüdür (yıl içi karne:
  * ör. 2026 için Ocak–Ağustos). Kalite süzgeci ve dağılımlar bu döneme göre hesaplanır.
  *
- * Her santral için: uzlaştırma birimleri → KGÜP ilk versiyon (çeyrek parçalar; UEVM servisi en fazla 3 ay kabul eder)
- * → UEVM → veritabanındaki piyasa fiyatlarıyla saatlik hesap → göstergeler. Her santral .cache/epias/sector-<yıl>/
+ * Veri tek yerden, veri havuzundan (data/pool; PLAN 7.5) okunur: her santral için ensurePlantCoverage havuzda olmayan ya da
+ * yenilenme zamanı gelmiş ayları EPİAŞ'tan çekip havuza yazar (başka projelerin çektiği aylar yeniden çekilmez), sonra ilk
+ * KGÜP ve UEVM havuzdan alınır → veritabanındaki piyasa fiyatlarıyla saatlik hesap → göstergeler. Her santral .cache/epias/sector-<yıl>/
  * altına ayrı dosya olarak, saatlik plan ve gerçekleşen serisi .cache/epias/sector-<yıl>-hourly/ altına sıkıştırılmış
  * yazılır: bağlantı koparsa tekrar çalıştırıldığında yalnızca eksikler çekilir. Saatlik serisi olmayan (bu özellikten
  * önce toplanmış) santraller de yeniden çekilir.
@@ -24,12 +25,15 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { fetchKgup, fetchUevm, listUevcbsForPlant, listUevmPowerPlants, listYekdemPlantIds, plantOwnerIndex } from "../lib/services/epias-plants";
-import { guessTechnologyFromName, mergePlantSeries, parseKgupItems, parseUevmItems, sumSeries } from "../lib/epias-plant/plant-data";
+import { guessTechnologyFromName } from "../lib/epias-plant/plant-data";
+import { ensurePlantCoverage, type PoolFetchers } from "../lib/pool/pool-sync";
+import { poolPlantRows } from "../lib/pool/pool-hours";
+import { writePoolPlantInfo } from "../lib/pool/pool-store";
 import { processHourlyRecord } from "../lib/calculations/engine";
 import { DEFAULT_IMBALANCE_PROFILE, SystemDirection } from "../lib/calculations/types";
 import { buildBenchmark, plantMetrics, type SectorPlantMetrics, type SectorTech } from "../lib/sector/benchmark";
-import { decodeHourly, encodeHourly } from "../lib/sector/hourly-store";
-import { listSectorHourlyIds, loadSectorHourly, saveSectorHourly } from "../lib/services/sector";
+import { encodeHourly } from "../lib/sector/hourly-store";
+import { saveSectorHourly } from "../lib/services/sector";
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));
 const flags = new Set(process.argv.slice(2).filter((a) => a.startsWith("--")));
@@ -45,15 +49,6 @@ const periodStart = `${year}-01-01`;
 const endExclusive = Date.parse(`${periodEnd}T00:00:00Z`) + 86_400_000;
 const dir = path.join(process.cwd(), ".cache", "epias", `sector-${year}`);
 await fs.mkdir(dir, { recursive: true });
-// UEVM servisi en fazla 3 ay kabul eder: çeyrekler dönem sonuna kırpılır
-const quarters = [
-  [`${year}-01-01`, `${year}-03-31`],
-  [`${year}-04-01`, `${year}-06-30`],
-  [`${year}-07-01`, `${year}-09-30`],
-  [`${year}-10-01`, `${year}-12-31`],
-]
-  .filter(([s]) => s <= periodEnd)
-  .map(([s, e]) => [s, e < periodEnd ? e : periodEnd]);
 const expectedHours = (endExclusive - Date.UTC(year, 0, 1)) / 3_600_000;
 console.log(`dönem ${periodStart} – ${periodEnd} (${expectedHours} saat)`);
 
@@ -106,24 +101,25 @@ const price = (rows: Array<{ timestamp: Date; forecastMwh: number; actualMwh: nu
         ]
       : [];
   });
-// Tamamlanmış sayılan: en az bir ortak saati ve saatlik serisi olan santral (boş sonuçlar yeniden denenir)
-const withHourly = new Set(await listSectorHourlyIds(year));
-const done = new Set(Array.from(saved.entries()).filter(([id, m]) => m.hours > 0 && withHourly.has(id)).map(([id]) => id));
-const todo = rebuild ? [] : targets.filter((x) => !done.has(x.p.id));
-console.log(`hedef ${targets.length} santral (${TYPES.join("+")}), tamamlanmış ${done.size}, kalan ${todo.length}`);
+// Havuz sayesinde tamamlanmış santral EPİAŞ'a gitmez (ensurePlantCoverage yalnız eksik ve yenilenme zamanı gelmiş ayları
+// çeker); bu yüzden her çalıştırmada bütün hedefler gezilir. Devam eden ay günde bir, biten ama kesinleşmemiş ay haftada bir
+// yenilenir (havuz kuralı). Yeniden kurmada EPİAŞ'a hiç gidilmez.
+const todo = rebuild ? [] : targets;
+console.log(`hedef ${targets.length} santral (${TYPES.join("+")}), diskte göstergesi olan ${saved.size}`);
 
 if (rebuild) {
-  // Diskteki saatlik serilerden, güncel fiyatlarla göstergeleri yeniden hesapla (saatlik serisi olmayan dosyaya dokunulmaz)
+  // Havuzdaki saatlik serilerden, güncel fiyatlarla göstergeleri yeniden hesapla (havuzda verisi olmayan dosyaya dokunulmaz)
   let rebuilt = 0;
   for (const { p, type } of targets) {
-    const series = done.has(p.id) ? await loadSectorHourly(year, p.id) : null;
-    if (!series) continue;
-    const old = saved.get(p.id)!;
-    const metrics = plantMetrics({ epiasPlantId: p.id, name: old.name, type, organizationName: old.organizationName, yekdem: old.yekdem }, price(decodeHourly(series)));
+    const rows = await poolPlantRows({ epiasPlantId: p.id, kgupVersion: "FIRST" }, periodStart, periodEnd);
+    const old = saved.get(p.id);
+    if (!old || rows.length === 0) continue;
+    await saveSectorHourly(year, encodeHourly(p.id, rows, periodStart, periodEnd));
+    const metrics = plantMetrics({ epiasPlantId: p.id, name: old.name, type, organizationName: old.organizationName, yekdem: old.yekdem }, price(rows));
     await fs.writeFile(path.join(dir, `${p.id}.json`), JSON.stringify(metrics));
     rebuilt++;
   }
-  console.log(`yeniden hesaplanan ${rebuilt} santral; saatlik serisi olmayan ${targets.length - rebuilt} santral olduğu gibi kaldı`);
+  console.log(`yeniden hesaplanan ${rebuilt} santral; havuzda verisi olmayan ${targets.length - rebuilt} santral olduğu gibi kaldı`);
 }
 
 // EPİAŞ hız sınırı: kontrolsüz paralel isteklerde HTTP 429 dönüyor. İstek başına 2–3 sn sürdüğü için az sayıda paralel
@@ -151,6 +147,12 @@ const retry = async <T>(fn: () => Promise<T>): Promise<T> => {
   }
 };
 
+const fetchers: PoolFetchers = {
+  listUevcbs: (id, day) => retry(() => listUevcbsForPlant(id, day)),
+  kgup: (uevcb, start, end, version) => retry(() => fetchKgup(uevcb, start, end, version)),
+  uevm: (id, start, end) => retry(() => fetchUevm(id, start, end)),
+};
+
 let next = 0;
 let ok = 0;
 let failed = 0;
@@ -159,23 +161,14 @@ const worker = async () => {
   while (next < todo.length) {
     const { p, type } = todo[next++];
     try {
-      // Yıl içinde devreye giren santralin uzlaştırma birimi yıl başında listelenmez
-      let uevcbs = await retry(() => listUevcbsForPlant(p.id, `${year}-01-01`));
-      for (const day of [`${year}-07-01`, `${year}-12-01`].filter((d) => d <= periodEnd)) {
-        if (uevcbs.length) break;
-        uevcbs = await retry(() => listUevcbsForPlant(p.id, day));
-      }
-      const kParts = [];
-      const uParts = [];
-      for (const [s, e] of quarters) {
-        for (const u of uevcbs) kParts.push(parseKgupItems(await retry(() => fetchKgup(u.id, s, e, "FIRST"))));
-        uParts.push(parseUevmItems(await retry(() => fetchUevm(p.id, s, e))));
-      }
-      const kgup = sumSeries(kParts);
-      const uevm = sumSeries(uParts);
-      const merged = mergePlantSeries(kgup, uevm, periodStart, periodEnd);
-      await saveSectorHourly(year, encodeHourly(p.id, merged.rows, periodStart, periodEnd));
-      const hourly = price(merged.rows);
+      // Havuzda olmayan ya da yenilenme zamanı gelmiş aylar EPİAŞ'tan çekilip havuza yazılır; hız sınırı sarmalayıcıyla
+      const cov = await ensurePlantCoverage(p.id, periodStart, periodEnd, "FIRST", { fetchers });
+      const failedMonth = cov.months.find((m) => m.source === "failed");
+      if (failedMonth) throw new Error(failedMonth.error ?? "EPİAŞ verisi alınamadı");
+      await writePoolPlantInfo({ epiasPlantId: p.id, type });
+      const rows = await poolPlantRows({ epiasPlantId: p.id, kgupVersion: "FIRST" }, periodStart, periodEnd);
+      await saveSectorHourly(year, encodeHourly(p.id, rows, periodStart, periodEnd));
+      const hourly = price(rows);
       const metrics: SectorPlantMetrics = plantMetrics(
         {
           epiasPlantId: p.id,
@@ -187,7 +180,7 @@ const worker = async () => {
         hourly
       );
       // Tanı bilgisi: boş sonuçların nedenini görmek için
-      const diag = { uevcbCount: uevcbs.length, kgupHours: kgup.values.size, uevmHours: uevm.values.size };
+      const diag = { uevcbCount: cov.uevcbs.length, kgupHours: cov.kgup.values.size, uevmHours: cov.uevm.values.size };
       await fs.writeFile(path.join(dir, `${p.id}.json`), JSON.stringify({ ...metrics, diag }));
       ok++;
     } catch (e) {
