@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Download, FileDown, Loader2 } from "lucide-react";
 import { CartesianGrid, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis, Cell } from "recharts";
 import Link from "next/link";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { MethodLink } from "@/components/method-link";
+import { placeLabels, type LabelSide as Side } from "@/lib/chart-labels";
 import type { AggregatorBenchmarkRow } from "@/lib/analysis/aggregator-benchmark";
 
 /**
@@ -77,6 +78,78 @@ function IndexCell({ v }: { v: number | null }) {
       <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-slate-100" title="Çubuk tamamı = sektör ortalamasının 1,25 katı">
         <div className={`h-full rounded-full ${tone}`} style={{ width: `${Math.min(100, (v / 1.25) * 100)}%` }} />
       </div>
+    </div>
+  );
+}
+
+type ScatterPoint = { x: number; y: number; z: number; name: string; low: boolean };
+
+const LABEL_FONT = 10;
+
+/** Büyüklük–endeks dağılımı; etiketler çakışmayacak biçimde yerleştirilir (noktaların ekran konumu çizimden okunur) */
+function ScatterPanel({ scatter }: { scatter: ScatterPoint[] }) {
+  const pos = useRef<Record<number, { x: number; y: number; r: number }>>({});
+  const [sides, setSides] = useState<Side[]>([]);
+  // Her çizimden sonra (yeniden boyutlanma dahil) yerleşimi hesapla; değişmediyse durum güncellenmez
+  useLayoutEffect(() => {
+    const pts = scatter.map((p, i) => ({ ...(pos.current[i] ?? { x: 0, y: 0, r: 0 }), name: p.name }));
+    if (pts.some((p) => p.x === 0 && p.y === 0)) return;
+    const next = placeLabels(pts);
+    setSides((cur) => (cur.length === next.length && cur.every((v, i) => v === next[i]) ? cur : next));
+  });
+  const renderLabel = (props: any) => {
+    // x ve y noktanın sınır kutusunun sol üst köşesidir; merkez ve yarıçap kutudan
+    const { index, width, height } = props;
+    const r = (width ?? 12) / 2;
+    const x = props.x + r;
+    const y = props.y + (height ?? 12) / 2;
+    pos.current[index] = { x, y, r };
+    const side = sides[index] ?? "top";
+    const name = scatter[index]?.name ?? "";
+    const gap = r + 4;
+    const at = {
+      top: { x, y: y - gap, anchor: "middle" },
+      bottom: { x, y: y + gap + LABEL_FONT - 2, anchor: "middle" },
+      right: { x: x + gap, y: y + LABEL_FONT / 2 - 1, anchor: "start" },
+      left: { x: x - gap, y: y + LABEL_FONT / 2 - 1, anchor: "end" },
+    }[side];
+    return (
+      <text key={index} x={at.x} y={at.y} textAnchor={at.anchor as any} fontSize={LABEL_FONT} fill="#475569">
+        {name}
+      </text>
+    );
+  };
+  return (
+    <div className="h-[340px] w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <ScatterChart margin={{ top: 24, right: 40, bottom: 20, left: 10 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          <XAxis type="number" dataKey="x" name="Üretim" unit=" GWh" tickMargin={6} tick={{ fontSize: 11 }} stroke="#64748b" tickFormatter={(v) => nf(Number(v))} />
+          <YAxis type="number" dataKey="y" name="Endeks" tick={{ fontSize: 11 }} stroke="#64748b" width={48} tickFormatter={(v) => nf(Number(v), 2)} domain={[(d: number) => Math.max(0, Math.floor((d - 0.05) * 10) / 10), (d: number) => Math.ceil((d + 0.03) * 10) / 10]} />
+          <ZAxis type="number" dataKey="z" range={[40, 400]} />
+          <Tooltip
+            cursor={{ strokeDasharray: "3 3" }}
+            content={({ payload }) => {
+              const p = payload?.[0]?.payload as ScatterPoint | undefined;
+              if (!p) return null;
+              return (
+                <div className="rounded-md border bg-white px-2.5 py-1.5 text-xs shadow">
+                  <b>{p.name}</b>
+                  <div>
+                    {nf(p.x)} GWh · endeks {nf(p.y, 2)} · {p.z} santral
+                  </div>
+                  {p.low && <div className="text-amber-700">düşük kapsam</div>}
+                </div>
+              );
+            }}
+          />
+          <Scatter data={scatter} label={renderLabel}>
+            {scatter.map((p) => (
+              <Cell key={p.name} fill={p.low ? "#f59e0b" : "#0e8c7e"} fillOpacity={0.75} />
+            ))}
+          </Scatter>
+        </ScatterChart>
+      </ResponsiveContainer>
     </div>
   );
 }
@@ -319,37 +392,7 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
           <CardDescription>Yatay: üretim (GWh). Dikey: karışıma göre düzeltilmiş endeks (aşağısı daha iyi). Nokta büyüklüğü santral sayısı; turuncu: düşük kapsam.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="h-[340px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <ScatterChart margin={{ top: 10, right: 30, bottom: 20, left: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis type="number" dataKey="x" name="Üretim" unit=" GWh" tick={{ fontSize: 11 }} stroke="#64748b" tickFormatter={(v) => nf(Number(v))} />
-                <YAxis type="number" dataKey="y" name="Endeks" tick={{ fontSize: 11 }} stroke="#64748b" width={48} tickFormatter={(v) => nf(Number(v), 2)} />
-                <ZAxis type="number" dataKey="z" range={[40, 400]} />
-                <Tooltip
-                  cursor={{ strokeDasharray: "3 3" }}
-                  content={({ payload }) => {
-                    const p = payload?.[0]?.payload as (typeof scatter)[number] | undefined;
-                    if (!p) return null;
-                    return (
-                      <div className="rounded-md border bg-white px-2.5 py-1.5 text-xs shadow">
-                        <b>{p.name}</b>
-                        <div>
-                          {nf(p.x)} GWh · endeks {nf(p.y, 2)} · {p.z} santral
-                        </div>
-                        {p.low && <div className="text-amber-700">düşük kapsam</div>}
-                      </div>
-                    );
-                  }}
-                />
-                <Scatter data={scatter} label={{ dataKey: "name", position: "top", fontSize: 10, fill: "#475569" }}>
-                  {scatter.map((p) => (
-                    <Cell key={p.name} fill={p.low ? "#f59e0b" : "#0e8c7e"} fillOpacity={0.75} />
-                  ))}
-                </Scatter>
-              </ScatterChart>
-            </ResponsiveContainer>
-          </div>
+          <ScatterPanel scatter={scatter} />
         </CardContent>
       </Card>
     </div>
