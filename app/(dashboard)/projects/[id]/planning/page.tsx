@@ -154,11 +154,15 @@ interface SummaryData {
   efficiencyPercent: number;
 }
 
-interface PlantPlanningData {
+/** Seçici için yeterli temel bilgi (ayrıntı yalnız seçilen santral için istenir; PLAN 10.4) */
+interface PlantBasics {
   plantId: string;
   plantName: string;
   plantType: string;
   capacityMw: number;
+}
+
+interface PlantPlanningData extends PlantBasics {
   summary: SummaryData;
   bias: ForecastBiasResult;
   uplift: PotentialUpliftResult;
@@ -192,7 +196,7 @@ interface PlanningApiResponse {
     heatmap: HeatmapCell[];
     arbitrage: ArbitrageOverview;
   };
-  plants: PlantPlanningData[];
+  plants: Array<PlantBasics & Partial<PlantPlanningData>>;
 }
 
 /** İşaretli TL gösterimi: "+1.234", "−1.234" (tipografik eksi) */
@@ -225,52 +229,77 @@ export default function PlanningEfficiencyPage() {
   // Isı Haritası Hover Tooltip State
   const [hoveredCell, setHoveredCell] = useState<HeatmapCell | null>(null);
 
-  const fetchData = React.useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/projects/${projectId}/planning`);
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(
-          json.error || "Planlama verimliliği verileri alınırken bir hata oluştu."
-        );
-      }
-      setData(json);
+  /** Son istenen santral ayrıntısı (aynı santral için tekrar istek atılmaz) */
+  const requestedDetail = React.useRef<string | null>(null);
 
-      if (typeof window !== "undefined") {
-        const urlParams = new URLSearchParams(window.location.search);
-        const tabParam = urlParams.get("tab");
-        if (tabParam === "arbitrage" || tabParam === "efficiency") {
-          setActiveSectionTab(tabParam as "arbitrage" | "efficiency");
+  const fetchData = React.useCallback(
+    async (plant?: string, initial = false) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(`/api/projects/${projectId}/planning${plant ? `?plant=${encodeURIComponent(plant)}` : ""}`);
+        const json = await res.json();
+        if (!res.ok || !json.success) {
+          throw new Error(
+            json.error || "Planlama verimliliği verileri alınırken bir hata oluştu."
+          );
         }
-        const plantParam = urlParams.get("plant");
-        if (plantParam) {
-          setSelectedScope(plantParam);
+        setData(json);
+
+        if (initial && typeof window !== "undefined") {
+          const urlParams = new URLSearchParams(window.location.search);
+          const tabParam = urlParams.get("tab");
+          if (tabParam === "arbitrage" || tabParam === "efficiency") {
+            setActiveSectionTab(tabParam as "arbitrage" | "efficiency");
+          }
+          if (plant) {
+            requestedDetail.current = plant;
+            setSelectedScope(plant);
+          }
+          const autoOpen = urlParams.get("drilldown");
+          if (autoOpen && json.portfolio?.worst10Days?.length > 0) {
+            const target =
+              json.portfolio.worst10Days.find(
+                (d: WorstDayItem) => d.period === autoOpen
+              ) || json.portfolio.worst10Days[0];
+            setSelectedDayDetail(target);
+            setIsDetailOpen(true);
+          }
         }
-        const autoOpen = urlParams.get("drilldown");
-        if (autoOpen && json.portfolio?.worst10Days?.length > 0) {
-          const target =
-            json.portfolio.worst10Days.find(
-              (d: WorstDayItem) => d.period === autoOpen
-            ) || json.portfolio.worst10Days[0];
-          setSelectedDayDetail(target);
-          setIsDetailOpen(true);
-        }
+      } catch (err) {
+        console.error("Fetch planning data error:", err);
+        setError(
+          err instanceof Error ? err.message : "Beklenmedik bir hata oluştu."
+        );
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error("Fetch planning data error:", err);
-      setError(
-        err instanceof Error ? err.message : "Beklenmedik bir hata oluştu."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId]);
+    },
+    [projectId]
+  );
 
   useEffect(() => {
-    fetchData();
+    // Adresteki ?plant= santralin ayrıntısı ilk istekle gelir
+    const plant = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("plant") : null;
+    fetchData(plant ?? undefined, true);
   }, [fetchData]);
+
+  /** Yeniden yükle: seçili santralin ayrıntısıyla birlikte */
+  const refresh = React.useCallback(() => {
+    requestedDetail.current = selectedScope === "portfolio" ? null : selectedScope;
+    return fetchData(selectedScope === "portfolio" ? undefined : selectedScope);
+  }, [fetchData, selectedScope]);
+
+  // Santral seçilince ayrıntısı henüz yoksa sunucudan istenir (sunucu önbelleği sayesinde hızlıdır)
+  useEffect(() => {
+    if (!data || selectedScope === "portfolio") return;
+    const plant = data.plants.find((p) => p.plantId === selectedScope);
+    if (plant && !plant.summary && requestedDetail.current !== selectedScope) {
+      requestedDetail.current = selectedScope;
+      fetchData(selectedScope);
+    }
+  }, [data, selectedScope, fetchData]);
+
 
   // Aktif Kapsam Verileri (Tüm Portföy veya Seçili Santral)
   const currentView = useMemo(() => {
@@ -290,7 +319,7 @@ export default function PlanningEfficiencyPage() {
       };
     }
     const plant = data.plants.find((p) => p.plantId === selectedScope);
-    if (!plant) {
+    if (!plant || !plant.summary) {
       return {
         name: "Tüm Portföy",
         type: "PORTFOLIO",
@@ -308,13 +337,13 @@ export default function PlanningEfficiencyPage() {
       name: plant.plantName,
       type: plant.plantType,
       summary: plant.summary,
-      bias: plant.bias,
-      uplift: plant.uplift,
-      upliftBacktest: plant.upliftBacktest,
-      monthlyEfficiency: plant.monthlyEfficiency,
-      worst10Days: plant.worst10Days,
-      heatmap: plant.heatmap,
-      arbitrage: plant.arbitrage,
+      bias: plant.bias!,
+      uplift: plant.uplift!,
+      upliftBacktest: plant.upliftBacktest ?? null,
+      monthlyEfficiency: plant.monthlyEfficiency!,
+      worst10Days: plant.worst10Days!,
+      heatmap: plant.heatmap!,
+      arbitrage: plant.arbitrage!,
     };
   }, [data, selectedScope]);
 
@@ -458,7 +487,7 @@ export default function PlanningEfficiencyPage() {
   };
 
   // 1. Loading State
-  if (loading) {
+  if (loading && !data) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
         <div className="flex flex-col items-center gap-4 text-center">
@@ -490,7 +519,7 @@ export default function PlanningEfficiencyPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
-            <Button onClick={fetchData} className="gap-2">
+            <Button onClick={refresh} className="gap-2">
               <RefreshCw className="h-4 w-4" />
               Tekrar Dene
             </Button>
@@ -582,12 +611,12 @@ export default function PlanningEfficiencyPage() {
             />
             <MarketDataUploadDialog
               projectId={projectId}
-              onUploadSuccess={fetchData}
+              onUploadSuccess={refresh}
             />
             <Button
               variant="outline"
               size="sm"
-              onClick={fetchData}
+              onClick={refresh}
               className="gap-1.5"
             >
               <RefreshCw className="h-3.5 w-3.5" />
@@ -597,7 +626,12 @@ export default function PlanningEfficiencyPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-8 px-4 pt-8 sm:px-6 lg:px-8">
+      <main className={`mx-auto max-w-7xl space-y-8 px-4 pt-8 transition-opacity sm:px-6 lg:px-8 ${loading ? "pointer-events-none opacity-50" : ""}`}>
+        {loading && (
+          <div className="flex items-center gap-2 text-sm text-slate-600" role="status">
+            <RefreshCw className="h-4 w-4 animate-spin" /> Santral ayrıntısı yükleniyor…
+          </div>
+        )}
         <DataQualityBanner projectId={projectId} refreshKey={data} />
 
         {/* Kapsam / Santral Seçici */}

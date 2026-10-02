@@ -204,7 +204,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 - [x] **10.1 Otomatik veri.** Havuz her zaman ilk KGÜP, son KGÜP ve UEVM'yi birlikte tutar (ensurePlantCoverage); proje oluşturulurken üçü de çekilir. `syncProjectData` (piyasa, resmi fiyat, santraller), `/api/projects/[id]/sync-data`, sonuç sayfasında "EPİAŞ verilerini tamamla", `scripts/pool-backfill.mts`.
 - [x] **10.2 Önbellek.** Proje hesapları veri sürümüne göre bellekte (`lib/services/response-cache.ts`: withProjectCache, cachedForProject); sürüm: proje/santral/profil zamanları, piyasa senkronu, havuz dosyaları, sektör ve toplayıcı kıyası dosyaları.
 - [x] **10.3 Küçük düzeltmeler.** Karşılaştırmada iki netleşme tanımı ayrı; küçük toplayıcılar kendi ölçek bandıyla kıyaslanır; DSG anahtar uyarısı.
-- [ ] 10.4 Planlama sayfası yalnız seçilen santralin ayrıntısını alsın (8,6 MB). İsteğe bağlı.
+- [x] **10.4 Planlama sayfası yalnız seçilen santralin ayrıntısını alır.** ✅ 02.10.2026. `/api/projects/[id]/planning` portföy görünümünü tam, santralleri yalnız ad/tür/kapasiteyle döndürür; `?plant=<id>` ile o santralin ayrıntısı (aylık verimlilik, en verimsiz günler, ısı haritası, GİP, geriye dönük test) eklenir. Sayfa santral seçilince ayrıntıyı ister (adresteki `?plant=` ilk istekle gelir; yükleme sırasında sayfa soluklaşır, tam ekran yükleyici yalnız ilk açılışta). Inavitas (61 santral): yük 8,6 MB → 151 KB (portföy), 295 KB (santral ayrıntısıyla); ikinci yükleme 13 ms (önbellek). Doğrulama: seçiciden santral değiştirme, portföye dönüş ve adresten `?plant=&tab=arbitrage` tarayıcıda denendi.
 
 ---
 

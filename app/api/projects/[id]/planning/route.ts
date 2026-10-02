@@ -126,11 +126,15 @@ function buildHeatmapMatrix(results: HourlyResult[]): DayHourHeatmapCell[] {
 }
 
 async function handleGET(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
     const projectId = params.id;
+    // ?plant=<id>: yalnız bu santralin ayrıntısı (aylık verimlilik, en verimsiz günler, ısı haritası, GİP, geriye dönük test)
+    // hesaplanıp gönderilir; diğer santraller seçici için yalnız ad, tür ve kapasiteyle döner (PLAN 10.4: 61 santralde
+    // 8,6 MB → ~0,3 MB). Portföy görünümü her zaman tamdır.
+    const detailPlantId = new URL(request.url).searchParams.get("plant");
 
     const project = await findProjectWithRecords(projectId);
 
@@ -385,6 +389,9 @@ async function handleGET(
 
     // 3. Santral Bazlı Hesaplamalar
     const plantsData = project.plants.map((plant) => {
+      if (plant.id !== detailPlantId) {
+        return { plantId: plant.id, plantName: plant.name, plantType: plant.type, capacityMw: plant.capacityMw };
+      }
       const plantHourly = plantResultsMap.get(plant.id)?.hourly || [];
 
       const plantHourlyByDate = new Map<string, HourlyResult[]>();
