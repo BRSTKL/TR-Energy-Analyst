@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Download, Loader2 } from "lucide-react";
 import { CartesianGrid, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis, Cell } from "recharts";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -231,7 +232,9 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
                     <TableRow key={a.id}>
                       <TableCell className="text-xs text-slate-500">{i + 1}</TableCell>
                       <TableCell className="font-medium" title={a.name}>
-                        {shortName(a.name)}
+                        <Link href={`/sector/aggregators/${a.id}?year=${data.year}`} className="hover:text-teal-700 hover:underline">
+                          {shortName(a.name)}
+                        </Link>
                         {low && (
                           <span
                             className="ml-1.5 inline-flex items-center gap-0.5 rounded bg-amber-50 px-1 text-2xs font-semibold text-amber-700"

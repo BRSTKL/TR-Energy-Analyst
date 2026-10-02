@@ -19,6 +19,8 @@ export interface BenchmarkHourPrice {
 
 export interface BenchmarkPlant {
   epiasPlantId: number;
+  /** Görünen ad (ayrıntı sayfası için; yoksa kimlik gösterilir) */
+  name?: string;
   type: string;
   /** Sahip (lisans sahibi) anahtarı; bilinmiyorsa null (santral kendi başına sahip sayılır) */
   owner: string | null;

@@ -197,7 +197,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 
 ### Aşama 9: Sektör karnesinde toplayıcılar · karar 30.09.2026
 - [x] **9.1 Toplayıcılar sekmesi.** ✅ 30.09.2026. `/sector` sayfasında "Santraller | Toplayıcılar": kıyas tablosu (santral kapsamı, üretim, karışım, netleşme değeri ve oranı, TL/MWh, karışıma göre düzeltilmiş endeks), ölçek ve teknoloji süzgeçleri, sıralama, büyüklük–endeks grafiği, kapsam uyarıları, CSV, metodoloji bağlantısı. Veri: `.cache/epias/aggregator-benchmark-<yıl>.json`.
-- [ ] 9.2 Toplayıcı ayrıntı sayfası (santraller, aylık netleşme, üretici katkısı). Sonra.
+- [x] **9.2 Toplayıcı ayrıntı sayfası.** ✅ 02.10.2026. `/sector/aggregators/[id]` (tablodaki ada tıklanır): özet göstergeler, aylık netleşme (sahipler tek başına, portföyde, değer, oran; grafik ve tablo), üreticilerin portföye katkısı (rapordaki formül), santraller (tek başına TL/MWh, sektör medyanına göre fark). Saf hesap `lib/analysis/aggregator-detail.ts` (3 test), veri okuma `lib/services/aggregator-data.ts` (kıyas betiğiyle ortak; betik çıktısı değişmedi), `/api/sector/aggregators/[id]`. Doğrulama: aylık toplam netleşme kıyas tablosuyla birebir (Inavitas 297,2 M, Atam 34,4 M). Not: sahibi bilinmeyen yeni bulunan santraller kendi başına üretici görünür.
 - [ ] 9.3 Satırdan "1 sayfa özet üret". Sonra.
 
 ### Aşama 10: Veri otomasyonu ve hız · karar 30.09.2026
