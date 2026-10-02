@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Download, Loader2 } from "lucide-react";
+import { AlertTriangle, Download, FileDown, Loader2 } from "lucide-react";
 import { CartesianGrid, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis, Cell } from "recharts";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -235,6 +235,14 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
                         <Link href={`/sector/aggregators/${a.id}?year=${data.year}`} className="hover:text-teal-700 hover:underline">
                           {shortName(a.name)}
                         </Link>
+                        <a
+                          href={`/api/sector/aggregators/${a.id}/summary?year=${data.year}`}
+                          className="ml-1.5 inline-block align-middle text-slate-400 hover:text-teal-700"
+                          title="1 sayfa özet (PPTX) indir"
+                          aria-label={`${shortName(a.name)} için 1 sayfa özet indir`}
+                        >
+                          <FileDown className="h-3.5 w-3.5" />
+                        </a>
                         {low && (
                           <span
                             className="ml-1.5 inline-flex items-center gap-0.5 rounded bg-amber-50 px-1 text-2xs font-semibold text-amber-700"

@@ -118,3 +118,33 @@ export function benchmarkAggregator(
     mixAdjustedIndex: expected > 0 ? portfolioCost / expected : null,
   };
 }
+
+/**
+ * Benzer ölçekli toplayıcı grubu (rapor ve ayrıntı özeti aynı kuralı kullanır). Ölçek bantları 8 aylık dönem için:
+ * büyük ≥ 1.000 GWh, orta 300–1.000 GWh (kısa/uzun dönemde orantılanır); toplayıcı kendi bandındakilerle kıyaslanır. Grup
+ * 4'ten küçük kalırsa ya da toplayıcı orta bandın bile altındaysa (küçük) üretimi en yakın 6 toplayıcı alınır. Satırlar karışıma göre düzeltilmiş endekse göre sıralıdır
+ * (endeksi olmayan sona).
+ */
+export function peerGroup(
+  all: AggregatorBenchmarkRow[],
+  selfId: number,
+  period: { start: string; end: string }
+): { rows: AggregatorBenchmarkRow[]; minProductionMwh: number; largeThresholdMwh: number; selfLarge: boolean; band: "large" | "mid" | "nearest" } | null {
+  const self = all.find((a) => a.id === selfId);
+  if (!self) return null;
+  const ym = (d: string) => Number(d.slice(0, 4)) * 12 + Number(d.slice(5, 7));
+  const months = Math.max(1, ym(period.end) - ym(period.start) + 1);
+  const large = 1_000_000 * (months / 8);
+  const mid = 300_000 * (months / 8);
+  const selfLarge = self.productionMwh >= large;
+  let minProductionMwh = selfLarge ? large : mid;
+  let band: "large" | "mid" | "nearest" = selfLarge ? "large" : "mid";
+  let group = all.filter((a) => a.id === selfId || (selfLarge ? a.productionMwh >= large : a.productionMwh >= mid && a.productionMwh < large));
+  if (group.length < 4 || self.productionMwh < mid) {
+    band = "nearest";
+    group = [...all].sort((a, b) => Math.abs(a.productionMwh - self.productionMwh) - Math.abs(b.productionMwh - self.productionMwh)).slice(0, 6);
+    minProductionMwh = Math.min(...group.map((a) => a.productionMwh));
+  }
+  const idx = (a: AggregatorBenchmarkRow) => a.mixAdjustedIndex ?? Infinity;
+  return { rows: [...group].sort((a, b) => idx(a) - idx(b)), minProductionMwh, largeThresholdMwh: large, selfLarge, band };
+}

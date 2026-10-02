@@ -23,7 +23,7 @@ import { combineBacktests, MIN_FEASIBLE_LAG_HOURS, persistenceStrategy, runBackt
 import { KUPST_REGIMES, kupstForHour, kupstTotal } from "@/lib/calculations/kupst";
 import { percentileRank, quantile, type Distribution } from "@/lib/sector/benchmark";
 import type { ProjectHourly } from "@/lib/services/project-hourly";
-import type { AggregatorBenchmarkRow } from "@/lib/analysis/aggregator-benchmark";
+import { peerGroup, type AggregatorBenchmarkRow } from "@/lib/analysis/aggregator-benchmark";
 
 export interface ReportPlantRow {
   name: string;
@@ -809,25 +809,12 @@ export function buildPlantReport(
   const bench = context.aggregatorBenchmark;
   const selfId = data.aggregator?.portfolio?.orgId;
   if (bench && selfId && bench.year === new Date(start).getUTCFullYear() && bench.aggregators.some((a) => a.id === selfId)) {
-    // Benzer ölçek: 1.000 GWh üstü (dönem); grup 4'ten küçük kalırsa üretimi en yakın 6 toplayıcı (8 ayda; kısa dönemde
-    // eşik orantılanır). Karışıma göre düzeltilmiş endeks: portföy maliyeti / Σ üretim × teknoloji medyanı.
-    const self = bench.aggregators.find((a) => a.id === selfId)!;
-    const ym = (d: string) => Number(d.slice(0, 4)) * 12 + Number(d.slice(5, 7));
-    const months = Math.max(1, ym(bench.period.end) - ym(bench.period.start) + 1);
-    // Ölçek bantları (8 ayda): büyük ≥ 1.000 GWh, orta 300–1.000 GWh; toplayıcı kendi bandındakilerle kıyaslanır
-    const large = 1_000_000 * (months / 8);
-    const mid = 300_000 * (months / 8);
-    const selfLarge = self.productionMwh >= large;
-    let minProduction = selfLarge ? large : mid;
-    let group = bench.aggregators.filter(
-      (a) => a.id === selfId || (selfLarge ? a.productionMwh >= large : a.productionMwh >= mid && a.productionMwh < large)
-    );
-    if (group.length < 4) {
-      group = [...bench.aggregators].sort((a, b) => Math.abs(a.productionMwh - self.productionMwh) - Math.abs(b.productionMwh - self.productionMwh)).slice(0, 6);
-      minProduction = Math.min(...group.map((a) => a.productionMwh));
-    }
-    const idx = (a: AggregatorBenchmarkRow) => a.mixAdjustedIndex ?? Infinity;
-    const rows = [...group].sort((a, b) => idx(a) - idx(b));
+    // Benzer ölçekli grup ve karışıma göre düzeltilmiş endeks sırası (kural: peerGroup)
+    const g = peerGroup(bench.aggregators, selfId, bench.period)!;
+    const rows = g.rows;
+    const large = g.largeThresholdMwh;
+    const minProduction = g.minProductionMwh;
+    const selfLarge = g.selfLarge;
     const rank = (sorted: AggregatorBenchmarkRow[]) => sorted.findIndex((a) => a.id === selfId) + 1;
     const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
     const m = (d: string) => MONTHS[Number(d.slice(5, 7)) - 1];
@@ -837,7 +824,7 @@ export function buildPlantReport(
       selfId,
       rows,
       minProductionMwh: minProduction,
-      maxProductionMwh: selfLarge || group.some((a) => a.productionMwh >= large) ? null : large,
+      maxProductionMwh: selfLarge || rows.some((a) => a.productionMwh >= large) ? null : large,
       othersCount: bench.aggregators.length - rows.length,
       rankIndex: rank(rows),
       rankValue: rank([...rows].sort((a, b) => b.nettingValueTl - a.nettingValueTl)),

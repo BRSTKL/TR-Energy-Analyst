@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Download, Loader2 } from "lucide-react";
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -69,6 +69,13 @@ export default function AggregatorDetailPage() {
         <Link href="/sector" className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800">
           <ArrowLeft className="h-3 w-3" /> Sektör karnesi · Toplayıcılar
         </Link>
+        <a
+          href={`/api/sector/aggregators/${id}/summary?year=${year}`}
+          className="float-right inline-flex h-8 items-center gap-1.5 rounded-md border bg-white px-3 text-xs font-medium hover:bg-slate-50"
+          title="Bu toplayıcının tek slaytlık özeti (PPTX); ilk mesaja eklenebilir"
+        >
+          <Download className="h-3.5 w-3.5" /> 1 sayfa özet (PPTX)
+        </a>
         <h1 className="mt-1 text-xl font-semibold">{data.name.replace(/\s*\(TOPLAYICI\)\s*$/, "")}</h1>
         <p className="text-sm text-slate-500">
           {period} · rüzgâr, güneş ve hidro santralleri · üyelik {data.membershipAsOf} tarihli listeye göre <MethodLink section="toplayici-kiyas" />

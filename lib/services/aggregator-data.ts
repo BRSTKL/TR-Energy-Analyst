@@ -11,7 +11,8 @@ import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import { readRange } from "@/lib/pool/pool-codec";
 import { readPoolYear } from "@/lib/pool/pool-store";
-import type { BenchmarkHourPrice, BenchmarkPlant } from "@/lib/analysis/aggregator-benchmark";
+import type { AggregatorBenchmarkRow, BenchmarkHourPrice, BenchmarkPlant } from "@/lib/analysis/aggregator-benchmark";
+import { aggregatorDetail, type AggregatorDetail } from "@/lib/analysis/aggregator-detail";
 
 const CACHE = path.join(process.cwd(), ".cache", "epias");
 const poolPlantFile = (id: number) => path.join(process.cwd(), "data", "pool", String(id), "plant.json");
@@ -64,4 +65,60 @@ export function otherTechIds(ids: number[]): Set<number> {
   const out = new Set<number>();
   for (const id of ids) if (readJson<{ kind?: string }>(poolPlantFile(id))?.kind === "OTHER") out.add(id);
   return out;
+}
+
+export interface AggregatorDetailResult extends AggregatorDetail {
+  year: number;
+  id: number;
+  name: string;
+  period: { start: string; end: string };
+  membershipAsOf: string;
+  sectorMedians: Record<string, number>;
+  /** Kıyas dosyasındaki bütün toplayıcılar (benzer ölçekli grup için) */
+  benchmarkRows: AggregatorBenchmarkRow[];
+}
+
+export class AggregatorDataError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+  }
+}
+
+const detailMemo = new Map<string, { at: number; value: AggregatorDetailResult }>();
+const DETAIL_TTL_MS = 5 * 60_000;
+
+/** Toplayıcının ayrıntısı (kıyas dosyası, üyelik listesi ve havuzdan; EPİAŞ'a gitmez). Kısa süre bellekte tutulur. */
+export async function loadAggregatorDetail(year: number, id: number): Promise<AggregatorDetailResult> {
+  const benchFile = path.join(CACHE, `aggregator-benchmark-${year}.json`);
+  if (!fs.existsSync(benchFile)) throw new AggregatorDataError("Toplayıcı kıyası bu yıl için üretilmedi.", 404);
+  const key = `${year}:${id}:${fs.statSync(benchFile).mtimeMs}`;
+  const hit = detailMemo.get(key);
+  if (hit && Date.now() - hit.at < DETAIL_TTL_MS) return hit.value;
+
+  const bench = readJson<{
+    period: { start: string; end: string };
+    sectorMedians: Record<string, number>;
+    membershipAsOf: string;
+    aggregators: AggregatorBenchmarkRow[];
+  }>(benchFile)!;
+  const membership = readJson<{ aggregators: Array<{ id: number; name: string; plantIds: number[] }> }>(path.join(CACHE, "aggregator-membership.json"));
+  const agg = membership?.aggregators.find((a) => a.id === id);
+  if (!agg) throw new AggregatorDataError("Toplayıcı bulunamadı.", 404);
+
+  const [prices, plants] = await Promise.all([
+    loadBenchmarkPrices(bench.period.start, bench.period.end),
+    loadBenchmarkPlants(agg.plantIds, year, bench.period.start, bench.period.end),
+  ]);
+  const value: AggregatorDetailResult = {
+    ...aggregatorDetail(agg, plants, prices, bench.sectorMedians),
+    year,
+    id,
+    name: agg.name,
+    period: bench.period,
+    membershipAsOf: bench.membershipAsOf,
+    sectorMedians: bench.sectorMedians,
+    benchmarkRows: bench.aggregators,
+  };
+  detailMemo.set(key, { at: Date.now(), value });
+  return value;
 }
