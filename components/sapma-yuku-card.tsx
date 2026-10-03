@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { PlantReportData } from "@/lib/report/plant-report";
 import { deviationLoad, monthlyRange } from "@/lib/report/deviation-load";
+import { HYDRO_KIND_LABEL } from "@/lib/sector/benchmark";
 
 /** Sonuç API'sinin `sapma` alanı: Dengesizlik Karnesi ile aynı motordan */
 export interface SapmaSummary {
@@ -240,8 +241,8 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh }: { sapma: SapmaSum
                   {sapma.sector.types.map((t) => {
                     const diff = ((t.portfolioUnitTl - t.unitImbalanceTl.median) / t.unitImbalanceTl.median) * 100;
                     return (
-                      <div key={t.type} className="flex flex-wrap items-baseline justify-between gap-2 rounded-md bg-slate-50 px-2 py-1.5 text-xs">
-                        <span className="font-semibold text-slate-800">{t.type === "RES" ? "Rüzgâr" : t.type === "GES" ? "Güneş" : t.type}</span>
+                      <div key={`${t.type}:${t.kind ?? ""}`} className="flex flex-wrap items-baseline justify-between gap-2 rounded-md bg-slate-50 px-2 py-1.5 text-xs">
+                        <span className="font-semibold text-slate-800">{t.type === "RES" ? "Rüzgâr" : t.type === "GES" ? "Güneş" : t.type === "HES" ? "Hidro" : t.type}{t.kind ? ` · ${HYDRO_KIND_LABEL[t.kind]}` : ""}</span>
                         <span className="text-slate-600">
                           Portföyünüz <strong>{Math.round(t.portfolioUnitTl).toLocaleString("tr-TR")} ₺</strong> · sektör medyanı{" "}
                           {Math.round(t.unitImbalanceTl.median).toLocaleString("tr-TR")} ₺ ·{" "}

@@ -642,7 +642,7 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
                 [
                   "1.7",
                   "3 Ekim 2026",
-                  "2026 kuralları Resmî Gazete'deki kararlardan doğrulandı: k ve l katsayıları 14030, KÜPST toleransları ve katsayıları 14029 sayılı karar (taslak değil nihai metin; değerler aynı). Düzeltme: toplayıcı portföyünde KÜPST, kararların md. 4'üne uygun olarak topluluk (portföy) birimi bazında, kurulu güce ağırlıklı toleransla ve topluluk katsayısıyla hesaplanır; önceden santral bazında hesaplanıyordu. Inavitas (Oca–Ağu 2026): KÜPST 59,6 M TL → 7,2 M TL, sapma yükü 306,1 M TL → 253,8 M TL. Şirket projelerinde (toplayıcı olmayan) hesap değişmedi.",
+                  "2026 kuralları Resmî Gazete'deki kararlardan doğrulandı: k ve l katsayıları 14030, KÜPST toleransları ve katsayıları 14029 sayılı karar (taslak değil nihai metin; değerler aynı). Düzeltme: toplayıcı portföyünde KÜPST, kararların md. 4'üne uygun olarak topluluk (portföy) birimi bazında, kurulu güce ağırlıklı toleransla ve topluluk katsayısıyla hesaplanır; önceden santral bazında hesaplanıyordu. Inavitas (Oca–Ağu 2026): KÜPST 59,6 M TL → 7,2 M TL, sapma yükü 306,1 M TL → 253,8 M TL. Şirket projelerinde (toplayıcı olmayan) hesap değişmedi. Projelerin sektörle kıyaslamasında hidro santraller artık kendi alt tipinin (barajlı / nehir tipi; tahmini) sektör dağılımıyla kıyaslanır; alt tipi belirsiz santraller en az 3 tane ise ayrı satır, aksi halde kıyas dışı kalır.",
                 ],
                 [
                   "1.6",

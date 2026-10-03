@@ -727,13 +727,14 @@ export async function exportPlantReportPptx(
     // Başlık önemliliğe göre: MWh başına en kötü santral küçük olabilir (ör. 1 MW). Ölçüte (sektör medyanı; karne yoksa
     // teknoloji ortalaması) inse en çok TL kazandıracak santral öne çıkar (MWh başına sıralama grafikte kalır). Sektör
     // medyanı, sektör ve fırsatlar slaytlarıyla aynı ölçüttür. Her santral kendi teknolojisinin ölçütüyle karşılaştırılır.
-    const refOf = (type: string) => {
-      const med = r.sector?.types.find((x) => x.type === type)?.unitImbalanceTl.median ?? null;
-      return { value: med ?? groups.find((g) => g.type === type)!.avg, sector: med !== null };
+    // Hidroda santral kendi alt tipinin medyanıyla kıyaslanır: ölçüt, santralin yer aldığı sektör satırıdır
+    const refOf = (p: (typeof r.plants)[number]) => {
+      const med = r.sector?.types.find((x) => x.type === p.type && x.plants.some((sp) => sp.name === p.name))?.unitImbalanceTl.median ?? null;
+      return { value: med ?? groups.find((g) => g.type === p.type)!.avg, sector: med !== null };
     };
-    const excess = (p: (typeof r.plants)[number]) => Math.max(0, p.unitCostTl - refOf(p.type).value) * p.actualMwh;
+    const excess = (p: (typeof r.plants)[number]) => Math.max(0, p.unitCostTl - refOf(p).value) * p.actualMwh;
     const biggest = [...(established.length ? established : r.plants)].sort((a, b) => excess(b) - excess(a))[0];
-    const bigRef = refOf(biggest.type);
+    const bigRef = refOf(biggest);
     const title =
       r.plants.length > 1 && excess(biggest) > 0
         ? `En büyük iyileştirme alanı ${biggest.name}: MWh başına ${nf(biggest.unitCostTl, 0)} TL; ${
@@ -832,7 +833,10 @@ export async function exportPlantReportPptx(
   // ---------------------------------------------------------------------------------------------
   if (r.sector) {
     const sec = r.sector;
-    const TECH_TR: Record<string, string> = { RES: "Rüzgâr", GES: "Güneş" };
+    const TECH_TR: Record<string, string> = { RES: "Rüzgâr", GES: "Güneş", HES: "Hidro" };
+    /** Satır adı: hidroda alt tip ("Hidro · barajlı") */
+    const rowName = (t: { type: string; kind?: string }) =>
+      `${TECH_TR[t.type] ?? t.type}${t.kind === "RESERVOIR" ? " · barajlı" : t.kind === "RUN_OF_RIVER" ? " · nehir tipi" : ""}`;
     const main = [...sec.types].sort((a, b) => b.plants.length - a.plants.length)[0];
     const diffPct = ((main.portfolioUnitTl - main.unitImbalanceTl.median) / main.unitImbalanceTl.median) * 100;
     const better = 100 - main.portfolioRankPct;
@@ -844,11 +848,11 @@ export async function exportPlantReportPptx(
     const title = split
       ? `Portföy ikiye ayrılıyor: ${topQ} santral sektörün en iyi çeyreğinde, ${bottomQ} santral en kötü çeyreğinde`
       : diffPct >= 0
-        ? `${TECH_TR[main.type] ?? main.type} santralleriniz MWh başına ${nf(main.portfolioUnitTl, 0)} TL ile sektör medyanının %${nf(diffPct, 0)} üstünde; sektörün yalnızca %${nf(better, 0)} kadarından iyi`
-        : `${TECH_TR[main.type] ?? main.type} santralleriniz MWh başına ${nf(main.portfolioUnitTl, 0)} TL ile sektör medyanının %${nf(-diffPct, 0)} altında; sektörün %${nf(better, 0)} kadarından iyi`;
+        ? `${rowName(main)} santralleriniz MWh başına ${nf(main.portfolioUnitTl, 0)} TL ile sektör medyanının %${nf(diffPct, 0)} üstünde; sektörün yalnızca %${nf(better, 0)} kadarından iyi`
+        : `${rowName(main)} santralleriniz MWh başına ${nf(main.portfolioUnitTl, 0)} TL ile sektör medyanının %${nf(-diffPct, 0)} altında; sektörün %${nf(better, 0)} kadarından iyi`;
     const s = contentSlide("Sektörle kıyaslama", title, "exact");
     s.addNotes(
-      `Kıyaslama, EPİAŞ'ta üretimi yayımlanan tüm lisanslı ${sec.types.map((t) => TECH_TR[t.type] ?? t.type).join(" ve ").toLocaleLowerCase("tr-TR")} santrallerinin ${sec.label} verisiyle, aynı yöntemle yapıldı. ` +
+      `Kıyaslama, EPİAŞ'ta üretimi yayımlanan tüm lisanslı ${Array.from(new Set(sec.types.map((t) => TECH_TR[t.type] ?? t.type))).join(" ve ").toLocaleLowerCase("tr-TR")} santrallerinin ${sec.label} verisiyle, aynı yöntemle yapıldı. ` +
         "Santraller tek başına karşılaştırılır; bu, tahmin kalitesinin kıyaslamasıdır. Bant sektörün orta %80'ini, koyu kısım orta %50'sini gösterir. " +
         "Gelebilecek soru: 'Santrallerimiz farklı bölgelerde, kıyas adil mi?' Cevap: Bölge ve rüzgâr rejimi etkiler; bu yüzden tek santrale değil portföy ortalamasına ve dağılımdaki yerine bakın."
     );
@@ -863,8 +867,10 @@ export async function exportPlantReportPptx(
       const lo = Math.max(0, Math.min(...vals) * 0.9);
       const hi = Math.max(...vals) * 1.05;
       const xOf = (v: number) => left + ((v - lo) / (hi - lo)) * width;
-      const bandY = top + 0.95;
-      text(s, TECH_TR[t.type] ?? t.type, { x: M, y: bandY - 0.2, w: 1.5, h: 0.4, fontSize: 15, bold: true, fontFace: FONT_HEAD });
+      // 4 ve daha çok satırda (hidro alt tipleri) sıkışık yerleşim: etiketler üçgenin yanında, özet satırı bandın hemen altında
+      const compact = rowH < 1.3;
+      const bandY = top + (compact ? 0.62 : 0.95);
+      text(s, rowName(t), { x: M, y: bandY - 0.2, w: 1.5, h: 0.4, fontSize: t.kind ? 12 : 15, bold: true, fontFace: FONT_HEAD, fit: "shrink" });
       text(s, `${d.count} santral`, { x: M, y: bandY + 0.18, w: 1.5, h: 0.3, fontSize: 10, color: C.sub });
       // Bandın dışında kalan santraller (P10 altı / P90 üstü) boşlukta asılı görünmesin diye tüm ölçek boyunca ince eksen
       s.addShape(pptx.ShapeType.line, { x: left, y: bandY, w: width, h: 0, line: { color: "C9D1DA", width: 0.75 } });
@@ -884,9 +890,10 @@ export async function exportPlantReportPptx(
       const numbered = listRoom >= perCol * 0.17;
       // Portföy ortalaması: bandın üstünde üçgen (numara yoksa banda daha yakın)
       const px = xOf(t.portfolioUnitTl);
-      const triY = numbered ? bandY - 0.72 : bandY - 0.42;
+      const triY = numbered ? bandY - 0.72 : compact ? bandY - 0.36 : bandY - 0.42;
       s.addShape(pptx.ShapeType.triangle, { x: px - 0.12, y: triY, w: 0.24, h: 0.2, fill: { color: C.risk }, line: { color: C.risk, width: 0 }, rotate: 180 });
-      text(s, `Portföyünüz ${nf(t.portfolioUnitTl, 0)} TL`, { x: px - 1.2, y: triY - 0.28, w: 2.4, h: 0.26, fontSize: 10, bold: true, align: "center", color: C.risk });
+      if (compact) text(s, `Portföyünüz ${nf(t.portfolioUnitTl, 0)} TL`, { x: px + 0.16, y: triY - 0.02, w: 2.4, h: 0.24, fontSize: 10, bold: true, align: "left", color: C.risk });
+      else text(s, `Portföyünüz ${nf(t.portfolioUnitTl, 0)} TL`, { x: px - 1.2, y: triY - 0.28, w: 2.4, h: 0.26, fontSize: 10, bold: true, align: "center", color: C.risk });
       // Santraller: noktalar ve üstünde sıra numarası (yakın noktalarda numaralar iki sıraya dağılır)
       const dots = numbered ? shown : tPlants;
       dots.forEach((p, pi) => {
@@ -905,7 +912,7 @@ export async function exportPlantReportPptx(
           `${tPlants.length} santral: ${best} tanesi en iyi çeyrekte, ${worstQ} tanesi en kötü çeyrekte · en yüksek: ${worst2
             .map((p) => `${p.name} ${nf(p.unitTl, 0)} TL`)
             .join(", ")}`,
-          { x: left, y: bandY + 0.42, w: width, h: 0.22, fontSize: 9, color: C.sub, valign: "middle" }
+          { x: left, y: bandY + (compact ? 0.46 : 0.42), w: width, h: 0.22, fontSize: 9, color: C.sub, valign: "middle" }
         );
         return;
       }

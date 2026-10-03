@@ -20,6 +20,9 @@ export const SECTOR_TECHS: SectorTech[] = ["RES", "GES", "HES"];
 /** Hidro alt tipi (tahmini): barajlı (üretimini fiyata göre kaydırabilen) ya da nehir tipi (akışa bağlı) */
 export type HydroKind = "RESERVOIR" | "RUN_OF_RIVER";
 
+/** Hidro alt tipinin görünen adı */
+export const HYDRO_KIND_LABEL: Record<HydroKind, string> = { RESERVOIR: "Barajlı", RUN_OF_RIVER: "Nehir tipi" };
+
 export interface SectorPlantMetrics {
   epiasPlantId: number;
   name: string;

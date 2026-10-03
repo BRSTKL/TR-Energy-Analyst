@@ -35,7 +35,7 @@ export interface ProjectKpis {
   unitLoadTl: number;
   /** 2026 kurallarıyla (en az 6 ay veri) */
   riskPremium: { expectedTlPerMwh: number; p90MonthTlPerMwh: number } | null;
-  sector: Array<{ type: string; unitTl: number; rankPct: number }>;
+  sector: Array<{ type: string; kind?: string; unitTl: number; rankPct: number }>;
   yekdem: { inYekdem: number; exiting: number; staying: number; unknown: number };
   worstPlant: { name: string; type: string; unitCostTl: number } | null;
   /** Ayı eksik santraller ("Boreas 1 Enez RES: Temmuz 2025 yok"); boşsa veri tam */
@@ -76,7 +76,7 @@ export async function projectKpis(projectId: string): Promise<ProjectKpis | null
     riskPremium: r.riskPremium
       ? { expectedTlPerMwh: r.riskPremium.portfolio.expectedTlPerMwh, p90MonthTlPerMwh: r.riskPremium.portfolio.p90MonthTlPerMwh }
       : null,
-    sector: (r.sector?.types ?? []).map((t) => ({ type: t.type, unitTl: t.portfolioUnitTl, rankPct: t.portfolioRankPct })),
+    sector: (r.sector?.types ?? []).map((t) => ({ type: t.type, ...(t.kind ? { kind: t.kind } : {}), unitTl: t.portfolioUnitTl, rankPct: t.portfolioRankPct })),
     yekdem: {
       inYekdem: r.yekdem?.plantNames.length ?? 0,
       // YEKDEM'den çıkış geliri etkiler (YEK fiyatı yerine PTF), dengesizliği etkilemez

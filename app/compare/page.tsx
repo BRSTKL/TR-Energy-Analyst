@@ -115,7 +115,7 @@ const METRICS: Metric[] = [
     hint: "Santral bazında MWh başına dengesizlik; yalnızca rüzgâr ve güneş",
     text: (k) =>
       k.sector.length
-        ? k.sector.map((s) => `${TECH[s.type] ?? s.type}: ${nf(s.unitTl)} TL/MWh, sektörün %${Math.round(100 - s.rankPct)} kadarından iyi`).join(" · ")
+        ? k.sector.map((s) => `${TECH[s.type] ?? s.type}${s.kind === "RESERVOIR" ? " (barajlı)" : s.kind === "RUN_OF_RIVER" ? " (nehir tipi)" : ""}: ${nf(s.unitTl)} TL/MWh, sektörün %${Math.round(100 - s.rankPct)} kadarından iyi`).join(" · ")
         : `Sektör karnesi ${k.period ? k.period.start.slice(0, 4) : ""} için henüz toplanmadı`,
   },
   {

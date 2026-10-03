@@ -21,7 +21,7 @@ import { detectOutages, markConcurrent, type PlantOutages } from "@/lib/analysis
 import { analyzeDsgScenario, MAX_EXACT_PLANTS } from "@/lib/analysis/dsg-scenarios";
 import { combineBacktests, MIN_FEASIBLE_LAG_HOURS, persistenceStrategy, runBacktest } from "@/lib/analysis/backtest";
 import { KUPST_REGIMES, kupstCommunityHours, kupstCommunityTotal, kupstForHour, kupstTotal } from "@/lib/calculations/kupst";
-import { percentileRank, quantile, type Distribution } from "@/lib/sector/benchmark";
+import { classifyHydro, percentileRank, quantile, type Distribution, type HydroKind } from "@/lib/sector/benchmark";
 import type { ProjectHourly } from "@/lib/services/project-hourly";
 import { peerGroup, type AggregatorBenchmarkRow } from "@/lib/analysis/aggregator-benchmark";
 
@@ -109,7 +109,10 @@ export interface ReportContext {
     year: number;
     /** "2025" ya da "2026 (Ocak–Ağustos)" */
     label?: string;
+    /** Teknoloji ("RES", "GES", "HES") ve hidro alt tipi ("HES:RESERVOIR", "HES:RUN_OF_RIVER") başına dağılım */
     byType: Partial<Record<string, { unitImbalanceTl: Distribution; unitKupstTl: Distribution; values: number[]; kupstValues: number[] }>>;
+    /** Karnedeki hidro santrallerin alt tipi (EPİAŞ santral kimliği → tip); karnede olmayan santralin tipi kendi serisinden tahmin edilir */
+    hydroKindById?: Record<number, HydroKind | null>;
   };
   /** Toplayıcılar arası kıyas (scripts/aggregator-benchmark.mts; PLAN 8.7) */
   aggregatorBenchmark?: {
@@ -162,6 +165,8 @@ export interface PlantReportData {
     label: string;
     types: Array<{
       type: string;
+      /** Hidroda alt tip: santraller kendi alt tipindeki sektör dağılımıyla kıyaslanır (yoksa bütün hidrolarla) */
+      kind?: HydroKind;
       unitImbalanceTl: Distribution;
       unitKupstTl: Distribution;
       /** Şirketin bu teknolojideki santrallerinin üretim ağırlıklı MWh başına dengesizliği (santral bazında) */
@@ -802,14 +807,43 @@ export function buildPlantReport(
   const sectorCtx = context.sector;
   if (sectorCtx && sectorCtx.year === new Date(start).getUTCFullYear()) {
     const types: NonNullable<PlantReportData["sector"]>["types"] = [];
+    // Hidro santralin alt tipi: karnedeki tip (aynı yöntem, aynı dönem); karnede yoksa kendi saatlik serisinden
+    const hydroKindOf = (name: string): HydroKind | null => {
+      const w = withData.find((x) => x.plantName === name);
+      if (!w) return null;
+      const known = w.epiasPlantId !== null ? sectorCtx.hydroKindById?.[w.epiasPlantId] : undefined;
+      return known !== undefined ? known : classifyHydro(w.plantName, w.hourly);
+    };
+    // Satır = (teknoloji, hidroda alt tip). Hidroda alt tipi bilinen santraller kendi alt tipinin dağılımıyla; bilinmeyenler
+    // bütün hidrolarla kıyaslanır. Alt tip dağılımı yeterince büyük değilse (< 10 santral) genel hidro dağılımı kullanılır.
+    type Group = { type: string; kind?: HydroKind; dist: NonNullable<(typeof sectorCtx.byType)[string]>; own: typeof plants };
+    const groups: Group[] = [];
     for (const [type, d] of Object.entries(sectorCtx.byType)) {
-      if (!d || d.values.length < 10) continue;
+      if (type.includes(":") || !d || d.values.length < 10) continue;
       const own = plants.filter((p) => p.type === type && p.actualMwh > 0);
       if (own.length === 0) continue;
+      if (type !== "HES") {
+        groups.push({ type, dist: d, own });
+        continue;
+      }
+      const rest: typeof own = [];
+      for (const kind of ["RESERVOIR", "RUN_OF_RIVER"] as HydroKind[]) {
+        const kd = sectorCtx.byType[`HES:${kind}`];
+        const kOwn = own.filter((p) => hydroKindOf(p.name) === kind);
+        if (kd && kd.values.length >= 10 && kOwn.length > 0) groups.push({ type, kind, dist: kd, own: kOwn });
+        else rest.push(...kOwn);
+      }
+      rest.push(...own.filter((p) => hydroKindOf(p.name) === null));
+      // Alt tipi belirsiz santraller yalnızca en az 3 tane ise ayrı satır olur (tek santralik satır slaytı kalabalıklaştırır)
+      if (rest.length >= 3) groups.push({ type, dist: d, own: rest });
+    }
+    for (const g of groups) {
+      const { type, kind, dist: d, own } = g;
       const mwh = own.reduce((a, p) => a + p.actualMwh, 0);
       const portfolioUnitTl = own.reduce((a, p) => a + p.imbalanceCostTl, 0) / mwh;
       types.push({
         type,
+        ...(kind ? { kind } : {}),
         unitImbalanceTl: d.unitImbalanceTl,
         unitKupstTl: d.unitKupstTl,
         portfolioUnitTl,

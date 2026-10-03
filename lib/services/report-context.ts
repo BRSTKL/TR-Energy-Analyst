@@ -11,7 +11,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { companyPlantIdsFromCache, listUevmPowerPlants } from "@/lib/services/epias-plants";
 import { loadSectorBenchmark } from "@/lib/services/sector";
-import { SECTOR_TECHS, sectorPeriodLabel } from "@/lib/sector/benchmark";
+import { SECTOR_TECHS, distribution, sectorPeriodLabel, type HydroKind } from "@/lib/sector/benchmark";
 import type { ReportContext } from "@/lib/report/plant-report";
 
 /** Kontrol için gereken santral bilgisi (saatlik veri gerekmez) */
@@ -98,5 +98,18 @@ async function loadSectorContext(year: number): Promise<ReportContext["sector"]>
       kupstValues: ps.map((p) => p.unitKupstTl),
     };
   }
-  return { year: bench.year, label: sectorPeriodLabel(bench), byType };
+  // Hidro alt tipleri: barajlı ve nehir tipi kendi dağılımlarıyla (proje karşılaştırmasında santral kendi alt tipiyle kıyaslanır)
+  const hydroKindById: Record<number, HydroKind | null> = {};
+  for (const p of bench.plants) if (p.type === "HES") hydroKindById[p.epiasPlantId] = p.hydroKind ?? null;
+  for (const kind of ["RESERVOIR", "RUN_OF_RIVER"] as HydroKind[]) {
+    const ps = bench.plants.filter((p) => p.type === "HES" && p.hydroKind === kind);
+    if (ps.length < 10) continue;
+    byType[`HES:${kind}`] = {
+      unitImbalanceTl: distribution(ps.map((p) => p.unitImbalanceTl)),
+      unitKupstTl: distribution(ps.map((p) => p.unitKupstTl)),
+      values: ps.map((p) => p.unitImbalanceTl),
+      kupstValues: ps.map((p) => p.unitKupstTl),
+    };
+  }
+  return { year: bench.year, label: sectorPeriodLabel(bench), byType, hydroKindById };
 }
