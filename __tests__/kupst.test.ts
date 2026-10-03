@@ -49,3 +49,37 @@ describe("KÜPST son KGÜP ile", () => {
     expect(kupstForHour({ ...base, forecastFinalMwh: null }, "RES", r2026)).toBeCloseTo(750, 6);
   });
 });
+
+describe("KÜPST · toplayıcı topluluğu (EPDK 14029 / 13025 md. 4)", () => {
+  const T26 = new Date(Date.UTC(2026, 5, 1, 12));
+  const plant = (type: string, forecast: number, actual: number, capacityMw: number, t = T26) => ({
+    hourly: [hour(t, forecast, actual)],
+    plantType: type,
+    capacityMw,
+  });
+
+  it("ters sapmalar topluluk biriminde netleşir; santral bazında ayrı ayrı KÜPST doğardı", async () => {
+    const { kupstCommunityTotal, kupstTotal } = await import("@/lib/calculations/kupst");
+    const a = plant("RES", 100, 60, 50); // −40
+    const b = plant("RES", 100, 140, 50); // +40
+    expect(kupstCommunityTotal([a, b])).toBe(0);
+    expect(kupstTotal(a.hourly, "RES") + kupstTotal(b.hourly, "RES")).toBeGreaterThan(0);
+  });
+
+  it("tolerans kurulu güce göre ağırlıklandırılır; fiyat katsayısı topluluk için 2026'da 0,05, 2025'te 0,03", async () => {
+    const { kupstCommunityTotal } = await import("@/lib/calculations/kupst");
+    // RES %15 (75 MW) ve HES %5 (25 MW): ağırlıklı tolerans = 0,15×0,75 + 0,05×0,25 = 0,125
+    // toplam plan 200, toplam gerçekleşen 140: sapma 60, tolerans 25 → 35 MWh × 2400 × 0,05
+    const parts = [plant("RES", 100, 70, 75), plant("HES", 100, 70, 25)];
+    expect(kupstCommunityTotal(parts)).toBeCloseTo(35 * 2400 * 0.05, 6);
+    // 2025: tolerans %17 / %5 → 0,17×0,75 + 0,05×0,25 = 0,14 → 60 − 28 = 32 MWh × 2400 × 0,03
+    const t25 = new Date(Date.UTC(2025, 5, 1, 12));
+    expect(kupstCommunityTotal([plant("RES", 100, 70, 75, t25), plant("HES", 100, 70, 25, t25)])).toBeCloseTo(32 * 2400 * 0.03, 6);
+  });
+
+  it("tek santral topluluğu münferit hesapla aynı tolerans için tutarlı (katsayı topluluk katsayısı)", async () => {
+    const { kupstCommunityTotal } = await import("@/lib/calculations/kupst");
+    const p = plant("RES", 100, 70, 10);
+    expect(kupstCommunityTotal([p])).toBeCloseTo(15 * 2400 * 0.05, 6);
+  });
+});

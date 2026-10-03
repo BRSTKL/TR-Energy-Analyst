@@ -20,7 +20,7 @@ import { describeAggregatorScope } from "@/lib/projects/aggregator";
 import { detectOutages, markConcurrent, type PlantOutages } from "@/lib/analysis/outage-detection";
 import { analyzeDsgScenario, MAX_EXACT_PLANTS } from "@/lib/analysis/dsg-scenarios";
 import { combineBacktests, MIN_FEASIBLE_LAG_HOURS, persistenceStrategy, runBacktest } from "@/lib/analysis/backtest";
-import { KUPST_REGIMES, kupstForHour, kupstTotal } from "@/lib/calculations/kupst";
+import { KUPST_REGIMES, kupstCommunityHours, kupstCommunityTotal, kupstForHour, kupstTotal } from "@/lib/calculations/kupst";
 import { percentileRank, quantile, type Distribution } from "@/lib/sector/benchmark";
 import type { ProjectHourly } from "@/lib/services/project-hourly";
 import { peerGroup, type AggregatorBenchmarkRow } from "@/lib/analysis/aggregator-benchmark";
@@ -690,7 +690,13 @@ export function buildPlantReport(
       }));
       const shapley = analyzeDsgScenario(inputs, inputs.map((i) => i.plantId), data.profile).allocation?.find((a) => a.id === "shapley");
       if (shapley) {
-        const kupstOf = new Map(plants.map((r) => [r.name, r.kupstTl]));
+        // Toplayıcıda KÜPST topluluk bazındadır (md. 4): üyelere, tek başına KÜPST'leriyle orantılı paylaştırılır (toplam korunur)
+        const sumK = plants.reduce((a, r) => a + r.kupstTl, 0);
+        const communityK = data.aggregator
+          ? kupstCommunityTotal(withData.map((p) => ({ hourly: p.hourly, plantType: p.plantType, capacityMw: p.capacityMw })))
+          : null;
+        const kScale = communityK !== null && sumK > 0 ? communityK / sumK : 1;
+        const kupstOf = new Map(plants.map((r) => [r.name, r.kupstTl * kScale]));
         fairShare = {
           basis,
           members: shapley.shares.map((sh) => {
@@ -738,8 +744,13 @@ export function buildPlantReport(
 
   // KÜPST: santral bazında; 2026 projeksiyonu en güncel yürürlükteki oranlarla
   const latestKupst = KUPST_REGIMES[KUPST_REGIMES.length - 1];
-  const kupstOf = (ps: Plant[]) => ps.reduce((sum, p) => sum + kupstTotal(p.hourly, p.plantType), 0);
-  const kupstNextOf = (ps: Plant[]) => ps.reduce((sum, p) => sum + kupstTotal(p.hourly, p.plantType, latestKupst), 0);
+  // Toplayıcı portföyünde KÜPST topluluk (portföy) birimi bazındadır (DUY md. 110, EPDK 14029 / 13025 md. 4): sapmalar
+  // netleşir, tolerans kurulu güce göre ağırlıklıdır. Diğer projelerde santral (UEVÇB) bazında.
+  const community = !!data.aggregator;
+  const communityOf = (ps: Plant[]) => ps.map((p) => ({ hourly: p.hourly, plantType: p.plantType, capacityMw: p.capacityMw }));
+  const kupstOf = (ps: Plant[]) => (community ? kupstCommunityTotal(communityOf(ps)) : ps.reduce((sum, p) => sum + kupstTotal(p.hourly, p.plantType), 0));
+  const kupstNextOf = (ps: Plant[]) =>
+    community ? kupstCommunityTotal(communityOf(ps), latestKupst) : ps.reduce((sum, p) => sum + kupstTotal(p.hourly, p.plantType, latestKupst), 0);
   const pre2026 = start < REGIME_2026_START;
   const kupst = { totalTl: kupstOf(withData), next2026Tl: pre2026 ? kupstNextOf(withData) : null };
 
@@ -757,8 +768,15 @@ export function buildPlantReport(
   let riskPremium: PlantReportData["riskPremium"] = null;
   if (monthly.length >= 6) {
     const latestProfile: ImbalancePricingProfile = { mode: "CUSTOM", ...COEF_2026 };
-    const kupstMonthly = (ps: Plant[]) => {
+    const kupstMonthly = (ps: Plant[], asCommunity = false) => {
       const m = new Map<string, number>();
+      if (asCommunity) {
+        for (const [t, v] of Array.from(kupstCommunityHours(communityOf(ps), latestKupst).entries())) {
+          const key = new Date(t).toISOString().slice(0, 7);
+          m.set(key, (m.get(key) ?? 0) + v);
+        }
+        return m;
+      }
       for (const p of ps)
         for (const h of p.hourly) {
           const key = new Date(h.timestamp).toISOString().slice(0, 7);
@@ -768,7 +786,7 @@ export function buildPlantReport(
     };
     riskPremium = {
       rules: `2026 kuralları: sistemle aynı yönde %6 katsayı, KÜPST ${latestKupst.label}`,
-      portfolio: riskPremiumOf(settleByCompany(withData, latestProfile), kupstMonthly(withData)),
+      portfolio: riskPremiumOf(settleByCompany(withData, latestProfile), kupstMonthly(withData, community)),
       plants: withData
         .map((p) => ({
           name: p.plantName,
@@ -979,11 +997,27 @@ export function buildPlantReport(
             const g = hourCost(d, h) - hourCost(d * sc, h);
             standaloneGain += g;
             gainByPlant.set(p.plantName, (gainByPlant.get(p.plantName) ?? 0) + g);
-            // KÜPST son plana göre: son plandan sapma da aynı oranda küçültülür
-            const kup = h.forecastFinalMwh ?? h.forecastMwh;
-            kupstGain += kupstForHour(h, p.plantType) - kupstForHour({ ...h, actualMwh: kup + (h.actualMwh - kup) * sc }, p.plantType);
+            // KÜPST son plana göre: son plandan sapma da aynı oranda küçültülür (santral bazında; toplayıcıda aşağıda topluluk bazında)
+            if (!community) {
+              const kup = h.forecastFinalMwh ?? h.forecastMwh;
+              kupstGain += kupstForHour(h, p.plantType) - kupstForHour({ ...h, actualMwh: kup + (h.actualMwh - kup) * sc }, p.plantType);
+            }
           }
         }
+      }
+      if (community) {
+        const improved = communityOf(withData).map((cp, i) => {
+          const sc = scale.get(withData[i].plantName) ?? 1;
+          if (sc >= 1) return cp;
+          return {
+            ...cp,
+            hourly: cp.hourly.map((h) => {
+              const kup = h.forecastFinalMwh ?? h.forecastMwh;
+              return { ...h, actualMwh: kup + (h.actualMwh - kup) * sc };
+            }),
+          };
+        });
+        kupstGain = kupstCommunityTotal(communityOf(withData)) - kupstCommunityTotal(improved);
       }
       let nettedGain = 0;
       for (const u of Array.from(units.values())) for (const b of Array.from(u.values())) nettedGain += hourCost(b.now, b.h) - hourCost(b.improved, b.h);

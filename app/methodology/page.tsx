@@ -15,7 +15,7 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.6";
+const VERSION = "1.7";
 const VERSION_DATE = "30 Eylül 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
@@ -259,12 +259,16 @@ KÜPST (saat) = KÜPSM × max(PTF, SMF) × n                n: fiyat katsayısı
               ]}
             />
             <p>
-              KÜP, gün içi piyasası kapandıktan sonraki son KGÜP&apos;tür. KÜPST santral (uzlaştırma birimi) bazında hesaplanır; şirket ya da
-              toplayıcı portföyünde netleşmez. Toleransın plana oranlandığı
-              varsayılmıştır (resmi formül görsel olarak yayımlanmıştır). Arıza kayıtları açık veride olmadığından arıza sayısına bağlı katsayı
-              artışı uygulanmaz: hesap bir alt sınırdır. 2026 değerleri EPDK kurul kararı taslağından alınmıştır (nihai karar sayısı
-              görülmedi). 2026&apos;da hem tolerans genişler hem katsayı 0,03&apos;ten 0,05&apos;e çıkar; toleransı aşan sapmanın bedeli artar.
-              Bu nedenlerle KÜPST her yerde <Tag kind="estimate" /> olarak etiketlenir.
+              KÜP, gün içi piyasası kapandıktan sonraki son KGÜP&apos;tür. Resmî formül (EPDK 14029 md. 1): KÜPSM = |UEVM − BUDÜP| − m × BUDÜP;
+              BUDÜP = KUDÜP + (yük alma − yük atma talimatı) + sekonder ve sınırlı frekans terimleri; talimat ve yan hizmet terimleri
+              açık veride santral bazında olmadığından sıfır alınır. Toleransın plana (BUDÜP) oranlandığı formül metninden doğrulandı.
+              <b>Kapsam:</b> bir şirketin santralleri için KÜPST santral (uzlaştırma birimi) bazında hesaplanır ve şirket içinde
+              netleşmez. <b>Toplayıcı portföyünde</b> ise md. 4 uyarınca KÜPST topluluk için oluşturulan uzlaştırma birimi (portföy)
+              bazındadır: toplam UEVM ile toplam KÜP karşılaştırılır (santraller arası sapmalar netleşir), tolerans kaynak türlerinin
+              işletmedeki kurulu gücüne göre ağırlıklandırılır ve fiyat katsayısı topluluk içindir (2025&apos;te 0,03; 2026&apos;da 0,05).
+              Arıza kayıtları açık veride olmadığından arıza sayısına bağlı katsayı artışı uygulanmaz: hesap bir alt sınırdır.
+              2026&apos;da hem tolerans genişler hem katsayı 0,03&apos;ten 0,05&apos;e çıkar. Bu nedenlerle KÜPST her yerde{" "}
+              <Tag kind="estimate" /> olarak etiketlenir.
             </p>
             <p>
               <b>Sapma yükü</b> = dengesizlik riski + tahmini KÜPST. Raporda &quot;santralin plandan sapmasının toplam bedeli&quot; olarak
@@ -572,8 +576,8 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
                 ],
                 [
                   "2026 fiyat kuralları: taban V = 150 TL, negatif fiyat B = 100 TL, azami fiyatta AFL × 1,05, 15 dakikalık SMF (SMF_N / SMF_P)",
-                  "Dengeleme ve Uzlaştırma Yönetmeliği md. 110/1–2 (RG 29.12.2025, 33122; yürürlük 1.1.2026); formül EPDK taslak metninden okundu",
-                  <span key="s2b" className={STATUS_STYLE.verified}>doğrulandı (yönetmelik ve taslak metni, EPİAŞ resmi tutarlarıyla)</span>,
+                  "Dengeleme ve Uzlaştırma Yönetmeliği md. 110/1–2 (RG 29.12.2025, 33122, değişiklik md. 17; yürürlük 1.1.2026)",
+                  <span key="s2b" className={STATUS_STYLE.verified}>doğrulandı (yönetmelik metni ve EPİAŞ resmi tutarlarıyla)</span>,
                 ],
                 [
                   "Resmi dengesizlik fiyatı",
@@ -583,33 +587,32 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
                 [
                   "2026'dan itibaren k ve l değerleri (açık: k %6, l %3; fazla: k %3, l %6; denge: %3)",
                   <span key="3">
-                    EPDK, &quot;k ve l katsayılarının 1/1/2026 tarihinden itibaren belirlenmesine ilişkin Kurul Kararı Taslağı&quot;,{" "}
-                    <a className="text-indigo-700 underline" href="https://www.epdk.gov.tr/Detay/Icerik/4-16180/elektrik-piyasasina-iliskin-cesitli-mevzuatlarda-" target="_blank" rel="noreferrer">
-                      epdk.gov.tr
+                    EPDK, 11/12/2025 tarihli ve 14030 sayılı Kurul Kararı (RG 29.12.2025, 33122; uygulama 01/01/2026 teslim gününden),{" "}
+                    <a className="text-indigo-700 underline" href="https://www.resmigazete.gov.tr/eskiler/2025/12/20251229-18.pdf" target="_blank" rel="noreferrer">
+                      resmigazete.gov.tr
                     </a>
                   </span>,
-                  <span key="s3" className={STATUS_STYLE.source}>taslak metni doğrulandı; nihai kurul kararının sayısı görülmedi</span>,
+                  <span key="s3" className={STATUS_STYLE.verified}>doğrulandı (karar metni)</span>,
                 ],
                 [
-                  "KÜPST formülü; kaynak bazlı katsayı yetkisi; toplayıcı portföyünde KÜPST",
-                  "Dengeleme ve Uzlaştırma Yönetmeliği md. 110 (3)–(6)",
+                  "KÜPST formülü; kaynak bazlı katsayı yetkisi",
+                  "Dengeleme ve Uzlaştırma Yönetmeliği md. 110 (3)–(6); formül ve toplayıcıda topluluk bazı: EPDK 13025 ve 14029 md. 1 ve 4",
                   <span key="s4a" className={STATUS_STYLE.verified}>doğrulandı (yönetmelik metni)</span>,
                 ],
                 [
-                  "KÜPST 2025: tolerans %17 / %10 / %5, katsayı 0,03",
+                  "KÜPST 2025: tolerans %17 / %10 / %5, katsayı 0,03 (arıza ≥ 40 ise 0,05; topluluk 0,03)",
                   "EPDK 21.11.2024 tarihli, 13025 sayılı kurul kararı (RG 17.12.2024), yürürlük 01.01.2025",
                   <span key="s4" className={STATUS_STYLE.verified}>doğrulandı (karar metni)</span>,
                 ],
                 [
-                  "KÜPST 2026: tolerans %15 / %8 / %5, iletimden bağlı lisanssız %20; katsayı 0,05",
+                  "KÜPST 2026: tolerans %15 / %8 / %5, iletimden bağlı lisanssız %20; katsayı 0,05 (arıza ≥ 30 ise 0,08; topluluk 0,05; depolamalı 0,10)",
                   <span key="5">
-                    EPDK, &quot;KÜPSM değerinin ve KÜPSM ile KÜPST hesaplamalarında kullanılacak katsayıların belirlenmesi hakkında kurul kararı
-                    taslağı&quot; (13025 sayılı kararı kaldırır, yürürlük 01.01.2026),{" "}
-                    <a className="text-indigo-700 underline" href="https://www.epdk.gov.tr/Detay/Icerik/4-16180/elektrik-piyasasina-iliskin-cesitli-mevzuatlarda-" target="_blank" rel="noreferrer">
-                      epdk.gov.tr
+                    EPDK, 11/12/2025 tarihli ve 14029 sayılı Kurul Kararı (13025 sayılı kararı kaldırır; RG 29.12.2025, 33122; yürürlük 01.01.2026),{" "}
+                    <a className="text-indigo-700 underline" href="https://www.resmigazete.gov.tr/eskiler/2025/12/20251229-19.pdf" target="_blank" rel="noreferrer">
+                      resmigazete.gov.tr
                     </a>
                   </span>,
-                  <span key="s5" className={STATUS_STYLE.source}>taslak metni doğrulandı; nihai karar sayısı görülmedi</span>,
+                  <span key="s5" className={STATUS_STYLE.verified}>doğrulandı (karar metni)</span>,
                 ],
                 [
                   "YEKDEM katılımcısı üretimini serbest piyasada satar; dengesizliği kendisine aittir",
@@ -636,6 +639,11 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.7",
+                  "3 Ekim 2026",
+                  "2026 kuralları Resmî Gazete'deki kararlardan doğrulandı: k ve l katsayıları 14030, KÜPST toleransları ve katsayıları 14029 sayılı karar (taslak değil nihai metin; değerler aynı). Düzeltme: toplayıcı portföyünde KÜPST, kararların md. 4'üne uygun olarak topluluk (portföy) birimi bazında, kurulu güce ağırlıklı toleransla ve topluluk katsayısıyla hesaplanır; önceden santral bazında hesaplanıyordu. Inavitas (Oca–Ağu 2026): KÜPST 59,6 M TL → 7,2 M TL, sapma yükü 306,1 M TL → 253,8 M TL. Şirket projelerinde (toplayıcı olmayan) hesap değişmedi.",
+                ],
                 [
                   "1.6",
                   "30 Eylül 2026",
