@@ -125,8 +125,14 @@ node --env-file=.env node_modules/.bin/tsx scripts/sector-collect.mts 2026 --hes
 
 Kesilirse aynı komut kaldığı yerden devam eder. `--rebuild` EPİAŞ'a gitmeden havuzdan yeniden kurar. Toplayıcı listeleri için `scripts/aggregator-collect.mts`, kıyas için `scripts/aggregator-benchmark.mts`.
 
-### Test
+### Test ve rapor denetimi
 
 ```bash
 npm test
+```
+
+Her PowerPoint raporu indirilmeden önce tutarlılık denetiminden geçer (`lib/report/report-checks.ts`): köprü kapanıyor mu, Ek A toplamları satırları tutuyor mu, aylar dönem toplamına eşit mi, netleşme ve risk primi tutarlı mı, slaytlarda bozuk değer ya da anonim sürümde gerçek ad var mı. Hata varsa indirme durur. Rapor ya da hesap koduna dokunduktan sonra bütün projelerin dört rapor sürümünü denetlemek için:
+
+```bash
+npm run check:reports
 ```

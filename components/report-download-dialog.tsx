@@ -26,6 +26,13 @@ interface Author {
 
 const EMPTY: Author = { name: "", title: "", email: "", phone: "", linkedin: "" };
 
+/** Tutarlılık denetimi bulgusu (lib/report/report-checks.ts) */
+interface AuditIssue {
+  level: "error" | "warning";
+  rule: string;
+  message: string;
+}
+
 interface ReportCheck {
   unknownOwner: string[];
   yekdemNextUnknown: string[];
@@ -65,6 +72,8 @@ export function ReportDownloadDialog({
   const [checking, setChecking] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  /** Seçilen sürümün tutarlılık denetimi: rapor üretilip köprü, tablo toplamları, aylar, netleşme ve ad sızıntısı sınanır */
+  const [audit, setAudit] = useState<{ variant: string; issues: AuditIssue[] | null; error: string | null } | null>(null);
 
   // Pencere açılınca raporun dayandığı EPİAŞ bilgilerini kontrol et
   const runCheck = () => {
@@ -79,6 +88,26 @@ export function ReportDownloadDialog({
     if (open) runCheck();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, projectId]);
+
+  // Sürüm değişince o sürümü denetle (rapor sunucuda üretilir: birkaç saniye)
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const q = new URLSearchParams({ full: "1" });
+    if (variant === "anon" || variant === "summaryAnon") q.set("anon", "1");
+    if (variant === "summary" || variant === "summaryAnon") q.set("summary", "1");
+    setAudit({ variant, issues: null, error: null });
+    fetch(`/api/projects/${projectId}/report-check?${q}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        setAudit(d.success ? { variant, issues: d.issues as AuditIssue[], error: null } : { variant, issues: null, error: d.error ?? "Denetim yapılamadı." });
+      })
+      .catch(() => !cancelled && setAudit({ variant, issues: null, error: "Denetim yapılamadı." }));
+    return () => {
+      cancelled = true;
+    };
+  }, [open, projectId, variant]);
 
   const updateEpias = async () => {
     setUpdating(true);
@@ -129,6 +158,10 @@ export function ReportDownloadDialog({
   }
   const query = params.toString();
   const href = `/api/projects/${projectId}/export/report${query ? `?${query}` : ""}`;
+  const forceHref = `/api/projects/${projectId}/export/report?${query ? `${query}&` : ""}force=1`;
+  const auditing = !audit || audit.variant !== variant || (audit.issues === null && audit.error === null);
+  const auditErrors = audit?.issues?.filter((i) => i.level === "error") ?? [];
+  const auditWarnings = audit?.issues?.filter((i) => i.level === "warning") ?? [];
 
   const remember = () => {
     try {
@@ -231,6 +264,43 @@ export function ReportDownloadDialog({
           ))}
         </fieldset>
 
+        <div className="space-y-1.5 rounded-md border border-slate-200 p-2.5">
+          <p className="text-xs font-semibold text-slate-700">Tutarlılık denetimi</p>
+          {auditing && (
+            <p className="flex items-center gap-1.5 text-xs text-slate-500">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Rapor üretilip denetleniyor…
+            </p>
+          )}
+          {!auditing && audit?.error && <p className="text-xs text-rose-700">{audit.error}</p>}
+          {!auditing && audit?.issues && auditErrors.length === 0 && (
+            <p className="flex items-start gap-1.5 text-xs text-emerald-700">
+              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              Köprü, tablo toplamları, aylık dağılım, netleşme ve bozuk değer denetimi tamam
+              {variant === "anon" || variant === "summaryAnon" ? "; gerçek ad geçmiyor" : ""}.
+            </p>
+          )}
+          {!auditing &&
+            auditErrors.map((i, k) => (
+              <p key={`e${k}`} className="flex items-start gap-1.5 text-xs text-rose-700">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {i.message}
+              </p>
+            ))}
+          {!auditing &&
+            auditWarnings.map((i, k) => (
+              <p key={`w${k}`} className="flex items-start gap-1.5 text-xs text-amber-800">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {i.message}
+              </p>
+            ))}
+          {!auditing && auditErrors.length > 0 && (
+            <p className="text-2xs text-slate-500">
+              Rapor bu haliyle çelişkili rakam içerir; indirme durduruldu. Hata uygulamadadır, lütfen bildirin.{" "}
+              <a href={forceHref} download onClick={remember} className="font-medium text-rose-700 underline">
+                Yine de indir
+              </a>
+            </p>
+          )}
+        </div>
+
         <p className="text-xs text-slate-500">
           Göndermeden önce rakamları gözden geçirin: rapor, şirketin gün içi işlemlerini ve ikili anlaşmalarını içermeyen
           açık veriye dayanır.
@@ -239,11 +309,15 @@ export function ReportDownloadDialog({
           <Button variant="outline" onClick={() => setOpen(false)}>
             İptal
           </Button>
-          <Button asChild onClick={remember}>
-            <a href={href} download>
-              İndir (.pptx)
-            </a>
-          </Button>
+          {auditing || auditErrors.length > 0 ? (
+            <Button disabled>{auditing ? "Denetleniyor…" : "İndir (.pptx)"}</Button>
+          ) : (
+            <Button asChild onClick={remember}>
+              <a href={href} download>
+                İndir (.pptx)
+              </a>
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

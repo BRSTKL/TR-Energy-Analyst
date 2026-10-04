@@ -140,6 +140,61 @@ type TextOpts = Parameters<Slide["addText"]>[1];
  * @param options.costChange aynı santrallerin önceki yıl projesiyle ayrıştırma (varsa "Ne değişti?" slaytı eklenir)
  * @param options.growth toplayıcı projelerinde hedef santraller (bağımsız; varsa "Büyüme" slaytı eklenir)
  */
+export type BridgeStepKind = "total" | "down" | "value" | "up" | "assumption" | "kupst" | "scenario" | "target";
+export interface BridgeStep {
+  label: string;
+  value: number;
+  kind: BridgeStepKind;
+}
+
+/**
+ * Sapma yükü köprüsünün (şelale) adımları. "total" ve "target" adımları seviyeyi belirler, diğerleri seviyeye eklenir;
+ * her "total" adımı kendisinden önceki adımların toplamına eşit olmalıdır (köprü kapanır). Slayt ve tutarlılık denetimi
+ * aynı fonksiyonu kullanır.
+ */
+export function buildBridgeSteps(r: PlantReportData): { steps: BridgeStep[]; loadEnd: number; imb2026: number; intradaySaving: number } {
+  const steps: BridgeStep[] = [];
+  const agg = r.aggregator;
+  const s2026 = r.coefficients2026;
+  const cost = r.totals.imbalanceCostTl;
+  const netted = r.settlement.sameCompanyNettingTl > 0.005 * r.settlement.plantLevelCostTl;
+  const intradayOn = !!r.intraday && r.intraday.savingTl > 0;
+  const k2026 = r.kupst.next2026Tl ?? r.kupst.totalTl;
+  if (agg) {
+    // Toplayıcı: aynı sahibin santralleri zaten kendi dengesinde netleşir; toplayıcının kattığı değer ayrıca gösterilir
+    // (özet slaytındaki "portföy değeri" ile aynı rakam, 8.3). Sahip içi netleşme küçükse (çoğu sahibin tek santrali var)
+    // ayrı sütun yerine köprü sahiplerin kendi dengesinden başlar: aksi halde gizlenen adım yüzünden sütunlar kapanmıyordu
+    // (Gain: 73,6 − 41,2 ≠ 32,2) ve özetteki rakamla ayrışıyordu
+    const ownerNetting = r.settlement.plantLevelCostTl - agg.standaloneCostTl;
+    if (ownerNetting > 0.005 * r.settlement.plantLevelCostTl) {
+      steps.push({ label: "Santraller tek tek uzlaştırılsaydı", value: r.settlement.plantLevelCostTl, kind: "total" });
+      steps.push({ label: "Aynı sahibin santralleri", value: -ownerNetting, kind: "down" });
+    } else {
+      steps.push({ label: "Santraller sahiplerinin kendi dengesinde", value: agg.standaloneCostTl, kind: "total" });
+    }
+    steps.push({ label: "Toplayıcının kattığı değer", value: -agg.benefitTl, kind: "value" });
+  } else if (netted) {
+    steps.push({ label: "Santraller tek tek uzlaştırılsaydı", value: r.settlement.plantLevelCostTl, kind: "total" });
+    steps.push({ label: "Şirket içi netleşme", value: -r.settlement.sameCompanyNettingTl, kind: "down" });
+  }
+  steps.push({ label: `Dengesizlik riski ${periodTag(r)}`, value: cost, kind: "total" });
+  let imb2026 = cost;
+  if (s2026) {
+    steps.push({ label: "2026 katsayı etkisi", value: s2026.deltaTl, kind: "up" });
+    imb2026 = s2026.cost2026Tl;
+    steps.push({ label: "Dengesizlik riski 2026", value: imb2026, kind: "total" });
+  }
+  steps.push({ label: "KÜPST (tahmini)", value: k2026, kind: "kupst" });
+  const loadEnd = steps.reduce((lvl, st) => (st.kind === "total" ? st.value : lvl + st.value), 0);
+  steps.push({ label: s2026 ? "Sapma yükü 2026" : "Sapma yükü", value: loadEnd, kind: "total" });
+  const intradaySaving = intradayOn ? (r.intraday!.savingPct / 100) * imb2026 : 0;
+  if (intradayOn) {
+    steps.push({ label: `Gün içi güncelleme, üst sınır (%${nf(r.intraday!.savingPct, 0)})`, value: -intradaySaving, kind: "scenario" });
+    steps.push({ label: "Ulaşılabilir", value: loadEnd - intradaySaving, kind: "target" });
+  }
+  return { steps, loadEnd, imb2026, intradaySaving };
+}
+
 export async function exportPlantReportPptx(
   r: PlantReportData,
   author: ReportAuthor = {},
@@ -459,41 +514,8 @@ export async function exportPlantReportPptx(
   // 3. SAPMA YÜKÜ KÖPRÜSÜ (şelale)
   // ---------------------------------------------------------------------------------------------
   {
-    type Step = { label: string; value: number; kind: "total" | "down" | "value" | "up" | "assumption" | "kupst" | "scenario" | "target" };
-    const steps: Step[] = [];
-    let imb2026: number;
-    if (agg) {
-      // Toplayıcı: aynı sahibin santralleri zaten kendi dengesinde netleşir; toplayıcının kattığı değer ayrıca gösterilir
-      // (özet slaytındaki "portföy değeri" ile aynı rakam, 8.3)
-      // Sahip içi netleşme küçükse (çoğu sahibin tek santrali var) ayrı sütun yerine köprü sahiplerin kendi dengesinden
-      // başlar: aksi halde gizlenen adım yüzünden sütunlar kapanmıyordu (Gain: 73,6 − 41,2 ≠ 32,2) ve özetteki rakamla ayrışıyordu
-      const ownerNetting = r.settlement.plantLevelCostTl - agg.standaloneCostTl;
-      if (ownerNetting > 0.005 * r.settlement.plantLevelCostTl) {
-        steps.push({ label: "Santraller tek tek uzlaştırılsaydı", value: r.settlement.plantLevelCostTl, kind: "total" });
-        steps.push({ label: "Aynı sahibin santralleri", value: -ownerNetting, kind: "down" });
-      } else {
-        steps.push({ label: "Santraller sahiplerinin kendi dengesinde", value: agg.standaloneCostTl, kind: "total" });
-      }
-      steps.push({ label: "Toplayıcının kattığı değer", value: -agg.benefitTl, kind: "value" });
-    } else if (netted) {
-      steps.push({ label: "Santraller tek tek uzlaştırılsaydı", value: r.settlement.plantLevelCostTl, kind: "total" });
-      steps.push({ label: "Şirket içi netleşme", value: -r.settlement.sameCompanyNettingTl, kind: "down" });
-    }
-    steps.push({ label: `Dengesizlik riski ${periodTag(r)}`, value: cost, kind: "total" });
-    imb2026 = cost;
-    if (s2026) {
-      steps.push({ label: "2026 katsayı etkisi", value: s2026.deltaTl, kind: "up" });
-      imb2026 = s2026.cost2026Tl;
-      steps.push({ label: "Dengesizlik riski 2026", value: imb2026, kind: "total" });
-    }
-    steps.push({ label: "KÜPST (tahmini)", value: k2026, kind: "kupst" });
-    const loadEnd = steps.reduce((lvl, st) => (st.kind === "total" ? st.value : lvl + st.value), 0);
-    steps.push({ label: s2026 ? "Sapma yükü 2026" : "Sapma yükü", value: loadEnd, kind: "total" });
-    const intradaySaving = intradayOn ? (r.intraday!.savingPct / 100) * imb2026 : 0;
-    if (intradayOn) {
-      steps.push({ label: `Gün içi güncelleme, üst sınır (%${nf(r.intraday!.savingPct, 0)})`, value: -intradaySaving, kind: "scenario" });
-      steps.push({ label: "Ulaşılabilir", value: loadEnd - intradaySaving, kind: "target" });
-    }
+    // Köprü adımları ayrı bir saf fonksiyonda (buildBridgeSteps): tutarlılık denetimi (lib/report/report-checks.ts) aynı adımları sınar
+    const { steps, loadEnd, intradaySaving } = buildBridgeSteps(r);
 
     const title = agg && !s2026
       ? `Toplayıcının kattığı değer ${formatTlShort(agg.benefitTl)}; ${periodTag(r)} sapma yükü ${formatTlShort(loadEnd)}`

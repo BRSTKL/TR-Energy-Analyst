@@ -16,7 +16,8 @@
     "prisma:push": "prisma db push",
     "prisma:seed": "tsx prisma/seed.ts",
     "prisma:studio": "prisma studio",
-    "db:backup": "tsx scripts/backup-db.mts"
+    "db:backup": "tsx scripts/backup-db.mts",
+    "check:reports": "tsx --tsconfig tsconfig.json scripts/check-reports.mts"
   },
   "dependencies": {
     "@prisma/client": "^5.21.1",

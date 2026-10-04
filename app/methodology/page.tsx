@@ -512,7 +512,8 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
                 ],
                 ["Maliyet ayrıştırması (Gain 2025 → 2026)", "Dört kalem farkın %97'sini açıklıyor; kalan etkileşim"],
                 ["Piyasa verisi", "2024, 2025 ve 2026 fiyatları ve resmi dengesizlik fiyatları EPİAŞ'tan; eski formatta kayıt kalmadı"],
-                ["Otomatik testler", "336 test (3.10.2026); her değişiklikte çalıştırılır"],
+                ["Otomatik testler", "342 test (4.10.2026); her değişiklikte çalıştırılır"],
+                ["Rapor tutarlılık denetimi", "Her PowerPoint raporu indirilmeden önce denetlenir: köprü kapanıyor mu, tablo toplamları satırları tutuyor mu, aylar ve ısı haritası dönem toplamına eşit mi, netleşme ve risk primi tutarlı mı, bozuk değer ya da anonim sürümde gerçek ad var mı. Hata varsa rapor verilmez. 7 projenin 28 raporu (4 sürüm) hatasız"],
               ]}
             />
           </Section>

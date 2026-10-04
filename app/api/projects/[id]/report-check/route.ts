@@ -2,15 +2,26 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { projectPeriod } from "@/lib/services/project-records";
 import { buildReportContext } from "@/lib/services/report-context";
+import { buildReportExport } from "@/lib/services/report-export";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/projects/[id]/report-check → rapor indirilmeden önce gösterilecek uyarılar (portföy eksikliği, sahibi
  * bilinmeyen santral, YEKDEM çıkışı bilinmeyen santral). Saatlik veriyi yüklemez; yalnızca santral bilgisi okunur.
+ *
+ * ?full=1[&anon=1][&summary=1] → istenen rapor sürümünü üretip tutarlılık denetiminden geçirir (lib/report/report-checks.ts)
+ * ve bulguları döndürür: { success, issues }. İndirme penceresi indirmeden önce bunu gösterir; dışa aktarma aynı denetimi
+ * yapar ve hata varsa raporu vermez.
  */
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
+    const q = new URL(request.url).searchParams;
+    if (q.get("full") === "1") {
+      const res = await buildReportExport(params.id, { anon: q.get("anon") === "1", summaryOnly: q.get("summary") === "1" });
+      if (!res) return NextResponse.json({ success: false, error: "Proje bulunamadı." }, { status: 404 });
+      return NextResponse.json({ success: true, issues: res.issues });
+    }
     const project = await prisma.project.findUnique({ where: { id: params.id }, select: { id: true, periodStart: true, periodEnd: true } });
     if (!project) return NextResponse.json({ success: false, error: "Proje bulunamadı." }, { status: 404 });
     // Verisi olan santraller: havuzdan okunanlar ya da veritabanında kaydı olanlar
