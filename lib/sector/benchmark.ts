@@ -189,8 +189,10 @@ export interface SectorBenchmark {
   generatedAt: string;
   /** Kalite süzgecinden geçen santraller */
   plants: SectorPlantMetrics[];
-  /** Kalite süzgecinde elenen santral sayısı (eksik veri, plan–gerçekleşen tutarsızlığı) */
+  /** Kalite süzgecinde elenen santral sayısı (eksik veri, plan–gerçekleşen tutarsızlığı, aşırı sapma) */
   excluded: number;
+  /** Elenenlerden sapması üretiminin DEVIATION_MAX_PCT'sini aşanlar (olası talimat ya da veri sorunu); eski dosyalarda yok */
+  excludedHighDeviation?: number;
   /** RES ve GES her zaman; HES yalnızca hidro toplandıysa */
   byType: Record<"RES" | "GES", TypeDistribution> & Partial<Record<"HES", TypeDistribution>>;
 }
@@ -211,15 +213,25 @@ export interface TypeDistribution {
  */
 export const PLAN_RATIO_RANGE = { min: 0.5, max: 2 } as const;
 
-/** Kıyaslamaya alınma şartı: yılın en az %90'ı veri, üretim var, yıllık plan/gerçekleşen oranı 0,5–2 */
+/**
+ * Net sapma hacminin (Σ|plan − gerçekleşen|) üretime oranı için üst sınır (%). Lisanslı bir santralde sapmanın üretimin
+ * %60'ını aşması tahmin hatası olamayacak kadar büyüktür: büyük barajlarda yük alma / atma (YAL/YAT) talimatı (talimatlı
+ * miktar dengeleme piyasasında uzlaşır, dengesizlik değildir; santral bazında açık veride yok) ya da plan girilmemiş saatler.
+ * Bu santraller kıyasta ve aday taramasında yapay olarak pahalı / değerli görünür (ör. Aslancık Barajı 2026: sapma %109).
+ */
+export const DEVIATION_MAX_PCT = 60;
+
+/** Kıyaslamaya alınma şartı: yılın en az %90'ı veri, üretim var, yıllık plan/gerçekleşen oranı 0,5–2, sapma üretimin en çok %60'ı */
 export function passesQuality(m: SectorPlantMetrics, expectedHours: number): boolean {
   if (m.hours < expectedHours * 0.9 || m.actualMwh <= 0) return false;
   const planToActual = 1 + m.biasPct / 100;
-  return planToActual >= PLAN_RATIO_RANGE.min && planToActual <= PLAN_RATIO_RANGE.max;
+  if (planToActual < PLAN_RATIO_RANGE.min || planToActual > PLAN_RATIO_RANGE.max) return false;
+  return m.deviationPct <= DEVIATION_MAX_PCT;
 }
 
 export function buildBenchmark(year: number, all: SectorPlantMetrics[], expectedHours: number): SectorBenchmark {
   const plants = all.filter((m) => passesQuality(m, expectedHours));
+  const highDeviation = all.filter((m) => m.deviationPct > DEVIATION_MAX_PCT && passesQuality({ ...m, deviationPct: 0 }, expectedHours)).length;
   const dist = (type: SectorTech): TypeDistribution => {
     const ps = plants.filter((p) => p.type === type);
     const w = ps.map((p) => p.actualMwh);
@@ -240,6 +252,7 @@ export function buildBenchmark(year: number, all: SectorPlantMetrics[], expected
     generatedAt: new Date().toISOString(),
     plants,
     excluded: all.length - plants.length,
+    excludedHighDeviation: highDeviation,
     byType: { RES: dist("RES"), GES: dist("GES"), ...(hasHydro ? { HES: dist("HES") } : {}) },
   };
 }

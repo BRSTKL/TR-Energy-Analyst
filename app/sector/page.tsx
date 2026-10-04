@@ -21,6 +21,8 @@ interface SectorResponse {
   label: string;
   generatedAt: string;
   excluded: number;
+  /** Elenenlerden sapması üretiminin %60'ını aşanlar (olası talimat ya da veri sorunu) */
+  excludedHighDeviation: number | null;
   /** "k1": arıza / kısıntı saatleri hariç */
   view: "all" | "k1";
   k1Available: boolean;
@@ -275,7 +277,11 @@ export default function SectorPage() {
             <p className="mt-1 max-w-3xl text-xs text-slate-600 sm:text-sm">
               EPİAŞ&apos;ta üretimi yayımlanan lisanslı {techs.map((t) => TECH_LABEL[t].toLocaleLowerCase("tr-TR")).join(", ")} santrallerinin
               MWh başına dengesizlik riski, aynı motorla ve santral tek başına uzlaştırılmış varsayımıyla (tahmin kalitesi kıyası). Dönemin en
-              az %90&apos;ında verisi olan {nf(data.plants.length)} santral; {nf(data.excluded)} santral eksik veri nedeniyle dışarıda.
+              az %90&apos;ında verisi olan {nf(data.plants.length)} santral; {nf(data.excluded)} santral dışarıda
+              {data.excludedHighDeviation
+                ? ` (${nf(data.excludedHighDeviation)} tanesi sapması üretiminin %60'ını aştığı için: olası yük alma / atma talimatı ya da veri sorunu; kalanı eksik veri ya da plan–gerçekleşen tutarsızlığı)`
+                : " (eksik veri ya da plan–gerçekleşen tutarsızlığı)"}
+              .
               {data.view === "k1" && " Olası arıza / kısıntı saatleri hariç (K1)."}
             </p>
           </div>

@@ -846,7 +846,7 @@ export async function exportPlantReportPptx(
     const bottomQ = mainPlants.filter((p) => p.rankPct >= 75).length;
     const split = mainPlants.length >= 3 && topQ > 0 && bottomQ > 0;
     const title = split
-      ? `Portföy ikiye ayrılıyor: ${topQ} santral sektörün en iyi çeyreğinde, ${bottomQ} santral en kötü çeyreğinde`
+      ? `${sec.types.length > 1 ? `${rowName(main)} santralleri` : "Portföy"} ikiye ayrılıyor: ${topQ} santral sektörün en iyi çeyreğinde, ${bottomQ} santral en kötü çeyreğinde`
       : diffPct >= 0
         ? `${rowName(main)} santralleriniz MWh başına ${nf(main.portfolioUnitTl, 0)} TL ile sektör medyanının %${nf(diffPct, 0)} üstünde; sektörün yalnızca %${nf(better, 0)} kadarından iyi`
         : `${rowName(main)} santralleriniz MWh başına ${nf(main.portfolioUnitTl, 0)} TL ile sektör medyanının %${nf(-diffPct, 0)} altında; sektörün %${nf(better, 0)} kadarından iyi`;
@@ -1877,7 +1877,7 @@ export async function exportPlantReportPptx(
           r
         )}, ${nf(r.period.hours, 0)} saat. ` +
           // Veri çekme yönteminin doğrulaması (bir kez, şirketin kendi dosyasıyla): mülakattaki "veri doğru mu?" sorusunun cevabı
-          "Doğrulama: veri çekme yöntemi bir santralde (BALABANLI RES) şirketin kendi verisiyle karşılaştırıldı; KGÜP ilk versiyonu 5.880 saatin tamamında, UEVM Mayıs–Aralık 2025 saatlerinde birebir aynı.",
+          "Doğrulama: veri çekme yöntemi bir rüzgâr santralinde şirketin kendi verisiyle karşılaştırıldı; KGÜP ilk versiyonu 5.880 saatin tamamında, UEVM Mayıs–Aralık 2025 saatlerinde birebir aynı.",
       ],
       [
         "Dengesizlik fiyatı",

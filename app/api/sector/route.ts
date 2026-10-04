@@ -49,6 +49,7 @@ export async function GET(request: Request) {
     label: sectorPeriodLabel(bench),
     generatedAt: bench.generatedAt,
     excluded: bench.excluded,
+    excludedHighDeviation: bench.excludedHighDeviation ?? null,
     view,
     k1Available,
     byType: bench.byType,

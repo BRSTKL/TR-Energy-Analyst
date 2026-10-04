@@ -26,6 +26,8 @@ describe("Sektör karnesi", () => {
     expect(m.unitImbalanceTl).toBeCloseTo(h.imbalanceCost / 8, 10);
     expect(passesQuality(m, 1)).toBe(true);
     expect(passesQuality(m, 2)).toBe(false); // verinin %50'si
+    expect(passesQuality({ ...m, deviationPct: 60 }, 1)).toBe(true);
+    expect(passesQuality({ ...m, deviationPct: 61 }, 1)).toBe(false); // olası talimat ya da veri sorunu
   });
 
   it("şirket toplamı üretim ağırlıklı, sıra santral dağılımına göre", () => {

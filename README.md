@@ -15,7 +15,7 @@ Uygulamanın kendi motoruyla, yalnızca EPİAŞ Şeffaflık Platformu verisinden
 - **Toplayıcı portföyünün değeri ölçülebilir.** 61 santrallik bir toplayıcı portföyünde santraller tek tek uzlaşsa 543 M TL olacak dengesizlik, portföyde netleşince 246 M TL'ye iniyor (%55 netleşme).
 - **Rüzgâr adaylarının %65'i zaten bir toplayıcıda.** Bir toplayıcının büyüme listesinde 364 adaydan yalnız 44'ü bağımsız hedef.
 
-Sektör karnesi (2026 Ocak–Ağustos, MWh başına dengesizlik medyanı): rüzgâr 176 TL (302 santral), güneş 147 TL (89), hidro 93 TL (660).
+Sektör karnesi (2026 Ocak–Ağustos, MWh başına dengesizlik medyanı): rüzgâr 175 TL (291 santral), güneş 143 TL (85), hidro 90 TL (635).
 
 ---
 
@@ -31,7 +31,7 @@ Sektör karnesi (2026 Ocak–Ağustos, MWh başına dengesizlik medyanı): rüzg
 | **Aday santraller** | Portföye eklendiğinde en çok netleşme kazancı sağlayacak santraller, Shapley adil prim, ulaşılabilirlik (başka toplayıcıda / grup portföyü / bağımsız hedef) |
 | **Planlama ve GİP** | Planlama verimliliği, gün×saat ısı haritası, gün içi kapatma senaryosu (2 saat gecikmeli kalıcılık testi; kusursuz öngörü yalnız "üst sınır" olarak) |
 | **Geriye dönük test** | Teklif ayarı ve GİP kurallarının eğitim/test ayrımıyla sınanması (her ay yalnız önceki aylardan öğrenir) |
-| **Sektör karnesi** `/sector` | ~1.050 lisanslı RES/GES/HES santralinin MWh başına dengesizlik dağılımı, arıza saatleri hariç görünüm, hidro alt tipleri; **30 toplayıcının** netleşme kıyası ve ayrıntı sayfaları |
+| **Sektör karnesi** `/sector` | ~1.010 lisanslı RES/GES/HES santralinin MWh başına dengesizlik dağılımı, arıza saatleri hariç görünüm, hidro alt tipleri; **30 toplayıcının** netleşme kıyası ve ayrıntı sayfaları |
 | **Metodoloji** `/methodology` | Formüller, mevzuat kaynakları (durum etiketli), varsayımlar, doğrulamalar ve sınırlar; A4 PDF olarak indirilebilir |
 
 **Çıktılar:** 16 slaytlık PowerPoint "Dengesizlik Karnesi" (tam, anonim ve tek sayfa sürümleri), toplayıcı için 1 sayfalık özet, Excel (formüllü), CSV.
@@ -59,6 +59,7 @@ Ayrıntı: uygulamadaki `/methodology` sayfası.
 
 - Yalnızca kamu verisi. Şirketlerin gün içi işlemleri, ikili anlaşmaları ve fiili uzlaştırma faturaları açık veride yok. Rakamlar "kapatılması gereken risk"tir, gerçekleşen fatura değil.
 - Dengesizlik riski ilk KGÜP'e göre (gün içi öncesi) hesaplanır. Son KGÜP'e göre portföy maliyeti %5–12 daha düşük çıkabilir.
+- Yük alma / atma (YAL/YAT) talimatları santral bazında açık veride yok. Talimatlı miktar dengesizlik sayılmadığı için, sapması üretiminin %60'ını aşan santraller (çoğu büyük baraj) karneden ve aday taramasından çıkarılır.
 - Hidro alt tipi (barajlı / nehir tipi) tahminidir. Toplayıcı dışındaki grup üyeliği tahminidir.
 - Uygulama yerel çalışmak için tasarlandı, kimlik doğrulama yok.
 

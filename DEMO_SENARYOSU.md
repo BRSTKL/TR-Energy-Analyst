@@ -2,7 +2,7 @@
 
 **Amaç:** Bir enerji şirketinin yöneticisi 3 dakikada şunu görsün: "Bu araç benim dengesizlik riskimi ölçüyor, sektörle kıyaslıyor ve ne yapacağımı söylüyor."
 
-**Proje:** Atam Enerji portföyü (12 santral, 415 MW, Oca–Ağu 2026, Atam toplayıcı). Rakamlar 3 Ekim 2026'da uygulamadan alındı ve bağımsız olarak doğrulandı.
+**Proje:** Atam Enerji portföyü (12 santral, 415 MW, Oca–Ağu 2026, Atam toplayıcı). Rakamlar 3 Ekim 2026'da uygulamadan alındı ve bağımsız olarak doğrulandı; sektör rakamları 4 Ekim'deki karne güncellemesine göre (metodoloji 1.8).
 
 **Dönemler:** Proje rakamları Ocak–Ağustos 2026. Piyasa rakamları ana sayfa ve `/market` varsayılanı olan Ocak–Eylül 2026'dır, karşılaştırma 2025'in aynı dönemiyle: makas 476 → 763 TL (+%60), sıfır fiyatlı saat 46 → 398. Ocak–Ağustos seçilirse 483 → 763 TL (+%58) ve 39 → 394 görünür. İki rakam da doğrudur, dönem farklıdır.
 
@@ -22,7 +22,7 @@
 | 0:00–0:20 | Ana sayfa `/` | Piyasa kutularını göster, işaretle: "SMF–PTF makası". | "2026'da SMF ile PTF arasındaki makas geçen yıla göre %60 açıldı: saat başına 476 TL'den 763 TL'ye. Aynı tahmin hatası artık çok daha pahalıya uzlaşıyor." |
 | 0:20–0:35 | Projelerim ya da EPİAŞ santral analizi | İsteğe bağlı: "EPİAŞ'tan santral analizi" > şirket adıyla ara > santralleri seç. VPN yoksa atlayıp doğrudan Atam kartında **Sonuç Raporu**'na tıklayın. | "Şirket adını yazıyorum, EPİAŞ'ın açık verisinden santralleri, planlarını ve üretimlerini çekiyor. Hazır bir projeyle devam ediyorum." |
 | 0:35–1:15 | Sonuç Raporu | Üst kartlardan **Sapma yükü** bloğuna kaydır. | "12 santrallik portföyün dönemlik dengesizlik riski **57,7 milyon TL**. Santraller tek tek uzlaşsaydı 108,3 olurdu: toplayıcı portföyünde fazla ve eksik üretimler birbirini dengeliyor. KÜPST ile birlikte sapma yükü 60,8 milyon TL. Sözleşme fiyatına eklenecek risk primi MWh başına **81 TL**, ihtiyatlı senaryoda 99." |
-| 1:15–1:35 | Sonuç Raporu, sektör kıyası | "Sektörle kıyaslama" kartını göster. | "Aynı yöntemle EPİAŞ'taki yaklaşık 1.050 lisanslı santrali hesapladık. Rüzgârda portföy 169 TL/MWh, sektör medyanı 176. Barajlı hidroda 59 TL ile sektör medyanının çok altında." |
+| 1:15–1:35 | Sonuç Raporu, sektör kıyası | "Sektörle kıyaslama" kartını göster. | "Aynı yöntemle EPİAŞ'taki yaklaşık 1.010 lisanslı santrali hesapladık. Rüzgârda portföy 169 TL/MWh, sektör medyanı 175. Barajlı hidroda 59 TL, sektör medyanı 92." |
 | 1:35–1:55 | Sonuç Raporu, DSG bloğu | **DSG Netleştirme** bölümüne in. | "Santraller tek tek uzlaşsa 108,3 milyon TL olacaktı, portföyde 57,7: toplam netleşme 50,6 milyon TL. Bunun 16,2 milyonu aynı sahibin santralleri arasında zaten olurdu; toplayıcının farklı sahipleri bir araya getirerek kattığı değer **34,4 milyon TL (%37)**, 8 ayın her birinde %29–46." |
 | 1:55–2:25 | Planlama > GİP Arbitraj | Sekmeyi aç, "Veriyle test" tablosunu göster. | "Gün içi piyasada hatanın bir kısmını kapatmak cazip görünüyor, ama dürüst olalım: hatayı bir saat önceden bilen bir model uygulanamaz. Gerçekçi gecikmeyle, yani 2 saat önce, kazanç %18 değil **%3** civarı. Biz bu farkı gizlemiyoruz, ekranda yan yana gösteriyoruz." |
 | 2:25–2:45 | Piyasa `/market` | Aylık makas grafiğini göster. | "Maliyetin neden arttığını piyasa sayfasından izleyebilirsiniz: makas her ay geçen yıldan geniş, sıfır fiyatlı saat 46'dan 398'e çıktı." |
@@ -42,7 +42,7 @@ Aynı santrallerin 2025 ve 2026 dönemleri iki ayrı projeyse **Karşılaştır*
 |---|---|
 | 57,7 M ₺ / 108,3 M ₺ | Sonuç sayfası, dengesizlik riski kartı |
 | 60,8 M ₺, 81 TL/MWh, 99 TL/MWh | Sapma yükü ve risk primi kartları |
-| 169 TL, 176 TL, 59 TL | Sektörle kıyaslama kartı |
+| 169 TL, 175 TL, 59 TL, 92 TL | Sektörle kıyaslama kartı |
 | 50,6 M ₺ (toplam netleşme), 34,4 M ₺ ve %29–46 (toplayıcının kattığı değer) | DSG bloğu; 34,4 ve aylık aralık raporun köprü ve özet slaytlarında |
 | %18 ve %3 | Planlama > GİP Arbitraj > "Veriyle test" |
 | 476 → 763 TL, 46 → 398 saat | Piyasa sayfası |

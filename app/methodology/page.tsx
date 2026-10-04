@@ -15,8 +15,8 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.7";
-const VERSION_DATE = "3 Ekim 2026";
+const VERSION = "1.8";
+const VERSION_DATE = "4 Ekim 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
   { id: "ozet", title: "Özet" },
@@ -389,7 +389,7 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
               şirkete değiştiği için kıyasa katılmaz.
             </p>
             <p>
-              <b>Kalite süzgeci:</b> dönem saatlerinin en az %90&apos;ında verisi olan ve plan / gerçekleşen oranı 0,5–2 arasında olan santraller
+              <b>Kalite süzgeci:</b> dönem saatlerinin en az %90&apos;ında verisi olan ve plan / gerçekleşen oranı 0,5–2 arasında olan ve net sapma hacmi üretimin %60&apos;ını aşmayan santraller
               kıyaslanır (eksik ya da bariz tutarsız veri elenir; dar aralık kötü tahmin eden santralleri de eleyip medyanı düşürdüğü için genişletildi). Dağılım santral sayısına göre P10, P25, medyan, P75 ve P90 ile, ayrıca üretim
               ağırlıklı ortalamayla verilir; santralin yeri teknoloji içindeki yüzdelik sırasıdır. <b>K1 görünümü</b> olası arıza / kısıntı saatlerini (bölüm 17) dışarıda bırakır.
             </p>
@@ -501,7 +501,7 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
               head={["Kontrol", "Sonuç"]}
               rows={[
                 [
-                  "EPİAŞ verisi ↔ şirket dosyası (BALABANLI RES)",
+                  "EPİAŞ verisi ↔ şirket dosyası (bir rüzgâr santrali)",
                   "KGÜP ilk sürümü 5.880 saatin tamamında birebir; UEVM Mayıs–Aralık 2025 saat saat eşleşti (161.893 MWh)",
                 ],
                 ["Hızlı maliyet fonksiyonu ↔ saatlik hesap", "2025 ve 2026 kuralları, iki yön, üç sistem durumunda aynı sonuç (otomatik test)"],
@@ -639,6 +639,11 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.8",
+                  "4 Ekim 2026",
+                  "Sektör karnesi kalite süzgecine sapma sınırı: net sapma hacmi üretimin %60'ını aşan santraller kıyas ve aday taramasından çıkar. Bu büyüklükte sapma tahmin hatası değildir: büyük barajlarda yük alma / atma (YAL/YAT) talimatı (talimatlı miktar dengeleme piyasasında uzlaşır; santral bazında açık veride yok) ya da plan girilmemiş saatler (ör. Aslancık Barajı 2026: sapma %109, 1.352 saat plan var üretim yok). Bu santraller aday listesinin başına çıkıyordu. 2026 (Oca–Ağu): 40 santral elendi, medyanlar rüzgâr 176 → 175, güneş 147 → 143, hidro 93 → 90 TL/MWh; 2025: 13 santral. Toplayıcılar arası kıyas güncel medyanlarla yeniden kuruldu (önceki dosya kalite süzgeci genişletilmeden önceki medyanlarla üretilmişti).",
+                ],
                 [
                   "1.7",
                   "3 Ekim 2026",
