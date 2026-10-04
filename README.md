@@ -1,160 +1,131 @@
 # TR-Energy Analyst
 
-Enerji üreticilerinin (RES/HES/GES) gün öncesi üretim tahmini (KGÖP) ile gerçekleşen üretimini kıyaslayarak dengesizlik maliyetini hesaplayan, piyasa verileriyle (PTF/SMF/Sistem Yönü) ilişkilendirip kural tabanlı strateji önerisi üreten analiz aracı.
+Türkiye elektrik piyasasında yenilenebilir santral portföylerinin (RES, GES, HES) **dengesizlik maliyetini** EPİAŞ'ın kamuya açık verisinden saat saat hesaplayan, sektörle kıyaslayan ve karar üreten bir analiz uygulaması.
+
+Soru şu: *"Bu portföyün gün öncesi planı (KGÜP) ile gerçekleşen üretimi arasındaki fark bize ne kadara mal oluyor, neden değişti, ve ne yapmalıyız?"*
 
 ---
 
-## ⚡ Temel Yetenekler
+## Kamu verisinden öne çıkan bulgular
 
-- **Saf (Pure) Hesaplama Motoru (`/lib/calculations`)**:
-  - Dışsal yan etkisi olmayan, deterministik formüller.
-  - EPİAŞ resmi asimetrik profil katsayılarıyla (SURPLUS: 0.94 / Diğer: 0.97; DEFICIT: 1.06 / Diğer: 1.03) dengesizlik fiyatlandırması.
-  - Saatlik uzlaştırma, aylık agregasyon ve yıllık ağırlıklı ortalama birim gelir/maliyet hesaplamaları.
-- **EPİAŞ Şeffaflık Platformu 2.0 Canlı Entegrasyonu (`/lib/services/epias-service.ts`)**:
-  - Resmi EPİAŞ CAS kimlik doğrulama altyapısı (TGT yönetimi ve otomatik token yenileme).
-  - Canlı REST servislerinden PTF (MCP), SMF (SMP), Sistem Yönü ve GİP AÖF (IDM WAP) çekme.
-  - 30 günlük otomatik parçalama (chunking) ile büyük tarih aralıklarını kesintisiz senkronize etme.
-  - UI üzerinden tek tıkla canlı veri çekme ve mevcut santral üretimleriyle otomatik eşleştirme (`EpiasSyncDialog`).
-- **Planlama Verimliliği & "Ne Olurdu?" Simülasyonu (`/lib/analysis/planning-efficiency.ts`)**:
-  - Fiili / Fiktif Gelir Oranı (Efficiency Ratio) ve dönemsel verimlilik sıralaması.
-  - Tahmin Yanlılığı (Forecast Bias) yönü ve tutarlılık tespiti (Aşırı / Eksik Tahmin).
-  - Ayarlanabilir hata azaltma yüzdesiyle potansiyel gelir artışı simülasyonu ve saatlik ısı haritası.
-- **GİP Arbitraj & Optimizasyon Motoru (`/lib/analysis/intraday-arbitrage.ts`)**:
-  - Gün İçi Piyasası AÖF verisiyle saatlik arbitraj fırsatı ve potansiyel tasarruf hesaplama.
-- **Kural Tabanlı İçgörü Motoru (`/lib/strategy`)**:
-  - En yüksek maliyetli saatlerin piyasa ve hata örüntüsü analizi.
-  - Teknolojiye (RES, HES, GES) ve sistem yönüne göre somut aksiyon adımları.
-  - Santraller için 0-100 portföy yönetim riski ve karlılık skorlaması.
-- **Finansal Model Standartlarında Dışa Aktarma (`/lib/export`)**:
-  - **Excel (`.xlsx`)**: Türetilmiş tüm sütunlar statik sayı yerine **gerçek dinamik formüllerle** (`=G2-F2`, `=IF(...)`) ve `SUMIFS` aylık pivotuyla yazılır.
-  - **PowerPoint (`.pptx`)**: 16:9 geniş ekran formatında 6 slaytlık kurumsal yönetici sunumu.
-- **Etkileşimli Gösterge Panelleri**:
-  - Projelerim Portföy Yönetim Ekranı (`/projects`)
-  - Karşılaştırmalı Recharts grafikleri ve sıralanabilir pivot tablo (`/projects/[id]/results`)
-  - Kritik saatler, aksiyon kartları ve portföy kıyaslama matrisi (`/projects/[id]/insights`)
+Uygulamanın kendi motoruyla, yalnızca EPİAŞ Şeffaflık Platformu verisinden:
+
+- **2026'da maliyet artışı tahmin hatasından değil, fiyattan geldi.** SMF–PTF makası saat başına ortalama 395 TL (2024) → 469 TL (2025) → **763 TL** (2026 Ocak–Ağustos). Rüzgâr santrallerinin tahmin hatası aynı kaldı, MWh başına dengesizlik maliyeti arttı. Bir rüzgâr portföyünde maliyet 65 → 95 TL/MWh çıktı; farkın %97'si dört kaleme ayrıldı, en büyük kalem fiyat makası.
+- **Sıfır fiyatlı saatler patladı:** 5 (2024) → 48 (2025) → 394 (2026 Ocak–Ağustos).
+- **Toplayıcı portföyünün değeri ölçülebilir.** 61 santrallik bir toplayıcı portföyünde santraller tek tek uzlaşsa 543 M TL olacak dengesizlik, portföyde netleşince 246 M TL'ye iniyor (%55 netleşme).
+- **Rüzgâr adaylarının %65'i zaten bir toplayıcıda.** Bir toplayıcının büyüme listesinde 364 adaydan yalnız 44'ü bağımsız hedef.
+
+Sektör karnesi (2026 Ocak–Ağustos, MWh başına dengesizlik medyanı): rüzgâr 176 TL (302 santral), güneş 147 TL (89), hidro 93 TL (660).
 
 ---
 
-## 🚀 Kurulum ve Çalıştırma
+## Ne yapar
 
-### 1. Gereksinimler
-- Node.js 18+ veya 20+
-- npm veya pnpm / yarn
+| Sayfa | İçerik |
+|---|---|
+| **Ana sayfa** `/` | Piyasa özeti (makas, PTF, sıfır fiyatlı saat, sistem yönü; geçen yılla kıyas), projeler, sektör medyanları |
+| **Piyasa** `/market` | PTF/SMF, SMF–PTF makası (ortalama, P90, saat profili), sistem yönü, düşük/sıfır fiyatlı saatler, GİP; yıl karşılaştırması ve otomatik "ne değişti" cümleleri |
+| **Sonuçlar** `/projects/[id]/results` | Dengesizlik riski (santral bazında ve şirket/toplayıcı bazında netleşmiş), KÜPST, sapma yükü, risk primi (beklenen / P90 / en kötü ay), PPA göstergesi, capture price, tahmin doğruluğu (WAPE, sistematik pay), arıza/kısıntı tespiti, veri bütünlüğü uyarıları |
+| **Karşılaştır** `/compare` | Projeler yan yana; aynı santrallerin iki dönemi için **maliyet değişim ayrıştırması**: tahmin hatası, fiyat makası, katsayı kuralı, hacim/profil, etkileşim |
+| **DSG senaryoları** | Dengeden sorumlu grup kurma, netleşme faydası, üyelerin marjinal katkısı, Shapley / orantılı paylaştırma ve çekirdek kontrolü |
+| **Aday santraller** | Portföye eklendiğinde en çok netleşme kazancı sağlayacak santraller, Shapley adil prim, ulaşılabilirlik (başka toplayıcıda / grup portföyü / bağımsız hedef) |
+| **Planlama ve GİP** | Planlama verimliliği, gün×saat ısı haritası, gün içi kapatma senaryosu (2 saat gecikmeli kalıcılık testi; kusursuz öngörü yalnız "üst sınır" olarak) |
+| **Geriye dönük test** | Teklif ayarı ve GİP kurallarının eğitim/test ayrımıyla sınanması (her ay yalnız önceki aylardan öğrenir) |
+| **Sektör karnesi** `/sector` | ~1.050 lisanslı RES/GES/HES santralinin MWh başına dengesizlik dağılımı, arıza saatleri hariç görünüm, hidro alt tipleri; **30 toplayıcının** netleşme kıyası ve ayrıntı sayfaları |
+| **Metodoloji** `/methodology` | Formüller, mevzuat kaynakları (durum etiketli), varsayımlar, doğrulamalar ve sınırlar; A4 PDF olarak indirilebilir |
 
-### 2. Projeyi Klonlayın ve Bağımlılıkları Yükleyin
+**Çıktılar:** 16 slaytlık PowerPoint "Dengesizlik Karnesi" (tam, anonim ve tek sayfa sürümleri), toplayıcı için 1 sayfalık özet, Excel (formüllü), CSV.
+
+---
+
+## Hesap yöntemi (özet)
+
+- **Dengesizlik:** sapma = UEVM − KGÜP. Pozitif dengesizlik fiyatı MIN(PTF, SMF) × (1 − l), negatif MAX(PTF, SMF) × (1 + k) (DUY md. 110). 2025'te k = l = %3. 2026'da sistemle aynı yöndeki sapmada %6, ters yönde %3, ayrıca taban fiyat ve negatif fiyat kuralları (EPDK 14030). EPİAŞ'ın yayımladığı resmi dengesizlik fiyatları varsa esas alınır.
+- **Maliyet** = tahmin hatasız olunsaydı elde edilecek gelir − gerçekleşen gelir.
+- **KÜPST:** 2025 toleransları rüzgâr %17, güneş %10 (EPDK 13025); 2026'da %15 / %8, katsayı 0,05 (EPDK 14029). Son KGÜP'e göre hesaplanır. Toplayıcı portföyünde topluluk bazında, kurulu güce ağırlıklı toleransla.
+- **Uzlaştırma birimi:** dengesizlik santral bazında değil, şirket ya da toplayıcı portföyü bazında netleşir. Ekranlar ikisini de gösterir.
+- Her rakam raporda **kesin hesap / tahmini / senaryo** diye etiketlenir.
+
+Ayrıntı: uygulamadaki `/methodology` sayfası.
+
+## Doğrulama
+
+- 2024–2025 formül fiyatı EPİAŞ resmi dengesizlik fiyatıyla saat saat aynı (ortalama fark 0,01–0,02 TL).
+- Ana rakamlar uygulama kodu kullanılmadan, bağımsız betiklerle havuz verisinden yeniden hesaplandı. Santral bazında ve netleşmiş dengesizlik, KÜPST, WAPE, capture price ve piyasa özeti birebir tuttu ([ANALIZ_RAPORU.md](ANALIZ_RAPORU.md)).
+- Mevzuat katsayıları Resmî Gazete metinlerinden doğrulandı ve testle sabitlendi.
+- **336 otomatik test** (Vitest); `tsc` ve ESLint temiz.
+
+## Sınırlar
+
+- Yalnızca kamu verisi. Şirketlerin gün içi işlemleri, ikili anlaşmaları ve fiili uzlaştırma faturaları açık veride yok. Rakamlar "kapatılması gereken risk"tir, gerçekleşen fatura değil.
+- Dengesizlik riski ilk KGÜP'e göre (gün içi öncesi) hesaplanır. Son KGÜP'e göre portföy maliyeti %5–12 daha düşük çıkabilir.
+- Hidro alt tipi (barajlı / nehir tipi) tahminidir. Toplayıcı dışındaki grup üyeliği tahminidir.
+- Uygulama yerel çalışmak için tasarlandı, kimlik doğrulama yok.
+
+---
+
+## Mimari
+
+- **Next.js 14** (App Router), **TypeScript**, Tailwind + shadcn/ui, Recharts
+- **Prisma + SQLite:** projeler, santraller, saatlik piyasa verisi (~24 bin saat, 2024–2026)
+- **Veri havuzu** (`data/pool/<santral>/<yıl>.json.gz`): ~1.400 santralin saatlik ilk KGÜP, son KGÜP ve UEVM serisi, ~40 MB. Projeler, sektör karnesi ve toplayıcı kıyası aynı veriyi kullanır. Yalnızca eksik santral-aylar EPİAŞ'tan çekilir.
+- **EPİAŞ Şeffaflık 2.0 istemcisi:** CAS/TGT kimlik doğrulama, hız sınırı, 30 günlük parçalama, kaldığı yerden devam
+- **Saf hesap motoru** (`lib/calculations`, `lib/analysis`): yan etkisiz, testli fonksiyonlar
+- **Çıktı:** pptxgenjs (rapor), exceljs (akışlı Excel)
+
+```
+lib/calculations   dengesizlik fiyatı, KÜPST, toplama
+lib/analysis       netleşme, DSG/Shapley, ayrıştırma, aday tarama, piyasa özeti, backtest, arıza tespiti
+lib/pool           veri havuzu (kodlama, depo, eksik tamamlama)
+lib/services       EPİAŞ istemcisi, önbellek, toplayıcı verisi
+lib/export         PowerPoint ve Excel
+scripts            sektör ve toplayıcı toplama, havuz bakımı, yedek
+```
+
+---
+
+## Kurulum
+
+Gereksinim: Node.js 20+. EPİAŞ verisi için bir [Şeffaflık Platformu](https://seffaflik.epias.com.tr) hesabı.
 
 ```bash
-git clone <repo-url>
-cd "TR-Energy Analyst"
 npm install
 ```
 
-### 3. Ortam Değişkenlerini Tanımlayın (`.env`)
-
-Kök dizinde `.env` dosyasını oluşturun veya güncelleyin:
+`.env`:
 
 ```env
 DATABASE_URL="file:./dev.db"
-
-# EPİAŞ Şeffaflık Platformu 2.0 Web Servis Giriş Bilgileri
-EPIAS_USERNAME="kullanici_adiniz@firma.com"
-EPIAS_PASSWORD="epias_sifreniz"
+EPIAS_USERNAME="kullanici@firma.com"
+EPIAS_PASSWORD="..."
 ```
-
-### 4. Veritabanını Yapılandırın (Prisma ORM)
-
-Geliştirme ortamında varsayılan olarak SQLite (`prisma/dev.db`) kullanılır:
 
 ```bash
-# Veritabanı şemasını oluşturun
 npx prisma db push
-
-# Demo ve tam yıllık 4 santralli veri setini yükleyin
-npm run prisma:seed
 ```
-
-> **PostgreSQL'e Geçiş**: `prisma/schema.prisma` dosyasında `provider = "postgresql"` yapıp `.env` dosyasındaki `DATABASE_URL` değişkenini PostgreSQL bağlantı cümlenizle güncelleyebilirsiniz.
-
-### 4. Geliştirme Sunucusunu Başlatın
 
 ```bash
 npm run dev
 ```
 
-Uygulamaya tarayıcınızdan erişin:
-- **Ana Sayfa**: [http://localhost:3000](http://localhost:3000)
-- **Projelerim**: [http://localhost:3000/projects](http://localhost:3000/projects)
-- **Sonuç Dashboard'ı**: [http://localhost:3000/projects/demo-project/results](http://localhost:3000/projects/demo-project/results)
-- **Stratejik İçgörüler**: [http://localhost:3000/projects/demo-project/insights](http://localhost:3000/projects/demo-project/insights)
+Veri depoda yok (`data/`, `.cache/` ve veritabanı `.gitignore`'da). İlk açılışta:
+1. Ana sayfada **EPİAŞ Canlı Veri Çek** ile piyasa verisini çekin.
+2. **Projelerim → EPİAŞ'tan santral analizi** ile şirket ya da toplayıcı adıyla santralleri seçip proje kurun.
 
-### 5. Testleri Çalıştırın
+EPİAŞ bazı yurt dışı ağlardan gelen istekleri engelleyebilir. Bağlantı hatasında Türkiye çıkışlı bir ağ ya da VPN gerekir.
+
+> `npm run prisma:seed` eski sentetik demo verisini kurar ve **veritabanındaki bütün projeleri siler**. Gerçek verili bir veritabanında çalıştırmayın.
+
+### Sektör karnesi ve toplayıcı kıyası (isteğe bağlı, uzun sürer)
+
+```bash
+node --env-file=.env node_modules/.bin/tsx scripts/sector-collect.mts 2026 --hes
+```
+
+Kesilirse aynı komut kaldığı yerden devam eder. `--rebuild` EPİAŞ'a gitmeden havuzdan yeniden kurar. Toplayıcı listeleri için `scripts/aggregator-collect.mts`, kıyas için `scripts/aggregator-benchmark.mts`.
+
+### Test
 
 ```bash
 npm test
-```
-
----
-
-## 📊 Veri Formatı Gereksinimleri
-
-Platform; santral üretim verileri ile EPİAŞ piyasa uzlaştırma verilerini saatlik zaman damgası üzerinden eşleştirir.
-
-### 1. Santral Üretim Verisi (Saatlik)
-
-| Alan | Tip | Açıklama | Örnek |
-| :--- | :--- | :--- | :--- |
-| `timestamp` | `ISO-8601 DateTime` | Uzlaştırma saati (UTC veya yerel saat) | `2026-01-15T09:00:00Z` |
-| `forecastMwh` | `Float (>= 0)` | Gün Öncesi Tahmini (KGÖP Bildirimi) | `35.0` |
-| `actualMwh` | `Float (>= 0)` | Gerçekleşen Net Üretim (MWh) | `30.0` |
-
-### 2. EPİAŞ Piyasa Verisi (Saatlik)
-
-| Alan | Tip | Açıklama | Örnek |
-| :--- | :--- | :--- | :--- |
-| `ptf` | `Float (> 0)` | Piyasa Takas Fiyatı (₺/MWh) | `2400.00` |
-| `smf` | `Float (> 0)` | Sistem Marjinal Fiyatı (₺/MWh) | `2800.00` |
-| `systemDirection` | `String` | Sistem Yönü (`DEFICIT`, `SURPLUS`, `BALANCED`) | `DEFICIT` |
-
-### 3. Hesaplama Formülleri
-
-1. **Dengesizlik Miktarı**: $\Delta = \text{actualMwh} - \text{forecastMwh}$
-2. **Pozitif Dengesizlik Fiyatı**:
-   - Sistem Fazlası (`SURPLUS`): $\min(\text{PTF}, \text{SMF}) \times (1 - k)$
-   - Açık veya Dengede: $\min(\text{PTF}, \text{SMF}) \times (1 - k)$
-3. **Negatif Dengesizlik Fiyatı**:
-   - Sistem Açığı (`DEFICIT`): $\max(\text{PTF}, \text{SMF}) \times (1 + k)$
-   - Fazla veya Dengede: $\max(\text{PTF}, \text{SMF}) \times (1 + k)$
-4. **Dengesizlik Tutarı (₺)**:
-   - $\Delta > 0 \implies \Delta \times \text{Pozitif Fiyat}$
-   - $\Delta < 0 \implies \Delta \times \text{Negatif Fiyat}$ (borçlanma tutarı)
-5. **Dengesizlik Maliyeti**: $\text{Fiktif Gelir} - \text{Toplam Gelir}$
-6. **Ağırlıklı Birim Metrikler**: $\frac{\sum \text{Gelir}}{\sum \text{Üretim}}$ ve $\frac{\sum \text{Maliyet}}{\sum \text{Üretim}}$ (asla basit ortalama alınmaz).
-
----
-
-## 🔄 Örnek Kullanım Akışı
-
-1. **Analiz Projesi Oluşturma (`/projects`)**:
-   - Yeni proje tanımlayın, portföydeki santralleri (RES, GES, HES) ve kurulu güçlerini (MW) belirleyin.
-2. **Veri Entegrasyonu & Hesaplama**:
-   - Saatlik KGÖP ve gerçekleşen veriler EPİAŞ fiyatlarıyla birleştirilir; saatlik, aylık ve yıllık performans anında hesaplanır.
-3. **Sonuç Gösterge Paneli (`/projects/[id]/results`)**:
-   - Aylık gelir ve ceza maliyeti grafikleri, birim maliyet trendleri ve gün içi dengesizlik yoğunlaşma saatlerini inceleyin.
-4. **Stratejik İçgörüler (`/projects/[id]/insights`)**:
-   - Kritik saatlerin ortak özelliklerini görün, sistem yönü ve zaman dilimi risklerini analiz edin.
-   - Teknolojiye özel (GİP kapı kapanış optimizasyonu, SCADA veri entegrasyonu, baraj debi yönetimi) eylem önerilerini uygulayın.
-5. **Dışa Aktarma & Raporlama**:
-   - **Excel İndir**: Dinamik formüllü ve `SUMIFS` özetli `.xlsx` dosyasını indirin.
-   - **PPT İndir**: 6 slaytlık kurumsal yönetim sunumunu `.pptx` formatında paylaşın.
-
----
-
-## 🛠️ Üretim Derlemesi (Production Build)
-
-```bash
-# Tip kontrolü ve Next.js optimize üretim derlemesi
-npm run build
-
-# Üretim sunucusunu ayağa kaldırma
-npm start
 ```

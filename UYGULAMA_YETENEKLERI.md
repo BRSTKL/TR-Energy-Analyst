@@ -1,3 +1,5 @@
+> **Not (4 Ekim 2026):** Bu belge uygulamanın ilk sürümünü anlatır ve güncel değildir (katsayılar, rapor slayt sayısı, sayfalar). Güncel özet için [README.md](README.md), yöntem için uygulamadaki `/methodology` sayfası.
+
 # TR-Energy Analyst — Kapsamlı Uygulama Yetenekleri ve Sistem Dokümantasyonu
 
 **TR-Energy Analyst**, elektrik piyasasında faaliyet gösteren yenilenebilir enerji üreticileri (RES, HES, GES) ve portföy yönetim şirketleri için geliştirilmiş; gün öncesi üretim tahminleri (KGÖP) ile gerçekleşen üretimleri kıyaslayarak **dengesizlik maliyetlerini**, **planlama verimliliğini** ve **piyasa optimizasyon olanaklarını** analiz eden yeni nesil bir enerji analitik platformudur.

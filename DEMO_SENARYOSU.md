@@ -4,6 +4,8 @@
 
 **Proje:** Atam Enerji portföyü (12 santral, 415 MW, Oca–Ağu 2026, Atam toplayıcı). Rakamlar 3 Ekim 2026'da uygulamadan alındı ve bağımsız olarak doğrulandı.
 
+**Dönemler:** Proje rakamları Ocak–Ağustos 2026. Piyasa rakamları ana sayfa ve `/market` varsayılanı olan Ocak–Eylül 2026'dır, karşılaştırma 2025'in aynı dönemiyle: makas 476 → 763 TL (+%60), sıfır fiyatlı saat 46 → 398. Ocak–Ağustos seçilirse 483 → 763 TL (+%58) ve 39 → 394 görünür. İki rakam da doğrudur, dönem farklıdır.
+
 **Hazırlık (kayıttan önce):**
 - `npm run dev`, tarayıcıda 1280×720 pencere, yakınlaştırma %100.
 - Tarayıcı sekmeleri hazır: `/`, `/projects/cmuo9sqek004semo5ij0kx56i/results`, `/projects/cmuo9sqek004semo5ij0kx56i/planning`, `/market`.
