@@ -931,7 +931,7 @@ export default function ProjectResultsPage() {
             netting={data.netting}
             projectId={projectId}
             companies={data.sapma?.settlement.companies}
-            crossCompanyBenefitTl={data.sapma?.dsg?.benefitTl ?? null}
+            crossCompanyBenefitTl={(data.sapma?.aggregator ?? data.sapma?.dsg)?.benefitTl ?? null}
             aggregatorName={data.sapma?.aggregator?.name ?? null}
           />
         )}

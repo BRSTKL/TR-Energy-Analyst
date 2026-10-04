@@ -99,9 +99,15 @@ export function NettingCard({
             {aggregatorName ? (
               <>
                 <span className="font-semibold">Tüm santraller {aggregatorName} portföyünde.</span> Toplayıcı portföyü tek
-                dengede uzlaştırıldığı için aşağıdaki netleşme uzlaştırmada zaten gerçekleşiyor: bu, portföyün farklı
-                sahiplerin santrallerini bir araya getirerek yarattığı değerdir. Sahiplere göre paylaştırma için DSG
-                Senaryoları sayfasına bakın.
+                dengede uzlaştırıldığı için aşağıdaki netleşme uzlaştırmada zaten gerçekleşiyor. Bu toplam, aynı sahibin
+                santralleri arasındaki netleşmeyi de içerir
+                {crossCompanyBenefitTl !== null && (
+                  <>
+                    ; toplayıcının farklı sahipleri bir araya getirerek kattığı değer{" "}
+                    <span className="font-semibold">{tl(crossCompanyBenefitTl)}</span>
+                  </>
+                )}
+                . Sahiplere göre paylaştırma için DSG Senaryoları sayfasına bakın.
               </>
             ) : allOneCompany ? (
               <>

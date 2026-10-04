@@ -1372,7 +1372,14 @@ export async function exportPlantReportPptx(
     const lw = 5.6;
     const stats: Array<[string, string, string]> = [
       [`${nf(pf.expectedTlPerMwh, 0)} TL/MWh`, `Beklenen prim (${isFullYear(r) ? "yıllık" : "dönem"} ortalaması)`, C.ink],
-      [`${nf(pf.p90MonthTlPerMwh, 0)} TL/MWh`, "İhtiyatlı prim (aylık P90)", C.risk],
+      [
+        `${nf(pf.p90MonthTlPerMwh, 0)} TL/MWh`,
+        // Kısa dönemde (ör. 8 ay) P90 en kötü aya eşit çıkabilir; aynı rakam iki kutuda hata gibi okunmasın
+        Math.round(pf.p90MonthTlPerMwh) === Math.round(pf.worstMonth.tlPerMwh)
+          ? `İhtiyatlı prim (aylık P90; ${pf.months.length} ayda en kötü aya eşit)`
+          : "İhtiyatlı prim (aylık P90)",
+        C.risk,
+      ],
       [`${nf(pf.worstMonth.tlPerMwh, 0)} TL/MWh`, `En kötü ay: ${monthLabel(pf.worstMonth.month)}`, C.cost],
     ];
     stats.forEach(([v, l, color], i) => {
