@@ -100,6 +100,7 @@ interface ApiResponse {
   portfolio: {
     monthly: MonthlyAggregate[];
     yearly: YearlyAggregate;
+    hourProfile?: HourBucket[];
   };
   comparison?: PlantComparisonResult;
   netting?: NettingResult;
@@ -240,7 +241,7 @@ export default function ProjectResultsPage() {
 
       // Portföy ağırlıklı ortalama birim maliyet
       const portItem = data.portfolio.monthly.find((item) => item.yearMonth === ym);
-      row["Portföy Ağırlıklı Ort."] = portItem?.unitImbalanceCost || 0;
+      row["Portföy (netleşmiş)"] = portItem?.unitImbalanceCost || 0;
 
       return row;
     });
@@ -252,7 +253,7 @@ export default function ProjectResultsPage() {
 
     const buckets =
       selectedPlantId === "all"
-        ? sumHourProfiles(data.plants.map((p) => p.hourProfile))
+        ? data.portfolio.hourProfile ?? sumHourProfiles(data.plants.map((p) => p.hourProfile))
         : data.plants.find((p) => p.plantId === selectedPlantId)?.hourProfile ?? [];
     const hours = buckets.map((b) => ({
       hour: `${String(b.hour).padStart(2, "0")}:00`,
@@ -337,6 +338,9 @@ export default function ProjectResultsPage() {
   };
 
   // CSV Dışa Aktarma Fonksiyonu (UTF-8 BOM ile Excel uyumlu)
+  /** CSV metin hücresi: tırnak kaçışlı, formül başlatan karakterlere karşı korumalı */
+  const csvText = (v: string) => `"${(/^[=+\-@]/.test(v) ? `'${v}` : v).replace(/"/g, '""')}"`;
+
   const exportToCsv = () => {
     if (!pivotRows.length) return;
 
@@ -357,9 +361,9 @@ export default function ProjectResultsPage() {
 
     pivotRows.forEach((row) => {
       const line = [
-        `"${row.plantName}"`,
-        `"${row.plantType}"`,
-        `"${row.yearMonth}"`,
+        csvText(row.plantName),
+        csvText(row.plantType),
+        csvText(row.yearMonth),
         row.totalActualMwh.toFixed(2).replace(".", ","),
         row.totalDayAheadSalesAmount.toFixed(2).replace(".", ","),
         row.totalImbalanceAmount.toFixed(2).replace(".", ","),
@@ -370,6 +374,8 @@ export default function ProjectResultsPage() {
       ];
       csvLines.push(line.join(";"));
     });
+
+    csvLines.push("", csvText("Not: bu dosyadaki dengesizlik maliyeti santral bazındadır (netleşmemiş); ekrandaki başlık rakamı uzlaştırma biriminde netleşmiştir."));
 
     const bom = "\uFEFF";
     const blob = new Blob([bom + csvLines.join("\r\n")], {
@@ -733,7 +739,7 @@ export default function ProjectResultsPage() {
         )}
 
         {/* Sapma yükü: şirket bazında dengesizlik + KÜPST, 2026 ve YEKDEM varsayımları */}
-        {data.sapma && <SapmaYukuCard sapma={data.sapma} projectId={projectId} onRefresh={fetchData} />}
+        {data.sapma && <SapmaYukuCard sapma={data.sapma} projectId={projectId} onRefresh={fetchData} plantScoped={selectedPlantId !== "all"} />}
 
         {/* 2. Recharts Görsel Analitik Grafikleri */}
         <div className="grid gap-6 lg:grid-cols-2">
@@ -799,8 +805,9 @@ export default function ProjectResultsPage() {
               </CardTitle>
               <CardDescription>
                 {selectedPlantId === "all" && data.plants.length > TREND_MAX_LINES
-                  ? `Portföy ortalaması ve toplam dengesizlik maliyeti en yüksek ${TREND_MAX_LINES} santral (${data.plants.length} santralden). Diğer santraller için yukarıdan santral seçin.`
-                  : "Santrallerin MWh başına dengesizlik maliyetinin zaman içindeki kıyaslaması."}
+                  ? `Toplam dengesizlik maliyeti en yüksek ${TREND_MAX_LINES} santral (${data.plants.length} santralden). Diğer santraller için yukarıdan santral seçin.`
+                  : "Santrallerin MWh başına dengesizlik maliyetinin zaman içindeki kıyaslaması."}{" "}
+                Santral çizgileri santral bazında (netleşmemiş); kesikli çizgi uzlaştırma biriminde netleşmiş portföydür, bu yüzden santral çizgilerinin ortalamasından düşüktür.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -842,7 +849,7 @@ export default function ProjectResultsPage() {
                     <Line
                       isAnimationActive={false}
                       type="monotone"
-                      dataKey="Portföy Ağırlıklı Ort."
+                      dataKey="Portföy (netleşmiş)"
                       stroke="#10b981"
                       strokeWidth={2}
                       strokeDasharray="4 4"
@@ -863,7 +870,7 @@ export default function ProjectResultsPage() {
             </CardTitle>
             <CardDescription>
               Günün hangi saatlerinde pozitif (fazla üretim) ve negatif (eksik üretim)
-              sapmaların yoğunlaştığını gösteren profil.
+              sapmaların yoğunlaştığını gösteren profil{selectedPlantId === "all" ? " (uzlaştırma biriminde netleşmiş)" : " (santral tek başına)"}.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -878,7 +885,7 @@ export default function ProjectResultsPage() {
                     vertical={false}
                     stroke="#e2e8f0"
                   />
-                  <XAxis dataKey="hour" tick={{ fontSize: 11 }} stroke="#64748b" />
+                  <XAxis dataKey="hour" tick={{ fontSize: 11 }} stroke="#64748b" interval={2} />
                   <YAxis
                     tick={{ fontSize: 11 }}
                     stroke="#64748b"

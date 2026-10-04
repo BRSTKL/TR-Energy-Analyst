@@ -173,8 +173,8 @@ function ProjectsSection({ rows, total }: { rows: ProjectKpis[] | null | undefin
                 <TableCell className="text-sm">
                   {r.sector.length
                     ? r.sector.map((s) => (
-                        <p key={s.type} className={s.rankPct <= 50 ? "text-emerald-700" : "text-rose-700"}>
-                          {TECH[s.type] ?? s.type}: {rankText(s.rankPct)}
+                        <p key={`${s.type}-${s.kind ?? ""}`} className={s.rankPct <= 50 ? "text-emerald-700" : "text-rose-700"}>
+                          {TECH[s.type] ?? s.type}{s.kind === "RESERVOIR" ? " (barajlı)" : s.kind === "RUN_OF_RIVER" ? " (nehir tipi)" : ""}: {rankText(s.rankPct)}
                         </p>
                       ))
                     : <span className="text-slate-400">karne yok</span>}
@@ -323,7 +323,7 @@ export default function HomePage() {
         <section className="space-y-3">
           <SectionHead
             title={`Piyasa · ${market?.period.label ?? ""}`}
-            sub={market?.previousPeriod ? `Bir önceki yılın aynı dönemiyle (${market.previousPeriod.label})` : undefined}
+            sub={market?.previousPeriod ? `Bir önceki yılın aynı dönemiyle: ${market.previousPeriod.label}` : undefined}
             href="/market"
             cta="Piyasa özeti"
           />

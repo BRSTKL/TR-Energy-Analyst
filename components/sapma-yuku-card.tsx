@@ -64,7 +64,7 @@ function Tile({ label, value, sub, tone, chip }: { label: string; value: string;
  * YEKDEM santralleri de dahildir (dengesizlikleri kendilerine aittir; YEK Yönetmeliği md. 15/1, 23/1). PowerPoint
  * raporuyla aynı rakamlar.
  */
-export function SapmaYukuCard({ sapma, projectId, onRefresh }: { sapma: SapmaSummary; projectId: string; onRefresh: () => void }) {
+export function SapmaYukuCard({ sapma, projectId, onRefresh, plantScoped = false }: { sapma: SapmaSummary; projectId: string; onRefresh: () => void; plantScoped?: boolean }) {
   const [updating, setUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const st = sapma.settlement;
@@ -119,6 +119,11 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh }: { sapma: SapmaSum
               <Scale className="h-4 w-4 text-slate-700" /> Sapma yükü ({unitLabel} uzlaştırma)
             </CardTitle>
             <CardDescription>
+              {plantScoped && (
+                <span className="mb-1 block font-medium text-amber-800">
+                  Bu blok seçili santrali değil, tüm portföyü gösterir (uzlaştırma portföy bazında yapılır).
+                </span>
+              )}
               Dengesizlik riski (gün içi işlemler öncesi) ve tahmini KÜPST.{" "}
               {agg
                 ? `Santraller ${agg.name} portföyünde tek dengede uzlaştırılır: farklı sahiplerin santralleri her saat birbirini dengeler.`
@@ -155,7 +160,7 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh }: { sapma: SapmaSum
           <p className="flex items-start gap-1.5 text-xs text-slate-600">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
             Olası arıza/kısıntı: {sapma.outages.plants.reduce((a, o) => a + o.events.length, 0)} blok (tahmin kurulu gücün ≥%30&apos;u,
-            üretim ≤%2, ≥3 saat), dengesizlik riskinin %{sapma.outages.sharePct.toLocaleString("tr-TR", { maximumFractionDigits: 1 })} kadarı
+            üretim ≤%2, ≥3 saat), santral bazında (netleşmemiş) dengesizlik riskinin %{sapma.outages.sharePct.toLocaleString("tr-TR", { maximumFractionDigits: 1 })} kadarı
             {sapma.outages.plants.some((o) => o.events.some((e) => e.concurrent)) && "; bir kısmı birden çok santralde aynı anda (olası kısıntı)"}.
             Tahmin hatası değil; arıza mı YAT talimatı mı teyit edilmeli.
           </p>
@@ -203,18 +208,29 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh }: { sapma: SapmaSum
                 <p className="mt-0.5 text-2xs text-slate-500">
                   Sözleşme fiyatına eklenecek MWh başına sapma yükü · {sapma.riskPremium.rules}
                 </p>
-                <div className="mt-2 grid grid-cols-3 gap-2 text-center">
-                  {[
-                    ["Beklenen", sapma.riskPremium.portfolio.expectedTlPerMwh, "text-slate-900"],
-                    ["İhtiyatlı (P90)", sapma.riskPremium.portfolio.p90MonthTlPerMwh, "text-amber-600"],
-                    [`En kötü ay (${sapma.riskPremium.portfolio.worstMonth.month.slice(5, 7)}.${sapma.riskPremium.portfolio.worstMonth.month.slice(2, 4)})`, sapma.riskPremium.portfolio.worstMonth.tlPerMwh, "text-rose-600"],
-                  ].map(([label, v, tone]) => (
+                {(() => {
+                  const rp = sapma.riskPremium.portfolio;
+                  const worstLabel = `${rp.worstMonth.month.slice(5, 7)}.${rp.worstMonth.month.slice(2, 4)}`;
+                  // Kısa veride P90 en kötü aya eşittir; aynı değeri iki kez göstermeyin
+                  const sameAsWorst = Math.round(rp.p90MonthTlPerMwh) === Math.round(rp.worstMonth.tlPerMwh);
+                  const tiles: Array<[string, number, string]> = [
+                    ["Beklenen", rp.expectedTlPerMwh, "text-slate-900"],
+                    sameAsWorst
+                      ? [`İhtiyatlı (P90 = en kötü ay ${worstLabel})`, rp.p90MonthTlPerMwh, "text-amber-600"]
+                      : ["İhtiyatlı (P90)", rp.p90MonthTlPerMwh, "text-amber-600"],
+                  ];
+                  if (!sameAsWorst) tiles.push([`En kötü ay (${worstLabel})`, rp.worstMonth.tlPerMwh, "text-rose-600"]);
+                  return (
+                <div className={`mt-2 grid gap-2 text-center ${tiles.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
+                  {tiles.map(([label, v, tone]) => (
                     <div key={label as string} className="rounded-md bg-slate-50 p-2">
                       <p className={`text-lg font-bold ${tone}`}>{Math.round(v as number).toLocaleString("tr-TR")}</p>
                       <p className="text-2xs text-slate-500">{label} · ₺/MWh</p>
                     </div>
                   ))}
                 </div>
+                  );
+                })()}
                 {sapma.marketProfile && sapma.marketProfile.baseloadPtfTl > 0 && (() => {
                   // PPA göstergesi: profil indirimi (yakalanan fiyat / baz PTF) + beklenen dengesizlik primi
                   const mp = sapma.marketProfile!;

@@ -22,8 +22,9 @@ describe("Veritabanı yedek saklama (db-backup)", () => {
     expect(listBackups(dir)[0]).toBe(names[3]);
     const removed = pruneBackups(2, dir);
 
-    expect(removed.sort()).toEqual([names[0], names[1]]);
-    expect(listBackups(dir)).toEqual([names[3], names[2]]);
+    // Genel yedeklerden en yeni 2 tutulur; silme öncesi yedek ayrıca korunur
+    expect(removed.sort()).toEqual([names[0]]);
+    expect(listBackups(dir)).toEqual([names[3], names[2], names[1]]);
     expect(fs.existsSync(path.join(dir, "notlar.txt"))).toBe(true);
   });
 

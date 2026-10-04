@@ -310,7 +310,7 @@ export default function ProjectInsightsPage() {
                 <p className="text-xs text-slate-500">
                   Toplam maliyetin %{currentCostAnalysis.percentageOfTotalCost.toFixed(0)}
                   {" "}kadarı bu {currentCostAnalysis.topNHours} saatte gerçekleşti (
-                  {currentCostAnalysis.totalTopNCost.toLocaleString("tr-TR")} ₺ kayıp).
+                  {currentCostAnalysis.totalTopNCost.toLocaleString("tr-TR", { maximumFractionDigits: 0 })} ₺ kayıp).
                 </p>
               </div>
             </div>
@@ -413,7 +413,7 @@ export default function ProjectInsightsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-xl font-bold text-amber-600">
-                    {currentCostAnalysis.errorRateRatio}x Kat
+                    {currentCostAnalysis.errorRateRatio.toLocaleString("tr-TR", { maximumFractionDigits: 2 })} kat
                   </div>
                   <p className="mt-1 text-xs text-slate-600">
                     En pahalı saatlerdeki hata kurulu gücün %
@@ -530,7 +530,6 @@ export default function ProjectInsightsPage() {
                           %{nf(hour.errorRate * 100, 1)}
                         </TableCell>
                         <TableCell className="text-right font-mono font-bold text-rose-600">
-                          -
                           {hour.imbalanceCost.toLocaleString("tr-TR", {
                             maximumFractionDigits: 0,
                           })}{" "}

@@ -115,3 +115,37 @@ export function describeGap(g: PlantDataGap): string {
   });
   return `${g.plantName}: ${parts.join(", ")}`;
 }
+
+/** Planı (KGÜP) sıfır ama üretimi kurulu gücün yarısından fazla olan saatler: plan hiç girilmemiş ya da ilk sürüm boş kalmış */
+export interface ZeroPlanGap {
+  plantName: string;
+  hours: number;
+  /** Bu saatlerin toplam üretimi (MWh) */
+  mwh: number;
+  /** Sıfır-plan saatlerinin payı: toplam saat içinde */
+  sharePct: number;
+}
+
+export function findZeroPlanHours(
+  plants: Array<{ plantName: string; capacityMw: number; hourly: Array<{ forecastMwh: number; actualMwh: number }> }>,
+  minHours = 24
+): ZeroPlanGap[] {
+  const out: ZeroPlanGap[] = [];
+  for (const p of plants) {
+    let hours = 0;
+    let mwh = 0;
+    for (const h of p.hourly) {
+      if (h.forecastMwh === 0 && h.actualMwh > 0.5 * p.capacityMw) {
+        hours++;
+        mwh += h.actualMwh;
+      }
+    }
+    if (hours >= minHours) out.push({ plantName: p.plantName, hours, mwh, sharePct: (hours / Math.max(1, p.hourly.length)) * 100 });
+  }
+  return out.sort((a, b) => b.hours - a.hours);
+}
+
+/** "EĞER HES: 888 saat plan 0, üretim kurulu gücün yarısından fazla (%15,2)" */
+export function describeZeroPlan(g: ZeroPlanGap): string {
+  return `${g.plantName}: ${g.hours.toLocaleString("tr-TR")} saatte plan 0 iken üretim kurulu gücün yarısından fazla (saatlerin %${g.sharePct.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}, ${Math.round(g.mwh).toLocaleString("tr-TR")} MWh)`;
+}

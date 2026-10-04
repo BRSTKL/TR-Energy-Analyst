@@ -576,7 +576,7 @@ export function generateMitigationSuggestions(
       title: "Uç Sapmalar İçin Uyarı Mekanizması",
       category: "CALIBRATION",
       priority: "MEDIUM",
-      triggerRule: `En pahalı ${topNHours} saat maliyetin %${percentageOfTotalCost.toLocaleString("tr-TR")} payını oluşturuyor; bu saatlerdeki ortalama hata (%${(topNMeanErrorRate * 100).toFixed(0)}) genel ortalamanın (%${(overallMeanErrorRate * 100).toFixed(0)}) ${errorRateRatio.toFixed(1)} katı.`,
+      triggerRule: `En pahalı ${topNHours} saat maliyetin %${percentageOfTotalCost.toLocaleString("tr-TR")} payını oluşturuyor; bu saatlerdeki ortalama hata (%${(topNMeanErrorRate * 100).toFixed(0)}) genel ortalamanın (%${(overallMeanErrorRate * 100).toFixed(0)}) ${errorRateRatio.toLocaleString("tr-TR", { maximumFractionDigits: 1 })} katı.`,
       description:
         "Maliyetin önemli bir kısmı az sayıda aşırı sapmalı saatte oluşuyor. Bu saatleri önceden fark etmek için tahmin belirsizliği izlenmelidir.",
       actionItems: [
@@ -598,6 +598,8 @@ export function generateMitigationSuggestions(
 export interface SectorScoreContext {
   label: string;
   byType: Partial<Record<string, { values: number[]; median: number }>>;
+  /** Hidro santralin alt tipi (varsa); "HES:RESERVOIR" / "HES:RUN_OF_RIVER" dağılımı varsa santral onunla kıyaslanır */
+  hydroKindOf?: (plantId: string) => "RESERVOIR" | "RUN_OF_RIVER" | null;
 }
 
 const TECH_TR: Record<string, string> = { RES: "rüzgâr", GES: "güneş", HES: "hidro" };
@@ -647,8 +649,12 @@ export function comparePlantProfitability(
       // Proje içinde MWh başına dengesizliğe göre (düşük = iyi)
       .sort((a, b) => a.unitImbalanceCost - b.unitImbalanceCost);
 
-    const sec = sector?.byType[plantType];
+    const typeSec = sector?.byType[plantType];
     metrics.forEach((item, index) => {
+      const hydroKind = plantType === "HES" ? sector?.hydroKindOf?.(item.plant.plantId) ?? null : null;
+      const kindSec = hydroKind ? sector?.byType[`HES:${hydroKind}`] : undefined;
+      const sec = kindSec && kindSec.values.length ? kindSec : typeSec;
+      const techLabel = `${TECH_TR[plantType] ?? plantType}${kindSec && hydroKind ? (hydroKind === "RESERVOIR" ? " (barajlı)" : " (nehir tipi)") : ""}`;
       const rankInType = index + 1;
       const total = metrics.length;
       const score = sec && sec.values.length
@@ -660,7 +666,7 @@ export function comparePlantProfitability(
         score >= 75 ? "EXCELLENT" : score >= 50 ? "GOOD" : score >= 25 ? "MODERATE" : "HIGH_RISK";
       const cost = Math.round(item.unitImbalanceCost).toLocaleString("tr-TR");
       const where = sec
-        ? `${sector!.label} ${TECH_TR[plantType] ?? plantType} sektör medyanı ${Math.round(sec.median).toLocaleString("tr-TR")} TL; santral sektörün %${score} kadarından iyi.`
+        ? `${sector!.label} ${techLabel} sektör medyanı ${Math.round(sec.median).toLocaleString("tr-TR")} TL; santral sektörün %${score} kadarından iyi.`
         : `Bu teknoloji için sektör karnesi yok; proje içinde ${total} santralin ${rankInType}. sırasında.`;
       const bias =
         item.planExcessPct !== null && Math.abs(item.planExcessPct) >= 2

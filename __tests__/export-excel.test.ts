@@ -50,7 +50,7 @@ describe("Excel Export Modülü (ExcelJS)", () => {
     ],
   };
 
-  it("Excel çalışma kitabını başarıyla üretmeli ve iki ana sayfa içermelidir", async () => {
+  it("Excel çalışma kitabını başarıyla üretmeli ve iki ana sayfa ve açıklama sayfası içermelidir", async () => {
     const buffer = await exportToExcel(mockData);
     expect(buffer).toBeDefined();
     expect(buffer.byteLength).toBeGreaterThan(1000);
@@ -60,7 +60,8 @@ describe("Excel Export Modülü (ExcelJS)", () => {
     // ExcelJS writeBuffer returns ArrayBuffer / Buffer, load accepts Buffer or ArrayBuffer
     await workbook.xlsx.load(buffer as any);
 
-    expect(workbook.worksheets.length).toBe(2);
+    expect(workbook.worksheets.length).toBe(3);
+    expect(workbook.getWorksheet("Açıklama")).toBeDefined();
     expect(workbook.getWorksheet("Saatlik Veriler")).toBeDefined();
     expect(workbook.getWorksheet("Aylık Özet")).toBeDefined();
   });

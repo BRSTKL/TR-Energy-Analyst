@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { findProjectWithRecords } from "@/lib/services/project-records";
-import { prisma } from "@/lib/prisma";
+import { processHourlyRecord } from "@/lib/calculations";
+import { toPricingProfile, SystemDirection, type HourlyResult } from "@/lib/calculations/types";
+import { settleByCompany } from "@/lib/report/plant-report";
+import { settlementIdentity } from "@/lib/projects/aggregator";
 import { exportToExcel, HourlyExportRow } from "@/lib/export/excel";
 
 export const dynamic = "force-dynamic";
@@ -28,9 +31,19 @@ export async function GET(
     const monthsSet = new Set<string>();
     const plantsMap = new Map<string, { plantName: string; plantType: string }>();
 
+    // Aynı adlı iki santral Excel özetinde (ad üzerinden SUMIFS) birleşirdi: tekrar eden adlar numaralanır
+    const seenNames = new Map<string, number>();
+    const labelOf = new Map<string, string>();
     for (const plant of project.plants) {
-      plantsMap.set(plant.name, {
-        plantName: plant.name,
+      const n = (seenNames.get(plant.name) ?? 0) + 1;
+      seenNames.set(plant.name, n);
+      labelOf.set(plant.id, n === 1 ? plant.name : `${plant.name} (${n})`);
+    }
+
+    for (const plant of project.plants) {
+      const plantLabel = labelOf.get(plant.id)!;
+      plantsMap.set(plantLabel, {
+        plantName: plantLabel,
         plantType: plant.type,
       });
 
@@ -47,7 +60,7 @@ export async function GET(
           timestamp: record.timestamp,
           yearMonth,
           hourStr,
-          plantName: plant.name,
+          plantName: plantLabel,
           plantType: plant.type,
           forecastMwh: record.forecastMwh,
           actualMwh: record.actualMwh,
@@ -72,7 +85,34 @@ export async function GET(
     const uniquePlants = Array.from(plantsMap.values());
     const pricingProfile = project.pricingProfiles?.[0];
 
+    // Uzlaştırma birimi bazında netleşmiş toplam (sonuç sayfasındaki başlık rakamı)
+    const profile = toPricingProfile(pricingProfile);
+    const plantResults = project.plants.map((plant) => {
+      const hourly: HourlyResult[] = [];
+      for (const r of plant.records) {
+        if (!r.marketData) continue;
+        hourly.push(
+          processHourlyRecord(
+            { timestamp: r.timestamp, actualMwh: r.actualMwh, forecastMwh: r.forecastMwh, forecastFinalMwh: r.forecastFinalMwh, plantId: plant.id, plantName: plant.name },
+            {
+              timestamp: r.marketData.timestamp,
+              ptf: r.marketData.ptf,
+              smf: r.marketData.smf,
+              systemDirection: r.marketData.systemDirection as SystemDirection,
+              imbalancePosPrice: r.marketData.imbalancePosPrice,
+              imbalanceNegPrice: r.marketData.imbalanceNegPrice,
+            },
+            profile
+          )
+        );
+      }
+      return { plantId: plant.id, ...settlementIdentity(plant, project.aggregatorName), hourly };
+    });
+    const settledCostTl = settleByCompany(plantResults, profile).reduce((sum, h) => sum + h.imbalanceCost, 0);
+
     const excelBuffer = await exportToExcel({
+      settledCostTl,
+      settlementLabel: project.aggregatorName ? `${project.aggregatorName} portföyünde` : "Şirket bazında",
       projectName: project.name,
       pricingProfile,
       hourlyRecords,

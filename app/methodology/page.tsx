@@ -16,7 +16,7 @@ export const metadata: Metadata = {
  */
 
 const VERSION = "1.7";
-const VERSION_DATE = "30 Eylül 2026";
+const VERSION_DATE = "3 Ekim 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
   { id: "ozet", title: "Özet" },
@@ -167,7 +167,7 @@ export default function MethodologyPage() {
             <p>
               Veri yalnızca kamuya açık EPİAŞ Şeffaflık Platformu&apos;dur. Şirketin gün içi işlemleri, ikili anlaşmaları ve fiili uzlaştırma
               faturaları açık veride yoktur; bu yüzden rakamlar &quot;kapatılması gereken risk&quot; olarak okunmalı, gerçekleşen bedel olarak
-              değil. Her rakamın ne kadar kesin olduğu rapordaki etiketlerle belirtilir (bölüm 16).
+              değil. Her rakamın ne kadar kesin olduğu rapordaki etiketlerle belirtilir (bölüm 19).
             </p>
           </Section>
 
@@ -389,9 +389,9 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
               şirkete değiştiği için kıyasa katılmaz.
             </p>
             <p>
-              <b>Kalite süzgeci:</b> dönem saatlerinin en az %90&apos;ında verisi olan ve plan / gerçekleşen oranı 0,75–1,33 arasında olan santraller
-              kıyaslanır (eksik ya da tutarsız veri elenir). Dağılım santral sayısına göre P10, P25, medyan, P75 ve P90 ile, ayrıca üretim
-              ağırlıklı ortalamayla verilir; santralin yeri teknoloji içindeki yüzdelik sırasıdır. <b>K1 görünümü</b> olası arıza / kısıntı saatlerini (bölüm 14) dışarıda bırakır.
+              <b>Kalite süzgeci:</b> dönem saatlerinin en az %90&apos;ında verisi olan ve plan / gerçekleşen oranı 0,5–2 arasında olan santraller
+              kıyaslanır (eksik ya da bariz tutarsız veri elenir; dar aralık kötü tahmin eden santralleri de eleyip medyanı düşürdüğü için genişletildi). Dağılım santral sayısına göre P10, P25, medyan, P75 ve P90 ile, ayrıca üretim
+              ağırlıklı ortalamayla verilir; santralin yeri teknoloji içindeki yüzdelik sırasıdır. <b>K1 görünümü</b> olası arıza / kısıntı saatlerini (bölüm 17) dışarıda bırakır.
             </p>
             <p>
               Hidro alt tipi (barajlı / nehir tipi) addan ya da gün içi üretim esnekliğinden tahmin edilir. <Tag kind="exact" /> (alt tip:{" "}
@@ -512,7 +512,7 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
                 ],
                 ["Maliyet ayrıştırması (Gain 2025 → 2026)", "Dört kalem farkın %97'sini açıklıyor; kalan etkileşim"],
                 ["Piyasa verisi", "2024, 2025 ve 2026 fiyatları ve resmi dengesizlik fiyatları EPİAŞ'tan; eski formatta kayıt kalmadı"],
-                ["Otomatik testler", "309 test (29.09.2026); her değişiklikte çalıştırılır"],
+                ["Otomatik testler", "336 test (3.10.2026); her değişiklikte çalıştırılır"],
               ]}
             />
           </Section>

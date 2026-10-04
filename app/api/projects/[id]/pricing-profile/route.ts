@@ -101,6 +101,14 @@ export async function PUT(
     const negDeficit = Number(negativeDeficitCoef);
     const negOther = Number(negativeOtherCoef);
 
+    const all = [posSurplus, posOther, negDeficit, negOther];
+    if (all.every((v) => Number.isFinite(v) && v > 0) && all.some((v) => v < 0.5 || v > 2)) {
+      return NextResponse.json(
+        { success: false, error: "Katsayılar 0,5 ile 2 arasında olmalıdır (ör. 0,94 ya da 1,06)." },
+        { status: 400 }
+      );
+    }
+
     if (
       isNaN(posSurplus) ||
       posSurplus <= 0 ||

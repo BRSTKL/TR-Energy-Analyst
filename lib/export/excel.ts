@@ -42,6 +42,10 @@ export interface ExcelExportProjectData {
   hourlyRecords: HourlyExportRow[];
   uniqueMonths: string[]; // ["2026-01", "2026-02", "2026-03"]
   uniquePlants: Array<{ plantName: string; plantType: string }>;
+  /** Uzlaştırma birimi bazında netleşmiş dengesizlik maliyeti (₺); verilirse "Açıklama" sayfasına yazılır */
+  settledCostTl?: number | null;
+  /** Uzlaştırma biriminin tanımı (ör. "Atam Toplayıcı portföyü", "şirket bazında") */
+  settlementLabel?: string;
 }
 
 export function normalizeExcelProjectData(
@@ -365,6 +369,32 @@ export async function exportToExcel(
     });
   });
   summarySheet.commit();
+
+  // SAYFA 3: AÇIKLAMA - bu dosyadaki maliyet santral bazındadır, uygulamadaki başlık rakamı netleşmiştir
+  const noteSheet = workbook.addWorksheet("Açıklama");
+  noteSheet.columns = [{ width: 110 }];
+  const trNum = (v: number) => v.toLocaleString("tr-TR", { maximumFractionDigits: 0 });
+  const notes = [
+    "Bu dosyadaki dengesizlik maliyeti SANTRAL BAZINDADIR: her santral kendi başına uzlaştırılmış sayılır, santraller arası netleşme yoktur.",
+    "Uygulamadaki sonuç sayfası, rapor ve karşılaştırma ise dengesizliği uzlaştırma birimi (şirket ya da toplayıcı portföyü) bazında saat saat netleştirir; bu yüzden başlık rakamı bu dosyadaki toplamdan küçüktür.",
+    "KÜPST (sapma bedeli) bu dosyada yoktur.",
+  ];
+  if (data.settledCostTl != null) {
+    const plantTotal = data.hourlyRecords.reduce((sum, r) => {
+      const e = imbalancePrices(r, resolveImbalanceProfile(profile, r.timestamp));
+      const d = r.actualMwh - r.forecastMwh;
+      return sum + d * (r.ptf - (d > 0 ? e.positive : e.negative));
+    }, 0);
+    notes.push(
+      `Santral bazında toplam: ${trNum(plantTotal)} ₺ · ${data.settlementLabel ?? "Uzlaştırma biriminde"} netleşmiş toplam: ${trNum(data.settledCostTl)} ₺ (uygulamadaki başlık rakamı).`
+    );
+  }
+  for (const n of notes) {
+    const r = noteSheet.addRow([n]);
+    r.alignment = { wrapText: true, vertical: "top" };
+    r.commit();
+  }
+  noteSheet.commit();
 
   await workbook.commit();
   await finished;

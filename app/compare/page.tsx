@@ -99,6 +99,7 @@ const METRICS: Metric[] = [
   {
     section: "Risk primi (piyasaya açık portföy, 2026 kuralları)",
     label: "Beklenen",
+    hint: "Veri 2026 ise MWh başına sapma yüküyle aynıdır; 2025 verisinde 2026 kuralları projeksiyonudur",
     text: (k) => (k.riskPremium ? `${nf(k.riskPremium.expectedTlPerMwh)} TL/MWh` : "6 aydan az veri"),
     value: (k) => k.riskPremium?.expectedTlPerMwh ?? null,
     better: "low",
@@ -112,7 +113,7 @@ const METRICS: Metric[] = [
   {
     section: "Sektör ve YEKDEM",
     label: "Sektördeki yeri",
-    hint: "Santral bazında MWh başına dengesizlik; yalnızca rüzgâr ve güneş",
+    hint: "Santral bazında MWh başına dengesizlik; rüzgâr, güneş ve hidro (barajlı / nehir tipi)",
     text: (k) =>
       k.sector.length
         ? k.sector.map((s) => `${TECH[s.type] ?? s.type}${s.kind === "RESERVOIR" ? " (barajlı)" : s.kind === "RUN_OF_RIVER" ? " (nehir tipi)" : ""}: ${nf(s.unitTl)} TL/MWh, sektörün %${Math.round(100 - s.rankPct)} kadarından iyi`).join(" · ")

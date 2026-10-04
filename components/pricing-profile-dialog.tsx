@@ -113,10 +113,10 @@ export function PricingProfileDialog({
     setSaving(true);
     setError(null);
 
-    const posSurplusNum = parseFloat(positiveSurplus);
-    const posOtherNum = parseFloat(positiveOther);
-    const negDeficitNum = parseFloat(negativeDeficit);
-    const negOtherNum = parseFloat(negativeOther);
+    const posSurplusNum = parseFloat(String(positiveSurplus).replace(',', '.'));
+    const posOtherNum = parseFloat(String(positiveOther).replace(',', '.'));
+    const negDeficitNum = parseFloat(String(negativeDeficit).replace(',', '.'));
+    const negOtherNum = parseFloat(String(negativeOther).replace(',', '.'));
 
     if (
       isNaN(posSurplusNum) ||
@@ -128,7 +128,12 @@ export function PricingProfileDialog({
       isNaN(negOtherNum) ||
       negOtherNum <= 0
     ) {
-      setError("Tüm katsayılar pozitif geçerli sayılar olmalıdır (örn: 0.94).");
+      setError("Tüm katsayılar pozitif geçerli sayılar olmalıdır (örn: 0,94).");
+      setSaving(false);
+      return;
+    }
+    if ([posSurplusNum, posOtherNum, negDeficitNum, negOtherNum].some((v) => v < 0.5 || v > 2)) {
+      setError("Katsayılar 0,5 ile 2 arasında olmalıdır (örn: 0,94 ya da 1,06).");
       setSaving(false);
       return;
     }

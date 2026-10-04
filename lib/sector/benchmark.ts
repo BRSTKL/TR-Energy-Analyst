@@ -204,11 +204,18 @@ export interface TypeDistribution {
   unitImbalanceExOutageTl?: Distribution;
 }
 
-/** Kıyaslamaya alınma şartı: yılın en az %90'ı veri, üretim var, yıllık plan/gerçekleşen oranı 0,75–1,33 */
+/**
+ * Plan / gerçekleşen oranının kabul aralığı. Dar bir aralık (eskiden 0,75–1,33) gerçekten kötü tahmin eden santralleri de
+ * eliyordu: elenenlerin medyan maliyeti kalanların iki katıydı ve sektör medyanı olduğundan düşük çıkıyordu. Aralık yalnızca
+ * veri hatasını (plan hiç girilmemiş ya da santral eşleşmemiş: oran ~0 ya da çok büyük) eleyecek genişlikte.
+ */
+export const PLAN_RATIO_RANGE = { min: 0.5, max: 2 } as const;
+
+/** Kıyaslamaya alınma şartı: yılın en az %90'ı veri, üretim var, yıllık plan/gerçekleşen oranı 0,5–2 */
 export function passesQuality(m: SectorPlantMetrics, expectedHours: number): boolean {
   if (m.hours < expectedHours * 0.9 || m.actualMwh <= 0) return false;
   const planToActual = 1 + m.biasPct / 100;
-  return planToActual >= 0.75 && planToActual <= 1.33;
+  return planToActual >= PLAN_RATIO_RANGE.min && planToActual <= PLAN_RATIO_RANGE.max;
 }
 
 export function buildBenchmark(year: number, all: SectorPlantMetrics[], expectedHours: number): SectorBenchmark {

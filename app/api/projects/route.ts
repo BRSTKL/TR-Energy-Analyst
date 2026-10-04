@@ -70,7 +70,12 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ success: false, error: "İstek gövdesi geçerli bir JSON değil." }, { status: 400 });
+    }
     const { name, description, plants } = body;
 
     if (!name || typeof name !== "string" || name.trim().length === 0) {

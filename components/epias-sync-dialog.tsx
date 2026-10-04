@@ -97,7 +97,12 @@ export function EpiasSyncDialog({
         }
       } else {
         setIsConnected(false);
-        setConnectionError(json.connectionError || json.error || "Bağlantı kurulamadı.");
+        const raw: string = json.connectionError || json.error || "Bağlantı kurulamadı.";
+        setConnectionError(
+          /fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ECONNRESET|timeout|aborted/i.test(raw)
+            ? "EPİAŞ'a ulaşılamadı. Bilgisayarın EPİAŞ'a erişimi (Türkiye içi bağlantı veya VPN) olduğundan emin olun."
+            : raw
+        );
       }
     } catch (err) {
       setIsConnected(false);

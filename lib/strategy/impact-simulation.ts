@@ -96,7 +96,7 @@ export function intradayImpact(
     savingTl,
     hourly,
     `${scopeLabel} saatlerinde dengesizliğin %${INTRADAY_SHARE * 100} payı GİP'te kapatıldı (${hoursWithGip.toLocaleString("tr-TR")} saat; saatlik GİP hacminin en fazla %${DEFAULT_INTRADAY_REALISM.volumeCapPercent} payı, zor saatlerde fiyat kayması %${DEFAULT_INTRADAY_REALISM.stressHaircutPercent}).`,
-    "Kapatılan payın gün içinde öngörülebildiği varsayılır. GİP hacim ve min/maks fiyat verisi olmayan saatlerde ortalama fiyat kullanılır."
+    "Üst sınırdır: eksik üretimin gün içinde doğru öngörüldüğü varsayılır. Öngörü gecikmeli yapılırsa (GİP teslimattan 60 dk önce kapanır; 2 saat önce görülen hata ile) aynı projede kazanç bunun çok altındadır, Geriye Dönük Test sayfasına bakın. GİP hacim ve min/maks fiyat verisi olmayan saatlerde ortalama fiyat kullanılır."
   );
 }
 

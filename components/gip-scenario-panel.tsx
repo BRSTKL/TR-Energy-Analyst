@@ -140,7 +140,7 @@ export function GipScenarioPanel({ projectId, scope }: { projectId: string; scop
     <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50/60 to-white shadow-sm lg:col-span-2">
       <CardHeader className="pb-2">
         <CardTitle className="text-xs font-medium uppercase tracking-wider text-emerald-800">
-          Gerçekçi senaryo: hatanın %{share} payı gün içinde GİP&apos;te kapatılırsa {loading && "· hesaplanıyor…"}
+          Üst sınır (kusursuz öngörü): hatanın %{share} payı doğru yönde GİP&apos;te kapatılırsa {loading && "· hesaplanıyor…"}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -153,6 +153,9 @@ export function GipScenarioPanel({ projectId, scope }: { projectId: string; scop
               </div>
               <div className="text-xs text-slate-600">
                 dengesizlik maliyetinin %{r.realisticShareOfCostPercent.toLocaleString("tr-TR")} payı
+              </div>
+              <div className="mt-1 max-w-xs text-xs font-medium text-amber-800">
+                Hatanın yönü hep doğru bilinir varsayılır; uygulanabilir sonuç için aşağıdaki &quot;Veriyle test&quot; (2 saat önce) satırına bakın.
               </div>
             </div>
             <div className="text-xs text-slate-500">
@@ -208,7 +211,7 @@ export function GipScenarioPanel({ projectId, scope }: { projectId: string; scop
                   <th className="py-1.5 pr-2 text-right">Saat</th>
                   <th className="py-1.5 pr-2 text-right">Dengesizlik maliyeti</th>
                   <th className="py-1.5 pr-2 text-right">Basit</th>
-                  <th className="py-1.5 text-right">Gerçekçi</th>
+                  <th className="py-1.5 text-right">Hacim sınırlı</th>
                 </tr>
               </thead>
               <tbody>
@@ -264,7 +267,7 @@ export function GipScenarioPanel({ projectId, scope }: { projectId: string; scop
                         {tl(st.outOfSampleSavingTl)}
                       </td>
                       <td className="py-1.5 pr-2 text-right tabular-nums">
-                        %{st.outOfSampleSavingPercent.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}
+                        {st.outOfSampleSavingPercent < 0 ? "−" : ""}%{Math.abs(st.outOfSampleSavingPercent).toLocaleString("tr-TR", { maximumFractionDigits: 1 })}
                       </td>
                       <td className="py-1.5 text-right tabular-nums text-slate-500">
                         {st.positiveMonths}/{st.testMonths} ay kazançlı

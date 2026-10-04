@@ -14,6 +14,7 @@ import {
 import { buildReportContext } from "@/lib/services/report-context";
 import { loadProjectHourly } from "@/lib/services/project-hourly";
 import { settleByCompany } from "@/lib/report/plant-report";
+import { classifyHydro } from "@/lib/sector/benchmark";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +77,12 @@ async function handleGET(_request: Request, { params }: { params: { id: string }
           byType: Object.fromEntries(
             Object.entries(s.byType).map(([t, v]) => [t, v ? { values: v.values, median: v.unitImbalanceTl.median } : undefined])
           ),
+          hydroKindOf: (plantId: string) => {
+            const w = withData.find((x) => x.plantId === plantId);
+            if (!w) return null;
+            const known = w.epiasPlantId !== null && w.epiasPlantId !== undefined ? s.hydroKindById?.[w.epiasPlantId] : undefined;
+            return known !== undefined ? known : classifyHydro(w.plantName, w.hourly);
+          },
         };
       }
     }

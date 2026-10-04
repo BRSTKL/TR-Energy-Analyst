@@ -22,6 +22,8 @@ export const BACKUP_DIR = path.join(process.cwd(), "prisma", "backups");
  * çekilebilen piyasa verisi senkronizasyonunda alınmaz (20 yedek ≈ 600 MB'a çıkmıştı, PLAN 7.6).
  */
 export const MAX_BACKUPS = 5;
+/** Silme öncesi alınan yedeklerden ayrıca tutulan sayı */
+export const MAX_DELETE_BACKUPS = 5;
 
 /** Yalnızca SQLite dosya veritabanında yedek alınır (PostgreSQL'e geçilirse no-op). */
 function isSqlite(): boolean {
@@ -56,7 +58,10 @@ export function listBackups(dir = BACKUP_DIR): string[] {
 
 /** En yeni `keep` yedek dışındakileri siler; silinen dosya adlarını döndürür. */
 export function pruneBackups(keep = MAX_BACKUPS, dir = BACKUP_DIR): string[] {
-  const stale = listBackups(dir).slice(keep);
+  // Silme öncesi yedekler ("delete-*") ayrı sayılır: her açılışta alınan yedekler onları itmesin
+  const all = listBackups(dir);
+  const isDelete = (f: string) => /-delete-/.test(f);
+  const stale = [...all.filter((f) => !isDelete(f)).slice(keep), ...all.filter(isDelete).slice(MAX_DELETE_BACKUPS)];
   for (const f of stale) fs.rmSync(path.join(dir, f), { force: true });
   return stale;
 }

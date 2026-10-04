@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { withProjectCache } from "@/lib/services/response-cache";
 import { findProjectWithRecords } from "@/lib/services/project-records";
-import { describeGap, findDataGaps } from "@/lib/analysis/data-completeness";
+import { describeGap, describeZeroPlan, findDataGaps, findZeroPlanHours } from "@/lib/analysis/data-completeness";
 
 export const dynamic = "force-dynamic";
 
@@ -86,6 +86,10 @@ async function handleGET(_request: Request, { params }: { params: { id: string }
       project.plants.map((p) => ({ plantName: p.name, timestamps: p.records.map((r) => r.timestamp.getTime()) }))
     ).map(describeGap);
 
+    const zeroPlanHours = findZeroPlanHours(
+      project.plants.map((p) => ({ plantName: p.name, capacityMw: p.capacityMw, hourly: p.records }))
+    ).map(describeZeroPlan);
+
     return NextResponse.json({
       success: true,
       totalHours,
@@ -103,6 +107,7 @@ async function handleGET(_request: Request, { params }: { params: { id: string }
       months,
       isFullyVerified: totalHours > 0 && verifiedHours === totalHours,
       generationGaps,
+      zeroPlanHours,
       dateRange: {
         start: byHour.size ? new Date(firstHour) : null,
         end: byHour.size ? new Date(lastHour) : null,

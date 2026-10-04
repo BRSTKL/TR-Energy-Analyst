@@ -1165,7 +1165,7 @@ export async function exportPlantReportPptx(
       text(
         s,
         `Olası arıza/kısıntı: ${ev.length} blok, ${nf(ev.reduce((a, e) => a + e.hours, 0), 0)} saat (tahmin kurulu gücün ≥%30'u, üretim ≤%2, ≥3 saat), ` +
-          `dengesizlik riskinin %${nf(r.outages.sharePct, 1)} kadarı` +
+          `santral bazında (netleşmemiş) dengesizlik riskinin %${nf(r.outages.sharePct, 1)} kadarı` +
           (concurrent ? `; ${concurrent} blok birden çok santralde aynı anda (olası kısıntı).` : ".") +
           " Tahmin hatası değil; arıza mı YAT talimatı mı teyit edilmeli.",
         { x: M, y: 6.6, w: CW, h: 0.4, fontSize: 9, color: C.sub, valign: "top" }
@@ -1899,7 +1899,7 @@ export async function exportPlantReportPptx(
             ? ` Eksik veri: ${listOf(r.dataGaps.map(describeGap), 4)}; bu aylar santral ve portföy rakamlarına girmedi.`
             : "") +
           (r.outages.plants.length
-            ? ` Olası arıza/kısıntı blokları (tahmin ≥ kurulu gücün %30'u, üretim ≤ %2, ≥ 3 saat) riskin %${nf(r.outages.sharePct, 1)} kadarı; hesaplardan çıkarılmadı.`
+            ? ` Olası arıza/kısıntı blokları (tahmin ≥ kurulu gücün %30'u, üretim ≤ %2, ≥ 3 saat) santral bazında riskin %${nf(r.outages.sharePct, 1)} kadarı; hesaplardan çıkarılmadı.`
             : ""),
       ],
       [

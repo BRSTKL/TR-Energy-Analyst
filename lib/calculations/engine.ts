@@ -214,6 +214,7 @@ export interface HourlyValidationResult {
   warnings: string[];
 }
 
+// Not: uygulama akışında çağrılmıyor (içe aktarma ayrıştırıcısı ve havuz girdileri kendi doğrulamasını yapar); testli yardımcı olarak duruyor.
 export function validateHourlyInput(
   actualMwh: number,
   forecastMwh: number,
@@ -271,6 +272,7 @@ export function validateHourlyInput(
 /**
  * Zaman serisinde eksik saatleri (gaps) tespit eder.
  */
+// Not: uygulama akışında çağrılmıyor (eksik ay denetimi lib/analysis/data-completeness.ts); testli yardımcı olarak duruyor.
 export function detectMissingHours(
   timestamps: (Date | string)[]
 ): {

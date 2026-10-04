@@ -793,9 +793,9 @@ export default function PlanningEfficiencyPage() {
                   }`}
                 >
                   {currentView.bias.direction === "OVER_FORECAST"
-                    ? `Aşırı Tahmin (+%${currentView.bias.avgBiasPercent})`
+                    ? `Aşırı Tahmin (+%${nf(currentView.bias.avgBiasPercent, 2)})`
                     : currentView.bias.direction === "UNDER_FORECAST"
-                    ? `Eksik Tahmin (%${currentView.bias.avgBiasPercent})`
+                    ? `Eksik Tahmin (%${nf(currentView.bias.avgBiasPercent, 2)})`
                     : "Nötr / Dengeli Dağılım"}
                 </div>
               </div>
@@ -905,7 +905,7 @@ export default function PlanningEfficiencyPage() {
                     {upliftOutcome === "gain" ? (
                       <>
                         Eğer santralin sistematik tahmin yanlılığı ({currentView.bias.avgBiasPercent > 0 ? "+" : ""}
-                        {currentView.bias.avgBiasPercent}%) giderilmiş olsaydı, dönem geliriniz{" "}
+                        {nf(currentView.bias.avgBiasPercent, 2)}%) giderilmiş olsaydı, dönem geliriniz{" "}
                         <strong className="text-emerald-300">
                           {formatSignedPercent(currentView.uplift.upliftPercent)} (
                           {formatSignedTl(currentView.uplift.totalUpliftTl)} ₺)
@@ -921,7 +921,7 @@ export default function PlanningEfficiencyPage() {
                         {currentView.name} için toplam tahmin{" "}
                         {currentView.bias.avgBiasPercent > 0 ? "fazla" : "eksik"} görünüyor (
                         {currentView.bias.avgBiasPercent > 0 ? "+" : ""}
-                        {currentView.bias.avgBiasPercent}%), ancak tahmini tek bir oranla ölçeklemek geliri{" "}
+                        {nf(currentView.bias.avgBiasPercent, 2)}%), ancak tahmini tek bir oranla ölçeklemek geliri{" "}
                         <strong className="text-rose-300">
                           {formatSignedTl(currentView.uplift.totalUpliftTl)} ₺
                         </strong>{" "}
@@ -1261,11 +1261,11 @@ export default function PlanningEfficiencyPage() {
                       </div>
                       <div className="flex items-center gap-1">
                         <span className="h-2.5 w-2.5 rounded-xs bg-emerald-500" />
-                        <span>%96 - %98.5</span>
+                        <span>%96 - %98,5</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <span className="h-2.5 w-2.5 rounded-xs bg-emerald-600" />
-                        <span>&gt; %98.5</span>
+                        <span>&gt; %98,5</span>
                       </div>
                     </div>
                   </div>
@@ -1302,7 +1302,7 @@ export default function PlanningEfficiencyPage() {
                 <TableRow className="bg-slate-50/80">
                   <TableHead className="w-12 text-center text-xs">#</TableHead>
                   <TableHead className="text-xs">Tarih</TableHead>
-                  <TableHead className="text-right text-xs">Verimlilik (%)</TableHead>
+                  <TableHead className="text-right text-xs">Kayıp (₺/MWh)</TableHead>
                   <TableHead className="text-right text-xs">Gerçekleşen (MWh)</TableHead>
                   <TableHead className="text-right text-xs">Tahmin (MWh)</TableHead>
                   <TableHead className="text-right text-xs">Net Sapma</TableHead>
@@ -1333,17 +1333,19 @@ export default function PlanningEfficiencyPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-mono text-xs font-semibold">
-                        <span
-                          className={`rounded-md px-1.5 py-0.5 ${
-                            day.efficiencyRatio >= 0.98
-                              ? "bg-emerald-50 text-emerald-700"
-                              : day.efficiencyRatio >= 0.95
-                              ? "bg-amber-50 text-amber-700"
-                              : "bg-rose-50 text-rose-700"
-                          }`}
-                        >
-                          %{nf(day.efficiencyRatio * 100, 1)}
-                        </span>
+                        {(() => {
+                          const unitLoss = day.totalActualMwh > 0 ? day.lossTl / day.totalActualMwh : 0;
+                          return (
+                            <span
+                              className={`rounded-md px-1.5 py-0.5 ${
+                                unitLoss >= 200 ? "bg-rose-50 text-rose-700" : unitLoss >= 100 ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"
+                              }`}
+                              title={`Verimlilik oranı %${nf(day.efficiencyRatio * 100, 1)} (fiyatı sıfıra yakın günlerde anlamsızlaşır)`}
+                            >
+                              {nf(unitLoss, 0)} ₺
+                            </span>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="text-right font-mono text-xs text-slate-700">
                         {day.totalActualMwh.toLocaleString("tr-TR")}
@@ -1743,7 +1745,7 @@ export default function PlanningEfficiencyPage() {
                                 }`}
                               >
                                 {hourItem.imbalanceMwh > 0 ? "+" : ""}
-                                {hourItem.imbalanceMwh} MWh ({hourItem.direction === "DEFICIT" ? "Açık" : "Fazla"})
+                                {nf(hourItem.imbalanceMwh, 2)} MWh ({hourItem.direction === "DEFICIT" ? "Açık" : "Fazla"})
                               </span>
                             </TableCell>
                             <TableCell className="text-right font-mono text-xs text-slate-700">
@@ -1823,7 +1825,7 @@ export default function PlanningEfficiencyPage() {
                       margin={{ top: 10, right: 30, left: 10, bottom: 5 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="hour" stroke="#64748b" fontSize={11} tickLine={false} />
+                      <XAxis dataKey="hour" stroke="#64748b" fontSize={11} tickLine={false} interval={2} />
                       {/* Sol Eksen: MWh */}
                       <YAxis
                         yAxisId="left"

@@ -13,6 +13,8 @@ interface DataQuality {
   isFullyVerified: boolean;
   /** Ayı eksik santraller ("Boreas 1 Enez RES: Temmuz 2025 yok") */
   generationGaps?: string[];
+  /** Planı 0 iken tam çalışan santraller (plan girilmemiş olabilir) */
+  zeroPlanHours?: string[];
 }
 
 interface DataQualityBannerProps {
@@ -48,7 +50,12 @@ export function DataQualityBanner({ projectId, refreshKey }: DataQualityBannerPr
   }, [projectId, refreshKey]);
 
   if (!quality || quality.totalHours === 0) return null;
-  const gapNotice = <GenerationGapNotice gaps={quality.generationGaps ?? []} />;
+  const gapNotice = (
+    <>
+      <GenerationGapNotice gaps={quality.generationGaps ?? []} />
+      <ZeroPlanNotice items={quality.zeroPlanHours ?? []} />
+    </>
+  );
   if (quality.isFullyVerified) return gapNotice;
 
   const { totalHours, verifiedHours, missingPriceHours, syntheticHours, legacyHours } = quality;
@@ -111,6 +118,28 @@ function GenerationGapNotice({ gaps }: { gaps: string[] }) {
         <p className="text-amber-800">
           Eksik ay santralin birim maliyetini, portföy netleşmesini ve sektör kıyasını etkiler. Veriyi EPİAŞ&apos;tan yeniden
           çekin ya da raporda bu santrali ayrıca belirtin.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ZeroPlanNotice({ items }: { items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div role="alert" className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900 shadow-sm">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+      <div className="space-y-1">
+        <p className="text-sm font-semibold">Bazı saatlerde ilk plan (KGÜP) sıfır, santral ise tam çalışmış.</p>
+        <ul className="list-disc pl-4">
+          {items.slice(0, 8).map((g) => (
+            <li key={g}>{g}</li>
+          ))}
+          {items.length > 8 && <li>… ve {items.length - 8} santral daha</li>}
+        </ul>
+        <p className="text-amber-800">
+          Plan o saatler için girilmemiş ya da ilk sürümde boş kalmış olabilir; bu saatler dengesizlik maliyetini ve sektör
+          sıralamasını şişirir. Gerçek bir tahmin hatası olup olmadığını santral işletmecisiyle teyit edin.
         </p>
       </div>
     </div>

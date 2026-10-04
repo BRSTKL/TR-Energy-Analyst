@@ -195,6 +195,8 @@ async function handleGET(_request: Request, { params }: { params: { id: string }
       portfolio: {
         monthly: portfolioMonthly,
         yearly: portfolioYearly,
+        // Uzlaştırma biriminde netleşmiş saatlerin profili (santral profillerinin toplamı brüt olurdu)
+        hourProfile: hourProfile(portfolioHourly),
       },
       comparison: comparePlants(plantInputs),
       netting: analyzePortfolioNetting(plantInputs, projectProfile),

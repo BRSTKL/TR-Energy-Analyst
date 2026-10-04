@@ -91,6 +91,8 @@ function ScatterPanel({ scatter }: { scatter: ScatterPoint[] }) {
   const pos = useRef<Record<number, { x: number; y: number; r: number }>>({});
   const [sides, setSides] = useState<Side[]>([]);
   // Her çizimden sonra (yeniden boyutlanma dahil) yerleşimi hesapla; değişmediyse durum güncellenmez
+  // Bağımlılık dizisi bilerek yok: yerleşim her çizimde okunur; durum yalnızca değişince güncellendiğinden döngü oluşmaz
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
     const pts = scatter.map((p, i) => ({ ...(pos.current[i] ?? { x: 0, y: 0, r: 0 }), name: p.name }));
     if (pts.some((p) => p.x === 0 && p.y === 0)) return;
@@ -125,7 +127,7 @@ function ScatterPanel({ scatter }: { scatter: ScatterPoint[] }) {
         <ScatterChart margin={{ top: 24, right: 40, bottom: 20, left: 10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
           <XAxis type="number" dataKey="x" name="Üretim" unit=" GWh" tickMargin={6} tick={{ fontSize: 11 }} stroke="#64748b" tickFormatter={(v) => nf(Number(v))} />
-          <YAxis type="number" dataKey="y" name="Endeks" tick={{ fontSize: 11 }} stroke="#64748b" width={48} tickFormatter={(v) => nf(Number(v), 2)} domain={[(d: number) => Math.max(0, Math.floor((d - 0.05) * 10) / 10), (d: number) => Math.ceil((d + 0.03) * 10) / 10]} />
+          <YAxis type="number" dataKey="y" name="Endeks" tick={{ fontSize: 11 }} stroke="#64748b" width={48} tickCount={6} tickFormatter={(v) => nf(Number(v), 2)} domain={[(d: number) => Math.max(0, Math.floor((d - 0.05) * 10) / 10), (d: number) => Math.ceil((d + 0.03) * 10) / 10]} />
           <ZAxis type="number" dataKey="z" range={[40, 400]} />
           <Tooltip
             cursor={{ strokeDasharray: "3 3" }}
@@ -246,8 +248,8 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
     .filter((a) => a.mixAdjustedIndex !== null)
     .map((a) => ({ x: a.productionMwh / 1000, y: a.mixAdjustedIndex!, z: a.coveredPlants, name: shortName(a.name), low: coverage(a) < LOW_COVERAGE }));
 
-  const pill = <T extends string>(value: T, current: T, set: (v: T) => void, text: string) => (
-    <Button key={value} size="sm" variant={current === value ? "default" : "outline"} className="h-8 text-xs" onClick={() => set(value)}>
+  const pill = <T extends string>(value: T, current: T, set: (v: T) => void, text: string, group = "") => (
+    <Button key={`${group}-${value}`} size="sm" variant={current === value ? "default" : "outline"} className="h-8 text-xs" onClick={() => set(value)}>
       {text}
     </Button>
   );
@@ -274,10 +276,10 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
             <span className="ml-3 text-xs font-semibold uppercase tracking-wider text-slate-500" title={`Üretiminin en az %${MIN_TECH_SHARE} kadarı bu teknoloji olan toplayıcılar`}>
               Teknoloji (üretimin %{MIN_TECH_SHARE}+):
             </span>
-            {pill<Mix>("all", mix, setMix, "Tümü")}
-            {pill<Mix>("HES", mix, setMix, "Hidro")}
-            {pill<Mix>("RES", mix, setMix, "Rüzgâr")}
-            {pill<Mix>("GES", mix, setMix, "Güneş")}
+            {pill<Mix>("all", mix, setMix, "Tümü", "mix")}
+            {pill<Mix>("HES", mix, setMix, "Hidro", "mix")}
+            {pill<Mix>("RES", mix, setMix, "Rüzgâr", "mix")}
+            {pill<Mix>("GES", mix, setMix, "Güneş", "mix")}
             <Button size="sm" variant="outline" className="ml-auto h-8 gap-1.5 text-xs" onClick={downloadCsv}>
               <Download className="h-3.5 w-3.5" /> CSV
             </Button>
