@@ -184,7 +184,70 @@ export function checkReportData(r: PlantReportData, bridge?: BridgeStep[]): Repo
   if (r.marketProfile.captureRatePct <= 0 && t.actualMwh > 0) warn("capture-rate", "Yakalanan fiyat oranı 0 ya da negatif.");
 
   // Köprü
-  if (bridge) issues.push(...checkBridge(bridge));
+  if (bridge) {
+    issues.push(...checkBridge(bridge));
+    issues.push(...checkIntradayBridge(r, bridge));
+  }
+  return issues;
+}
+
+/**
+ * Gün içi anlatımı (4 Ekim 2026, Gain): rapor gerçekleşen gün içi düzeltmenin dengesizliği %26 azalttığını gösterirken
+ * özet, köprü ve fırsatlarda "gün içi en fazla %1 azaltır" diyordu. Kurallar raporun karar fonksiyonundan bağımsız:
+ * - son planı olan saatler dönemin en az %90'ıysa ve azalma ≥ %0,5 ise köprüde gerçekleşen adımı bulunur;
+ * - kural tabanlı strateji (ilk plana göre) gerçekleşenden fazlasını vaat etmiyorsa köprüde gün içi senaryosu bulunmaz.
+ */
+function realizedIntraday(r: PlantReportData): number | null {
+  const ie = r.intradayEffect;
+  return ie && ie.coveragePct >= 90 && ie.reductionPct >= 0.5 ? ie.reductionPct : null;
+}
+
+function intradayStrategyDominated(r: PlantReportData): boolean {
+  const realized = realizedIntraday(r);
+  const strategy = r.intraday && r.intraday.savingTl > 0 ? r.intraday.savingPct : null;
+  return realized !== null && (strategy === null || strategy - realized < 0.5);
+}
+
+export function checkIntradayBridge(r: PlantReportData, bridge: BridgeStep[]): ReportIssue[] {
+  const issues: ReportIssue[] = [];
+  const realized = realizedIntraday(r);
+  const realizedStep = bridge.find((st) => st.kind === "realized");
+  if (realized !== null && !realizedStep)
+    issues.push({
+      level: "error",
+      rule: "intraday-realized",
+      message: `Gün içi düzeltmeler dengesizliği %${realized.toFixed(0)} azaltıyor ama köprüde gerçekleşen gün içi adımı yok (rapor gün içi öncesi rakamla kalıyor).`,
+    });
+  if (realizedStep && r.intradayEffect && !r.coefficients2026 && r.intradayEffect.coveragePct >= 99.9) {
+    const cut = r.intradayEffect.firstCostTl - r.intradayEffect.finalCostTl;
+    if (!near(-realizedStep.value, cut))
+      issues.push({ level: "error", rule: "intraday-cut", message: `Köprüdeki gün içi adımı ${fmt(-realizedStep.value)}, ilk plan − son plan ${fmt(cut)}.` });
+  }
+  if (intradayStrategyDominated(r) && bridge.some((st) => st.kind === "scenario" && /gün içi/i.test(st.label)))
+    issues.push({
+      level: "error",
+      rule: "intraday-scenario",
+      message: `Köprüde gün içi senaryosu var, ama gerçekleşen gün içi düzeltme (%${realized!.toFixed(0)}) kural tabanlı stratejiden (%${(r.intraday?.savingPct ?? 0).toFixed(0)}) büyük: senaryo ek fırsat değil.`,
+    });
+  return issues;
+}
+
+/**
+ * Slayt metninde gün içi vaadi: strateji gerçekleşenden fazlasını vaat etmiyorsa hiçbir slayt "gün içi … en fazla %X"
+ * diye fırsat sunmamalı (özet, köprü başlığı, fırsatlar, tek sayfa özet).
+ */
+export function checkIntradayText(r: PlantReportData, slides: Array<{ slide: number; text: string }>): ReportIssue[] {
+  if (!intradayStrategyDominated(r)) return [];
+  const issues: ReportIssue[] = [];
+  for (const { slide, text } of slides) {
+    const m = text.match(/[Gg]ün içi[^.]{0,140}?en fazla %\d+/);
+    if (m)
+      issues.push({
+        level: "error",
+        rule: "intraday-text",
+        message: `Slayt ${slide}: gün içi fırsatı vaat ediliyor ("${m[0].slice(0, 90)}…"), ama gerçekleşen gün içi düzeltme stratejiden büyük.`,
+      });
+  }
   return issues;
 }
 

@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { buildPlantReport } from "@/lib/report/plant-report";
 import { anonymizeReport } from "@/lib/report/anonymize";
-import { buildBridgeSteps, exportPlantReportPptx } from "@/lib/export/plant-report-pptx";
+import { buildBridgeSteps, exportPlantReportPptx, intradayView } from "@/lib/export/plant-report-pptx";
 import {
   checkBridge,
+  checkIntradayBridge,
+  checkIntradayText,
   checkReportData,
   checkSlideTables,
   checkSlideTexts,
@@ -117,5 +119,65 @@ describe("Rapor tutarlılık denetimi", () => {
     expect(checkReportData(plants).map((i) => i.rule)).toEqual(expect.arrayContaining(["plant-count", "plants-sum-cost"]));
     const nan = { ...r, totals: { ...r.totals, actualMwh: Number.NaN } };
     expect(checkReportData(nan).map((i) => i.rule)).toContain("finite");
+  });
+
+  /** Gerçekleşen gün içi azalma ve kural tabanlı strateji (ilk plana göre) verilmiş rapor */
+  function withIntraday(realizedPct: number, strategyPct: number) {
+    const r = sampleReport();
+    const cost = r.totals.imbalanceCostTl;
+    return {
+      ...r,
+      intradayEffect: {
+        hoursWithFinal: r.period.hours,
+        coveragePct: 100,
+        firstCostTl: cost,
+        finalCostTl: cost * (1 - realizedPct / 100),
+        reductionPct: realizedPct,
+        absDevFirstMwh: 1000,
+        absDevFinalMwh: 800,
+        staticPlants: ["KARADERE 3 RES"],
+        topAdjusters: [],
+      },
+      intraday: { savingTl: (strategyPct / 100) * cost, savingPct: strategyPct, testMonths: 1, firstTestMonth: "2026-02", lastTestMonth: "2026-02", lagHours: 2 },
+    };
+  }
+
+  it("gün içi: gerçekleşen düzeltme stratejiden büyükse köprü gerçekleşeni gösterir, senaryo fırsat sayılmaz (Gain: %26 ve %1)", async () => {
+    const r = withIntraday(26, 1);
+    const { steps, afterIntraday } = buildBridgeSteps(r);
+    expect(steps.map((s) => s.kind)).toContain("realized");
+    expect(steps.some((s) => s.kind === "scenario")).toBe(false);
+    expect(afterIntraday).toBeCloseTo((buildBridgeSteps(r).loadEnd - r.totals.imbalanceCostTl * 0.26), 0);
+    expect(checkReportData(r, steps).filter((i) => i.level === "error")).toEqual([]);
+    const slides = await extractSlideTexts(await exportPlantReportPptx(r));
+    expect(checkIntradayText(r, slides)).toEqual([]);
+    expect(slides.some((s) => s.text.includes("Gün içi düzeltmeler (zaten alınıyor)"))).toBe(true);
+    const summary = await extractSlideTexts(await exportPlantReportPptx(r, {}, { summaryOnly: true }));
+    expect(checkIntradayText(r, summary)).toEqual([]);
+  });
+
+  it("gün içi: eski anlatımı yakalar (gerçekleşen adımı yok, %1 senaryo ve 'en fazla %1' vaadi)", () => {
+    const r = withIntraday(26, 1);
+    const cost = r.totals.imbalanceCostTl;
+    const old = [
+      { label: "Dengesizlik riski", value: cost, kind: "total" as const },
+      { label: "KÜPST (tahmini)", value: r.kupst.totalTl, kind: "kupst" as const },
+      { label: "Sapma yükü", value: cost + r.kupst.totalTl, kind: "total" as const },
+      { label: "Gün içi güncelleme, üst sınır (%1)", value: -0.01 * cost, kind: "scenario" as const },
+      { label: "Ulaşılabilir", value: cost + r.kupst.totalTl - 0.01 * cost, kind: "target" as const },
+    ];
+    expect(checkIntradayBridge(r, old).map((i) => i.rule).sort()).toEqual(["intraday-realized", "intraday-scenario"]);
+    const text = [{ slide: 2, text: "Tahmin hatası 2 saat önceden görülüp kısmen gün içi piyasada kapatılırsa dengesizlik riski en fazla %1 azalır." }];
+    expect(checkIntradayText(r, text).map((i) => i.rule)).toEqual(["intraday-text"]);
+  });
+
+  it("gün içi: strateji gerçekleşenden fazlasını vaat ediyorsa yalnız fark ek fırsat olarak gösterilir", async () => {
+    const r = withIntraday(5, 12);
+    const iv = intradayView(r);
+    expect(iv.extra?.pct).toBeCloseTo(7, 6);
+    const { steps } = buildBridgeSteps(r);
+    expect(steps.map((s) => s.kind)).toEqual(expect.arrayContaining(["realized", "scenario", "target"]));
+    expect(checkReportData(r, steps).filter((i) => i.level === "error")).toEqual([]);
+    expect(checkIntradayText(r, await extractSlideTexts(await exportPlantReportPptx(r)))).toEqual([]);
   });
 });

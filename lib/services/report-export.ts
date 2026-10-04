@@ -11,7 +11,7 @@ import { buildReportContext } from "@/lib/services/report-context";
 import { buildBridgeSteps, exportPlantReportPptx, type ReportAuthor } from "@/lib/export/plant-report-pptx";
 import { reportCostChange } from "@/lib/services/cost-change";
 import { projectCandidates } from "@/lib/services/candidates";
-import { checkReportData, checkSlideTables, checkSlideTexts, extractSlideTables, extractSlideTexts, type ReportIssue } from "@/lib/report/report-checks";
+import { checkIntradayText, checkReportData, checkSlideTables, checkSlideTexts, extractSlideTables, extractSlideTexts, type ReportIssue } from "@/lib/report/report-checks";
 
 export interface ReportVariant {
   /** Anonim örnek: santral, üretici ve toplayıcı adları takma adla */
@@ -64,9 +64,11 @@ export async function buildReportExport(projectId: string, variant: ReportVarian
         data.project.name,
       ]
     : [];
+  const slides = await extractSlideTexts(buffer);
   const issues = [
     ...checkReportData(report, buildBridgeSteps(report).steps),
-    ...checkSlideTexts(await extractSlideTexts(buffer), forbidden),
+    ...checkSlideTexts(slides, forbidden),
+    ...checkIntradayText(report, slides),
     ...checkSlideTables(await extractSlideTables(buffer)),
   ];
 

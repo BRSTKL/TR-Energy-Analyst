@@ -15,7 +15,7 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.8";
+const VERSION = "1.9";
 const VERSION_DATE = "4 Ekim 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
@@ -512,7 +512,7 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
                 ],
                 ["Maliyet ayrıştırması (Gain 2025 → 2026)", "Dört kalem farkın %97'sini açıklıyor; kalan etkileşim"],
                 ["Piyasa verisi", "2024, 2025 ve 2026 fiyatları ve resmi dengesizlik fiyatları EPİAŞ'tan; eski formatta kayıt kalmadı"],
-                ["Otomatik testler", "342 test (4.10.2026); her değişiklikte çalıştırılır"],
+                ["Otomatik testler", "345 test (4.10.2026); her değişiklikte çalıştırılır"],
                 ["Rapor tutarlılık denetimi", "Her PowerPoint raporu indirilmeden önce denetlenir: köprü kapanıyor mu, tablo toplamları satırları tutuyor mu, aylar ve ısı haritası dönem toplamına eşit mi, netleşme ve risk primi tutarlı mı, bozuk değer ya da anonim sürümde gerçek ad var mı. Hata varsa rapor verilmez. 7 projenin 28 raporu (4 sürüm) hatasız"],
               ]}
             />
@@ -640,6 +640,11 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.9",
+                  "4 Ekim 2026",
+                  "Gün içi anlatımı tekleştirildi. Gerçekleşen gün içi düzeltme (ilk plan → son plan, aynı fiyatlar) köprüde kesin hesap olarak gösterilir: sapma yükü gün içi öncesi ve sonrası birlikte (Gain: 33,1 → 24,6 M TL). Kural tabanlı gün içi stratejisi (2 saat önce görülen hatanın kapatılması, geriye dönük test) aynı tabandan ölçüldüğü için gerçekleşenle karşılaştırılır; yalnız gerçekleşenden fazlası ek fırsat sayılır. Önceden rapor gerçekleşen %26 azalmayı gösterirken özet, köprü ve fırsatlarda 'gün içi en fazla %1 azaltır' diyordu. Rapor denetimi bu çelişkiyi artık hata sayar.",
+                ],
                 [
                   "1.8",
                   "4 Ekim 2026",
