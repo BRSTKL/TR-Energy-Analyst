@@ -316,7 +316,7 @@ export async function exportPlantReportPptx(
     text(
       s,
       `${periodLabel(r)} · ${t.plantCount} santral · ${nf(t.capacityMw, 0)} MW${
-        agg ? ` · Toplayıcı portföyü: ${agg.name}` : singleCompany ? ` · ${singleCompany}` : ""
+        agg ? ` · ${agg.name} portföyü` : singleCompany ? ` · ${singleCompany}` : ""
       }`,
       { x: M + 0.1, y: 3.05, w: CW - 0.2, h: 0.45, fontSize: 16, color: "C9D6E3" }
     );
@@ -1001,7 +1001,8 @@ export async function exportPlantReportPptx(
         cell(a.mixAdjustedIndex !== null ? nf(a.mixAdjustedIndex, 2) : "–", { ...o, align: "right", bold: true }),
       ];
     });
-    const rowH = Math.min(0.36, 3.9 / (n + 1));
+    // Tablo, iki madde satırı ve dipnot alt bilginin üstüne sığsın (14+ toplayıcıda dipnot maddelerin üstüne biniyordu)
+    const rowH = Math.min(0.36, 3.55 / (n + 1));
     s.addTable([head, ...rows] as any, {
       x: M,
       y: 1.95,
@@ -1012,7 +1013,7 @@ export async function exportPlantReportPptx(
       margin: [0, 0.08, 0, 0.08],
       valign: "middle",
     });
-    const yBelow = 1.95 + (n + 1) * rowH + 0.25;
+    const yBelow = 1.95 + (n + 1) * rowH + 0.15;
     const facts = [
       `Endeks ${nf(self.mixAdjustedIndex ?? 0, 2)}: sektörün ortalama santralleri aynı karışımla tek başına ${formatTlShort(self.expectedCostTl)} öderdi; ${agg.name} portföyü ${formatTlShort(self.portfolioCostTl)} ödüyor.`,
       pe.rankIndex === 1
@@ -1028,7 +1029,7 @@ export async function exportPlantReportPptx(
       s,
       `Endeks = portföyde netleşmiş dengesizlik / Σ üretim × teknolojinin sektör medyanı (rüzgâr, güneş, hidro; santral tek başına); 1'in altı daha iyi, karışımdan bağımsız. Grup: ${pe.label} üretimi ${pe.maxProductionMwh ? `${formatEnergy(pe.minProductionMwh)}–${formatEnergy(pe.maxProductionMwh)} arası` : `${formatEnergy(pe.minProductionMwh)} üstü`} toplayıcılar (diğer ${pe.othersCount} toplayıcı farklı ölçekte). ` +
         `EPİAŞ'ın ${pe.membershipAsOf} tarihli toplayıcı listeleri (santraller dönem boyunca portföydeymiş gibi), santral bazında üretimi yayımlanan lisanslı santraller, resmi dengesizlik fiyatı, ilk KGÜP, KÜPST hariç.`,
-      { x: M, y: 6.35, w: CW, h: 0.6, fontSize: 9, color: C.sub, valign: "top" }
+      { x: M, y: Math.max(6.35, yBelow + facts.length * 0.36 + 0.02), w: CW, h: 0.6, fontSize: 9, color: C.sub, valign: "top" }
     );
   }
 

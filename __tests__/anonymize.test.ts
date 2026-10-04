@@ -20,7 +20,7 @@ describe("rapor anonimleştirme", () => {
     const text = JSON.stringify(report);
     for (const n of ["SARMAŞIK", "MERSİN", "AGE ENERJİ", "GALATA", "Inavitas", "INAVITAS", "AKSA"]) expect(text).not.toContain(n);
     expect(report.plants.map((p: any) => p.name)).toEqual(["HES-01", "HES-02", "RES-01"]);
-    expect(report.notes[0]).toBe("En kötü: HES-02 ve HES-01; sahibi Üretici 01; Toplayıcı portföyü");
+    expect(report.notes[0]).toBe("En kötü: HES-02 ve HES-01; sahibi Üretici 01; Toplayıcı X portföyü");
     expect(report.totals.imbalanceCostTl).toBe(123.45);
   });
 });

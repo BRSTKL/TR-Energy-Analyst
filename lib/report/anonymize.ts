@@ -45,9 +45,9 @@ export function anonymizeReport(
   owners.forEach((o, i) => add(o, `Üretici ${pad(i + 1)}`));
   // Toplayıcı ve kıyastaki diğer toplayıcılar
   if (r.aggregator) {
-    add(r.aggregator.name, "Toplayıcı");
+    add(r.aggregator.name, "Toplayıcı X");
     // Marka adı tek başına da geçebilir ("Inavitas"): uzun adlar önce değiştirildiği için güvenli
-    add(r.aggregator.name.split(/\s+/)[0], "Toplayıcı");
+    add(r.aggregator.name.split(/\s+/)[0], "Toplayıcı X");
   }
   for (const [i, a] of (r.peers?.rows ?? []).entries()) {
     if (a.id === r.peers!.selfId) add(a.name, "Bu portföy");

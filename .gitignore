@@ -53,3 +53,6 @@ scripts/tmp/
 
 # Veri havuzu (PLAN 7)
 /data/
+
+# Üretilmiş raporlar (şirket adları içerir)
+/Raporlar/
