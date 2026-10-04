@@ -465,10 +465,15 @@ export async function exportPlantReportPptx(
     if (agg) {
       // Toplayıcı: aynı sahibin santralleri zaten kendi dengesinde netleşir; toplayıcının kattığı değer ayrıca gösterilir
       // (özet slaytındaki "portföy değeri" ile aynı rakam, 8.3)
-      steps.push({ label: "Santraller tek tek uzlaştırılsaydı", value: r.settlement.plantLevelCostTl, kind: "total" });
+      // Sahip içi netleşme küçükse (çoğu sahibin tek santrali var) ayrı sütun yerine köprü sahiplerin kendi dengesinden
+      // başlar: aksi halde gizlenen adım yüzünden sütunlar kapanmıyordu (Gain: 73,6 − 41,2 ≠ 32,2) ve özetteki rakamla ayrışıyordu
       const ownerNetting = r.settlement.plantLevelCostTl - agg.standaloneCostTl;
-      if (ownerNetting > 0.005 * r.settlement.plantLevelCostTl)
+      if (ownerNetting > 0.005 * r.settlement.plantLevelCostTl) {
+        steps.push({ label: "Santraller tek tek uzlaştırılsaydı", value: r.settlement.plantLevelCostTl, kind: "total" });
         steps.push({ label: "Aynı sahibin santralleri", value: -ownerNetting, kind: "down" });
+      } else {
+        steps.push({ label: "Santraller sahiplerinin kendi dengesinde", value: agg.standaloneCostTl, kind: "total" });
+      }
       steps.push({ label: "Toplayıcının kattığı değer", value: -agg.benefitTl, kind: "value" });
     } else if (netted) {
       steps.push({ label: "Santraller tek tek uzlaştırılsaydı", value: r.settlement.plantLevelCostTl, kind: "total" });
@@ -1027,6 +1032,11 @@ export async function exportPlantReportPptx(
     );
     text(
       s,
+      // Kıyas EPİAŞ toplayıcı listesindeki tüm lisanslı santrallerle yapılır; proje daha az santral içeriyorsa rakamlar
+      // raporun geri kalanından farklı çıkar (Gain: tabloda 38 santral 43,5 M, raporda 35 santral 41,2 M), bunu söyle
+      (self.coveredPlants !== r.plants.length
+        ? `Bu tabloda ${agg.name} EPİAŞ listesindeki ${self.coveredPlants} santraliyle yer alır; raporun diğer slaytları projedeki ${r.plants.length} santralle hesaplandı, rakamlar bu yüzden biraz farklıdır. `
+        : "") +
       `Endeks = portföyde netleşmiş dengesizlik / Σ üretim × teknolojinin sektör medyanı (rüzgâr, güneş, hidro; santral tek başına); 1'in altı daha iyi, karışımdan bağımsız. Grup: ${pe.label} üretimi ${pe.maxProductionMwh ? `${formatEnergy(pe.minProductionMwh)}–${formatEnergy(pe.maxProductionMwh)} arası` : `${formatEnergy(pe.minProductionMwh)} üstü`} toplayıcılar (diğer ${pe.othersCount} toplayıcı farklı ölçekte). ` +
         `EPİAŞ'ın ${pe.membershipAsOf} tarihli toplayıcı listeleri (santraller dönem boyunca portföydeymiş gibi), santral bazında üretimi yayımlanan lisanslı santraller, resmi dengesizlik fiyatı, ilk KGÜP, KÜPST hariç.`,
       { x: M, y: Math.max(6.35, yBelow + facts.length * 0.36 + 0.02), w: CW, h: 0.6, fontSize: 9, color: C.sub, valign: "top" }
@@ -1647,7 +1657,7 @@ export async function exportPlantReportPptx(
         impact: r.dsg.benefitTl > 0 ? `${formatTlShort(r.dsg.benefitTl)} · %${nf(r.dsg.benefitPct, 0)}` : "Belirgin fayda yok",
         value: r.dsg.benefitTl,
         body:
-          `Saatlerin %${nf(r.dsg.offsettingHourSharePct, 0)} kadarında bir şirket fazla, bir diğeri eksik üretiyor; grup bu saatlerde kendi içinde dengelenir. ` +
+          `${r.dsg.offsettingHourSharePct >= 99.5 ? "Neredeyse her saatte" : `Saatlerin %${nf(r.dsg.offsettingHourSharePct, 0)} kadarında`} bir şirket fazla, bir diğeri eksik üretiyor; grup bu saatlerde kendi içinde dengelenir. ` +
           (() => {
             const mr = monthlyRange(r.dsg.monthlyBenefit);
             return mr ? `Fayda her ay %${nf(mr.min, 0)}–${nf(mr.max, 0)}. ` : "";
@@ -1661,7 +1671,7 @@ export async function exportPlantReportPptx(
         title: `${agg.name} portföyünde netleşme (zaten alınıyor)`,
         impact: `${formatTlShort(agg.benefitTl)} · %${nf(agg.benefitPct, 0)}`,
         body:
-          `Saatlerin %${nf(agg.offsettingHourSharePct, 0)} kadarında bir sahibin santrali fazla, diğerininki eksik üretiyor; portföy bu saatlerde kendi içinde dengelenir. ` +
+          `${agg.offsettingHourSharePct >= 99.5 ? "Neredeyse her saatte" : `Saatlerin %${nf(agg.offsettingHourSharePct, 0)} kadarında`} bir sahibin santrali fazla, diğerininki eksik üretiyor; portföy bu saatlerde kendi içinde dengelenir. ` +
           (() => {
             const mr = monthlyRange(agg.monthlyBenefit);
             return mr ? `Fayda tek seferlik değil: her ay %${nf(mr.min, 0)}–${nf(mr.max, 0)}. ` : "";
@@ -1801,6 +1811,7 @@ export async function exportPlantReportPptx(
       ]);
     }
     const bold = { bold: true, fill: { color: "E6EBF0" } };
+    const plantKupstTl = r.plants.reduce((a, p) => a + p.kupstTl, 0);
     rows.push([
       cell("Toplam (santral bazında)", bold),
       cell("", bold),
@@ -1808,7 +1819,8 @@ export async function exportPlantReportPptx(
       cell(formatEnergy(t.actualMwh), { ...bold, align: "right" }),
       cell(formatTlShort(r.settlement.plantLevelCostTl, 2), { ...bold, align: "right" }),
       cell(nf(plantLevelUnit, 0), { ...bold, align: "right" }),
-      cell(formatTlShort(r.kupst.totalTl, 2), { ...bold, align: "right" }),
+      // Santral satırlarındaki KÜPST santral tek başına; toplamı da öyle. Topluluk (portföy) KÜPST'ü portföy satırında
+      cell(formatTlShort(plantKupstTl, 2), { ...bold, align: "right" }),
       cell(`%${nf(t.deviationPct, 1)}`, { ...bold, align: "right" }),
     ]);
     if (netted) {
@@ -1819,7 +1831,7 @@ export async function exportPlantReportPptx(
         cell("", bold),
         cell(formatTlShort(cost, 2), { ...bold, align: "right", color: C.cost }),
         cell(nf(t.unitCostTl, 0), { ...bold, align: "right" }),
-        cell("", bold),
+        cell(Math.abs(r.kupst.totalTl - plantKupstTl) > 1 ? formatTlShort(r.kupst.totalTl, 2) : "", { ...bold, align: "right" }),
         cell("", bold),
       ]);
     }
@@ -1845,10 +1857,15 @@ export async function exportPlantReportPptx(
     const ownerList = Array.from(ownerGroups.entries()).sort((a, b) => b[1].length - a[1].length);
     const owners = agg
       ? ownerList.length > 6
-        ? `Santraller ${agg.name} portföyünde tek dengede uzlaştırıldı. ${ownerList.length} lisans sahibi; en çok santrali olanlar: ${ownerList
-            .slice(0, 4)
-            .map(([o, ps]) => `${o} (${ps.length})`)
-            .join("; ")}.`
+        ? `Santraller ${agg.name} portföyünde tek dengede uzlaştırıldı. ${ownerList.length} lisans sahibi` +
+          // Yalnız birden çok santrali olan sahipler "en çok santrali olanlar" sayılır (tek santrallileri listelemek yanıltıyordu)
+          (ownerList[0][1].length > 1
+            ? `; birden çok santrali olanlar: ${ownerList
+                .filter(([, ps]) => ps.length > 1)
+                .slice(0, 4)
+                .map(([o, ps]) => `${o} (${ps.length})`)
+                .join("; ")}.`
+            : "; her sahibin bir santrali var.")
         : `Santraller ${agg.name} portföyünde tek dengede uzlaştırıldı. Lisans sahipleri: ${ownerList
             .map(([o, ps]) => `${o} (${ps.join(", ")})`)
             .join("; ")}.`
@@ -1925,7 +1942,7 @@ export async function exportPlantReportPptx(
         : []),
       [
         "Etiketler",
-        `KESİN HESAP: veriden doğrudan. TAHMİNİ: tolerans oranı ve dayanağı tam doğrulanmamış hesap (KÜPST). VARSAYIMA BAĞLI: bir varsayıma dayanır (risk primi, adil prim paylaşımı). SENARYO: davranış varsayımı; taahhüt değildir.`,
+        `KESİN HESAP: veriden doğrudan. TAHMİNİ: mevzuata dayanır ama açık veriyle tam yeniden üretilemez (KÜPST: arıza sayısına bağlı katsayı ve tolerans ayrıntıları). VARSAYIMA BAĞLI: bir varsayıma dayanır (risk primi, adil prim paylaşımı). SENARYO: davranış varsayımı; taahhüt değildir.`,
       ],
     ];
     // Satır yüksekliği metin uzunluğuna göre: aynı satırdaki iki bloğun uzun olanı belirler (sabit adım uzun metni
