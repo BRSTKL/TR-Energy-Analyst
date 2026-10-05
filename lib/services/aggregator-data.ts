@@ -11,6 +11,7 @@ import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import { readRange } from "@/lib/pool/pool-codec";
 import { readPoolYear } from "@/lib/pool/pool-store";
+import { loadOwnerEntries } from "@/lib/services/epias-plants";
 import type { AggregatorBenchmarkRow, BenchmarkHourPrice, BenchmarkPlant } from "@/lib/analysis/aggregator-benchmark";
 import { aggregatorDetail, type AggregatorDetail } from "@/lib/analysis/aggregator-detail";
 
@@ -44,9 +45,11 @@ export async function loadBenchmarkPlants(ids: number[], year: number, start: st
   const plants = new Map<number, BenchmarkPlant>();
   // Karnede olmayan santrallerin (adından tür anlaşılmadığı için atlananlar) sahibi EPİAŞ sahiplik önbelleğinden: yoksa
   // aynı şirketin santralleri ayrı sahip sayılıyor, netleşme değeri projeden farklı çıkıyordu (Inavitas 297,2 / 297,0 M)
-  const owners = new Map<number, { organizationName?: string | null }>(
-    readJson<{ entries: Array<[number, { organizationName?: string | null }]> }>(path.join(CACHE, "plant-owners-2025.json"))?.entries ?? []
-  );
+  // Önce yılın yeni şirket taraması, sonra tam dizin: tam dizindeki sahip önceliklidir (yeni tarama yalnız eksikleri tamamlar)
+  const owners = new Map<number, { organizationName?: string | null }>([
+    ...(readJson<{ entries: Array<[number, { organizationName?: string | null }]> }>(path.join(CACHE, `plant-owners-${year}-new.json`))?.entries ?? []),
+    ...(await loadOwnerEntries(year)),
+  ]);
   for (const id of ids) {
     const doc = await readPoolYear(id, year);
     if (!doc) continue;

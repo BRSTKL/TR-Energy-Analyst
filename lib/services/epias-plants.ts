@@ -139,7 +139,11 @@ export interface PlantOwner {
   organizationName: string;
 }
 
-// Santral sahipliği nadiren değişir; tam tarama ~1.300 şirket ister (hız sınırıyla ~20 dk). Bu yüzden uzun geçerli
+// Santral sahipliği nadiren değişir; tam tarama ~1.300 şirket ister (hız sınırıyla ~20 dk). Bu yüzden uzun geçerli.
+// DİKKAT: toplayıcıya giren santral EPİAŞ'ta sahibinin değil toplayıcının altında listelenir (toplayıcı taranmaz). 2026
+// tam taraması bu yüzden 2025'in 1.845 santralinden 1.196'sını buldu (projelerdeki 278 sahipli santralin 31'i): toplayıcı
+// dönemindeki bir yıl için tam dizin kurmak sahipleri siler. Sahip için 2025 dizini, yeni santraller için
+// scanNewOrganizations (yalnız eksikleri tamamlar) kullanılır.
 const INDEX_TTL_MS = 180 * 24 * 3_600_000;
 const indexFile = (year: number) => path.join(process.cwd(), ".cache", "epias", `plant-owners-${year}.json`);
 
@@ -176,6 +180,50 @@ async function nearestOwnerIndex(year: number): Promise<OwnerIndexFile | null> {
     // klasör yok
   }
   return null;
+}
+
+const newOrgsFile = (year: number) => path.join(process.cwd(), ".cache", "epias", `plant-owners-${year}-new.json`);
+/** Bir istekte taranacak en çok yeni şirket (2 paralel istekle ~1 dk) */
+const NEW_ORG_SCAN_MAX = 200;
+
+/**
+ * Yıl dizini yokken en yakın yılın dizini kullanılır; o yıl devreye giren santraller (çoğu yeni kurulan proje şirketinin)
+ * orada yoktur ve "EPİAŞ bilgilerini güncelle" sahiplerini hiç bulamıyordu (Inavitas: G4-BOR-1 GES, IĞDIR DGES…). Bu
+ * fonksiyon yalnız `year` içinde listelenip temel dizinde taranmamış şirketleri tarar (tam tarama ~20 dk, bu birkaç
+ * saniye ile 1 dk). Sonuç ayrı dosyada birikir (plant-owners-<yıl>-new.json; tam dizin sayılmaz).
+ */
+export async function scanNewOrganizations(year: number, baseScanned: Iterable<number>): Promise<Map<number, PlantOwner>> {
+  const file = newOrgsFile(year);
+  let saved: { entries: Array<[number, PlantOwner]>; scanned: number[] } = { entries: [], scanned: [] };
+  try {
+    saved = JSON.parse(await fs.readFile(file, "utf8"));
+  } catch {
+    // yok: ilk tarama
+  }
+  const start = `${year}-01-01`;
+  const end = `${year}-12-31`;
+  const known = new Set<number>([...Array.from(baseScanned), ...saved.scanned]);
+  const todo = (await listOrganizations(start, end)).filter((o) => !known.has(o.id) && !isAggregatorName(o.name)).slice(0, NEW_ORG_SCAN_MAX);
+  const owners = new Map<number, PlantOwner>(saved.entries);
+  const scanned = new Set<number>(saved.scanned);
+  let next = 0;
+  const worker = async () => {
+    while (next < todo.length) {
+      const org = todo[next++];
+      try {
+        for (const p of await listPlantsByOrganization(org.id, start, end)) owners.set(p.id, { organizationId: org.id, organizationName: org.name });
+        scanned.add(org.id);
+      } catch {
+        // sonraki istekte yeniden denenir
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: 2 }, worker));
+  if (todo.length) {
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(file, JSON.stringify({ entries: Array.from(owners.entries()), scanned: Array.from(scanned) }));
+  }
+  return owners;
 }
 
 /** Diskteki en yakın yılın tam sahip dizini (EPİAŞ'a bağlanmaz); yoksa boş */
@@ -329,6 +377,21 @@ export async function resolvePlantMeta(
           errors.push(`${idx.pending} şirketin santral listesi henüz alınamadı; bazı santrallerin sahibi bulunamamış olabilir. Tekrar denendiğinde kalan şirketler taranır.`);
         }
         return idx.owners;
+      })
+      .then(async (owners) => {
+        // En yakın yılın dizininde olmayan santraller için o yılın yeni şirketleri taranır
+        const missing = ids.filter((id) => !owners.has(id));
+        if (!missing.length) return owners;
+        const base = await nearestOwnerIndex(year);
+        const fresh = await scanNewOrganizations(year, base?.scanned ?? []).catch(() => new Map<number, PlantOwner>());
+        const merged = new Map(owners);
+        for (const id of missing) if (fresh.has(id)) merged.set(id, fresh.get(id)!);
+        const still = missing.filter((id) => !merged.has(id)).length;
+        if (still > 0)
+          errors.push(
+            `${still} santralin sahibi EPİAŞ'ta yok: toplayıcı portföyüne doğrudan giren yeni santraller ve LÜY birimleri toplayıcının altında listelenir, sahibi yayımlanmaz. Ayrı sahip sayılır.`
+          );
+        return merged;
       })
       .catch((e) => {
         errors.push(e instanceof Error ? e.message : "Şirket bilgisi alınamadı.");

@@ -128,9 +128,9 @@ export function ReportDownloadDialog({
   if (check) {
     for (const m of check.missing) warnings.push(`${m.company} şirketinin ${m.plants.length} santrali projede yok: ${m.plants.join(", ")}.`);
     if (check.unknownOwner.length)
-      warnings.push(`Sahibi bilinmeyen santral: ${check.unknownOwner.join(", ")}. Rapor bunları ayrı şirket sayar; aynı şirketin santralleriyse risk olduğundan yüksek görünür.`);
+      warnings.push(`Sahibi bilinmeyen santral: ${check.unknownOwner.join(", ")}. Rapor bunları ayrı şirket sayar; aynı şirketin santralleriyse risk olduğundan yüksek görünür. Toplayıcıya doğrudan giren yeni santrallerin ve LÜY birimlerinin sahibini EPİAŞ yayımlamaz; güncelleme bunları bulamaz.`);
     if (check.yekdemNextUnknown.length)
-      warnings.push(`YEKDEM'den çıkış yılı bilinmeyen santral: ${check.yekdemNextUnknown.join(", ")}.`);
+      warnings.push(`YEKDEM'den çıkış yılı bilinmeyen santral (sonraki yılın YEKDEM listesi henüz yayımlanmamış olabilir; dönem rakamlarını etkilemez): ${check.yekdemNextUnknown.join(", ")}.`);
   }
   const nameWords = author.name.trim().split(/\s+/).filter(Boolean).length;
   const preview = [author.name, author.title, author.email, author.phone, author.linkedin].map((v) => v.trim()).filter(Boolean);

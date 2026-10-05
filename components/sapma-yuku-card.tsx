@@ -85,7 +85,7 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh, plantScoped = false
   if (sapma.check.unknownOwner.length)
     warnings.push(
       agg
-        ? `Sahibi bilinmeyen ${sapma.check.unknownOwner.length} santral: ${names(sapma.check.unknownOwner)}. Uzlaştırma toplayıcı portföyünde olduğu için dengesizlik etkilenmez; yalnız sahiplere göre paylaştırmada ayrı sahip sayılır.`
+        ? `Sahibi bilinmeyen ${sapma.check.unknownOwner.length} santral: ${names(sapma.check.unknownOwner)}. Uzlaştırma toplayıcı portföyünde olduğu için dengesizlik etkilenmez; yalnız sahiplere göre paylaştırmada ayrı sahip sayılır. Toplayıcıya doğrudan giren yeni santrallerin ve LÜY birimlerinin sahibini EPİAŞ yayımlamaz.`
         : `Sahibi bilinmeyen santral: ${names(sapma.check.unknownOwner)}. Ayrı şirket sayıldı; aynı şirketin santralleriyse risk olduğundan yüksek görünür.`
     );
   if (sapma.check.yekdemNextUnknown.length)
