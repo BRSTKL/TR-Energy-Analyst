@@ -15,7 +15,7 @@
 import { processHourlyRecord } from "@/lib/calculations/engine";
 import { aggregateMonthly } from "@/lib/calculations/aggregate";
 import { HourlyResult, ImbalancePricingProfile, REGULATORY_IMBALANCE_REGIMES } from "@/lib/calculations/types";
-import { findDataGaps, findLateStarts, type LateStart, type PlantDataGap } from "@/lib/analysis/data-completeness";
+import { findDataGaps, findLateStarts, isNotProducing, type LateStart, type PlantDataGap } from "@/lib/analysis/data-completeness";
 import { describeAggregatorScope } from "@/lib/projects/aggregator";
 import { detectOutages, markConcurrent, type PlantOutages } from "@/lib/analysis/outage-detection";
 import { analyzeDsgScenario, MAX_EXACT_PLANTS } from "@/lib/analysis/dsg-scenarios";
@@ -283,6 +283,11 @@ export interface PlantReportData {
     nettedGainTl: number;
     kupstGainTl: number;
   } | null;
+  /**
+   * Henüz üretime geçmemiş santraller: kayıtlı saatlerin hepsinde plan da üretim de sıfır (yeni kayıt; ör. Pure'da Çepni
+   * RES). EPİAŞ üretmeyen santralin UEVM'sini yayımlamayabilir; bu eksik veri ya da devreye alma sayılmaz.
+   */
+  notProducing?: string[];
   /** Dönem içinde devreye giren santraller (ilk verisinden önceki saatler eksik sayılmaz) */
   lateStarts: LateStart[];
   /**
@@ -1006,7 +1011,12 @@ export function buildPlantReport(
     }
   }
 
-  const stamps = data.plants.map((p) => ({ plantName: p.plantName, timestamps: p.hourly.map((h) => new Date(h.timestamp).getTime()) }));
+  const notProducing = data.plants.filter((p) => isNotProducing(p.hourly)).map((p) => p.plantName);
+  // Veri eksiği ve devreye girme yalnız üreten (ya da plan giren) santrallerde aranır: hiç üretmeyen santralin eksik ayı
+  // yönetici özetinde "veri eksik" diye çıkıyordu
+  const stamps = data.plants
+    .filter((p) => !notProducing.includes(p.plantName))
+    .map((p) => ({ plantName: p.plantName, timestamps: p.hourly.map((h) => new Date(h.timestamp).getTime()) }));
   const lateStarts = findLateStarts(stamps);
 
   // Tahmin iyileştirme fırsatı: santralin her saatteki sapması aynı oranda (s = medyan / MWh başına risk) küçültülür.
@@ -1112,6 +1122,7 @@ export function buildPlantReport(
     marketProfile,
     fairShare,
     dataGaps: findDataGaps(stamps),
+    notProducing,
     lateStarts,
     forecastUpside,
     intradayEffect,

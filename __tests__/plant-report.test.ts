@@ -283,3 +283,26 @@ describe("Gün içi: planı güncellenmeyen santraller", () => {
     expect(r.intradayEffect!.smallStaticCount).toBe(1);
   });
 });
+
+describe("Henüz üretime geçmeyen santral", () => {
+  it("plan ve üretimi hep sıfır olan santral veri eksiği ya da devreye giren sayılmaz", () => {
+    const run = (n: number, start: number, f: number, a: number) =>
+      Array.from({ length: n }, (_, i) => hour(new Date(Date.UTC(2026, 6, 1) + (start + i) * 3_600_000), f, a, 2000, 1800, "SURPLUS"));
+    // Dönem 1 Temmuz – 31 Ağustos (1.488 saat). YENİ RES: 14 Temmuz'da kayıt, yalnız Temmuz'da 432 saat, hep sıfır
+    const r = buildPlantReport(project([
+      { name: "ESKİ RES", type: "RES", hourly: run(1488, 0, 10, 9) },
+      { name: "YENİ RES", type: "RES", hourly: run(432, 312, 0, 0) },
+    ]));
+    expect(r.notProducing).toEqual(["YENİ RES"]);
+    expect(r.dataGaps).toEqual([]);
+    expect(r.lateStarts.map((l) => l.plantName)).not.toContain("YENİ RES");
+    // Aynı veri üretim varken: Ağustos eksik ve devreye giren olarak bildirilir
+    const r2 = buildPlantReport(project([
+      { name: "ESKİ RES", type: "RES", hourly: run(1488, 0, 10, 9) },
+      { name: "YENİ RES", type: "RES", hourly: run(432, 312, 5, 4) },
+    ]));
+    expect(r2.notProducing).toEqual([]);
+    expect(r2.dataGaps.map((g) => g.plantName)).toEqual(["YENİ RES"]);
+    expect(r2.lateStarts.map((l) => l.plantName)).toEqual(["YENİ RES"]);
+  });
+});

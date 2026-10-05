@@ -6,7 +6,7 @@
  */
 
 import { buildPlantReport, deviationLoad } from "@/lib/report/plant-report";
-import { describeGap, findDataGaps } from "@/lib/analysis/data-completeness";
+import { describeGap, findDataGaps, isNotProducing } from "@/lib/analysis/data-completeness";
 import { buildReportContext } from "@/lib/services/report-context";
 import { loadProjectHourly } from "@/lib/services/project-hourly";
 
@@ -87,7 +87,7 @@ export async function projectKpis(projectId: string): Promise<ProjectKpis | null
     worstPlant: worst ? { name: worst.name, type: worst.type, unitCostTl: worst.unitCostTl } : null,
     // Verisi hiç olmayan santral de görünsün diye tüm santrallerle
     dataGaps: findDataGaps(
-      data.plants.map((p) => ({ plantName: p.plantName, timestamps: p.hourly.map((h) => new Date(h.timestamp).getTime()) }))
+      data.plants.map((p) => ({ plantName: p.plantName, timestamps: p.hourly.map((h) => new Date(h.timestamp).getTime()), idle: isNotProducing(p.hourly) }))
     ).map(describeGap),
   };
 }

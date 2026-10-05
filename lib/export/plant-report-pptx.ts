@@ -271,7 +271,8 @@ export async function exportPlantReportPptx(
   // Dönem içinde devreye giren santraller: ilk aylar devreye alma (test, kısıt, kademeli yük) olduğu için "en kötü"
   // sıralamalarına alınmaz; toplamlarda kalır (8.2)
   const late = new Set((r.lateStarts ?? []).map((l) => l.plantName));
-  const established = r.plants.filter((p) => !late.has(p.name));
+  const idle = new Set(r.notProducing ?? []);
+  const established = r.plants.filter((p) => !late.has(p.name) && !idle.has(p.name));
   const lateNote = late.size
     ? `Dönem içinde devreye giren ${late.size} santral (${Array.from(late).join(", ")}) devreye alma dönemindedir; sıralamaya alınmadı, toplamlarda var.`
     : "";
@@ -2049,6 +2050,7 @@ export async function exportPlantReportPptx(
             ? " YEKDEM santralleri dahildir: YEKDEM katılımcısı üretimini serbest piyasada kendisi satar ve dengesizliği kendisine aittir (YEK Yönetmeliği md. 15/1, 23/1; YEKDEM portföyü dengesizliğini düzenleyen md. 16–17 29.4.2016'da kaldırıldı); yalnızca geliri PTF yerine YEK fiyatından oluşur."
             : "") +
           (r.lateStarts?.length ? ` Dönem içinde devreye giren santraller (öncesi eksik sayılmadı): ${listOf(r.lateStarts.map(describeLateStart), 6)}.` : "") +
+          (r.notProducing?.length ? ` Henüz üretime geçmeyen (plan ve üretim sıfır, hesaba etkisi yok): ${listOf(r.notProducing, 4)}.` : "") +
           (r.dataGaps.length
             ? ` Eksik veri: ${listOf(r.dataGaps.map(describeGap), 4)}; bu aylar santral ve portföy rakamlarına girmedi.`
             : "") +

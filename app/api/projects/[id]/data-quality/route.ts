@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { withProjectCache } from "@/lib/services/response-cache";
 import { findProjectWithRecords } from "@/lib/services/project-records";
-import { describeGap, describeZeroPlan, findDataGaps, findZeroPlanHours } from "@/lib/analysis/data-completeness";
+import { describeGap, describeZeroPlan, findDataGaps, findZeroPlanHours, isNotProducing } from "@/lib/analysis/data-completeness";
 
 export const dynamic = "force-dynamic";
 
@@ -83,7 +83,7 @@ async function handleGET(_request: Request, { params }: { params: { id: string }
 
     // Santral × ay üretim verisi bütünlüğü: bir santralin ayı eksikse o ay hesaplardan sessizce düşer
     const generationGaps = findDataGaps(
-      project.plants.map((p) => ({ plantName: p.name, timestamps: p.records.map((r) => r.timestamp.getTime()) }))
+      project.plants.map((p) => ({ plantName: p.name, timestamps: p.records.map((r) => r.timestamp.getTime()), idle: isNotProducing(p.records) }))
     ).map(describeGap);
 
     const zeroPlanHours = findZeroPlanHours(

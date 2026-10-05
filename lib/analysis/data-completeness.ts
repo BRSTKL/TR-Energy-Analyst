@@ -23,14 +23,24 @@ export interface PlantDataGap {
 }
 
 const HOUR = 3_600_000;
+
+/**
+ * Henüz üretime geçmemiş santral: kayıtlı saatlerin hepsinde plan da üretim de sıfır (yeni kayıt; ör. Pure'da Çepni RES,
+ * 14 Temmuz'dan beri sıfır, Ağustos UEVM'si yayımlanmamış). Eksik veri ya da devreye girme sayılmaz.
+ */
+export function isNotProducing(hours: Array<{ forecastMwh: number; actualMwh: number }>): boolean {
+  return hours.length > 0 && hours.every((h) => Math.abs(h.actualMwh) < 1e-9 && Math.abs(h.forecastMwh) < 1e-9);
+}
+
 const monthKey = (t: number) => new Date(t).toISOString().slice(0, 7);
 
 /**
- * @param plants her santralin saatlik zaman damgaları (ms; duvar saati UTC alanında)
+ * @param plants her santralin saatlik zaman damgaları (ms; duvar saati UTC alanında); idle: henüz üretime geçmemiş
+ *   santral (isNotProducing), eksik ayı aranmaz
  * @param minMonthShare bir ayın "tam" sayılması için gereken pay (varsayılan 0,9)
  * @returns yalnızca eksiği olan santraller (eksik yoksa boş dizi)
  */
-export function findDataGaps(plants: Array<{ plantName: string; timestamps: number[] }>, minMonthShare = 0.9): PlantDataGap[] {
+export function findDataGaps(plants: Array<{ plantName: string; timestamps: number[]; idle?: boolean }>, minMonthShare = 0.9): PlantDataGap[] {
   let start = Infinity;
   let end = -Infinity;
   for (const p of plants) {
@@ -51,6 +61,7 @@ export function findDataGaps(plants: Array<{ plantName: string; timestamps: numb
 
   const gaps: PlantDataGap[] = [];
   for (const p of plants) {
+    if (p.idle) continue;
     const have = new Map<string, number>();
     const seen = new Set<number>();
     let first = Infinity;
