@@ -42,6 +42,11 @@ export async function loadBenchmarkPrices(start: string, end: string): Promise<M
  */
 export async function loadBenchmarkPlants(ids: number[], year: number, start: string, end: string): Promise<Map<number, BenchmarkPlant>> {
   const plants = new Map<number, BenchmarkPlant>();
+  // Karnede olmayan santrallerin (adından tür anlaşılmadığı için atlananlar) sahibi EPİAŞ sahiplik önbelleğinden: yoksa
+  // aynı şirketin santralleri ayrı sahip sayılıyor, netleşme değeri projeden farklı çıkıyordu (Inavitas 297,2 / 297,0 M)
+  const owners = new Map<number, { organizationName?: string | null }>(
+    readJson<{ entries: Array<[number, { organizationName?: string | null }]> }>(path.join(CACHE, "plant-owners-2025.json"))?.entries ?? []
+  );
   for (const id of ids) {
     const doc = await readPoolYear(id, year);
     if (!doc) continue;
@@ -55,7 +60,7 @@ export async function loadBenchmarkPlants(ids: number[], year: number, start: st
       if (r.kgupFirst === null || r.uevm === null) continue;
       hours.set(r.timestamp.getTime(), { d: r.uevm - r.kgupFirst, actual: r.uevm });
     }
-    plants.set(id, { epiasPlantId: id, name: meta.name, type: meta.type, owner: meta.organizationName ?? null, hours });
+    plants.set(id, { epiasPlantId: id, name: meta.name, type: meta.type, owner: meta.organizationName ?? owners.get(id)?.organizationName ?? null, hours });
   }
   return plants;
 }
