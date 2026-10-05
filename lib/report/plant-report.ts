@@ -15,7 +15,8 @@
 import { processHourlyRecord } from "@/lib/calculations/engine";
 import { aggregateMonthly } from "@/lib/calculations/aggregate";
 import { HourlyResult, ImbalancePricingProfile, REGULATORY_IMBALANCE_REGIMES } from "@/lib/calculations/types";
-import { findDataGaps, findLateStarts, isNotProducing, type LateStart, type PlantDataGap } from "@/lib/analysis/data-completeness";
+import { finalPlanCoverage, findDataGaps, findLateStarts, isNotProducing, type FinalPlanCoverage, type LateStart, type PlantDataGap } from "@/lib/analysis/data-completeness";
+import { intradayTradeCost } from "@/lib/analysis/intraday-trade";
 import { describeAggregatorScope } from "@/lib/projects/aggregator";
 import { detectOutages, markConcurrent, type PlantOutages } from "@/lib/analysis/outage-detection";
 import { analyzeDsgScenario, MAX_EXACT_PLANTS } from "@/lib/analysis/dsg-scenarios";
@@ -137,6 +138,12 @@ export interface PlantReportData {
    * oran tablosuyla (2026: rüzgâr %15, güneş %8); veri zaten 2026+ ise null.
    */
   kupst: { totalTl: number; next2026Tl: number | null };
+  /**
+   * Son plan kapsamı (Aşama 11.1). KÜPST son plana göre hesaplanır, son planı olmayan saatte ilk plana düşer;
+   * kupstFirstPlanSharePct o saatlerin KÜPST içindeki payı (santral bazında hesapla, yaklaşık). Kapsam
+   * FINAL_PLAN_MIN_COVERAGE_PCT'nin altındaysa rapor KÜPST'ü üst sınır sayar ve gün içi adımını köprüye koymaz.
+   */
+  finalPlan: FinalPlanCoverage & { kupstFirstPlanSharePct: number };
   settlement: {
     /** Santraller tek tek uzlaştırılsaydı */
     plantLevelCostTl: number;
@@ -236,6 +243,15 @@ export interface PlantReportData {
     reductionPct: number;
     absDevFirstMwh: number;
     absDevFinalMwh: number;
+    /**
+     * Gün içi işlemlerin tahmini maliyeti (Aşama 11.2): Σ (ilk − son plan) × (GİP AOF − PTF), son planı olan saatlerde.
+     * Net gün içi kazanç = (firstCostTl − finalCostTl) − tradeCostTl. Şirketin gerçek işlem fiyatı bilinmez.
+     */
+    tradeCostTl: number;
+    planDownMwh: number;
+    planUpMwh: number;
+    /** Planı değişen ama GİP fiyatı olmayan saatler (işlem maliyeti 0 sayıldı) */
+    tradeHoursWithoutGip: number;
     /** Planı gün içinde hiç güncellenmeyen santraller (saatlerin %1'inden azında fark); yalnız portföyün mutlak sapmasının
      * en az %1'ini taşıyanlar (STATIC_PLANT_MIN_DEV_SHARE), küçük santraller öneri olmaz */
     staticPlants: string[];
@@ -940,6 +956,12 @@ export function buildPlantReport(
     // 0,7 GWh, sapmanın binde biri, Mart–Temmuz üretim yok) "en hızlı ek kazanım" diye öneriliyordu
     const staticPlants = staticCandidates.filter((c) => c.absDevMwh >= STATIC_PLANT_MIN_DEV_SHARE * absFirst).map((c) => c.name);
     if (withFinal > 0.5 * total) {
+      // İşlem maliyeti doğrusaldır: uzlaştırma birimine göre toplamaya gerek yok
+      const trade = intradayTradeCost(
+        (function* () {
+          for (const p of withData) yield* p.hourly;
+        })()
+      );
       let firstCost = 0;
       let finalCost = 0;
       for (const u of Array.from(units.values()))
@@ -955,6 +977,10 @@ export function buildPlantReport(
         reductionPct: firstCost > 0 ? (1 - finalCost / firstCost) * 100 : 0,
         absDevFirstMwh: absFirst,
         absDevFinalMwh: absFinal,
+        tradeCostTl: trade.costTl,
+        planDownMwh: trade.planDownMwh,
+        planUpMwh: trade.planUpMwh,
+        tradeHoursWithoutGip: trade.hoursWithoutGip,
         staticPlants,
         smallStaticCount: staticCandidates.length - staticPlants.length,
         topAdjusters: adjusters.sort((a, b) => b.reductionPct - a.reductionPct).slice(0, 5),
@@ -1012,6 +1038,20 @@ export function buildPlantReport(
   }
 
   const notProducing = data.plants.filter((p) => isNotProducing(p.hourly)).map((p) => p.plantName);
+
+  // Son plan kapsamı ve KÜPST'ün ilk plana düşen saatlerdeki payı (santral bazında KÜPST ile ağırlıklı)
+  let kupstAll = 0;
+  let kupstFirstPlan = 0;
+  for (const p of withData)
+    for (const h of p.hourly) {
+      const k = kupstForHour(h, p.plantType);
+      kupstAll += k;
+      if (h.forecastFinalMwh === null || h.forecastFinalMwh === undefined) kupstFirstPlan += k;
+    }
+  const finalPlan: PlantReportData["finalPlan"] = {
+    ...finalPlanCoverage(withData),
+    kupstFirstPlanSharePct: kupstAll > 0 ? (kupstFirstPlan / kupstAll) * 100 : 0,
+  };
   // Veri eksiği ve devreye girme yalnız üreten (ya da plan giren) santrallerde aranır: hiç üretmeyen santralin eksik ayı
   // yönetici özetinde "veri eksik" diye çıkıyordu
   const stamps = data.plants
@@ -1110,6 +1150,7 @@ export function buildPlantReport(
     yekdem: hasYekdem ? { plantNames: withData.filter((p) => p.yekdem).map((p) => p.plantName) } : null,
     coverage,
     kupst,
+    finalPlan,
     sector,
     riskPremium,
     alignment: { sameDirectionMwhPct: pct(netSame, netAbs), sameDirectionCostPct: pct(sameCost, companyCost) },

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
+import { pctIn } from "@/lib/format";
 
 interface DataQuality {
   totalHours: number;
@@ -15,6 +16,8 @@ interface DataQuality {
   generationGaps?: string[];
   /** Planı 0 iken tam çalışan santraller (plan girilmemiş olabilir) */
   zeroPlanHours?: string[];
+  /** Son plan (gün içi sonrası KGÜP) kapsamı; kapsamı %90'ın altındaki santraller ("ÖZMEN-1 GES (%0)") */
+  finalPlan?: { coveragePct: number; belowThreshold: boolean; lowPlants: string[] };
 }
 
 interface DataQualityBannerProps {
@@ -54,6 +57,7 @@ export function DataQualityBanner({ projectId, refreshKey }: DataQualityBannerPr
     <>
       <GenerationGapNotice gaps={quality.generationGaps ?? []} />
       <ZeroPlanNotice items={quality.zeroPlanHours ?? []} />
+      <FinalPlanNotice finalPlan={quality.finalPlan} />
     </>
   );
   if (quality.isFullyVerified) return gapNotice;
@@ -140,6 +144,33 @@ function ZeroPlanNotice({ items }: { items: string[] }) {
         <p className="text-amber-800">
           Plan o saatler için girilmemiş ya da ilk sürümde boş kalmış olabilir; bu saatler dengesizlik maliyetini ve sektör
           sıralamasını şişirir. Gerçek bir tahmin hatası olup olmadığını santral işletmecisiyle teyit edin.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Son plan kapsamı eksikse: KÜPST o saatlerde ilk plana göre (üst sınıra yakın), gün içi etkisi o saatleri içermez */
+function FinalPlanNotice({ finalPlan }: { finalPlan?: DataQuality["finalPlan"] }) {
+  if (!finalPlan || (!finalPlan.belowThreshold && finalPlan.lowPlants.length === 0)) return null;
+
+  return (
+    <div role="alert" className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900 shadow-sm">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+      <div className="space-y-1">
+        <p className="text-sm font-semibold">
+          Son plan (gün içi sonrası KGÜP) saatlerin {pctIn(finalPlan.coveragePct)} var
+          {finalPlan.belowThreshold ? ": KÜPST üst sınır, gün içi düzeltmeler rapor köprüsüne girmez." : "."}
+        </p>
+        {finalPlan.lowPlants.length > 0 && (
+          <p>
+            Son planı eksik santraller: {finalPlan.lowPlants.slice(0, 8).join(", ")}
+            {finalPlan.lowPlants.length > 8 ? ` ve ${finalPlan.lowPlants.length - 8} santral daha` : ""}.
+          </p>
+        )}
+        <p className="text-amber-800">
+          Bu saatlerde KÜPST ilk plana göre hesaplanır (gerçek değerden yüksek olabilir). EPİAŞ son planı bazı birimler için (ör. LÜY)
+          yayımlamaz; diğerleri için &quot;EPİAŞ verilerini tamamla&quot; ile çekilebilir.
         </p>
       </div>
     </div>

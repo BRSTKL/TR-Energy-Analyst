@@ -160,3 +160,48 @@ export function findZeroPlanHours(
 export function describeZeroPlan(g: ZeroPlanGap): string {
   return `${g.plantName}: ${g.hours.toLocaleString("tr-TR")} saatte plan 0 iken üretim kurulu gücün yarısından fazla (saatlerin %${g.sharePct.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}, ${Math.round(g.mwh).toLocaleString("tr-TR")} MWh)`;
 }
+
+/**
+ * Son plan (gün içi piyasası kapandıktan sonra güncellenen KGÜP) kapsamı. KÜPST ve gün içi etkisi son plana dayanır; son
+ * planı olmayan saatte KÜPST ilk plana düşer (üst sınıra yakın) ve gün içi etkisi o saati dışarıda bırakır. EPİAŞ son planı
+ * bazı birimler için yayımlamaz (LÜY birimleri) ya da havuza henüz çekilmemiş olabilir; rapor bunu söylemelidir.
+ */
+export interface FinalPlanCoverage {
+  hours: number;
+  hoursWithFinal: number;
+  /** Portföy: son planı olan santral-saat payı (%) */
+  coveragePct: number;
+  /** Kapsamı %90'ın altında kalan santraller (henüz üretime geçmeyenler hariç), kapsama göre artan */
+  lowPlants: Array<{ plantName: string; coveragePct: number }>;
+}
+
+/** Raporun KÜPST'ü "üst sınır" sayıp gün içi adımını köprüden çıkardığı eşik (%) */
+export const FINAL_PLAN_MIN_COVERAGE_PCT = 90;
+
+export function finalPlanCoverage(
+  plants: Array<{ plantName: string; hourly: Array<{ forecastMwh: number; actualMwh: number; forecastFinalMwh?: number | null }> }>
+): FinalPlanCoverage {
+  let hours = 0;
+  let hoursWithFinal = 0;
+  const lowPlants: FinalPlanCoverage["lowPlants"] = [];
+  for (const p of plants) {
+    if (p.hourly.length === 0) continue;
+    let withFinal = 0;
+    for (const h of p.hourly) if (h.forecastFinalMwh !== null && h.forecastFinalMwh !== undefined) withFinal++;
+    hours += p.hourly.length;
+    hoursWithFinal += withFinal;
+    const pct = (withFinal / p.hourly.length) * 100;
+    if (pct < FINAL_PLAN_MIN_COVERAGE_PCT && !isNotProducing(p.hourly)) lowPlants.push({ plantName: p.plantName, coveragePct: pct });
+  }
+  return {
+    hours,
+    hoursWithFinal,
+    coveragePct: hours > 0 ? (hoursWithFinal / hours) * 100 : 0,
+    lowPlants: lowPlants.sort((a, b) => a.coveragePct - b.coveragePct),
+  };
+}
+
+/** "ÖZMEN-1 GES (%0)" biçiminde kısa liste öğesi */
+export function describeLowFinalPlan(p: { plantName: string; coveragePct: number }): string {
+  return `${p.plantName} (%${p.coveragePct.toLocaleString("tr-TR", { maximumFractionDigits: 0 })})`;
+}

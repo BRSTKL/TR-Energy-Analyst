@@ -4,6 +4,7 @@ import { anonymizeReport } from "@/lib/report/anonymize";
 import { buildBridgeSteps, exportPlantReportPptx, intradayView } from "@/lib/export/plant-report-pptx";
 import {
   checkBridge,
+  checkFinalPlanText,
   checkIntradayBridge,
   checkIntradayText,
   checkReportData,
@@ -122,11 +123,12 @@ describe("Rapor tutarlılık denetimi", () => {
   });
 
   /** Gerçekleşen gün içi azalma ve kural tabanlı strateji (ilk plana göre) verilmiş rapor */
-  function withIntraday(realizedPct: number, strategyPct: number) {
+  function withIntraday(realizedPct: number, strategyPct: number, tradeCostPct = 0) {
     const r = sampleReport();
     const cost = r.totals.imbalanceCostTl;
     return {
       ...r,
+      finalPlan: { ...r.finalPlan, hoursWithFinal: r.finalPlan.hours, coveragePct: 100, lowPlants: [], kupstFirstPlanSharePct: 0 },
       intradayEffect: {
         hoursWithFinal: r.period.hours,
         coveragePct: 100,
@@ -135,6 +137,10 @@ describe("Rapor tutarlılık denetimi", () => {
         reductionPct: realizedPct,
         absDevFirstMwh: 1000,
         absDevFinalMwh: 800,
+        tradeCostTl: (tradeCostPct / 100) * cost,
+        planDownMwh: 100,
+        planUpMwh: 50,
+        tradeHoursWithoutGip: 0,
         staticPlants: ["KARADERE 3 RES"],
         topAdjusters: [],
       },
@@ -154,6 +160,58 @@ describe("Rapor tutarlılık denetimi", () => {
     expect(slides.some((s) => s.text.includes("Gün içi düzeltmeler (zaten alınıyor)"))).toBe(true);
     const summary = await extractSlideTexts(await exportPlantReportPptx(r, {}, { summaryOnly: true }));
     expect(checkIntradayText(r, summary)).toEqual([]);
+  });
+
+  it("gün içi: GİP işlem maliyeti köprüde ayrı adım, gün içi sonrası net; adım silinirse denetim yakalar", async () => {
+    const r = withIntraday(26, 1, 6);
+    const cost = r.totals.imbalanceCostTl;
+    const { steps, loadEnd, afterIntraday } = buildBridgeSteps(r);
+    const trade = steps.find((s) => s.kind === "trade");
+    expect(trade?.value).toBeCloseTo(0.06 * cost, 0);
+    expect(afterIntraday).toBeCloseTo(loadEnd - 0.26 * cost + 0.06 * cost, 0);
+    expect(intradayView(r).realized?.netCutTl).toBeCloseTo(0.2 * cost, 0);
+    expect(checkReportData(r, steps).filter((i) => i.level === "error")).toEqual([]);
+    const slides = await extractSlideTexts(await exportPlantReportPptx(r));
+    expect(slides.some((s) => s.text.includes("GİP işlem maliyeti"))).toBe(true);
+    expect(checkSlideTexts(slides)).toEqual([]);
+    // Adım gizlenirse (ve köprü yine kapanacak biçimde düzeltilirse) kural yakalar
+    const hidden = steps.filter((s) => s.kind !== "trade");
+    expect(checkIntradayBridge(r, hidden).map((i) => i.rule)).toContain("intraday-trade");
+  });
+
+  it("gün içi: ihmal edilebilir işlem maliyeti (%2'den az) köprüde adım olmaz", () => {
+    const r = withIntraday(26, 1, 0.3);
+    const { steps } = buildBridgeSteps(r);
+    expect(steps.some((s) => s.kind === "trade")).toBe(false);
+    expect(checkIntradayBridge(r, steps)).toEqual([]);
+  });
+
+  it("gün içi: strateji net gerçekleşenle kıyaslanır (brüt %10, işlem maliyeti %5, strateji %8 → ek %3)", () => {
+    const r = withIntraday(10, 8, 5);
+    const iv = intradayView(r);
+    expect(iv.realized?.netPct).toBeCloseTo(5, 1);
+    expect(iv.extra?.pct).toBeCloseTo(3, 1);
+    expect(checkIntradayBridge(r, buildBridgeSteps(r).steps)).toEqual([]);
+  });
+
+  it("son plan kapsamı düşükse KÜPST üst sınır etiketi alır, gün içi adımı olmaz ve rapor kapsamı söyler", async () => {
+    const base = sampleReport();
+    const r = {
+      ...base,
+      finalPlan: { ...base.finalPlan, hoursWithFinal: Math.round(base.finalPlan.hours * 0.6), coveragePct: 60, kupstFirstPlanSharePct: 35, lowPlants: [{ plantName: "KARADERE 3 RES", coveragePct: 0 }] },
+      intradayEffect: null,
+    };
+    const { steps } = buildBridgeSteps(r);
+    const kupst = steps.find((s) => s.kind === "kupst")!;
+    expect(kupst.label).toContain("üst sınır");
+    expect(steps.some((s) => s.kind === "realized")).toBe(false);
+    expect(checkIntradayBridge(r, steps)).toEqual([]);
+    const relabeled = steps.map((s) => (s.kind === "kupst" ? { ...s, label: "KÜPST (tahmini)" } : s));
+    expect(checkIntradayBridge(r, relabeled).map((i) => i.rule)).toContain("kupst-upper-bound");
+    const slides = await extractSlideTexts(await exportPlantReportPptx(r));
+    expect(checkFinalPlanText(r, slides)).toEqual([]);
+    expect(slides.some((s) => s.text.includes("KARADERE 3 RES (%0)"))).toBe(true);
+    expect(checkFinalPlanText(r, slides.map((s) => ({ ...s, text: s.text.replace(/Son plan \(gün içi sonrası\) saatlerin/g, "") }))).map((i) => i.rule)).toEqual(["final-plan-text"]);
   });
 
   it("gün içi: eski anlatımı yakalar (gerçekleşen adımı yok, %1 senaryo ve 'en fazla %1' vaadi)", () => {

@@ -28,3 +28,20 @@ export function tlAxis(v: number): string {
 
 /** Enerji: 275_764 MWh → "275,8 GWh"; 9_500 → "9.500 MWh" */
 export const energy = (mwh: number) => (Math.abs(mwh) >= 10_000 ? `${nf(mwh / 1000, 1)} GWh` : `${nf(mwh, 0)} MWh`);
+
+/**
+ * Tam sayılı yüzdeye Türkçe ek, okunuşun son sözcüğüne göre: pctOf(95) → "%95'i", pctOf(60) → "%60'ı", pctOf(100) → "%100'ü";
+ * pctIn(95) → "%95'inde", pctIn(60) → "%60'ında", pctIn(2) → "%2'sinde". Değer en yakın tam sayıya yuvarlanır.
+ */
+const PCT_OF_ONES = ["", "i", "si", "ü", "ü", "i", "sı", "si", "i", "u"]; // bir, iki, üç, dört, beş, altı, yedi, sekiz, dokuz
+const PCT_OF_TENS = ["", "u", "si", "u", "ı", "si", "ı", "i", "i", "ı"]; // on, yirmi, otuz, kırk, elli, altmış, yetmiş, seksen, doksan
+const PCT_IN_ONES = ["", "inde", "sinde", "ünde", "ünde", "inde", "sında", "sinde", "inde", "unda"];
+const PCT_IN_TENS = ["", "unda", "sinde", "unda", "ında", "sinde", "ında", "inde", "inde", "ında"];
+
+function pctSuffix(v: number, ones: string[], tens: string[], zero: string, hundreds: string): string {
+  const n = Math.abs(Math.round(v));
+  const s = n === 0 ? zero : n % 10 ? ones[n % 10] : n % 100 ? tens[(n % 100) / 10] : hundreds;
+  return `%${nf(Math.round(v), 0)}'${s}`;
+}
+export const pctOf = (v: number) => pctSuffix(v, PCT_OF_ONES, PCT_OF_TENS, "ı", "ü");
+export const pctIn = (v: number) => pctSuffix(v, PCT_IN_ONES, PCT_IN_TENS, "ında", "ünde");

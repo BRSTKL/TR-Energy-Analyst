@@ -1,7 +1,16 @@
 import { NextResponse } from "next/server";
 import { withProjectCache } from "@/lib/services/response-cache";
 import { findProjectWithRecords } from "@/lib/services/project-records";
-import { describeGap, describeZeroPlan, findDataGaps, findZeroPlanHours, isNotProducing } from "@/lib/analysis/data-completeness";
+import {
+  describeGap,
+  describeLowFinalPlan,
+  describeZeroPlan,
+  FINAL_PLAN_MIN_COVERAGE_PCT,
+  finalPlanCoverage,
+  findDataGaps,
+  findZeroPlanHours,
+  isNotProducing,
+} from "@/lib/analysis/data-completeness";
 
 export const dynamic = "force-dynamic";
 
@@ -90,6 +99,14 @@ async function handleGET(_request: Request, { params }: { params: { id: string }
       project.plants.map((p) => ({ plantName: p.name, capacityMw: p.capacityMw, hourly: p.records }))
     ).map(describeZeroPlan);
 
+    // Son plan (gün içi sonrası KGÜP) kapsamı: KÜPST ve gün içi etkisi buna dayanır; eksik saatte KÜPST ilk plana düşer
+    const fp = finalPlanCoverage(project.plants.map((p) => ({ plantName: p.name, hourly: p.records })));
+    const finalPlan = {
+      coveragePct: fp.coveragePct,
+      belowThreshold: fp.hours > 0 && fp.coveragePct < FINAL_PLAN_MIN_COVERAGE_PCT,
+      lowPlants: fp.lowPlants.map(describeLowFinalPlan),
+    };
+
     return NextResponse.json({
       success: true,
       totalHours,
@@ -108,6 +125,7 @@ async function handleGET(_request: Request, { params }: { params: { id: string }
       isFullyVerified: totalHours > 0 && verifiedHours === totalHours,
       generationGaps,
       zeroPlanHours,
+      finalPlan,
       dateRange: {
         start: byHour.size ? new Date(firstHour) : null,
         end: byHour.size ? new Date(lastHour) : null,

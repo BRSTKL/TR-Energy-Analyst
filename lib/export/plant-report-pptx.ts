@@ -14,7 +14,7 @@
  *   7. 2026 katsayıları
  *   7b. Dengesizlik risk primi: MWh başına beklenen ve ihtiyatlı (P90) prim, santral bazında tablo
  *   8. Fırsatlar
- *   9. Önerilen sonraki adım ve iletişim
+ *   9. Önerilen sonraki adım ve iletişim (şimdilik kapalı, INCLUDE_NEXT_STEP_SLIDE)
  * Her slaytta sunum yapan kişi için konuşmacı notu vardır (ne söylenir, hangi sorular gelir).
  *   Ek A: santral detay tablosu · Ek B: yöntem ve sınırlar
  *
@@ -26,10 +26,15 @@
 import pptxgen from "pptxgenjs";
 import { deviationLoad, type PlantReportData } from "@/lib/report/plant-report";
 import { monthlyRange } from "@/lib/report/deviation-load";
-import { describeGap, describeLateStart } from "@/lib/analysis/data-completeness";
+import { describeGap, describeLateStart, describeLowFinalPlan, FINAL_PLAN_MIN_COVERAGE_PCT } from "@/lib/analysis/data-completeness";
+import { materialTradeCost } from "@/lib/analysis/intraday-trade";
+import { pctIn, pctOf } from "@/lib/format";
 import { COST_FACTORS } from "@/lib/analysis/cost-change";
 import type { ReportCostChange } from "@/lib/services/cost-change";
 import type { ProjectCandidates } from "@/lib/services/candidates";
+
+/** "Önerilen sonraki adım" (görüşme · doğrulama · pilot) slaytı; tekrar açmak için true yapın. */
+const INCLUDE_NEXT_STEP_SLIDE = false;
 
 export interface ReportAuthor {
   name?: string;
@@ -140,7 +145,7 @@ type TextOpts = Parameters<Slide["addText"]>[1];
  * @param options.costChange aynı santrallerin önceki yıl projesiyle ayrıştırma (varsa "Ne değişti?" slaytı eklenir)
  * @param options.growth toplayıcı projelerinde hedef santraller (bağımsız; varsa "Büyüme" slaytı eklenir)
  */
-export type BridgeStepKind = "total" | "down" | "value" | "realized" | "up" | "assumption" | "kupst" | "scenario" | "target";
+export type BridgeStepKind = "total" | "down" | "value" | "realized" | "trade" | "up" | "assumption" | "kupst" | "scenario" | "target";
 
 /**
  * Gün içinin rapordaki tek anlatımı. İki ayrı ölçü var:
@@ -153,30 +158,47 @@ export type BridgeStepKind = "total" | "down" | "value" | "realized" | "up" | "a
  * gerçekleşen %26 azalmayı gösterirken özette, köprüde ve fırsatlarda "gün içi en fazla %1 azaltır" diyordu (Gain, 4 Ekim 2026).
  */
 export interface IntradayView {
-  /** Gerçekleşen azalma (son planı olan saatler dönemin en az %90'ı ve azalma ≥ %0,5 ise); cutTl köprü tabanında */
-  realized: { pct: number; cutTl: number; staticPlants: string[] } | null;
+  /**
+   * Gerçekleşen azalma (son planı olan saatler dönemin en az %90'ı ve azalma ≥ %0,5 ise); cutTl köprü tabanında,
+   * dengesizlik tarafında (brüt). tradeCostTl: plan değişikliğinin GİP ağırlıklı ortalama fiyatıyla tahmini işlem maliyeti
+   * (Aşama 11.2; brüt azalmanın %2'sinden küçükse 0). netCutTl = cutTl − tradeCostTl, netPct köprü tabanına oranı.
+   */
+  realized: { pct: number; cutTl: number; tradeCostTl: number; netCutTl: number; netPct: number; staticPlants: string[] } | null;
   /** Kural tabanlı stratejinin ilk plana göre azaltması (%); yoksa null */
   strategyPct: number | null;
-  /** Gerçekleşenin üstüne ek kazanç (strateji − gerçekleşen, en az 0,5 puan); yoksa null */
+  /** Gerçekleşenin (net) üstüne ek kazanç (strateji − gerçekleşen net, en az 0,5 puan); strateji de GİP fiyatıyla nettir */
   extra: { pct: number; tl: number } | null;
 }
 
 export function intradayView(r: PlantReportData): IntradayView {
   const basis = r.coefficients2026?.cost2026Tl ?? r.totals.imbalanceCostTl;
   const ie = r.intradayEffect;
-  const realized =
-    ie && ie.coveragePct >= 90 && ie.reductionPct >= 0.5
-      ? {
-          pct: ie.reductionPct,
-          // Tam kapsamda ve veri yılı kurallarıyla tutar doğrudan; aksi halde oran köprü tabanına uygulanır
-          cutTl: !r.coefficients2026 && ie.coveragePct >= 99.9 ? ie.firstCostTl - ie.finalCostTl : (ie.reductionPct / 100) * basis,
-          staticPlants: ie.staticPlants,
-        }
-      : null;
+  let realized: IntradayView["realized"] = null;
+  if (ie && ie.coveragePct >= FINAL_PLAN_MIN_COVERAGE_PCT && ie.reductionPct >= 0.5) {
+    // Tam kapsamda ve veri yılı kurallarıyla tutar doğrudan; aksi halde oran köprü tabanına uygulanır
+    const cutTl = !r.coefficients2026 && ie.coveragePct >= 99.9 ? ie.firstCostTl - ie.finalCostTl : (ie.reductionPct / 100) * basis;
+    // İşlem maliyeti katsayıdan bağımsızdır (PTF ve GİP fiyatı); eksik kapsamda son planı olan saatlerden döneme ölçeklenir
+    const rawTrade = ie.coveragePct >= 99.9 ? ie.tradeCostTl : (ie.tradeCostTl * 100) / ie.coveragePct;
+    const tradeCostTl = materialTradeCost(rawTrade, cutTl);
+    const netCutTl = cutTl - tradeCostTl;
+    realized = { pct: ie.reductionPct, cutTl, tradeCostTl, netCutTl, netPct: basis > 0 ? (netCutTl / basis) * 100 : 0, staticPlants: ie.staticPlants };
+  }
   const strategyPct = r.intraday && r.intraday.savingTl > 0 ? r.intraday.savingPct : null;
-  const extraPct = strategyPct === null ? 0 : strategyPct - (realized?.pct ?? 0);
+  const extraPct = strategyPct === null ? 0 : strategyPct - (realized?.netPct ?? 0);
   return { realized, strategyPct, extra: extraPct >= 0.5 ? { pct: extraPct, tl: (extraPct / 100) * basis } : null };
 }
+/**
+ * "Gün içi düzeltmeler dengesizliği %27 (≈ 8,8 M TL) azaltıyor; GİP işlem maliyeti ≈ 2,2 M TL, net ≈ 6,6 M TL" (nokta yok).
+ * İşlem maliyeti ihmal edilebilirse yalnız ilk kısım.
+ */
+export function realizedIntradayPhrase(rz: NonNullable<IntradayView["realized"]>): string {
+  const head = `Gün içi düzeltmeler dengesizliği %${nf(rz.pct, 0)} (≈ ${formatTlShort(rz.cutTl)}) azaltıyor`;
+  if (rz.tradeCostTl === 0) return head;
+  return rz.tradeCostTl > 0
+    ? `${head}; GİP işlem maliyeti (ortalama fiyatla) ≈ ${formatTlShort(rz.tradeCostTl)}, net ≈ ${formatTlShort(rz.netCutTl)}`
+    : `${head}; GİP işlemleri ortalama fiyatla ≈ ${formatTlShort(-rz.tradeCostTl)} ek kazandırıyor, net ≈ ${formatTlShort(rz.netCutTl)}`;
+}
+
 export interface BridgeStep {
   label: string;
   value: number;
@@ -188,6 +210,27 @@ export interface BridgeStep {
  * her "total" adımı kendisinden önceki adımların toplamına eşit olmalıdır (köprü kapanır). Slayt ve tutarlılık denetimi
  * aynı fonksiyonu kullanır.
  */
+/** Son plan kapsamı eşiğin altında: KÜPST'ün bir kısmı ilk plana göre (gerçek değerden yüksek olabilir) */
+export function kupstUpperBound(r: PlantReportData): boolean {
+  return r.finalPlan.coveragePct < FINAL_PLAN_MIN_COVERAGE_PCT && r.finalPlan.kupstFirstPlanSharePct >= 1;
+}
+
+/**
+ * Son plan kapsamı eşiğin altındaysa okuyucuya söylenecek cümle (yoksa null): KÜPST'ün ne kadarı ilk plana göre, gün içi
+ * düzeltmelerin neden köprüde olmadığı ve kapsamı düşük santraller.
+ */
+export function finalPlanNote(r: PlantReportData, maxNames = 3): string | null {
+  const fp = r.finalPlan;
+  if (fp.hours === 0 || (fp.coveragePct >= FINAL_PLAN_MIN_COVERAGE_PCT && fp.lowPlants.length === 0)) return null;
+  const low = fp.lowPlants.length ? ` Son planı eksik: ${listOf(fp.lowPlants.map((p) => describeLowFinalPlan(p)), maxNames, ", ")}.` : "";
+  if (fp.coveragePct >= FINAL_PLAN_MIN_COVERAGE_PCT)
+    return `Son plan (gün içi sonrası) saatlerin ${pctIn(fp.coveragePct)} var; eksik saatlerde KÜPST ilk plana göre (KÜPST'ün ${pctOf(fp.kupstFirstPlanSharePct)}).${low}`;
+  return (
+    `Son plan (gün içi sonrası) saatlerin yalnız ${pctIn(fp.coveragePct)} var: KÜPST'ün ${pctOf(fp.kupstFirstPlanSharePct)} ilk plana göre (üst sınır), ` +
+    `gün içi düzeltmeler köprüye alınmadı.${low}`
+  );
+}
+
 export function buildBridgeSteps(r: PlantReportData): { steps: BridgeStep[]; loadEnd: number; imb2026: number; intradaySaving: number; afterIntraday: number | null } {
   const steps: BridgeStep[] = [];
   const agg = r.aggregator;
@@ -220,7 +263,7 @@ export function buildBridgeSteps(r: PlantReportData): { steps: BridgeStep[]; loa
     imb2026 = s2026.cost2026Tl;
     steps.push({ label: "Dengesizlik riski 2026", value: imb2026, kind: "total" });
   }
-  steps.push({ label: "KÜPST (tahmini)", value: k2026, kind: "kupst" });
+  steps.push({ label: kupstUpperBound(r) ? "KÜPST (tahmini, üst sınır)" : "KÜPST (tahmini)", value: k2026, kind: "kupst" });
   const loadEnd = steps.reduce((lvl, st) => (st.kind === "total" ? st.value : lvl + st.value), 0);
   steps.push({ label: `${s2026 ? "Sapma yükü 2026" : "Sapma yükü"}${iv.realized ? " (gün içi öncesi)" : ""}`, value: loadEnd, kind: "total" });
   // Gerçekleşen gün içi düzeltme kesin hesaptır; senaryo yalnız bunun üstüne ek kazanç varsa
@@ -228,7 +271,9 @@ export function buildBridgeSteps(r: PlantReportData): { steps: BridgeStep[]; loa
   let afterIntraday: number | null = null;
   if (iv.realized) {
     steps.push({ label: `Gün içi düzeltmeler (gerçekleşen, %${nf(iv.realized.pct, 0)})`, value: -iv.realized.cutTl, kind: "realized" });
-    level = loadEnd - iv.realized.cutTl;
+    if (iv.realized.tradeCostTl !== 0)
+      steps.push({ label: "GİP işlem maliyeti (ortalama fiyatla, tahmini)", value: iv.realized.tradeCostTl, kind: "trade" });
+    level = loadEnd - iv.realized.netCutTl;
     afterIntraday = level;
     steps.push({ label: "Gün içi sonrası", value: level, kind: "total" });
   }
@@ -379,7 +424,7 @@ export async function exportPlantReportPptx(
       `Riskin %${nf(r.alignment.sameDirectionCostPct, 0)} kadarı sapmanın sistemle aynı yönde olduğu saatlerden geliyor; 2026'daki %6 katsayı yalnız bu saatlere uygulanıyor.`,
       worst ? `En pahalı ay ${monthLabel(worst.month)} (${formatTlShort(worst.imbalanceCostTl)}); maliyet birkaç ay ve saatte yoğunlaşıyor.` : "",
       iv.realized
-        ? `Gün içi düzeltmeler dengesizliği %${nf(iv.realized.pct, 0)} (≈ ${formatTlShort(iv.realized.cutTl)}) azaltıyor${
+        ? `${realizedIntradayPhrase(iv.realized)}${
             iv.strategyPct !== null && !iv.extra ? `; 2 saat önceden kural tabanlı kapatma yalnız %${nf(iv.strategyPct, 0)} sağlardı` : ""
           }${iv.realized.staticPlants.length ? `; ${iv.realized.staticPlants.length} santralin planı gün içinde hiç güncellenmiyor` : ""}.`
         : ie
@@ -412,7 +457,7 @@ export async function exportPlantReportPptx(
     col("Aksiyonlar", actions, M + CW / 2 + 0.1, CW / 2 - 0.1);
     text(
       s,
-      `Veri: EPİAŞ Şeffaflık Platformu (KGÜP, UEVM, resmi dengesizlik fiyatları), ${periodLabel(r)}; hesaplar EPİAŞ uzlaştırmasıyla doğrulandı. Gün içi işlemler ve ikili anlaşmalar açık veride yok.` +
+      `Veri: EPİAŞ Şeffaflık Platformu (KGÜP, UEVM, resmi dengesizlik fiyatları), ${periodLabel(r)}; hesaplar EPİAŞ uzlaştırmasıyla doğrulandı. Gün içi işlem fiyatları (GİP ortalama fiyatıyla tahmin edildi) ve ikili anlaşmalar açık veride yok.` +
         (author.name ? ` Hazırlayan: ${[author.name, author.title, author.email, author.linkedin].filter(Boolean).join(" · ")}. Tam rapor ve yöntem notu talep üzerine.` : ""),
       { x: M, y: 6.55, w: CW, h: 0.6, fontSize: 9, color: C.sub, valign: "top" }
     );
@@ -552,7 +597,7 @@ export async function exportPlantReportPptx(
       points.push({
         kind: "exact",
         text:
-          `Gün içi düzeltmeler dengesizliği %${nf(iv.realized.pct, 0)} (≈ ${formatTlShort(iv.realized.cutTl)}) azaltıyor: son plana göre sapma yükü ≈ ${formatTlShort(load.current - iv.realized.cutTl)}. ` +
+          `${realizedIntradayPhrase(iv.realized)}: gün içi sonrası sapma yükü ≈ ${formatTlShort(load.current - iv.realized.netCutTl)}. ` +
           (iv.extra
             ? `Kural tabanlı ek kapatma en fazla %${nf(iv.extra.pct, 0)} daha azaltabilir (üst sınır).`
             : iv.strategyPct !== null
@@ -581,8 +626,10 @@ export async function exportPlantReportPptx(
       gapNote +
       (cov.length
         ? `Kapsam: ${cov.map((c) => `${c.company} şirketinin EPİAŞ'ta üretimi yayımlanan ${c.total} santralinden ${c.total - c.missing.length} tanesi (eksik: ${listOf(c.missing, 4, ", ")})`).join("; ")}. `
-        : "") + `Sapma yükü = dengesizlik riski (gün içi işlemler öncesi) + tahmini KÜPST${iv.realized ? "; gün içi düzeltmeler sonrası rakam ayrıca verildi" : ""}.`;
-    text(s, scope, { x: M, y: 6.68, w: CW, h: 0.32, fontSize: 9, color: cov.length || gapNote ? C.scenTx : C.sub, valign: "top" });
+        : "") +
+      (finalPlanNote(r) ? `${finalPlanNote(r)} ` : "") +
+      `Sapma yükü = dengesizlik riski (gün içi işlemler öncesi) + tahmini KÜPST${iv.realized ? "; gün içi düzeltmeler sonrası rakam ayrıca verildi" : ""}.`;
+    text(s, scope, { x: M, y: 6.68, w: CW, h: 0.32, fontSize: 9, color: cov.length || gapNote || finalPlanNote(r) ? C.scenTx : C.sub, valign: "top", fit: "shrink" });
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -610,7 +657,10 @@ export async function exportPlantReportPptx(
             : "") +
         (agg ? "KÜPST topluluk (portföy) birimi bazında, kurulu güce ağırlıklı toleransla hesaplanır (EPDK 14029 md. 4); 2026 projeksiyonu" : "KÜPST santral bazında hesaplanır, netleşmez; 2026 projeksiyonu") + " 2026 tolerans oranları ve katsayısıyla (rüzgâr %15, güneş %8, katsayı 0,05) yapıldı. 2026 adımları veri yılının fiyatları ve sistem yönleri tekrar ederse geçerlidir. " +
         (iv.realized
-          ? "Gün içi düzeltmeler adımı kesin hesaptır: ilk plan ile son plan (gün içi piyasası kapandıktan sonra) aynı fiyatlarla; gün içi işlem fiyatlarının kâr/zararı hariç. "
+          ? "Gün içi düzeltmeler adımı kesin hesaptır: ilk plan ile son plan (gün içi piyasası kapandıktan sonra) aynı fiyatlarla. " +
+            (iv.realized.tradeCostTl !== 0
+              ? "GİP işlem maliyeti tahmindir: plan değişikliği GİP saatlik ağırlıklı ortalama fiyatından işlem görmüş sayılır; şirketin gerçek işlem fiyatı farklı olabilir. "
+              : "GİP ortalama fiyatıyla işlem maliyeti brüt azalmanın %2'sinden küçük, köprüde ayrı gösterilmedi. ")
           : "") +
         (intradayOn ? "Ek gün içi adımı senaryodur ve üst sınırdır; yalnızca dengesizlik riskine uygulanmıştır." : "")
     );
@@ -641,6 +691,7 @@ export async function exportPlantReportPptx(
       steps.some((st) => st.kind === "kupst") ? "kırmızı: tahmini KÜPST" : null,
       steps.some((st) => st.kind === "assumption") ? "kesikli turuncu: varsayıma bağlı" : null,
       steps.some((st) => st.kind === "realized") ? "yeşil: gerçekleşen gün içi düzeltme (ilk plan → son plan)" : null,
+      steps.some((st) => st.kind === "trade") ? "kesikli: GİP işlem maliyeti, ortalama fiyatla tahmini" : null,
       steps.some((st) => st.kind === "scenario") ? "kesikli yeşil: senaryo" : null,
       s2026 ? `2026 adımları ${yearOf(r)} fiyatları ve sistem yönleri tekrar ederse` : null,
     ]
@@ -660,14 +711,16 @@ export async function exportPlantReportPptx(
       const y0 = yOf(b.hi);
       const h = Math.max(yOf(b.lo) - y0, 0.02);
       const scenario = st.kind === "scenario" || st.kind === "target";
-      if (scenario || st.kind === "assumption") {
+      // GİP işlem maliyeti tahmindir (ortalama fiyat): kesikli; maliyetse turuncu, kazançsa yeşil
+      const greenDash = scenario || (st.kind === "trade" && st.value < 0);
+      if (scenario || st.kind === "assumption" || st.kind === "trade") {
         s.addShape(pptx.ShapeType.rect, {
           x: cx - barW / 2,
           y: y0,
           w: barW,
           h,
-          fill: { color: scenario ? C.gainSoft : C.riskSoft },
-          line: { color: scenario ? C.gain : C.risk, width: 1.25, dashType: "dash" },
+          fill: { color: greenDash ? C.gainSoft : C.riskSoft },
+          line: { color: greenDash ? C.gain : C.risk, width: 1.25, dashType: "dash" },
         });
       } else {
         rect(s, cx - barW / 2, y0, barW, h, st.kind === "total" ? C.navy : st.kind === "up" ? C.risk : st.kind === "kupst" ? C.cost : st.kind === "value" || st.kind === "realized" ? C.gain : "A7B4C2");
@@ -691,7 +744,16 @@ export async function exportPlantReportPptx(
         fontSize: 15,
         bold: true,
         align: "center",
-        color: st.kind === "up" || st.kind === "assumption" ? C.risk : st.kind === "kupst" ? C.cost : scenario || st.kind === "value" || st.kind === "realized" ? C.gain : st.kind === "down" ? C.sub : C.ink,
+        color:
+          st.kind === "up" || st.kind === "assumption" || (st.kind === "trade" && st.value >= 0)
+            ? C.risk
+            : st.kind === "kupst"
+              ? C.cost
+              : greenDash || st.kind === "value" || st.kind === "realized"
+                ? C.gain
+                : st.kind === "down"
+                  ? C.sub
+                  : C.ink,
       });
       text(s, st.label, { x: cx - slot / 2 + 0.05, y: bottom + 0.12, w: slot - 0.1, h: 0.6, fontSize: 11, color: C.sub, align: "center", valign: "top" });
     });
@@ -1301,29 +1363,42 @@ export async function exportPlantReportPptx(
     s.addNotes(
       "İlk plan gün öncesinde bildirilen, son plan gün içi piyasası kapandıktan sonra güncellenen KGÜP'tür; ikisi de EPİAŞ'ta yayımlanır. " +
         "Son planla hesaplanan dengesizlik, gün içi işlemlerden sonra kalan (uzlaştırmaya giden) sapmadır. Aradaki fark gün içi düzeltmelerin değeridir; " +
-        "gün içi işlemlerin alım-satım fiyatından doğan kâr ya da zarar açık veride olmadığından hariçtir."
+        "Gün içi işlemlerin fiyatı açık veride yok: plan değişikliği (ilk − son) GİP saatlik ağırlıklı ortalama fiyatından işlem görmüş sayılır, " +
+        "işlem maliyeti = (ilk − son plan) × (GİP − PTF). Şirketin gerçek işlem fiyatı farklı olabilir; bu kalem tahmindir."
     );
-    // Sol: iki sütun
+    // Sol: ilk plan, son plan ve (işlem maliyeti anlamlıysa) son plan + GİP işlem maliyeti
+    const trade = ie.tradeCostTl;
+    const showTrade = cut > 0 && materialTradeCost(trade, cut) !== 0;
     const bottom = 5.9;
     const topY = 2.6;
-    const maxV = Math.max(ie.firstCostTl, ie.finalCostTl, 1);
-    const cols: Array<[string, number, string]> = [
-      ["İlk plan (gün öncesi)", ie.firstCostTl, C.navy],
-      ["Son plan (gün içi sonrası)", ie.finalCostTl, C.gain],
+    const cols: Array<[string, number, string, boolean]> = [
+      ["İlk plan (gün öncesi)", ie.firstCostTl, C.navy, false],
+      ["Son plan (gün içi sonrası)", ie.finalCostTl, C.gain, false],
+      ...(showTrade ? [["Son plan + GİP işlem maliyeti (tahmini)", ie.finalCostTl + trade, C.risk, true] as [string, number, string, boolean]] : []),
     ];
-    cols.forEach(([label, v, color], i) => {
-      const x = M + 0.4 + i * 2.2;
-      const h = (v / maxV) * (bottom - topY);
-      rect(s, x, bottom - h, 1.3, h, color);
-      text(s, formatTlShort(v), { x: x - 0.4, y: bottom - h - 0.42, w: 2.1, h: 0.36, fontSize: 15, bold: true, align: "center", color: C.ink });
-      text(s, label, { x: x - 0.4, y: bottom + 0.1, w: 2.1, h: 0.5, fontSize: 10.5, align: "center", color: C.sub, valign: "top" });
+    const maxV = Math.max(...cols.map((c) => c[1]), 1);
+    const gap = showTrade ? 1.75 : 2.2;
+    cols.forEach(([label, v, color, dashed], i) => {
+      const x = M + 0.3 + i * gap;
+      const h = (Math.max(v, 0) / maxV) * (bottom - topY);
+      if (dashed)
+        s.addShape(pptx.ShapeType.rect, { x, y: bottom - h, w: 1.2, h, fill: { color: C.riskSoft }, line: { color, width: 1.25, dashType: "dash" } });
+      else rect(s, x, bottom - h, 1.2, h, color);
+      text(s, formatTlShort(v), { x: x - 0.25, y: bottom - h - 0.42, w: 1.7, h: 0.36, fontSize: 15, bold: true, align: "center", color: C.ink });
+      text(s, label, { x: x - 0.25, y: bottom + 0.1, w: 1.7, h: 0.5, fontSize: 10, align: "center", color: C.sub, valign: "top" });
     });
     text(s, `Dengesizlik (${unit.loc} netleşmiş, aynı fiyatlar)`, { x: M, y: 1.95, w: 5, h: 0.3, fontSize: 10, bold: true, color: C.sub });
     // Sağ: bulgular
     const rx = M + 5.6;
     const rw = W - M - rx;
     const lines: string[] = [
-      `Gün içi düzeltmeler dengesizliği ${formatTlShort(cut)} (%${nf(ie.reductionPct, 0)}), sapma hacmini %${nf(devCut, 0)} azaltıyor.`,
+      `Gün içi düzeltmeler dengesizliği ${formatTlShort(cut)} (%${nf(ie.reductionPct, 0)}), sapma hacmini %${nf(devCut, 0)} azaltıyor` +
+        (showTrade
+          ? trade > 0
+            ? `; GİP ortalama fiyatıyla işlem maliyeti ≈ ${formatTlShort(trade)}, net kazanç ≈ ${formatTlShort(cut - trade)}.`
+            : `; GİP işlemleri ortalama fiyatla ≈ ${formatTlShort(-trade)} ek kazandırıyor, net ≈ ${formatTlShort(cut - trade)}.`
+          : "; GİP ortalama fiyatıyla işlem maliyeti ihmal edilebilir.")
+      ,
       ie.staticPlants.length
         ? `${ie.staticPlants.length} santralin planı gün içinde hiç güncellenmiyor (${listOf(ie.staticPlants, 4, ", ")}): gün içi operasyon kapsamı dışında.`
         : ie.smallStaticCount
@@ -1332,7 +1407,9 @@ export async function exportPlantReportPptx(
       ie.topAdjusters.length
         ? `Planı en etkin düzeltilen santraller: ${ie.topAdjusters.slice(0, 3).map((a) => `${a.name} (sapma −%${nf(a.reductionPct, 0)})`).join(", ")}.`
         : "",
-      "Raporun diğer bölümlerindeki dengesizlik riski ilk plana göredir (gün içi işlemler öncesi); KÜPST son plana göre hesaplanır.",
+      `Raporun diğer bölümlerindeki dengesizlik riski ilk plana göredir (gün içi işlemler öncesi); KÜPST son plana göre hesaplanır${
+        r.finalPlan.coveragePct < 99.9 ? ` (son planı olmayan saatlerde ilk plana göre; KÜPST'ün ${pctOf(r.finalPlan.kupstFirstPlanSharePct)})` : ""
+      }.`,
     ].filter(Boolean);
     lines.forEach((l, i) => {
       round(s, rx, 1.95 + i * 1.08, rw, 0.92, C.panel);
@@ -1340,7 +1417,7 @@ export async function exportPlantReportPptx(
     });
     text(
       s,
-      `İlk ve son KGÜP EPİAŞ Şeffaflık Platformu'ndan; son planı olan saatler (%${nf(ie.coveragePct, 0)}). Gün içi işlemlerin fiyat kâr/zararı hariç.`,
+      `İlk ve son KGÜP EPİAŞ Şeffaflık Platformu'ndan; son planı olan saatler (%${nf(ie.coveragePct, 0)}). GİP işlem maliyeti = (ilk − son plan) × (GİP ağırlıklı ortalama fiyatı − PTF); şirketin gerçek işlem fiyatları bilinmez.`,
       { x: M, y: 6.5, w: CW, h: 0.3, fontSize: 9, color: C.sub }
     );
   }
@@ -1727,13 +1804,17 @@ export async function exportPlantReportPptx(
     if (iv.realized && !iv.extra) {
       items.push({
         title: "Gün içi düzeltmeler (zaten alınıyor)",
-        impact: `${formatTlShort(iv.realized.cutTl)} · %${nf(iv.realized.pct, 0)}`,
+        impact:
+          iv.realized.tradeCostTl !== 0
+            ? `net ${formatTlShort(iv.realized.netCutTl)} · brüt %${nf(iv.realized.pct, 0)}`
+            : `${formatTlShort(iv.realized.cutTl)} · %${nf(iv.realized.pct, 0)}`,
         body:
-          `Son plan (gün içi piyasası kapandıktan sonra) ilk plandan isabetli: dengesizlik %${nf(iv.realized.pct, 0)} azalıyor. ` +
+          `Son plan (gün içi piyasası kapandıktan sonra) ilk plandan isabetli: dengesizlik %${nf(iv.realized.pct, 0)} azalıyor` +
+          (iv.realized.tradeCostTl !== 0 ? `, GİP ortalama fiyatıyla işlem maliyeti düşülünce net ${formatTlShort(iv.realized.netCutTl)}. ` : ". ") +
           (iv.strategyPct !== null ? `Kural tabanlı 2 saatlik kapatma testi yalnız %${nf(iv.strategyPct, 0)} verdi; mevcut gün içi operasyon bunun üstünde. ` : "") +
           (iv.realized.staticPlants.length
             ? `Planı gün içinde hiç güncellenmeyen ${iv.realized.staticPlants.length} santral (${listOf(iv.realized.staticPlants, 3, ", ")}) kapsam dışında: en hızlı ek kazanım bunları gün içi operasyona almak.`
-            : "Ek kazanç gün içi işlem fiyatlarında (açık veride yok)."),
+            : "Ek kazanç gün içi işlem fiyatlarında: şirketin gerçek fiyatları açık veride yok."),
         kind: "exact",
         effort: "—",
         realised: true,
@@ -1745,7 +1826,7 @@ export async function exportPlantReportPptx(
         impact: `en fazla %${nf(iv.extra.pct, 0)} · ≈ ${formatTlShort(iv.extra.tl)}`,
         body:
           (iv.realized
-            ? `Mevcut gün içi düzeltmeler dengesizliği %${nf(iv.realized.pct, 0)} azaltıyor; kural tabanlı kapatma %${nf(iv.strategyPct ?? 0, 0)} verdi, fark %${nf(iv.extra.pct, 0)}. `
+            ? `Mevcut gün içi düzeltmeler GİP işlem maliyeti düşülünce dengesizliği net %${nf(iv.realized.netPct, 1)} azaltıyor; kural tabanlı kapatma %${nf(iv.strategyPct ?? 0, 1)} verdi, fark %${nf(iv.extra.pct, 1)}. `
             : "") +
           `${testNote} Üst sınırdır.`,
         kind: "scenario",
@@ -1857,9 +1938,10 @@ export async function exportPlantReportPptx(
   }
 
   // ---------------------------------------------------------------------------------------------
-  // 9. SONRAKİ ADIM VE İLETİŞİM
+  // 9. SONRAKİ ADIM VE İLETİŞİM (şimdilik kapalı: pilot teklifi geri bildirim isteyen mesajlarla çelişiyor;
+  // iletişim bilgisi kapakta kalır)
   // ---------------------------------------------------------------------------------------------
-  {
+  if (INCLUDE_NEXT_STEP_SLIDE) {
     const s = pptx.addSlide();
     page++;
     s.background = { color: C.navy };
@@ -2032,7 +2114,7 @@ export async function exportPlantReportPptx(
       ],
       [
         "Dengesizlik riski",
-        "Gün öncesi planın hatasının dengesizlik fiyatıyla değeri: gerçekleşen üretimin tamamı PTF'den satılsaydı elde edilecek gelir ile gün öncesi satış + dengesizlik tutarı arasındaki fark. Şirketin gün içi işlemleri öncesidir; gün içinde kapatılan sapmalar varsa fiilen ödenen tutar daha düşüktür.",
+        "Gün öncesi planın hatasının dengesizlik fiyatıyla değeri: gerçekleşen üretimin tamamı PTF'den satılsaydı elde edilecek gelir ile gün öncesi satış + dengesizlik tutarı arasındaki fark. Şirketin gün içi işlemleri öncesidir. Gün içi düzeltmeler ayrıca verilir: ilk plan ile son plan (gün içi piyasası kapandıktan sonra) arasındaki dengesizlik farkı kesin hesaptır; plan değişikliğinin işlem maliyeti (ilk − son plan) × (GİP saatlik ağırlıklı ortalama fiyatı − PTF) olarak tahmin edilir.",
       ],
       [
         "Uzlaştırma",
@@ -2045,7 +2127,7 @@ export async function exportPlantReportPptx(
       ],
       [
         "Sınırlar",
-        "Santralin gün içi piyasa işlemleri ve ikili anlaşmaları açık veride yok; gün içinde kapatılan sapmalar varsa gerçek maliyet daha düşüktür. TEİAŞ yük atma/alma talimatları (kısıntı) santral bazında yayımlanmadığından ayrılamadı; talimatla düşen üretim dengesizlik sayılmaz, bu yüzden kısıntı yaşayan santrallerde risk olduğundan yüksek görünebilir." +
+        "Şirketin gün içi işlem fiyatları ve ikili anlaşmaları açık veride yok: GİP işlem maliyeti ortalama fiyatla tahmindir, gerçek fiyat farklı olabilir. TEİAŞ yük atma/alma talimatları (kısıntı) santral bazında yayımlanmadığından ayrılamadı; talimatla düşen üretim dengesizlik sayılmaz, bu yüzden kısıntı yaşayan santrallerde risk olduğundan yüksek görünebilir." +
           (r.yekdem
             ? " YEKDEM santralleri dahildir: YEKDEM katılımcısı üretimini serbest piyasada kendisi satar ve dengesizliği kendisine aittir (YEK Yönetmeliği md. 15/1, 23/1; YEKDEM portföyü dengesizliğini düzenleyen md. 16–17 29.4.2016'da kaldırıldı); yalnızca geliri PTF yerine YEK fiyatından oluşur."
             : "") +
@@ -2060,7 +2142,9 @@ export async function exportPlantReportPptx(
       ],
       [
         "KÜPST (tahmini)",
-        `Saatlik |gerçekleşen − KÜP| sapmanın tolerans payını aşan kısmı × max(PTF, SMF) × katsayı; KÜP gün içi piyasası kapandıktan sonraki son KGÜP'tür (havuzda yoksa ilk plan); ${agg ? "toplayıcı portföyünde topluluk birimi bazında (toplam UEVM ile toplam KÜP karşılaştırılır; tolerans kaynak türlerinin kurulu gücüne göre ağırlıklı; katsayı topluluk için 2025'te 0,03, 2026'da 0,05; EPDK 14029 / 13025 md. 4)" : "santral bazında"}, YEKDEM santralleri dahil ${unit.dat} ait. Tolerans plana oranlandı. 2025: rüzgâr %17, güneş %10, diğer %5, katsayı 0,03 (EPDK 13025). 2026'dan itibaren: rüzgâr %15, güneş %8, diğer %5, katsayı 0,05 (EPDK 11/12/2025 tarihli 14029 sayılı karar, RG 29.12.2025). 2025 öncesi %21 / %12, katsayı 0,03. Arıza sayısına bağlı katsayı artışı kapsam dışı (alt sınır).`,
+        `Saatlik |gerçekleşen − KÜP| sapmanın tolerans payını aşan kısmı × max(PTF, SMF) × katsayı; KÜP gün içi piyasası kapandıktan sonraki son KGÜP'tür (yoksa ilk plan; son plan saatlerin ${pctIn(r.finalPlan.coveragePct)} var${
+          r.finalPlan.kupstFirstPlanSharePct >= 0.5 ? `, KÜPST'ün ${pctOf(r.finalPlan.kupstFirstPlanSharePct)} ilk plana göre${kupstUpperBound(r) ? ", üst sınır" : ""}` : ""
+        }); ${agg ? "toplayıcı portföyünde topluluk birimi bazında (toplam UEVM ile toplam KÜP karşılaştırılır; tolerans kaynak türlerinin kurulu gücüne göre ağırlıklı; katsayı topluluk için 2025'te 0,03, 2026'da 0,05; EPDK 14029 / 13025 md. 4)" : "santral bazında"}, YEKDEM santralleri dahil ${unit.dat} ait. Tolerans plana oranlandı. 2025: rüzgâr %17, güneş %10, diğer %5, katsayı 0,03 (EPDK 13025). 2026'dan itibaren: rüzgâr %15, güneş %8, diğer %5, katsayı 0,05 (EPDK 11/12/2025 tarihli 14029 sayılı karar, RG 29.12.2025). 2025 öncesi %21 / %12, katsayı 0,03. Arıza sayısına bağlı katsayı artışı kapsam dışı (alt sınır).`,
       ],
       ...(options.costChange
         ? [
@@ -2073,7 +2157,7 @@ export async function exportPlantReportPptx(
         : []),
       [
         "Etiketler",
-        `KESİN HESAP: veriden doğrudan. TAHMİNİ: mevzuata dayanır ama açık veriyle tam yeniden üretilemez (KÜPST: arıza sayısına bağlı katsayı ve tolerans ayrıntıları). VARSAYIMA BAĞLI: bir varsayıma dayanır (risk primi, adil prim paylaşımı). SENARYO: davranış varsayımı; taahhüt değildir.`,
+        `KESİN HESAP: veriden doğrudan. TAHMİNİ: mevzuata dayanır ama açık veriyle tam yeniden üretilemez (KÜPST: arıza sayısına bağlı katsayı ve tolerans ayrıntıları; GİP işlem maliyeti: ortalama fiyat). VARSAYIMA BAĞLI: bir varsayıma dayanır (risk primi, adil prim paylaşımı). SENARYO: davranış varsayımı; taahhüt değildir.`,
       ],
     ];
     // Satır yüksekliği metin uzunluğuna göre: aynı satırdaki iki bloğun uzun olanı belirler (sabit adım uzun metni

@@ -15,7 +15,7 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.10";
+const VERSION = "1.11";
 const VERSION_DATE = "5 Ekim 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
@@ -190,6 +190,12 @@ export default function MethodologyPage() {
               öncesinde ölçer. <b>KÜPST</b> mevzuata uygun olarak gün içi piyasası kapandıktan sonra güncellenen <b>son sürüme</b> (KÜP)
               göredir; son sürüm veri havuzunda yoksa ilk sürüm kullanılır (üst sınıra yakın). İki sürümün farkı gün içi etkinlik bölümünde
               ölçülür. Birden çok uzlaştırma birimi olan santralde birimlerin serileri toplanır.
+            </p>
+            <p>
+              <b>Son plan kapsamı:</b> son sürümü olan santral-saat payı raporda, veri kalitesi bandında ve Ek B&apos;de yazılır; kapsamı
+              %90&apos;ın altındaki santraller adıyla listelenir. EPİAŞ son sürümü bazı birimler için (ör. lisanssız üretim birimleri)
+              yayımlamaz. Portföy kapsamı %90&apos;ın altındaysa KÜPST &quot;üst sınır&quot; etiketini alır ve gün içi düzeltmeler köprüye
+              girmez (yalnız kapsanan saatlere dayanırdı). <Tag kind="exact" />
             </p>
           </Section>
 
@@ -469,8 +475,16 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
             <p>
               <b>Gün içi etkinlik:</b> uzlaştırma birimindeki saatlik toplam sapma ilk plana ve son plana göre aynı fiyatlarla
               değerlenir. Son plan gün içi işlemlerden sonra kalan pozisyondur; aradaki fark gün içi düzeltmelerin dengesizliği ne kadar
-              azalttığıdır. Gün içi işlemlerin alım-satım fiyatından doğan kâr ya da zarar açık veride olmadığından hariçtir. Planı gün
-              içinde hiç değişmeyen (saatlerin %1&apos;inden azında) santraller ayrıca listelenir. <Tag kind="exact" />
+              azalttığıdır. Planı gün içinde hiç değişmeyen (saatlerin %1&apos;inden azında) santraller ayrıca listelenir.{" "}
+              <Tag kind="exact" />
+            </p>
+            <p>
+              <b>GİP işlem maliyeti:</b> plan değişikliği bedava değildir. Gün öncesinde PTF&apos;den taahhüt edilen ilk plan ile son plan
+              arasındaki fark (Δ = ilk − son) gün içi piyasasında işlem görmüş sayılır: plan düştüyse Δ geri alınır, arttıysa fazladan
+              satılır. Maliyet = Δ × (GİP saatlik ağırlıklı ortalama fiyatı − PTF); net gün içi kazanç = dengesizlik azalması − işlem
+              maliyeti. Köprüde ayrı (kesikli) adım olarak gösterilir; brüt azalmanın %2&apos;sinden küçükse ihmal edilir. Kural tabanlı gün
+              içi stratejisi de işlem fiyatıyla net olduğu için ek fırsat net gerçekleşenle karşılaştırılır. Şirketin gerçek işlem fiyatı
+              açık veride yoktur; ortalama fiyat, 15 dakikalık ve blok kontratlar ayrı izlenmez. <Tag kind="estimate" />
             </p>
             <p>
               <b>Tahmin iyileştirme fırsatı:</b> sektör medyanının üstündeki santrallerin (dönem içinde devreye girenler hariç) saatlik
@@ -640,6 +654,11 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.11",
+                  "5 Ekim 2026",
+                  "Gün içi düzeltmelerin işlem maliyeti: ilk ve son plan farkı GİP saatlik ağırlıklı ortalama fiyatından işlem görmüş sayılır, maliyet = (ilk − son plan) × (GİP − PTF). Önce plan değişikliği bedava sayılıyordu; gün içi kazancı brüt gösteriyor ve net olan kural tabanlı stratejiyle karşılaştırıyordu. Köprüde ayrı adım; gün içi sonrası sapma yükü nettir. Gain: işlem maliyeti 2,2 M TL, gün içi sonrası 24,7 → 26,9 M TL; Inavitas: 14,0 M TL, 240,8 → 254,8 M TL ve net düzeltme (%9,9) stratejinin (%14,5) altında kaldığı için %4,6 ek gün içi fırsatı görünür. Son plan kapsamı raporda, veri kalitesi bandında ve Ek B'de yazılır; kapsam %90'ın altındaysa KÜPST üst sınır etiketini alır (Zeros %95, son planı eksik 3 santral; Met %92, 1 LÜY birimi). Bağımsız doğrulama betiği (scripts/verify-independent.mts): Gain, Inavitas ve Met'in bütün santral-saatlerinde dengesizlik, KÜPST ve GİP işlem maliyeti ham veriden yeniden hesaplandı, en büyük fark 0,00 TL.",
+                ],
                 [
                   "1.10",
                   "5 Ekim 2026",

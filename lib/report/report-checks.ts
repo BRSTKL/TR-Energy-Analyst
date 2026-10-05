@@ -12,6 +12,8 @@
 import JSZip from "jszip";
 import type { PlantReportData } from "@/lib/report/plant-report";
 import type { BridgeStep } from "@/lib/export/plant-report-pptx";
+import { FINAL_PLAN_MIN_COVERAGE_PCT } from "@/lib/analysis/data-completeness";
+import { materialTradeCost } from "@/lib/analysis/intraday-trade";
 
 export type ReportIssueLevel = "error" | "warning";
 
@@ -152,6 +154,13 @@ export function checkReportData(r: PlantReportData, bridge?: BridgeStep[]): Repo
       err("intraday-first", `Gün içi slaytında ilk plan maliyeti ${fmt(ie.firstCostTl)}, raporun ana rakamı ${fmt(t.imbalanceCostTl)}.`);
   }
 
+  // Son plan kapsamı: gün içi slaytı ile kapsam satırı aynı santral-saatlerden
+  const fp = r.finalPlan;
+  if (ie && Math.abs(ie.coveragePct - fp.coveragePct) > 0.05)
+    err("final-plan-coverage", `Gün içi slaytında son plan kapsamı %${ie.coveragePct.toFixed(1)}, kapsam satırında %${fp.coveragePct.toFixed(1)}.`);
+  if (fp.hours > 0 && Math.abs((fp.hoursWithFinal / fp.hours) * 100 - fp.coveragePct) > 0.05)
+    err("final-plan-coverage", `Son plan kapsamı %${fp.coveragePct.toFixed(1)}, saatlerden %${((fp.hoursWithFinal / fp.hours) * 100).toFixed(1)}.`);
+
   // Arıza payı santral bazına oranlanır (metinlerde böyle yazar)
   if (r.outages && st.plantLevelCostTl > 0) {
     const pct = (r.outages.costTl / st.plantLevelCostTl) * 100;
@@ -199,17 +208,37 @@ export function checkReportData(r: PlantReportData, bridge?: BridgeStep[]): Repo
  */
 function realizedIntraday(r: PlantReportData): number | null {
   const ie = r.intradayEffect;
-  return ie && ie.coveragePct >= 90 && ie.reductionPct >= 0.5 ? ie.reductionPct : null;
+  return ie && ie.coveragePct >= FINAL_PLAN_MIN_COVERAGE_PCT && ie.reductionPct >= 0.5 ? ie.reductionPct : null;
+}
+
+/**
+ * Gerçekleşen gün içi azalmanın GİP işlem maliyeti düşülmüş oranı (%; ilk plan maliyetine göre). Kural tabanlı strateji
+ * işlem fiyatıyla net olduğundan karşılaştırma net oranla yapılır (Aşama 11.2).
+ */
+function realizedIntradayNet(r: PlantReportData): number | null {
+  const ie = r.intradayEffect;
+  if (realizedIntraday(r) === null || !ie || ie.firstCostTl <= 0) return null;
+  const cut = ie.firstCostTl - ie.finalCostTl;
+  return ((cut - materialTradeCost(ie.tradeCostTl, cut)) / ie.firstCostTl) * 100;
 }
 
 function intradayStrategyDominated(r: PlantReportData): boolean {
-  const realized = realizedIntraday(r);
+  const realized = realizedIntradayNet(r);
   const strategy = r.intraday && r.intraday.savingTl > 0 ? r.intraday.savingPct : null;
   return realized !== null && (strategy === null || strategy - realized < 0.5);
 }
 
 export function checkIntradayBridge(r: PlantReportData, bridge: BridgeStep[]): ReportIssue[] {
   const issues: ReportIssue[] = [];
+  // KÜPST'ün anlamlı bir kısmı ilk plana göreyse (son plan kapsamı eşiğin altında) köprü onu üst sınır diye etiketler
+  const kupstStep = bridge.find((st) => st.kind === "kupst");
+  const fp = r.finalPlan;
+  if (kupstStep && fp.coveragePct < FINAL_PLAN_MIN_COVERAGE_PCT && fp.kupstFirstPlanSharePct >= 1 && !/üst sınır/.test(kupstStep.label))
+    issues.push({
+      level: "error",
+      rule: "kupst-upper-bound",
+      message: `Son plan saatlerin yalnız %${fp.coveragePct.toFixed(0)}'inde var, KÜPST'ün %${fp.kupstFirstPlanSharePct.toFixed(0)}'i ilk plana göre; köprü etiketi "${kupstStep.label}" üst sınır demiyor.`,
+    });
   const realized = realizedIntraday(r);
   const realizedStep = bridge.find((st) => st.kind === "realized");
   if (realized !== null && !realizedStep)
@@ -227,8 +256,24 @@ export function checkIntradayBridge(r: PlantReportData, bridge: BridgeStep[]): R
     issues.push({
       level: "error",
       rule: "intraday-scenario",
-      message: `Köprüde gün içi senaryosu var, ama gerçekleşen gün içi düzeltme (%${realized!.toFixed(0)}) kural tabanlı stratejiden (%${(r.intraday?.savingPct ?? 0).toFixed(0)}) büyük: senaryo ek fırsat değil.`,
+      message: `Köprüde gün içi senaryosu var, ama gerçekleşen gün içi düzeltme (net %${(realizedIntradayNet(r) ?? 0).toFixed(0)}) kural tabanlı stratejiden (%${(r.intraday?.savingPct ?? 0).toFixed(0)}) büyük: senaryo ek fırsat değil.`,
     });
+  // Son plan kapsamı eşiğin altındaysa gerçekleşen adımı olmaz (yalnız kapsanan saatlere dayanır)
+  const ie = r.intradayEffect;
+  if (realizedStep && ie && ie.coveragePct < FINAL_PLAN_MIN_COVERAGE_PCT)
+    issues.push({ level: "error", rule: "intraday-coverage", message: `Son plan saatlerin yalnız %${ie.coveragePct.toFixed(0)}'inde var ama köprüde gerçekleşen gün içi adımı var.` });
+  // GİP işlem maliyeti: anlamlıysa köprüde ayrı adım, tam kapsamda tutarı veriden
+  const tradeStep = bridge.find((st) => st.kind === "trade");
+  if (realizedStep && ie) {
+    const cut = ie.firstCostTl - ie.finalCostTl;
+    const expected = materialTradeCost(ie.tradeCostTl, cut);
+    if (expected !== 0 && !tradeStep)
+      issues.push({ level: "error", rule: "intraday-trade", message: `GİP işlem maliyeti ${fmt(ie.tradeCostTl)} (brüt gün içi azalmanın %${((Math.abs(ie.tradeCostTl) / Math.max(cut, 1)) * 100).toFixed(0)}'i) köprüde yok.` });
+    if (tradeStep && ie.coveragePct >= 99.9 && !near(tradeStep.value, expected))
+      issues.push({ level: "error", rule: "intraday-trade", message: `Köprüdeki GİP işlem maliyeti ${fmt(tradeStep.value)}, veriden ${fmt(expected)}.` });
+  }
+  if (tradeStep && !realizedStep)
+    issues.push({ level: "error", rule: "intraday-trade", message: "Köprüde GİP işlem maliyeti var ama gerçekleşen gün içi adımı yok." });
   return issues;
 }
 
@@ -249,6 +294,24 @@ export function checkIntradayText(r: PlantReportData, slides: Array<{ slide: num
       });
   }
   return issues;
+}
+
+/**
+ * Son plan kapsamı eşiğin altındaysa ya da kapsamı düşük santral varsa rapor bunu söylemeli (özet sayfası hariç tam
+ * raporda yönetici özeti dipnotu ve Ek B): "Son plan (gün içi sonrası) saatlerin …".
+ */
+export function checkFinalPlanText(r: PlantReportData, slides: Array<{ slide: number; text: string }>): ReportIssue[] {
+  const fp = r.finalPlan;
+  if (fp.hours === 0 || (fp.coveragePct >= FINAL_PLAN_MIN_COVERAGE_PCT && fp.lowPlants.length === 0)) return [];
+  if (slides.length <= 1) return []; // tek sayfa özet
+  if (slides.some((s) => /Son plan \(gün içi sonrası\) saatlerin/.test(s.text))) return [];
+  return [
+    {
+      level: "error",
+      rule: "final-plan-text",
+      message: `Son plan kapsamı %${fp.coveragePct.toFixed(0)}${fp.lowPlants.length ? ` (eksik: ${fp.lowPlants.length} santral)` : ""}, ama raporda kapsam cümlesi yok.`,
+    },
+  ];
 }
 
 /** Slayt metninde bozuk değer: biçimlendirilmemiş sayı, boş alan, eksi işaretli yüzde */

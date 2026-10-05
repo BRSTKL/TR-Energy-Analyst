@@ -42,7 +42,8 @@ Sektör karnesi (2026 Ocak–Ağustos, MWh başına dengesizlik medyanı): rüzg
 
 - **Dengesizlik:** sapma = UEVM − KGÜP. Pozitif dengesizlik fiyatı MIN(PTF, SMF) × (1 − l), negatif MAX(PTF, SMF) × (1 + k) (DUY md. 110). 2025'te k = l = %3. 2026'da sistemle aynı yöndeki sapmada %6, ters yönde %3, ayrıca taban fiyat ve negatif fiyat kuralları (EPDK 14030). EPİAŞ'ın yayımladığı resmi dengesizlik fiyatları varsa esas alınır.
 - **Maliyet** = tahmin hatasız olunsaydı elde edilecek gelir − gerçekleşen gelir.
-- **KÜPST:** 2025 toleransları rüzgâr %17, güneş %10 (EPDK 13025); 2026'da %15 / %8, katsayı 0,05 (EPDK 14029). Son KGÜP'e göre hesaplanır. Toplayıcı portföyünde topluluk bazında, kurulu güce ağırlıklı toleransla.
+- **KÜPST:** 2025 toleransları rüzgâr %17, güneş %10 (EPDK 13025); 2026'da %15 / %8, katsayı 0,05 (EPDK 14029). Son KGÜP'e göre hesaplanır (son planı olmayan saatte ilk plana göre; kapsam raporda yazılır, %90'ın altındaysa KÜPST "üst sınır"). Toplayıcı portföyünde topluluk bazında, kurulu güce ağırlıklı toleransla.
+- **Gün içi düzeltmeler:** ilk ve son KGÜP arasındaki dengesizlik farkı kesin hesap; plan değişikliğinin işlem maliyeti (ilk − son plan) × (GİP ağırlıklı ortalama fiyatı − PTF) olarak tahmin edilir ve gün içi kazancından düşülür.
 - **Uzlaştırma birimi:** dengesizlik santral bazında değil, şirket ya da toplayıcı portföyü bazında netleşir. Ekranlar ikisini de gösterir.
 - Her rakam raporda **kesin hesap / tahmini / senaryo** diye etiketlenir.
 
@@ -52,13 +53,14 @@ Ayrıntı: uygulamadaki `/methodology` sayfası.
 
 - 2024–2025 formül fiyatı EPİAŞ resmi dengesizlik fiyatıyla saat saat aynı (ortalama fark 0,01–0,02 TL).
 - Ana rakamlar uygulama kodu kullanılmadan, bağımsız betiklerle havuz verisinden yeniden hesaplandı. Santral bazında ve netleşmiş dengesizlik, KÜPST, WAPE, capture price ve piyasa özeti birebir tuttu ([ANALIZ_RAPORU.md](ANALIZ_RAPORU.md)).
+- `scripts/verify-independent.mts`: hesap motoru kullanılmadan ham havuz dosyası ve EPİAŞ fiyatlarından dengesizlik, KÜPST ve GİP işlem maliyeti yeniden hesaplanır. Gain (219.768), Inavitas (375.192) ve Met (75.816) santral-saatlerinin hepsinde en büyük fark 0,00 TL.
 - Mevzuat katsayıları Resmî Gazete metinlerinden doğrulandı ve testle sabitlendi.
-- **336 otomatik test** (Vitest); `tsc` ve ESLint temiz.
+- **359 otomatik test** (Vitest); `tsc` ve ESLint temiz.
 
 ## Sınırlar
 
-- Yalnızca kamu verisi. Şirketlerin gün içi işlemleri, ikili anlaşmaları ve fiili uzlaştırma faturaları açık veride yok. Rakamlar "kapatılması gereken risk"tir, gerçekleşen fatura değil.
-- Dengesizlik riski ilk KGÜP'e göre (gün içi öncesi) hesaplanır. Son KGÜP'e göre portföy maliyeti %5–12 daha düşük çıkabilir.
+- Yalnızca kamu verisi. Şirketlerin gün içi işlem fiyatları, ikili anlaşmaları ve fiili uzlaştırma faturaları açık veride yok. Rakamlar "kapatılması gereken risk"tir, gerçekleşen fatura değil; hiçbir rakam henüz gerçek bir uzlaştırma bildirimiyle karşılaştırılmadı.
+- Dengesizlik riski ilk KGÜP'e göre (gün içi öncesi) hesaplanır; raporda gün içi sonrası rakam ayrıca verilir. GİP işlem maliyeti ortalama fiyatla tahmindir: şirketin gerçek işlem fiyatı farklı olabilir.
 - Yük alma / atma (YAL/YAT) talimatları santral bazında açık veride yok. Talimatlı miktar dengesizlik sayılmadığı için, sapması üretiminin %60'ını aşan santraller (çoğu büyük baraj) karneden ve aday taramasından çıkarılır.
 - Hidro alt tipi (barajlı / nehir tipi) tahminidir. Toplayıcı dışındaki grup üyeliği tahminidir.
 - Uygulama yerel çalışmak için tasarlandı, kimlik doğrulama yok.
