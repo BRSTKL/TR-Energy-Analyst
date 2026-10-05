@@ -44,3 +44,12 @@ export function splitProjectDescription(description: string | null | undefined):
 
 /** Ekranda gösterilecek açıklama: teknik notlar ayıklanmış kullanıcı metni (yoksa boş) */
 export const displayDescription = (description: string | null | undefined) => splitProjectDescription(description).text;
+
+/**
+ * Kullanıcı metnini değiştirir, eski teknik notları (varsa) korur: açıklama ekrandan düzenlendiğinde notlar kaybolmasın.
+ * Sonuç boşsa null.
+ */
+export function replaceDescriptionText(description: string | null | undefined, text: string): string | null {
+  const notes = (description ?? "").match(NOTE) ?? [];
+  return [text.trim(), ...notes.map((n) => n.trim())].filter(Boolean).join("\n") || null;
+}

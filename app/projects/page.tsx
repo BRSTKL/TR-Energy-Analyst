@@ -42,6 +42,7 @@ import {
 import { PricingProfileDialog } from "@/components/pricing-profile-dialog";
 import { EpiasSyncDialog } from "@/components/epias-sync-dialog";
 import { DeleteProjectDialog } from "@/components/delete-project-dialog";
+import { RenameProjectDialog } from "@/components/rename-project-dialog";
 import { EpiasPlantPicker } from "@/components/epias-plant-picker";
 import { isAggregatorName } from "@/lib/projects/aggregator";
 import { ReportDownloadDialog } from "@/components/report-download-dialog";
@@ -661,6 +662,12 @@ export default function ProjectsPage() {
 
                     <CardTitle className="mt-2 text-lg font-bold text-slate-900">
                       {project.name}
+                      <RenameProjectDialog
+                        projectId={project.id}
+                        projectName={project.name}
+                        projectDescription={project.description}
+                        onRenamed={() => fetchProjects()}
+                      />
                     </CardTitle>
                     <CardDescription className="line-clamp-2 text-xs text-slate-600">
                       {project.description ||

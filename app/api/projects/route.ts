@@ -3,6 +3,7 @@ import { displayDescription } from "@/lib/projects/description";
 import { prisma } from "@/lib/prisma";
 import { plantHourSummaries } from "@/lib/services/project-records";
 import { plantNameKey, validatePlantInput } from "@/lib/plants/validation";
+import { normalizeProjectName } from "@/lib/projects/name";
 
 export const dynamic = "force-dynamic";
 
@@ -78,14 +79,9 @@ export async function POST(request: Request) {
     }
     const { name, description, plants } = body;
 
-    if (!name || typeof name !== "string" || name.trim().length === 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Proje adı zorunludur.",
-        },
-        { status: 400 }
-      );
+    const projectName = normalizeProjectName(name);
+    if (!projectName.ok) {
+      return NextResponse.json({ success: false, error: projectName.error }, { status: 400 });
     }
 
     // Santral tanımları: ad zorunlu ve proje içinde benzersiz, tür RES/HES/GES, kurulu güç > 0
@@ -107,7 +103,7 @@ export async function POST(request: Request) {
 
     const created = await prisma.project.create({
       data: {
-        name: name.trim(),
+        name: projectName.value,
         description: description?.trim() || null,
         pricingProfiles: {
           create: {

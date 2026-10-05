@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { plantHourSummaries } from "@/lib/services/project-records";
 import { backupDatabase } from "@/lib/db-backup";
 import { loadAggregatorPortfolio } from "@/lib/services/aggregator-portfolio";
+import { normalizeProjectName } from "@/lib/projects/name";
+import { replaceDescriptionText } from "@/lib/projects/description";
 import { fetchAggregatorPortfolio } from "@/lib/services/epias-plants";
 
 export const dynamic = "force-dynamic";
@@ -61,6 +63,8 @@ export async function GET(_request: Request, { params }: { params: { id: string 
 }
 
 /**
+ * PATCH /api/projects/[id] { name: string, description?: string } → proje adını (rapor kapağı ve dosya adı bu addır) ve
+ * isteğe bağlı açıklamayı değiştirir; açıklamadaki eski EPİAŞ teknik notları korunur.
  * PATCH /api/projects/[id] { aggregatorName: string | null, aggregatorOrgId?: number, aggregatorOrgName?: string }
  * Toplayıcı portföyü ayarı: dolu ise projedeki tüm santraller bu adla tek dengede uzlaştırılır; null ise her santral
  * sahibinin dengesinde (varsayılan). aggregatorOrgId verilirse toplayıcının EPİAŞ portföyü (santral sayısı ve
@@ -68,8 +72,22 @@ export async function GET(_request: Request, { params }: { params: { id: string 
  */
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   const body = await request.json().catch(() => null);
+  if (body && "name" in body && !("aggregatorName" in body)) {
+    const n = normalizeProjectName(body.name);
+    if (!n.ok) return NextResponse.json({ success: false, error: n.error }, { status: 400 });
+    if ("description" in body && typeof body.description !== "string") {
+      return NextResponse.json({ success: false, error: "Açıklama metin olmalı." }, { status: 400 });
+    }
+    const exists = await prisma.project.findUnique({ where: { id: params.id }, select: { id: true, description: true } });
+    if (!exists) return NextResponse.json({ success: false, error: "Proje bulunamadı." }, { status: 404 });
+    const data: { name: string; description?: string | null } = { name: n.value };
+    if (typeof body.description === "string") data.description = replaceDescriptionText(exists.description, body.description.slice(0, 1000));
+    // updatedAt değişir: proje önbelleği (projectVersion) yeni adla yeniden hesaplanır
+    const project = await prisma.project.update({ where: { id: params.id }, data, select: { id: true, name: true, description: true } });
+    return NextResponse.json({ success: true, project: { ...project, description: displayDescription(project.description) } });
+  }
   if (!body || !("aggregatorName" in body)) {
-    return NextResponse.json({ success: false, error: "aggregatorName alanı gerekli." }, { status: 400 });
+    return NextResponse.json({ success: false, error: "name ya da aggregatorName alanı gerekli." }, { status: 400 });
   }
   const raw = body.aggregatorName;
   if (raw !== null && typeof raw !== "string") {
