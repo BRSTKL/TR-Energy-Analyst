@@ -67,10 +67,10 @@ export function parseAggregatorPortfolio(raw: string | null | undefined): Aggreg
   }
 }
 
-const TYPE_TR: Record<string, string> = { HES: "hidro", RES: "rüzgâr", GES: "güneş", OTHER: "diğer" };
+const TYPE_TR: Record<string, string> = { HES: "hidro", RES: "rüzgâr", GES: "güneş", OTHER: "diğer tür" };
 const MONTHS_TR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
 
-/** "29 hidro, 6 rüzgâr, 5 diğer" (çoktan aza) */
+/** "32 hidro, 6 rüzgâr, 2 diğer tür" (çoktan aza) */
 export function describePortfolioMix(byType: Record<string, number>): string {
   return Object.entries(byType)
     .filter(([, n]) => n > 0)
@@ -86,8 +86,12 @@ export function describePortfolioMix(byType: Record<string, number>): string {
 export function describeAggregatorScope(name: string, p: AggregatorPortfolio, inProject: number, outside = 0): string {
   const [y, m] = p.asOf.split("-").map(Number);
   const all = inProject >= p.plantCount;
+  // Diğer türler (biyokütle, jeotermal…) analiz edilmez: rüzgâr/güneş/hidronun hepsi projedeyse bunu söyle
+  const other = p.byType.OTHER ?? 0;
+  const allAnalyzable = !all && other > 0 && inProject >= p.plantCount - other;
   return (
-    `Kapsam: ${name} portföyündeki ${p.plantCount} santralin ${all ? "tamamı" : `${inProject} tanesi`} ` +
+    `Kapsam: ${name} portföyündeki ${p.plantCount} santralin ${all ? "tamamı" : `${inProject} tanesi`}` +
+    (allAnalyzable ? ", yani rüzgâr, güneş ve hidro santrallerinin tamamı " : " ") +
     `(portföy: ${describePortfolioMix(p.byType)}; EPİAŞ, ${MONTHS_TR[m - 1]} ${y})` +
     (outside > 0 ? `; projedeki ${outside} santral bu listede yok` : "")
   );

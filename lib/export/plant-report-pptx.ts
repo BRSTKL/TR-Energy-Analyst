@@ -1325,7 +1325,9 @@ export async function exportPlantReportPptx(
       `Gün içi düzeltmeler dengesizliği ${formatTlShort(cut)} (%${nf(ie.reductionPct, 0)}), sapma hacmini %${nf(devCut, 0)} azaltıyor.`,
       ie.staticPlants.length
         ? `${ie.staticPlants.length} santralin planı gün içinde hiç güncellenmiyor (${listOf(ie.staticPlants, 4, ", ")}): gün içi operasyon kapsamı dışında.`
-        : "Bütün santrallerin planı gün içinde güncelleniyor.",
+        : ie.smallStaticCount
+          ? `Planı gün içinde güncellenmeyen yalnız ${ie.smallStaticCount} küçük santral var (portföy sapmasının %1'inden azı).`
+          : "Bütün santrallerin planı gün içinde güncelleniyor.",
       ie.topAdjusters.length
         ? `Planı en etkin düzeltilen santraller: ${ie.topAdjusters.slice(0, 3).map((a) => `${a.name} (sapma −%${nf(a.reductionPct, 0)})`).join(", ")}.`
         : "",

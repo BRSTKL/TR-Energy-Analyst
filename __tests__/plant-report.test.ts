@@ -213,9 +213,13 @@ import { describeAggregatorScope, describePortfolioMix } from "@/lib/projects/ag
 describe("Toplayıcı kapsam cümlesi", () => {
   const p = { orgId: 1, orgName: "X (TOPLAYICI)", asOf: "2026-09-27", plantCount: 40, byType: { RES: 6, HES: 29, OTHER: 5 }, plantIds: [] };
   it("portföy dağılımı çoktan aza, kapsam ve kaynak ayı", () => {
-    expect(describePortfolioMix(p.byType)).toBe("29 hidro, 6 rüzgâr, 5 diğer");
+    expect(describePortfolioMix(p.byType)).toBe("29 hidro, 6 rüzgâr, 5 diğer tür");
     expect(describeAggregatorScope("Gain Toplayıcı", p, 6)).toBe(
-      "Kapsam: Gain Toplayıcı portföyündeki 40 santralin 6 tanesi (portföy: 29 hidro, 6 rüzgâr, 5 diğer; EPİAŞ, Eylül 2026)"
+      "Kapsam: Gain Toplayıcı portföyündeki 40 santralin 6 tanesi (portföy: 29 hidro, 6 rüzgâr, 5 diğer tür; EPİAŞ, Eylül 2026)"
+    );
+    // Gain: 40 santralin 2'si biyogaz/biyokütle; rüzgâr ve hidronun 38'i de projede
+    expect(describeAggregatorScope("Gain Toplayıcı", { ...p, byType: { HES: 32, RES: 6, OTHER: 2 } }, 38)).toBe(
+      "Kapsam: Gain Toplayıcı portföyündeki 40 santralin 38 tanesi, yani rüzgâr, güneş ve hidro santrallerinin tamamı (portföy: 32 hidro, 6 rüzgâr, 2 diğer tür; EPİAŞ, Eylül 2026)"
     );
     expect(describeAggregatorScope("G", { ...p, plantCount: 6 }, 6, 1)).toContain("santralin tamamı");
     expect(describeAggregatorScope("G", { ...p, plantCount: 6 }, 6, 1)).toContain("projedeki 1 santral bu listede yok");
@@ -229,5 +233,53 @@ describe("Aylık fayda aralığı", () => {
     expect(monthlyRange([{ benefitPct: 30 }, { benefitPct: 26 }, { benefitPct: 39 }])).toEqual({ min: 26, max: 39, months: 3 });
     expect(monthlyRange([{ benefitPct: 30 }, { benefitPct: 26 }])).toBeNull();
     expect(monthlyRange(undefined)).toBeNull();
+  });
+});
+
+import { refinePortfolioTypes } from "@/lib/services/aggregator-portfolio";
+
+describe("Toplayıcı portföyü türleri havuzdan", () => {
+  it("türü bilinen santraller havuzdaki türle sayılır; biri eksikse kayıtlı tahmin korunur", async () => {
+    const fs = await import("node:fs");
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pool-"));
+    const prev = process.env.POOL_DIR;
+    process.env.POOL_DIR = dir;
+    try {
+      const write = (id: number, info: object) => {
+        fs.mkdirSync(path.join(dir, String(id)), { recursive: true });
+        fs.writeFileSync(path.join(dir, String(id), "plant.json"), JSON.stringify({ epiasPlantId: id, ...info }));
+      };
+      write(1, { name: "Erfelek", type: "HES" });
+      write(2, { name: "X RES", type: "RES" });
+      write(3, { name: "Aslan Biyogaz", kind: "OTHER" });
+      const p = { orgId: 1, orgName: "G", asOf: "2026-09-28", plantCount: 3, byType: { RES: 1, OTHER: 2 }, plantIds: [1, 2, 3] };
+      expect((await refinePortfolioTypes(p))!.byType).toEqual({ HES: 1, RES: 1, OTHER: 1 });
+      expect((await refinePortfolioTypes({ ...p, plantIds: [1, 2, 3, 4] }))!.byType).toEqual(p.byType);
+    } finally {
+      if (prev === undefined) delete process.env.POOL_DIR;
+      else process.env.POOL_DIR = prev;
+    }
+  });
+});
+
+describe("Gün içi: planı güncellenmeyen santraller", () => {
+  it("yalnız portföy sapmasında payı olanlar öneri olur (küçük santral listelenmez)", () => {
+    const withFinal = (t: Date, first: number, final: number, actual: number) => ({
+      ...hour(t, first, actual, 2000, 1800, "SURPLUS"),
+      forecastFinalMwh: final,
+    });
+    const hours = (fn: (t: Date) => ReturnType<typeof withFinal>) => Array.from({ length: 10 }, (_, i) => fn(at(2026, 0, 1, i)));
+    const r = buildPlantReport(project([
+      // Büyük santral planı günceller: ilk plan 100, son plan 95, gerçekleşen 90
+      { name: "BÜYÜK RES", type: "RES", hourly: hours((t) => withFinal(t, 100, 95, 90)) },
+      // Orta santral planı hiç güncellemiyor ve sapması büyük (10 MWh/saat): öneri
+      { name: "ORTA HES", type: "HES", hourly: hours((t) => withFinal(t, 30, 30, 20)) },
+      // Küçük santral planı hiç güncellemiyor, sapması önemsiz (0,05 MWh/saat; toplamın %1'inden az)
+      { name: "KÜÇÜK HES", type: "HES", hourly: hours((t) => withFinal(t, 1, 1, 0.95)) },
+    ]));
+    expect(r.intradayEffect!.staticPlants).toEqual(["ORTA HES"]);
+    expect(r.intradayEffect!.smallStaticCount).toBe(1);
   });
 });

@@ -3,7 +3,7 @@ import { displayDescription } from "@/lib/projects/description";
 import { prisma } from "@/lib/prisma";
 import { plantHourSummaries } from "@/lib/services/project-records";
 import { backupDatabase } from "@/lib/db-backup";
-import { parseAggregatorPortfolio } from "@/lib/projects/aggregator";
+import { loadAggregatorPortfolio } from "@/lib/services/aggregator-portfolio";
 import { fetchAggregatorPortfolio } from "@/lib/services/epias-plants";
 
 export const dynamic = "force-dynamic";
@@ -47,7 +47,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
       description: displayDescription(project.description),
       hasImportTemplate: !!project.importTemplate,
       aggregatorName: project.aggregatorName,
-      aggregatorPortfolio: parseAggregatorPortfolio(project.aggregatorPortfolio),
+      aggregatorPortfolio: await loadAggregatorPortfolio(project.aggregatorPortfolio),
       dataRange,
       plants: project.plants.map((p) => ({
         id: p.id,
@@ -92,7 +92,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     }
   }
   await prisma.project.update({ where: { id: params.id }, data: { aggregatorName, aggregatorPortfolio } });
-  return NextResponse.json({ success: true, aggregatorName, aggregatorPortfolio: parseAggregatorPortfolio(aggregatorPortfolio), warning });
+  return NextResponse.json({ success: true, aggregatorName, aggregatorPortfolio: await loadAggregatorPortfolio(aggregatorPortfolio), warning });
 }
 
 /**

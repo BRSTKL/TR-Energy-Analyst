@@ -21,7 +21,8 @@ import { comparePlants } from "@/lib/analysis/plant-comparison";
 import { analyzePortfolioNetting } from "@/lib/analysis/portfolio-netting";
 import { buildPlantReport, settleByCompany } from "@/lib/report/plant-report";
 import { buildReportContext } from "@/lib/services/report-context";
-import { parseAggregatorPortfolio, settlementIdentity } from "@/lib/projects/aggregator";
+import { settlementIdentity } from "@/lib/projects/aggregator";
+import { loadAggregatorPortfolio } from "@/lib/services/aggregator-portfolio";
 
 export const dynamic = "force-dynamic";
 
@@ -128,7 +129,7 @@ async function handleGET(_request: Request, { params }: { params: { id: string }
           project: { id: project.id, name: project.name },
           profile: projectProfile,
           aggregator: project.aggregatorName
-            ? { name: project.aggregatorName, portfolio: parseAggregatorPortfolio(project.aggregatorPortfolio) }
+            ? { name: project.aggregatorName, portfolio: await loadAggregatorPortfolio(project.aggregatorPortfolio) }
             : null,
           plants: withData,
         },

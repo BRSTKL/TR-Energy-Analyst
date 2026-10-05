@@ -1,7 +1,8 @@
 import { findProjectWithRecords } from "@/lib/services/project-records";
 import { processHourlyRecord } from "@/lib/calculations/engine";
 import { HourlyResult, ImbalancePricingProfile, SystemDirection, toPricingProfile } from "@/lib/calculations/types";
-import { parseAggregatorPortfolio, settlementIdentity, type AggregatorPortfolio } from "@/lib/projects/aggregator";
+import { settlementIdentity, type AggregatorPortfolio } from "@/lib/projects/aggregator";
+import { loadAggregatorPortfolio } from "@/lib/services/aggregator-portfolio";
 
 export interface ProjectHourly {
   project: { id: string; name: string };
@@ -45,7 +46,7 @@ export async function loadProjectHourly(projectId: string): Promise<ProjectHourl
     project: { id: project.id, name: project.name },
     profile,
     aggregator: project.aggregatorName
-      ? { name: project.aggregatorName, portfolio: parseAggregatorPortfolio(project.aggregatorPortfolio) }
+      ? { name: project.aggregatorName, portfolio: await loadAggregatorPortfolio(project.aggregatorPortfolio) }
       : null,
     plants: project.plants.map((plant) => ({
       plantId: plant.id,

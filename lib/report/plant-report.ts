@@ -236,8 +236,11 @@ export interface PlantReportData {
     reductionPct: number;
     absDevFirstMwh: number;
     absDevFinalMwh: number;
-    /** Planı gün içinde hiç güncellenmeyen santraller (saatlerin %1'inden azında fark) */
+    /** Planı gün içinde hiç güncellenmeyen santraller (saatlerin %1'inden azında fark); yalnız portföyün mutlak sapmasının
+     * en az %1'ini taşıyanlar (STATIC_PLANT_MIN_DEV_SHARE), küçük santraller öneri olmaz */
     staticPlants: string[];
+    /** Planı güncellenmeyen ama sapmadaki payı eşiğin altında kalan santral sayısı ("bütün santraller güncelliyor" denmesin) */
+    smallStaticCount?: number;
     /** Planı en çok güncellenen santraller: sapma azalması (%) */
     topAdjusters: Array<{ name: string; reductionPct: number }>;
   } | null;
@@ -343,6 +346,9 @@ export interface PlantReportData {
    */
   intraday: { savingTl: number; savingPct: number; testMonths: number; firstTestMonth: string; lastTestMonth: string; lagHours: number } | null;
 }
+
+/** Planı gün içinde güncellenmeyen santral, ilk plana göre mutlak sapmanın en az bu payını taşıyorsa öneri olarak gösterilir */
+export const STATIC_PLANT_MIN_DEV_SHARE = 0.01;
 
 const COEF_2026 = REGULATORY_IMBALANCE_REGIMES[REGULATORY_IMBALANCE_REGIMES.length - 1].coefficients;
 const REGIME_2026_START = Date.parse(`${REGULATORY_IMBALANCE_REGIMES[REGULATORY_IMBALANCE_REGIMES.length - 1].from}T00:00:00Z`);
@@ -895,7 +901,7 @@ export function buildPlantReport(
     let withFinal = 0;
     let absFirst = 0;
     let absFinal = 0;
-    const staticPlants: string[] = [];
+    const staticCandidates: Array<{ name: string; absDevMwh: number }> = [];
     const adjusters: Array<{ name: string; reductionPct: number }> = [];
     for (const p of withData) {
       const key = p.organizationId !== null ? `org:${p.organizationId}` : `plant:${p.plantId}`;
@@ -922,9 +928,12 @@ export function buildPlantReport(
         b.final += d2;
         u.set(t, b);
       }
-      if (n > 0 && changed < 0.01 * n) staticPlants.push(p.plantName);
+      if (n > 0 && changed < 0.01 * n) staticCandidates.push({ name: p.plantName, absDevMwh: pf });
       else if (n > 0 && pf > 0) adjusters.push({ name: p.plantName, reductionPct: (1 - pl / pf) * 100 });
     }
+    // Planı güncellenmeyen santral ancak portföy sapmasında payı varsa öneri olur: Gain'de Üzümlü İçmesuyu HES (8 ayda
+    // 0,7 GWh, sapmanın binde biri, Mart–Temmuz üretim yok) "en hızlı ek kazanım" diye öneriliyordu
+    const staticPlants = staticCandidates.filter((c) => c.absDevMwh >= STATIC_PLANT_MIN_DEV_SHARE * absFirst).map((c) => c.name);
     if (withFinal > 0.5 * total) {
       let firstCost = 0;
       let finalCost = 0;
@@ -942,6 +951,7 @@ export function buildPlantReport(
         absDevFirstMwh: absFirst,
         absDevFinalMwh: absFinal,
         staticPlants,
+        smallStaticCount: staticCandidates.length - staticPlants.length,
         topAdjusters: adjusters.sort((a, b) => b.reductionPct - a.reductionPct).slice(0, 5),
       };
     }
