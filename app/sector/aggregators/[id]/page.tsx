@@ -83,7 +83,7 @@ export default function AggregatorDetailPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
-        <Stat label="Santral" value={`${s.coveredPlants} / ${s.listedPlants - (s.otherTechPlants ?? 0)}`} hint="Analizde / listedeki rüzgâr, güneş, hidro" />
+        <Stat label="Santral" value={`${s.coveredPlants} / ${s.listedPlants - (s.otherTechPlants ?? 0)}`} hint={`Analizde / listedeki rüzgâr, güneş, hidro${s.otherTechPlants ? ` · ${s.otherTechPlants} diğer tür (biyokütle, jeotermal, doğalgaz…) kapsam dışı` : ""}`} />
         <Stat label="Üretim" value={`${nf(s.productionMwh / 1000)} GWh`} />
         <Stat label="Netleşme değeri" value={mTl(s.nettingValueTl)} hint="Sahipler tek başına − portföy" />
         <Stat label="Netleşme oranı" value={`%${nf(s.nettingPct)}`} />

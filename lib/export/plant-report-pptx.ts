@@ -1136,10 +1136,10 @@ export async function exportPlantReportPptx(
       // Kıyas EPİAŞ toplayıcı listesindeki tüm lisanslı santrallerle yapılır; proje daha az santral içeriyorsa rakamlar
       // raporun geri kalanından farklı çıkar (Gain: tabloda 38 santral 43,5 M, raporda 35 santral 41,2 M), bunu söyle
       (self.coveredPlants !== r.plants.length
-        ? `Bu tabloda ${agg.name} EPİAŞ listesindeki ${self.coveredPlants} santraliyle yer alır; raporun diğer slaytları projedeki ${r.plants.length} santralle hesaplandı, rakamlar bu yüzden biraz farklıdır. `
+        ? `Bu tabloda ${agg.name} EPİAŞ listesindeki ${self.coveredPlants} rüzgâr, güneş ve hidro santraliyle yer alır; raporun diğer slaytları projedeki ${r.plants.length} santralle hesaplandı, rakamlar bu yüzden biraz farklıdır. `
         : "") +
       `Endeks = portföyde netleşmiş dengesizlik / Σ üretim × teknolojinin sektör medyanı (rüzgâr, güneş, hidro; santral tek başına); 1'in altı daha iyi, karışımdan bağımsız. Grup: ${pe.label} üretimi ${pe.maxProductionMwh ? `${formatEnergy(pe.minProductionMwh)}–${formatEnergy(pe.maxProductionMwh)} arası` : `${formatEnergy(pe.minProductionMwh)} üstü`} toplayıcılar (diğer ${pe.othersCount} toplayıcı farklı ölçekte). ` +
-        `EPİAŞ'ın ${pe.membershipAsOf} tarihli toplayıcı listeleri (santraller dönem boyunca portföydeymiş gibi), santral bazında üretimi yayımlanan lisanslı santraller, resmi dengesizlik fiyatı, ilk KGÜP, KÜPST hariç.`,
+        `EPİAŞ'ın ${pe.membershipAsOf} tarihli toplayıcı listeleri (santraller dönem boyunca portföydeymiş gibi), santral bazında üretimi yayımlanan lisanslı rüzgâr, güneş ve hidro santralleri (Santral sütunu bunları sayar; biyokütle, jeotermal, doğalgaz gibi diğer türler ve lisanssız santraller hariç), resmi dengesizlik fiyatı, ilk KGÜP, KÜPST hariç.`,
       { x: M, y: Math.max(6.35, yBelow + facts.length * 0.36 + 0.02), w: CW, h: 0.6, fontSize: 9, color: C.sub, valign: "top" }
     );
   }

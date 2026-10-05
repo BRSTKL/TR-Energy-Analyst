@@ -15,8 +15,8 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.9";
-const VERSION_DATE = "4 Ekim 2026";
+const VERSION = "1.10";
+const VERSION_DATE = "5 Ekim 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
   { id: "ozet", title: "Özet" },
@@ -401,7 +401,7 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
 
           <Section id="toplayici-kiyas" n={next()} title="Toplayıcılar arası kıyas">
             <p>
-              EPİAŞ&apos;taki her toplayıcının santral listesindeki lisanslı santraller için aynı yöntem: saatlik sapma (UEVM − ilk KGÜP),
+              EPİAŞ&apos;taki her toplayıcının santral listesindeki lisanslı rüzgâr, güneş ve hidro santralleri için aynı yöntem: saatlik sapma (UEVM − ilk KGÜP),
               resmi dengesizlik fiyatı. Sahipler tek başına (aynı sahibin santralleri kendi dengesinde netleşir) ile toplayıcı
               portföyünde tek denge karşılaştırılır:
             </p>
@@ -414,7 +414,7 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
             </F>
             <p>
               Üyelik, listenin alındığı güne göredir (santraller dönem boyunca portföydeymiş gibi); santral bazında üretimi yayımlanmayan
-              lisanssız santraller ve KÜPST hesapta yoktur. Ham MWh başına maliyet teknoloji karışımından etkilenir (hidro ağırlıklı
+              lisanssız santraller ve KÜPST hesapta yoktur. Listedeki diğer türler (biyokütle, biyogaz, jeotermal, doğalgaz, kojenerasyon) kapsam dışıdır: tür UEVM kaynak kırılımından, veri çekilmemişse adından (JES, biyogaz, kojenerasyon…) belirlenir; santral sayıları bu yüzden &quot;analizde / listedeki rüzgâr, güneş, hidro&quot; olarak verilir. Ham MWh başına maliyet teknoloji karışımından etkilenir (hidro ağırlıklı
               portföyler doğal olarak düşük çıkar); bu yüzden sıralama <b>endekse</b> göredir: portföy, aynı karışımdaki sektör ortalaması
               santrallerin tek başına ödeyeceğinin ne kadarını ödüyor. Endeksi hem iyi tahmin hem netleşme düşürür. Kıyas <b>benzer
               ölçekli</b> toplayıcılarla yapılır: dönem üretimi 8 ayda 1.000 GWh üstü (dönemle orantılı); grup 4&apos;ten küçükse
@@ -640,6 +640,11 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.10",
+                  "5 Ekim 2026",
+                  "Toplayıcı kıyasının kapsamı açık yazılır: yalnız rüzgâr, güneş ve hidro santralleri. Listedeki diğer türler (biyokütle, biyogaz, jeotermal, doğalgaz, kojenerasyon; ör. Aksa 26, Inavitas 16, Zeros 99 santral) ve lisanssız santraller hesapta yoktur. Tek sayfalık özetin başlığı ve dipnotu, raporun kıyas slaytı ve ayrıntı sayfası bunu söyler (önce yalnız '88 santral' yazıyordu; alıcı listesindeki santral sayısıyla karşılaştırınca eksik veri sanabilirdi). Rakamlar değişmedi. Türü veriyle belirlenen 54 santralin hiçbiri rüzgâr, güneş ya da hidro değil (biyokütle 23, doğalgaz 15, jeotermal 2, kömür 1).",
+                ],
                 [
                   "1.9",
                   "4 Ekim 2026",

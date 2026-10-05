@@ -109,8 +109,13 @@ export async function loadAggregatorDetail(year: number, id: number): Promise<Ag
     loadBenchmarkPrices(bench.period.start, bench.period.end),
     loadBenchmarkPlants(agg.plantIds, year, bench.period.start, bench.period.end),
   ]);
+  const detail = aggregatorDetail(agg, plants, prices, bench.sectorMedians);
+  // Kapsam dışı türler (biyokütle, jeotermal…) kıyas betiğiyle aynı kuralla: özet ve sayfa "analizde / listedeki
+  // rüzgâr, güneş, hidro" sayısını ve dışarıda kalanları doğru yazsın (önce alan boştu, liste sayısı tamamı görünüyordu)
+  const other = otherTechIds(agg.plantIds.filter((pid) => !plants.has(pid))).size;
+  detail.summary = { ...detail.summary, otherTechPlants: other, missingPlants: agg.plantIds.length - detail.summary.coveredPlants - other };
   const value: AggregatorDetailResult = {
-    ...aggregatorDetail(agg, plants, prices, bench.sectorMedians),
+    ...detail,
     year,
     id,
     name: agg.name,

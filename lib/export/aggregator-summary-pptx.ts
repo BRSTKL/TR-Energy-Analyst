@@ -7,7 +7,7 @@
  */
 
 import pptxgen from "pptxgenjs";
-import { peerGroup } from "@/lib/analysis/aggregator-benchmark";
+import { peerGroup, type AggregatorBenchmarkRow } from "@/lib/analysis/aggregator-benchmark";
 import type { AggregatorDetailResult } from "@/lib/services/aggregator-data";
 import type { ReportAuthor } from "@/lib/export/plant-report-pptx";
 
@@ -34,6 +34,22 @@ export function shortAggregatorName(name: string): string {
   const cap = (w: string) => `${w.charAt(0)}${w.slice(1).replace(/İ/g, "i").toLowerCase()}`;
   const ws = name.replace(/\s*\(TOPLAYICI\)\s*$/i, "").trim().split(/\s+/);
   return /^ENERJ[İI]SA$/i.test(ws[0]) ? `${cap(ws[0])} ${cap(ws[1] ?? "")}`.trim() : cap(ws[0]);
+}
+
+/**
+ * Kıyasın kapsam cümlesi: yalnız rüzgâr, güneş ve hidro santralleri hesaptadır; listedeki diğer türler (biyokütle,
+ * biyogaz, jeotermal, doğalgaz, kojenerasyon) ve lisanssız santraller yoktur. Alıcı kendi santral sayısını bilir, bu
+ * yüzden dışarıda kalan sayı açıkça yazılır.
+ */
+export function aggregatorScopeNote(s: Pick<AggregatorBenchmarkRow, "coveredPlants" | "listedPlants" | "otherTechPlants">): string {
+  const other = s.otherTechPlants ?? 0;
+  const eligible = s.listedPlants - other;
+  return (
+    `Yalnız rüzgâr, güneş ve hidro santralleri; ${s.coveredPlants} / ${eligible} santralin üretimi yayımlanıyor. ` +
+    (other > 0
+      ? `Listedeki ${other} diğer tür santral (biyokütle, biyogaz, jeotermal, doğalgaz, kojenerasyon) ve lisanssız santraller kapsam dışı.`
+      : "Lisanssız santraller kapsam dışı.")
+  );
 }
 
 export interface AggregatorSummaryFacts {
@@ -118,8 +134,8 @@ export async function exportAggregatorSummaryPptx(d: AggregatorDetailResult, aut
   // Başlık bandı
   box(0, 0, W, 1.35, C.navy);
   text(`TOPLAYICI ÖZETİ · ${f.periodLabel.toLocaleUpperCase("tr-TR")}`, { x: M, y: 0.25, w: 9, h: 0.25, fontSize: 10, bold: true, charSpacing: 2, color: "7FD1C7" });
-  text(`${f.shortName}: ${s0.coveredPlants} santral, ${nf(s0.productionMwh / 1000)} GWh`, {
-    x: M, y: 0.55, w: CW, h: 0.6, fontSize: 24, bold: true, fontFace: "Arial", color: C.white, valign: "middle",
+  text(`${f.shortName}: ${s0.coveredPlants} rüzgâr, güneş ve hidro santrali, ${nf(s0.productionMwh / 1000)} GWh`, {
+    x: M, y: 0.55, w: CW, h: 0.6, fontSize: 24, bold: true, fontFace: "Arial", color: C.white, valign: "middle", fit: "shrink",
   });
   text(`${f.mix.map((m) => `${m.label} %${nf(m.pct)}`).join(" · ")}`, { x: M, y: 1.0, w: CW, h: 0.3, fontSize: 12, color: "C9D6E3" });
 
@@ -182,7 +198,7 @@ export async function exportAggregatorSummaryPptx(d: AggregatorDetailResult, aut
   });
 
   const notes = [
-    `Veri: EPİAŞ Şeffaflık Platformu (ilk KGÜP, UEVM, resmi dengesizlik fiyatları), ${f.periodLabel}. Yalnız rüzgâr, güneş ve hidro santralleri; ${s0.coveredPlants} / ${s0.listedPlants - (s0.otherTechPlants ?? 0)} santralin üretimi yayımlanıyor.`,
+    `Veri: EPİAŞ Şeffaflık Platformu (ilk KGÜP, UEVM, resmi dengesizlik fiyatları), ${f.periodLabel}. ${aggregatorScopeNote(s0)}`,
     `Üyelik ${d.membershipAsOf} tarihli listeye göre; gün içi işlemler ve ikili anlaşmalar açık veride yok. Katkı: üretici ayrılırsa kaybedilecek fayda.`,
     author.name ? `Hazırlayan: ${[author.name, author.title, author.email, author.linkedin].filter(Boolean).join(" · ")}.` : "",
   ].filter(Boolean);

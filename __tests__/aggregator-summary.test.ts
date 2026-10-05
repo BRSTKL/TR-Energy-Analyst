@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aggregatorSummaryFacts, ownerShort, shortAggregatorName } from "@/lib/export/aggregator-summary-pptx";
+import { aggregatorScopeNote, aggregatorSummaryFacts, ownerShort, shortAggregatorName } from "@/lib/export/aggregator-summary-pptx";
 import type { AggregatorBenchmarkRow } from "@/lib/analysis/aggregator-benchmark";
 import type { AggregatorDetailResult } from "@/lib/services/aggregator-data";
 
@@ -45,5 +45,19 @@ describe("toplayıcı özeti", () => {
     expect(f.bestMonth).toEqual({ month: "Ocak", pct: 70 });
     expect(f.worstMonth).toEqual({ month: "Şubat", pct: 40 });
     expect(f.expensive).toEqual({ count: 1, excessTl: 5000, worstName: "P" });
+  });
+
+  it("kapsam cümlesi: yalnız rüzgâr/güneş/hidro, diğer türlerin sayısı açık", () => {
+    // Aksa: listede 114, 26'sı biyokütle/biyogaz/jeotermal; 88 rüzgâr/güneş/hidro hepsi analizde
+    const aksa = aggregatorScopeNote({ listedPlants: 114, coveredPlants: 88, otherTechPlants: 26 });
+    expect(aksa).toContain("Yalnız rüzgâr, güneş ve hidro santralleri; 88 / 88 santralin");
+    expect(aksa).toContain("Listedeki 26 diğer tür santral");
+    expect(aksa).toContain("lisanssız santraller kapsam dışı");
+    // Gökada: diğer tür yok → sayı cümlesi yazılmaz
+    const gokada = aggregatorScopeNote({ listedPlants: 25, coveredPlants: 25, otherTechPlants: 0 });
+    expect(gokada).not.toContain("diğer tür");
+    expect(gokada).toContain("Lisanssız santraller kapsam dışı.");
+    // Eski kıyas dosyası (alan yok) ve verisi olmayan santral
+    expect(aggregatorScopeNote({ listedPlants: 57, coveredPlants: 37 })).toContain("37 / 57 santralin");
   });
 });
