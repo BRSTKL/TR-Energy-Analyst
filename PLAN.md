@@ -230,6 +230,32 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
   - Gain ve Inavitas için önce/sonra rakamları ilerleme kaydına (kapsam %, gün içi brüt / işlem maliyeti / net, KÜPST).
   - `npm test`, `npm run check:reports` 0 hata; metodoloji sürümü artar; README sınırlar bölümü güncellenir.
 
+### Aşama 12: Düşük güvenli hesapları geçmişle sınamak · karar 05.10.2026
+**Amaç:** "Ne olurdu" rakamları (gün içi fırsatı, risk primi, tahmin fırsatı, büyüme adayları, arıza tespiti) bugüne kadar hiç gerçekle karşılaştırılmadı. Havuzda 2025 (1.314 santral) ve 2026 (1.469 santral; 988'inde son plan) verisi birlikte var, saatlik sektör serisi ~1.400 santral. **Fikir:** yöntemi geçen yılın verisiyle çalıştır, bu yıl gerçekte ne olduğuna bak, hatayı ölç ve rapordaki rakamın yanına yaz. Hedef bu rakamları kesin yapmak değil, her birine sınanmış bir aralık ve geçmiş hata oranı vermek.
+
+- [x] **12.1 Gün içi gerçekçilik kontrolü** ✅ 05.10.2026 (kod ve veri; metodoloji notu ve commit bekliyor). Toplayıcı kıyasına `intraday` (aggregatorIntraday), `intradayPeerStats`; 136 toplayıcı santralinin son planı çekildi, 23 toplayıcı kıyasta (kapsam %100). Strateji vaadi en iyi çeyrekle sınırlı (`cappedByPeers`, denetim `intraday-peers`), 2/3/4 saat duyarlılığı (Inavitas 14,5/7,5/3,3). Yer: Pure, Enerjisa Müşteri en iyi çeyrek; Gain medyan üstü; Inavitas, Zeros, Met, Atam, Enerjisa Doğal medyan altı (medyan ~%20, en iyi çeyrek ~%35–38). 364 test, 32 rapor 0 hata.
+  - Basitçe: strateji "şu kadar daha kazanırsın" diyor; bunun yerine en iyi toplayıcıların gerçekte ne başardığına bakılır. Strateji bunun çok üstünü vaat ediyorsa gerçekçi değildir.
+  - Nasıl: 30 toplayıcı (`.cache/epias/aggregator-membership.json`) için havuzdaki ilk plan, son plan ve GİP fiyatıyla net gerçekleşen gün içi azalma; `intradayTradeCost` (lib/analysis/intraday-trade.ts) ve plant-report.ts'teki `intradayEffect` netleştirme mantığı yeniden kullanılır. Sektör dağılımı: medyan ve en iyi çeyrek (son plan kapsamı yazılır).
+  - Raporda: "Bu portföy net %X, sektör medyanı %Y, en iyi çeyrek %Z; gerçekçi fırsat en iyi çeyreğe uzaklık." Strateji backtest'i yalnız üst sınır; 2/3/4 saat gecikme duyarlılığı küçük tablo.
+- [ ] **12.2 Risk primi geriye dönük sınaması (2025 → 2026).**
+  - Basitçe: 2025 verisinden hesaplanan prim, 2026'da gerçekleşen maliyeti ne kadar tuttu? ~1.000 santralde ölçülür, tipik hata bulunur.
+  - Nasıl: saatlik sektör serisi (`.cache/epias/sector-2025-hourly`, `sector-2026-hourly`; lib/sector okuyucusu): her santralin 2025 TL/MWh'ı "tahmin", 2026 TL/MWh'ı "gerçekleşen"; teknolojiye göre hata dağılımı. Prim ayrıştırma motoruyla (lib/analysis/cost-change) tahmin hatası ve fiyat makası diye ikiye ayrılır; makas senaryoları: 2025, 2026, stres.
+  - Raporda: prim aralık olarak, yanında "bu yöntemin geçen yılki tipik hatası ±%X".
+- [ ] **12.3 Tahmin iyileştirme fırsatının geriye dönük sınaması.**
+  - Basitçe: "her zayıf santral medyana inebilir" varsayımı yerine gözlem: 2025'te medyanın üstündeki santrallerden kaçı 2026'da iyileşti, ne kadar?
+  - Nasıl: 12.2 ile aynı seriler; 2025'te medyan üstündeki santrallerin 2026'da WAPE ve TL/MWh değişimi, teknolojiye göre dağılım. plant-report.ts `forecastUpside` medyana ölçekleme yerine "gerçekçi" (medyan iyileşme) ve "iyi" (üst çeyrek) senaryoyu kullanır.
+  - Raporda: "Benzer santraller bir yılda tipik olarak %Z iyileşti → 0,8–1,7 M" biçiminde aralık.
+- [ ] **12.4 Arıza bildirimleri** (VPN; önce araştırma).
+  - Basitçe: "plan yüksek, üretim sıfır" tahmin kuralı yerine EPİAŞ'ın resmi arıza bildirimleri.
+  - Nasıl: önce Şeffaflık Platformu'nda bildirim uç noktası bulunur. `detectOutages` (lib/analysis/outage-detection.ts) bildirimlerle karşılaştırılır: kaçını yakalıyor, kaçı yanlış alarm. Yeterliyse arıza saatleri doğrudan bildirimden; aylık arıza sayısı KÜPST katsayısına (0,05 / 0,08) kaba cevap verir.
+  - Risk: uç nokta yoksa ya da erişilemiyorsa yalnız not.
+- [ ] **12.5 Büyüme adaylarının geriye dönük sınaması** (en son; önce araştırma).
+  - Basitçe: 2025'te bağımsız olup 2026'da bir toplayıcıya giren santraller için 2025 verisiyle tahmin edilen netleşme gerçekleşenle tuttu mu?
+  - Sorun: toplayıcı üyeliği tek bir anlık görüntü (28.09.2026). Önce 2025 üyeliğinin `plant-owners-2025.json`'dan ya da EPİAŞ'tan çıkarılıp çıkarılamayacağına bakılır; çıkmazsa madde bekler.
+- [ ] **Kabul:** her maddenin geçmiş hata oranı rapora ve metodolojiye yazılır; slaytlarda rakamlar "tek rakam" yerine "aralık + sınandı". `npm test`, `npm run check:reports` 0 hata, `scripts/verify-independent.mts`; yeni slayt alanları için report-checks.ts kuralları. Gain ve Inavitas önce/sonra rakamları ilerleme kaydına.
+
+**Sıra:** 12.1 → 12.2 → 12.3 (veri elde) → 12.4 → 12.5 (araştırma / VPN).
+
 ---
 
 ## 3. Karar noktaları (sizin onayınız gerekiyor)

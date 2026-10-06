@@ -15,8 +15,8 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.11";
-const VERSION_DATE = "5 Ekim 2026";
+const VERSION = "1.12";
+const VERSION_DATE = "6 Ekim 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
   { id: "ozet", title: "Özet" },
@@ -487,6 +487,14 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
               açık veride yoktur; ortalama fiyat, 15 dakikalık ve blok kontratlar ayrı izlenmez. <Tag kind="estimate" />
             </p>
             <p>
+              <b>Sektörde gün içi:</b> aynı hesap (ilk ve son plan, GİP işlem maliyeti, portföy bazında) EPİAŞ toplayıcı listesindeki
+              portföylerde yapılır; son plan kapsamı %90&apos;ın ve üretimi 8 ayda 100 GWh&apos;ın altındaki toplayıcılar ve projenin kendi
+              toplayıcısı dağılıma girmez. Rapor portföyün yerini (en iyi çeyrek, medyan üstü, medyan altı) verir. Kural tabanlı ek gün içi
+              fırsatı en az 5 toplayıcı varsa sektörün en iyi çeyreğinin gerçekte ulaştığı seviyeyle sınırlanır; kuralın 2, 3 ve 4 saatlik
+              gecikmeyle sonucu da yazılır (gecikmeye çok duyarlıdır). Portföy karışımları farklıdır: barajlı hidro planı daha kolay
+              düzeltir. <Tag kind="exact" />
+            </p>
+            <p>
               <b>Tahmin iyileştirme fırsatı:</b> sektör medyanının üstündeki santrallerin (dönem içinde devreye girenler hariç) saatlik
               sapması, MWh başına riskleri medyana inecek oranda küçültülür (dengesizlik fiyatı plana bağlı olmadığından maliyet sapmayla
               orantılıdır). Kazanç uzlaştırma biriminde yeniden netleştirilerek bulunur; santral tek başına kazanç yalnız bağlam olarak
@@ -654,6 +662,11 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.12",
+                  "6 Ekim 2026",
+                  "Gün içi gerçekçilik kontrolü: toplayıcıların gerçekleşen net gün içi düzeltmesi (ilk → son plan, GİP işlem maliyeti düşülmüş) toplayıcı kıyasına eklendi; 136 toplayıcı santralinin son planı EPİAŞ'tan çekildi, kıyastaki 23 toplayıcının kapsamı %100. Medyan ≈ %20, en iyi çeyrek ≈ %35–38. Kural tabanlı ek fırsat en iyi çeyrekle sınırlanır ve 2/3/4 saat gecikme duyarlılığı yazılır (Inavitas: %14,5 / %7,5 / %3,3). Yer: Pure ve Enerjisa Müşteri en iyi çeyrekte, Gain medyanın üstünde, Inavitas, Zeros, Met, Atam ve Enerjisa Doğal medyanın altında. Netleşme rakamları değişmedi (Socar 47,86 → 47,69 M: EPİAŞ verisinin güncellenmesi).",
+                ],
                 [
                   "1.11",
                   "5 Ekim 2026",

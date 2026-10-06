@@ -222,10 +222,19 @@ function realizedIntradayNet(r: PlantReportData): number | null {
   return ((cut - materialTradeCost(ie.tradeCostTl, cut)) / ie.firstCostTl) * 100;
 }
 
+/** Sektör kıyası (12.1) gün içi vaadini sınırlıyor mu: en az 5 toplayıcı ve gerçekleşen düzeltme var */
+function intradayPeerRoom(r: PlantReportData): number | null {
+  const realized = realizedIntradayNet(r);
+  const ps = r.intradayPeers;
+  if (realized === null || !ps || ps.n < 5) return null;
+  return Math.max(0, ps.topQuartileNetPct - realized);
+}
+
 function intradayStrategyDominated(r: PlantReportData): boolean {
   const realized = realizedIntradayNet(r);
   const strategy = r.intraday && r.intraday.savingTl > 0 ? r.intraday.savingPct : null;
-  return realized !== null && (strategy === null || strategy - realized < 0.5);
+  const room = intradayPeerRoom(r);
+  return realized !== null && (strategy === null || strategy - realized < 0.5 || (room !== null && room < 0.5));
 }
 
 export function checkIntradayBridge(r: PlantReportData, bridge: BridgeStep[]): ReportIssue[] {
@@ -258,6 +267,19 @@ export function checkIntradayBridge(r: PlantReportData, bridge: BridgeStep[]): R
       rule: "intraday-scenario",
       message: `Köprüde gün içi senaryosu var, ama gerçekleşen gün içi düzeltme (net %${(realizedIntradayNet(r) ?? 0).toFixed(0)}) kural tabanlı stratejiden (%${(r.intraday?.savingPct ?? 0).toFixed(0)}) büyük: senaryo ek fırsat değil.`,
     });
+  // Sektör kıyası varsa ek gün içi senaryosu en iyi çeyreğe kalan mesafeyi aşamaz (12.1)
+  const room = intradayPeerRoom(r);
+  const scenario = bridge.find((st) => st.kind === "scenario" && /gün içi/i.test(st.label));
+  if (room !== null && scenario) {
+    const basis = r.coefficients2026?.cost2026Tl ?? r.totals.imbalanceCostTl;
+    const pct = basis > 0 ? (-scenario.value / basis) * 100 : 0;
+    if (pct > room + 0.5)
+      issues.push({
+        level: "error",
+        rule: "intraday-peers",
+        message: `Ek gün içi senaryosu %${pct.toFixed(1)}, ama sektörün en iyi çeyreğine kalan mesafe %${room.toFixed(1)} (en iyi çeyrek net %${r.intradayPeers!.topQuartileNetPct.toFixed(1)}).`,
+      });
+  }
   // Son plan kapsamı eşiğin altındaysa gerçekleşen adımı olmaz (yalnız kapsanan saatlere dayanır)
   const ie = r.intradayEffect;
   if (realizedStep && ie && ie.coveragePct < FINAL_PLAN_MIN_COVERAGE_PCT)

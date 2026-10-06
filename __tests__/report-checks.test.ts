@@ -194,6 +194,47 @@ describe("Rapor tutarlılık denetimi", () => {
     expect(checkIntradayBridge(r, buildBridgeSteps(r).steps)).toEqual([]);
   });
 
+  /** Sektördeki toplayıcıların net gün içi düzeltmesi: medyan ve en iyi çeyrek verilir (n = 8) */
+  const withPeers = <T extends ReturnType<typeof withIntraday>>(r: T, median: number, top: number) => ({
+    ...r,
+    intradayPeers: { n: 8, medianNetPct: median, topQuartileNetPct: top, bestNetPct: top + 10, excluded: 3, rows: [] },
+  });
+
+  it("gün içi sektör kıyası: strateji en iyi çeyreğin ulaştığı seviyeyle sınırlanır (net %10, strateji %25, en iyi çeyrek %18 → ek %8)", async () => {
+    const r = withPeers(withIntraday(10, 25), 12, 18);
+    const iv = intradayView(r);
+    expect(iv.peers?.position).toBe("belowMedian");
+    expect(iv.extra?.pct).toBeCloseTo(8, 1);
+    expect(iv.extra?.cappedByPeers).toBe(true);
+    const { steps } = buildBridgeSteps(r);
+    expect(checkIntradayBridge(r, steps)).toEqual([]);
+    // Sınırsız senaryo (strateji %15 fark) denetimde yakalanır
+    const cost = r.totals.imbalanceCostTl;
+    const unbounded = steps.map((st) => (st.kind === "scenario" ? { ...st, value: -0.15 * cost } : st));
+    expect(checkIntradayBridge(r, unbounded).map((i) => i.rule)).toContain("intraday-peers");
+    const slides = await extractSlideTexts(await exportPlantReportPptx(r));
+    expect(slides.some((s) => s.text.includes("en iyi çeyrek %18"))).toBe(true);
+    expect(checkIntradayText(r, slides)).toEqual([]);
+  });
+
+  it("gün içi sektör kıyası: portföy en iyi çeyrekteyse ek fırsat yok, metin vaat etmez", async () => {
+    const r = withPeers(withIntraday(30, 34), 12, 20);
+    const iv = intradayView(r);
+    expect(iv.peers?.position).toBe("top");
+    expect(iv.extra).toBeNull();
+    expect(buildBridgeSteps(r).steps.some((st) => st.kind === "scenario")).toBe(false);
+    const slides = await extractSlideTexts(await exportPlantReportPptx(r));
+    expect(slides.some((s) => s.text.includes("en iyi çeyrekte"))).toBe(true);
+    expect(checkIntradayText(r, slides)).toEqual([]);
+  });
+
+  it("gün içi sektör kıyası: 5'ten az toplayıcı varsa sınırlama yapılmaz", () => {
+    const r = { ...withPeers(withIntraday(10, 25), 12, 18), intradayPeers: { n: 3, medianNetPct: 12, topQuartileNetPct: 18, bestNetPct: 20, excluded: 9, rows: [] } };
+    const iv = intradayView(r);
+    expect(iv.peers).toBeNull();
+    expect(iv.extra?.pct).toBeCloseTo(15, 1);
+  });
+
   it("son plan kapsamı düşükse KÜPST üst sınır etiketi alır, gün içi adımı olmaz ve rapor kapsamı söyler", async () => {
     const base = sampleReport();
     const r = {

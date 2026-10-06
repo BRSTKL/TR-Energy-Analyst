@@ -24,7 +24,7 @@ import { combineBacktests, MIN_FEASIBLE_LAG_HOURS, persistenceStrategy, runBackt
 import { KUPST_REGIMES, kupstCommunityHours, kupstCommunityTotal, kupstForHour, kupstTotal } from "@/lib/calculations/kupst";
 import { classifyHydro, percentileRank, quantile, type Distribution, type HydroKind } from "@/lib/sector/benchmark";
 import type { ProjectHourly } from "@/lib/services/project-hourly";
-import { peerGroup, type AggregatorBenchmarkRow } from "@/lib/analysis/aggregator-benchmark";
+import { intradayPeerStats, peerGroup, type AggregatorBenchmarkRow, type IntradayPeerStats } from "@/lib/analysis/aggregator-benchmark";
 
 export interface ReportPlantRow {
   name: string;
@@ -365,7 +365,22 @@ export interface PlantReportData {
    * önce kapandığı için 1 saatlik gecikme uygulanamaz); uzlaştırma biriminin netleşmiş serisinde, önceki aylardan
    * öğrenerek test. savingTl, test edilen oranın şirket bazındaki maliyete uygulanmasıyla bulunan yaklaşık tutardır.
    */
-  intraday: { savingTl: number; savingPct: number; testMonths: number; firstTestMonth: string; lastTestMonth: string; lagHours: number } | null;
+  intraday: {
+    savingTl: number;
+    savingPct: number;
+    testMonths: number;
+    firstTestMonth: string;
+    lastTestMonth: string;
+    lagHours: number;
+    /** Aynı kural farklı gecikmelerle (2, 3, 4 saat): sonucun gecikme varsayımına duyarlılığı (Aşama 12.1) */
+    lagSensitivity?: Array<{ lagHours: number; savingPct: number }>;
+  } | null;
+  /**
+   * Toplayıcıların gerçekleşen net gün içi düzeltmesinin dağılımı (Aşama 12.1; toplayıcı kıyasından, projenin toplayıcısı
+   * hariç). Kural tabanlı stratejinin vaadi sektörün en iyi çeyreğinin ulaştığı seviyeyle sınırlanır. Toplayıcı projesi
+   * değilse ya da kıyasta son planı yeterli toplayıcı yoksa null.
+   */
+  intradayPeers: IntradayPeerStats | null;
 }
 
 /** Planı gün içinde güncellenmeyen santral, ilk plana göre mutlak sapmanın en az bu payını taşıyorsa öneri olarak gösterilir */
@@ -752,14 +767,16 @@ export function buildPlantReport(
     }
   }
 
-  // Gün içi: önceki 4 aydan öğrenilen oranla, uygulanabilir en kısa gecikmede (2 saat) görülen hatanın kapatılması
+  // Gün içi: önceki 4 aydan öğrenilen oranla, uygulanabilir en kısa gecikmede (2 saat) görülen hatanın kapatılması;
+  // duyarlılık için aynı kural 3 ve 4 saatle (ilk eleman raporun ana rakamı)
+  const INTRADAY_LAGS = [MIN_FEASIBLE_LAG_HOURS, MIN_FEASIBLE_LAG_HOURS + 1, MIN_FEASIBLE_LAG_HOURS + 2];
   let intraday: PlantReportData["intraday"] = null;
   const backtests =
     // Uzlaştırma biriminin netleşmiş serisiyle: portföyde zaten netleşen hatayı ayrıca "kapatılmış" saymamak için
     options.intraday === false
       ? []
       : settleByCompanyGroups(withData, data.profile).map((g) =>
-          runBacktest(g.hourly, data.profile, { strategies: [persistenceStrategy(MIN_FEASIBLE_LAG_HOURS)] })
+          runBacktest(g.hourly, data.profile, { strategies: INTRADAY_LAGS.map((lag) => persistenceStrategy(lag)) })
         );
   const combined = combineBacktests(backtests.filter((b) => b.testMonths.length > 0));
   const s = combined?.strategies[0];
@@ -771,6 +788,7 @@ export function buildPlantReport(
       firstTestMonth: combined.testMonths[0],
       lastTestMonth: combined.testMonths[combined.testMonths.length - 1],
       lagHours: MIN_FEASIBLE_LAG_HOURS,
+      lagSensitivity: INTRADAY_LAGS.map((lag, i) => ({ lagHours: lag, savingPct: combined.strategies[i]?.outOfSampleSavingPercent ?? 0 })),
     };
   }
 
@@ -885,6 +903,7 @@ export function buildPlantReport(
 
   // Toplayıcılar arası kıyas: 300 GWh üstü toplayıcılar (küçük portföylerde oran anlamsız) ve projenin toplayıcısı
   let peers: PlantReportData["peers"] = null;
+  let intradayPeers: PlantReportData["intradayPeers"] = null;
   const bench = context.aggregatorBenchmark;
   const selfId = data.aggregator?.portfolio?.orgId;
   if (bench && selfId && bench.year === new Date(start).getUTCFullYear() && bench.aggregators.some((a) => a.id === selfId)) {
@@ -897,6 +916,7 @@ export function buildPlantReport(
     const rank = (sorted: AggregatorBenchmarkRow[]) => sorted.findIndex((a) => a.id === selfId) + 1;
     const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
     const m = (d: string) => MONTHS[Number(d.slice(5, 7)) - 1];
+    intradayPeers = intradayPeerStats(bench.aggregators, selfId, bench.period);
     peers = {
       label: `${m(bench.period.start)}–${m(bench.period.end)} ${bench.year}`,
       membershipAsOf: bench.membershipAsOf,
@@ -1170,5 +1190,6 @@ export function buildPlantReport(
     ownerContributions,
     peers,
     intraday,
+    intradayPeers,
   };
 }

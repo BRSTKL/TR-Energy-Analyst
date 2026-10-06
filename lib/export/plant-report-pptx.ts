@@ -126,6 +126,8 @@ export function yearLocative(label: string): string {
   const suffix = y % 10 ? ones[y % 10] : y % 100 ? tens[(y % 100) / 10] : "de";
   return `${label}'${suffix}`;
 }
+/** İlk harfi büyük (Türkçe: "işlem" → "İşlem") */
+const capitalize = (t: string) => (t ? t.charAt(0).toLocaleUpperCase("tr-TR") + t.slice(1) : t);
 const hourRange = (h: number) => `${String(h).padStart(2, "0")}:00–${String((h + 1) % 24).padStart(2, "0")}:00`;
 
 /** İki renk arasında doğrusal ara renk (ısı haritası) */
@@ -166,9 +168,20 @@ export interface IntradayView {
   realized: { pct: number; cutTl: number; tradeCostTl: number; netCutTl: number; netPct: number; staticPlants: string[] } | null;
   /** Kural tabanlı stratejinin ilk plana göre azaltması (%); yoksa null */
   strategyPct: number | null;
-  /** Gerçekleşenin (net) üstüne ek kazanç (strateji − gerçekleşen net, en az 0,5 puan); strateji de GİP fiyatıyla nettir */
-  extra: { pct: number; tl: number } | null;
+  /**
+   * Gerçekleşenin (net) üstüne ek kazanç (strateji − gerçekleşen net, en az 0,5 puan); strateji de GİP fiyatıyla nettir.
+   * Sektör kıyası varsa sektörün en iyi çeyreğinin ulaştığı seviyeyle sınırlanır (cappedByPeers).
+   */
+  extra: { pct: number; tl: number; cappedByPeers?: boolean } | null;
+  /**
+   * Sektördeki yeri (Aşama 12.1): toplayıcıların gerçekleşen net gün içi düzeltmesine göre. Gerçekleşen yoksa ya da
+   * kıyasta yeterli toplayıcı (INTRADAY_PEERS_MIN_N) yoksa null.
+   */
+  peers: { n: number; medianPct: number; topQuartilePct: number; position: "top" | "aboveMedian" | "belowMedian" } | null;
 }
+
+/** Sektör kıyasının gün içi vaadini sınırlaması için en az toplayıcı sayısı */
+export const INTRADAY_PEERS_MIN_N = 5;
 
 export function intradayView(r: PlantReportData): IntradayView {
   const basis = r.coefficients2026?.cost2026Tl ?? r.totals.imbalanceCostTl;
@@ -184,8 +197,35 @@ export function intradayView(r: PlantReportData): IntradayView {
     realized = { pct: ie.reductionPct, cutTl, tradeCostTl, netCutTl, netPct: basis > 0 ? (netCutTl / basis) * 100 : 0, staticPlants: ie.staticPlants };
   }
   const strategyPct = r.intraday && r.intraday.savingTl > 0 ? r.intraday.savingPct : null;
-  const extraPct = strategyPct === null ? 0 : strategyPct - (realized?.netPct ?? 0);
-  return { realized, strategyPct, extra: extraPct >= 0.5 ? { pct: extraPct, tl: (extraPct / 100) * basis } : null };
+  const ps = r.intradayPeers;
+  const peers =
+    realized && ps && ps.n >= INTRADAY_PEERS_MIN_N
+      ? {
+          n: ps.n,
+          medianPct: ps.medianNetPct,
+          topQuartilePct: ps.topQuartileNetPct,
+          position: (realized.netPct >= ps.topQuartileNetPct ? "top" : realized.netPct >= ps.medianNetPct ? "aboveMedian" : "belowMedian") as
+            | "top"
+            | "aboveMedian"
+            | "belowMedian",
+        }
+      : null;
+  let extraPct = strategyPct === null ? 0 : strategyPct - (realized?.netPct ?? 0);
+  // Gerçekçilik sınırı: strateji sektörde kimsenin (en iyi çeyreğin) ulaşmadığı seviyeyi vaat edemez
+  let cappedByPeers = false;
+  if (peers && realized) {
+    const room = Math.max(0, peers.topQuartilePct - realized.netPct);
+    if (extraPct > room) {
+      extraPct = room;
+      cappedByPeers = true;
+    }
+  }
+  return {
+    realized,
+    strategyPct,
+    extra: extraPct >= 0.5 ? { pct: extraPct, tl: (extraPct / 100) * basis, ...(cappedByPeers ? { cappedByPeers } : {}) } : null,
+    peers,
+  };
 }
 /**
  * "Gün içi düzeltmeler dengesizliği %27 (≈ 8,8 M TL) azaltıyor; GİP işlem maliyeti ≈ 2,2 M TL, net ≈ 6,6 M TL" (nokta yok).
@@ -197,6 +237,23 @@ export function realizedIntradayPhrase(rz: NonNullable<IntradayView["realized"]>
   return rz.tradeCostTl > 0
     ? `${head}; GİP işlem maliyeti (ortalama fiyatla) ≈ ${formatTlShort(rz.tradeCostTl)}, net ≈ ${formatTlShort(rz.netCutTl)}`
     : `${head}; GİP işlemleri ortalama fiyatla ≈ ${formatTlShort(-rz.tradeCostTl)} ek kazandırıyor, net ≈ ${formatTlShort(rz.netCutTl)}`;
+}
+
+/**
+ * "sektörde 9 toplayıcı arasında medyan %15, en iyi çeyrek %35; bu portföy medyanın üstünde" (nokta yok). Kıyas yoksa "".
+ */
+export function intradayPeerPhrase(iv: IntradayView): string {
+  const p = iv.peers;
+  if (!p) return "";
+  const where = p.position === "top" ? "en iyi çeyrekte" : p.position === "aboveMedian" ? "medyanın üstünde" : "medyanın altında";
+  return `sektörde ${p.n} toplayıcı arasında net düzeltmede medyan %${nf(p.medianPct, 0)}, en iyi çeyrek %${nf(p.topQuartilePct, 0)}; bu portföy ${where}`;
+}
+
+/** Kural tabanlı stratejinin 2/3/4 saat gecikmeyle sonucu: "2 saat %3,0 · 3 saat %2,1 · 4 saat %1,5" (yoksa "") */
+export function lagSensitivityText(r: PlantReportData): string {
+  const ls = r.intraday?.lagSensitivity;
+  if (!ls || ls.length < 2) return "";
+  return ls.map((l) => `${l.lagHours} saat %${nf(l.savingPct, 1)}`).join(" · ");
 }
 
 export interface BridgeStep {
@@ -425,7 +482,11 @@ export async function exportPlantReportPptx(
       worst ? `En pahalı ay ${monthLabel(worst.month)} (${formatTlShort(worst.imbalanceCostTl)}); maliyet birkaç ay ve saatte yoğunlaşıyor.` : "",
       iv.realized
         ? `${realizedIntradayPhrase(iv.realized)}${
-            iv.strategyPct !== null && !iv.extra ? `; 2 saat önceden kural tabanlı kapatma yalnız %${nf(iv.strategyPct, 0)} sağlardı` : ""
+            iv.peers
+              ? `; ${intradayPeerPhrase(iv)}`
+              : iv.strategyPct !== null && !iv.extra
+                ? `; 2 saat önceden kural tabanlı kapatma yalnız %${nf(iv.strategyPct, 0)} sağlardı`
+                : ""
           }${iv.realized.staticPlants.length ? `; ${iv.realized.staticPlants.length} santralin planı gün içinde hiç güncellenmiyor` : ""}.`
         : ie
           ? `Planlar gün içinde neredeyse hiç düzeltilmiyor: son planla dengesizlik yalnızca %${nf(ie.reductionPct, 0)} düşük.`
@@ -598,9 +659,10 @@ export async function exportPlantReportPptx(
         kind: "exact",
         text:
           `${realizedIntradayPhrase(iv.realized)}: gün içi sonrası sapma yükü ≈ ${formatTlShort(load.current - iv.realized.netCutTl)}. ` +
+          (iv.peers ? `${capitalize(intradayPeerPhrase(iv))}. ` : "") +
           (iv.extra
-            ? `Kural tabanlı ek kapatma en fazla %${nf(iv.extra.pct, 0)} daha azaltabilir (üst sınır).`
-            : iv.strategyPct !== null
+            ? `Kural tabanlı ek kapatma en fazla %${nf(iv.extra.pct, 0)} daha azaltabilir (üst sınır${iv.extra.cappedByPeers ? ", sektörün en iyi çeyreğiyle sınırlı" : ""}).`
+            : iv.strategyPct !== null && !iv.peers
               ? `${r.intraday!.lagHours} saat önceden kural tabanlı kapatma yalnız %${nf(iv.strategyPct, 0)} sağlardı; gün içi operasyon bundan etkin.`
               : ""),
       });
@@ -1391,6 +1453,9 @@ export async function exportPlantReportPptx(
     // Sağ: bulgular
     const rx = M + 5.6;
     const rw = W - M - rx;
+    const kupstBasisNote = `Raporun diğer bölümlerindeki dengesizlik riski ilk plana göredir (gün içi işlemler öncesi); KÜPST son plana göre hesaplanır${
+      r.finalPlan.coveragePct < 99.9 ? ` (son planı olmayan saatlerde ilk plana göre; KÜPST'ün ${pctOf(r.finalPlan.kupstFirstPlanSharePct)})` : ""
+    }.`;
     const lines: string[] = [
       `Gün içi düzeltmeler dengesizliği ${formatTlShort(cut)} (%${nf(ie.reductionPct, 0)}), sapma hacmini %${nf(devCut, 0)} azaltıyor` +
         (showTrade
@@ -1407,9 +1472,11 @@ export async function exportPlantReportPptx(
       ie.topAdjusters.length
         ? `Planı en etkin düzeltilen santraller: ${ie.topAdjusters.slice(0, 3).map((a) => `${a.name} (sapma −%${nf(a.reductionPct, 0)})`).join(", ")}.`
         : "",
-      `Raporun diğer bölümlerindeki dengesizlik riski ilk plana göredir (gün içi işlemler öncesi); KÜPST son plana göre hesaplanır${
-        r.finalPlan.coveragePct < 99.9 ? ` (son planı olmayan saatlerde ilk plana göre; KÜPST'ün ${pctOf(r.finalPlan.kupstFirstPlanSharePct)})` : ""
-      }.`,
+      // Sektördeki yer (12.1) varsa son kart odur; yöntem notu dipnota iner
+      iv.peers && iv.realized
+        ? `Sektörde ${iv.peers.n} toplayıcının gerçekleşen net gün içi düzeltmesi: medyan %${nf(iv.peers.medianPct, 0)}, en iyi çeyrek %${nf(iv.peers.topQuartilePct, 0)}. ` +
+          `Bu portföy net %${nf(iv.realized.netPct, 0)} ile ${iv.peers.position === "top" ? "en iyi çeyrekte" : iv.peers.position === "aboveMedian" ? "medyanın üstünde" : "medyanın altında"}.`
+        : kupstBasisNote,
     ].filter(Boolean);
     lines.forEach((l, i) => {
       round(s, rx, 1.95 + i * 1.08, rw, 0.92, C.panel);
@@ -1417,8 +1484,11 @@ export async function exportPlantReportPptx(
     });
     text(
       s,
-      `İlk ve son KGÜP EPİAŞ Şeffaflık Platformu'ndan; son planı olan saatler (%${nf(ie.coveragePct, 0)}). GİP işlem maliyeti = (ilk − son plan) × (GİP ağırlıklı ortalama fiyatı − PTF); şirketin gerçek işlem fiyatları bilinmez.`,
-      { x: M, y: 6.5, w: CW, h: 0.3, fontSize: 9, color: C.sub }
+      `İlk ve son KGÜP EPİAŞ Şeffaflık Platformu'ndan; son planı olan saatler (%${nf(ie.coveragePct, 0)}). GİP işlem maliyeti = (ilk − son plan) × (GİP ağırlıklı ortalama fiyatı − PTF); şirketin gerçek işlem fiyatları bilinmez.` +
+        (iv.peers
+          ? ` Sektör kıyası: aynı hesap EPİAŞ toplayıcı listesindeki portföylerde (son plan kapsamı ≥ %90, üretim ≥ 100 GWh; bu toplayıcı hariç); portföy karışımları farklıdır (barajlı hidro planı daha kolay düzeltir). ${kupstBasisNote}`
+          : ""),
+      { x: M, y: 6.42, w: CW, h: 0.45, fontSize: 9, color: C.sub, valign: "top", fit: "shrink" }
     );
   }
 
@@ -1811,7 +1881,11 @@ export async function exportPlantReportPptx(
         body:
           `Son plan (gün içi piyasası kapandıktan sonra) ilk plandan isabetli: dengesizlik %${nf(iv.realized.pct, 0)} azalıyor` +
           (iv.realized.tradeCostTl !== 0 ? `, GİP ortalama fiyatıyla işlem maliyeti düşülünce net ${formatTlShort(iv.realized.netCutTl)}. ` : ". ") +
-          (iv.strategyPct !== null ? `Kural tabanlı 2 saatlik kapatma testi yalnız %${nf(iv.strategyPct, 0)} verdi; mevcut gün içi operasyon bunun üstünde. ` : "") +
+          (iv.peers
+            ? `${capitalize(intradayPeerPhrase(iv))}. `
+            : iv.strategyPct !== null
+              ? `Kural tabanlı 2 saatlik kapatma testi yalnız %${nf(iv.strategyPct, 0)} verdi; mevcut gün içi operasyon bunun üstünde. `
+              : "") +
           (iv.realized.staticPlants.length
             ? `Planı gün içinde hiç güncellenmeyen ${iv.realized.staticPlants.length} santral (${listOf(iv.realized.staticPlants, 3, ", ")}) kapsam dışında: en hızlı ek kazanım bunları gün içi operasyona almak.`
             : "Ek kazanç gün içi işlem fiyatlarında: şirketin gerçek fiyatları açık veride yok."),
@@ -1826,9 +1900,12 @@ export async function exportPlantReportPptx(
         impact: `en fazla %${nf(iv.extra.pct, 0)} · ≈ ${formatTlShort(iv.extra.tl)}`,
         body:
           (iv.realized
-            ? `Mevcut gün içi düzeltmeler GİP işlem maliyeti düşülünce dengesizliği net %${nf(iv.realized.netPct, 1)} azaltıyor; kural tabanlı kapatma %${nf(iv.strategyPct ?? 0, 1)} verdi, fark %${nf(iv.extra.pct, 1)}. `
+            ? `Mevcut gün içi düzeltmeler GİP işlem maliyeti düşülünce dengesizliği net %${nf(iv.realized.netPct, 1)} azaltıyor; kural tabanlı kapatma %${nf(iv.strategyPct ?? 0, 1)} verdi` +
+              (iv.extra.cappedByPeers
+                ? `, ama sektörün en iyi çeyreği net %${nf(iv.peers!.topQuartilePct, 1)}'de: ek fırsat bu seviyeyle sınırlı (%${nf(iv.extra.pct, 1)}). `
+                : `, fark %${nf(iv.extra.pct, 1)}${iv.peers ? ` (sektörün en iyi çeyreği net %${nf(iv.peers.topQuartilePct, 1)})` : ""}. `)
             : "") +
-          `${testNote} Üst sınırdır.`,
+          `${testNote}${lagSensitivityText(r) ? ` Gecikmeye duyarlılık: ${lagSensitivityText(r)}.` : ""} Üst sınırdır.`,
         kind: "scenario",
         effort: "Orta · gün içi operasyon",
       });
@@ -2114,7 +2191,7 @@ export async function exportPlantReportPptx(
       ],
       [
         "Dengesizlik riski",
-        "Gün öncesi planın hatasının dengesizlik fiyatıyla değeri: gerçekleşen üretimin tamamı PTF'den satılsaydı elde edilecek gelir ile gün öncesi satış + dengesizlik tutarı arasındaki fark. Şirketin gün içi işlemleri öncesidir. Gün içi düzeltmeler ayrıca verilir: ilk plan ile son plan (gün içi piyasası kapandıktan sonra) arasındaki dengesizlik farkı kesin hesaptır; plan değişikliğinin işlem maliyeti (ilk − son plan) × (GİP saatlik ağırlıklı ortalama fiyatı − PTF) olarak tahmin edilir.",
+        "Gün öncesi planın hatasının dengesizlik fiyatıyla değeri: gerçekleşen üretimin tamamı PTF'den satılsaydı elde edilecek gelir ile gün öncesi satış + dengesizlik tutarı arasındaki fark. Şirketin gün içi işlemleri öncesidir. Gün içi düzeltmeler ayrıca verilir: ilk plan ile son plan (gün içi piyasası kapandıktan sonra) arasındaki dengesizlik farkı kesin hesaptır; plan değişikliğinin işlem maliyeti (ilk − son plan) × (GİP saatlik ağırlıklı ortalama fiyatı − PTF) olarak tahmin edilir. Aynı hesap toplayıcı listesindeki portföylerde yapılır; kural tabanlı ek gün içi fırsatı sektörün en iyi çeyreğinin gerçekte ulaştığı seviyeyle sınırlanır.",
       ],
       [
         "Uzlaştırma",

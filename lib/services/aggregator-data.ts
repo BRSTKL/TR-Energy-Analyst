@@ -32,7 +32,7 @@ export async function loadBenchmarkPrices(start: string, end: string): Promise<M
   const prices = new Map<number, BenchmarkHourPrice>();
   for (const m of market) {
     if (m.imbalancePosPrice === null || m.imbalanceNegPrice === null) continue;
-    prices.set(m.timestamp.getTime(), { ptf: m.ptf, pos: m.imbalancePosPrice, neg: m.imbalanceNegPrice });
+    prices.set(m.timestamp.getTime(), { ptf: m.ptf, pos: m.imbalancePosPrice, neg: m.imbalanceNegPrice, gip: m.gipPrice });
   }
   return prices;
 }
@@ -58,10 +58,10 @@ export async function loadBenchmarkPlants(ids: number[], year: number, start: st
       readJson<{ type?: string; name?: string; organizationName?: string | null }>(poolPlantFile(id)) ??
       {};
     if (!meta.type || !["RES", "GES", "HES"].includes(meta.type)) continue;
-    const hours = new Map<number, { d: number; actual: number }>();
+    const hours: BenchmarkPlant["hours"] = new Map();
     for (const r of readRange([doc], start, end)) {
       if (r.kgupFirst === null || r.uevm === null) continue;
-      hours.set(r.timestamp.getTime(), { d: r.uevm - r.kgupFirst, actual: r.uevm });
+      hours.set(r.timestamp.getTime(), { d: r.uevm - r.kgupFirst, actual: r.uevm, firstPlan: r.kgupFirst, finalPlan: r.kgupFinal });
     }
     plants.set(id, { epiasPlantId: id, name: meta.name, type: meta.type, owner: meta.organizationName ?? owners.get(id)?.organizationName ?? null, hours });
   }
