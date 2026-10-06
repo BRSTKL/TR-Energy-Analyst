@@ -256,6 +256,23 @@ export function lagSensitivityText(r: PlantReportData): string {
   return ls.map((l) => `${l.lagHours} saat %${nf(l.savingPct, 1)}`).join(" · ");
 }
 
+/**
+ * Tahmin iyileştirme fırsatının ana rakamı (12.3): geçmişle sınama varsa benzer santrallerin en iyi çeyreğinin bir yılda
+ * başardığı iyileşmeyle; yoksa "medyana inse" üst sınırı. upper her zaman medyana inme senaryosudur.
+ */
+export function forecastUpsideValue(fu: NonNullable<PlantReportData["forecastUpside"]>): { main: number; upper: number; evidence: boolean } {
+  const upper = fu.nettedGainTl + fu.kupstGainTl;
+  return fu.evidence ? { main: fu.evidence.nettedGainTl + fu.evidence.kupstGainTl, upper, evidence: true } : { main: upper, upper, evidence: false };
+}
+
+/** "rüzgâr %12, hidro %26" (sınamada uygulanan iyileşme oranları; yoksa "") */
+export function evidenceRates(fu: NonNullable<PlantReportData["forecastUpside"]>): string {
+  const name: Record<string, string> = { RES: "rüzgâr", GES: "güneş", HES: "hidro" };
+  return Object.entries(fu.evidence?.byType ?? {})
+    .map(([t, v]) => `${name[t] ?? t} %${nf(v.improvementPct, 0)}`)
+    .join(", ");
+}
+
 export interface BridgeStep {
   label: string;
   value: number;
@@ -466,7 +483,11 @@ export async function exportPlantReportPptx(
       pe
         ? [`${pe.rankIndex}. / ${pe.rows.length}`, `Benzer ölçekli toplayıcılar içinde karışıma göre düzeltilmiş maliyet sırası (endeks ${nf(pe.rows.find((x) => x.id === pe.selfId)?.mixAdjustedIndex ?? 0, 2)})`, C.navy]
         : [`%${nf(r.alignment.sameDirectionCostPct, 0)}`, "Riskin sistemle aynı yöndeki saatlerden gelen payı", C.navy],
-      fu ? [formatTlShort(fu.nettedGainTl + fu.kupstGainTl), `Tahmin iyileştirme fırsatı · ${fu.plantCount} santral sektör medyanına inse`, C.gain] : [`%${nf(r.alignment.sameDirectionCostPct, 0)}`, "Aynı yönlü saatlerin riskteki payı", C.navy],
+      fu
+        ? forecastUpsideValue(fu).evidence
+          ? [formatTlShort(forecastUpsideValue(fu).main), `Tahmin iyileştirme fırsatı · benzer santrallerin en iyi çeyreği kadar (medyana inse ${formatTlShort(forecastUpsideValue(fu).upper)})`, C.gain]
+          : [formatTlShort(fu.nettedGainTl + fu.kupstGainTl), `Tahmin iyileştirme fırsatı · ${fu.plantCount} santral sektör medyanına inse`, C.gain]
+        : [`%${nf(r.alignment.sameDirectionCostPct, 0)}`, "Aynı yönlü saatlerin riskteki payı", C.navy],
     ];
     const kw = (CW - 0.6) / 4;
     kpis.forEach(([v, l, color], i) => {
@@ -494,7 +515,11 @@ export async function exportPlantReportPptx(
       agg && r.ownerContributions?.length ? `Portföye en çok değer katan üretici ${r.ownerContributions[0].name.split(/\s+/).slice(0, 2).join(" ")} (${formatTlShort(r.ownerContributions[0].contributionTl)}).` : "",
     ].filter(Boolean).slice(0, 3);
     const actions = [
-      fu ? `Zayıf ${fu.plantCount} santralde tahmin iyileştirme: ≈ ${formatTlShort(fu.nettedGainTl + fu.kupstGainTl)} (netleşmiş portföyde + KÜPST).` : "",
+      fu
+        ? forecastUpsideValue(fu).evidence
+          ? `Zayıf ${fu.plantCount} santralde tahmin iyileştirme: ≈ ${formatTlShort(forecastUpsideValue(fu).main)} (benzer santrallerin en iyi çeyreğinin bir yılda başardığı kadar; medyana inse ${formatTlShort(forecastUpsideValue(fu).upper)}).`
+          : `Zayıf ${fu.plantCount} santralde tahmin iyileştirme: ≈ ${formatTlShort(fu.nettedGainTl + fu.kupstGainTl)} (netleşmiş portföyde + KÜPST).`
+        : "",
       iv.extra
         ? iv.realized
           ? `Ek gün içi kapatma: mevcut düzeltmelerin üstüne en fazla %${nf(iv.extra.pct, 0)} (geriye dönük test, üst sınır).`
@@ -1628,8 +1653,22 @@ export async function exportPlantReportPptx(
     s.addNotes(
       "Risk primi, bu portföyün (ya da bir santralin) üretimini satarken veya bir toplayıcıya devrederken fiyata eklenmesi gereken MWh başına sapma yüküdür: dengesizlik + KÜPST, 2026 kurallarıyla, tüm santraller (YEKDEM santrallerinin dengesizliği de kendilerine aittir). " +
         `Beklenen değer ${isFullYear(r) ? "yıllık" : "dönem"} ortalamasıdır; ihtiyatlı değer ayların %90'ının altında kaldığı seviyedir. Toplayıcılar teklif verirken bu iki rakam arasında bir prim seçer. ` +
-        "Santral tablosu, portföye yeni santral alırken ya da santral bazında sözleşme yaparken kullanılır; santral tek başına uzlaştırılır, bu yüzden portföy priminden yüksektir."
+        "Santral tablosu, portföye yeni santral alırken ya da santral bazında sözleşme yaparken kullanılır; santral tek başına uzlaştırılır, bu yüzden portföy priminden yüksektir." +
+        (rp.backtest
+          ? ` Geçmişle sınama: aynı yöntemle ${rp.backtest.fromYear} verisinden hesaplanan prim, ${rp.backtest.toYear}'te gerçekleşenin altında kaldı (${rp.backtest.stats.n} santralde gerçek / tahmin medyanı ${nf(rp.backtest.stats.ratio.p50, 2)}; fiyat makası ×${nf(rp.backtest.stats.priceEffectRatio, 2)}, tahmin ×${nf(rp.backtest.stats.forecastEffectRatio, 2)}). Prim geçmişe bakar; fiyat makası açılırsa düşük kalır.`
+          : "")
     );
+    if (rp.backtest) {
+      const b = rp.backtest;
+      text(
+        s,
+        `Geçmişle sınama: bu yöntemle ${b.fromYear} ${b.months} verisinden hesaplanan prim, ${b.toYear}'te gerçekleşenin medyanda %${nf((1 - 1 / b.stats.ratio.p50) * 100, 0)} altında kaldı ` +
+          `(${b.stats.n} santral; tipik hata %${nf(b.stats.medianAbsErrorPct, 0)}). Geçen yılın hata dağılımı uygulanırsa: ${nf(b.range.low, 0)}–${nf(b.range.high, 0)} TL/MWh${
+          b.range.low > pf.expectedTlPerMwh ? " (yöntem geçmişte düşük tahmin ettiği için aralık beklenen primin üstünde)" : ""
+        }.`,
+        { x: M, y: 5.78, w: 5.6 + 0.5, h: 0.6, fontSize: 9, color: C.scenTx, valign: "top", fit: "shrink" }
+      );
+    }
     const lw = 5.6;
     const stats: Array<[string, string, string]> = [
       [`${nf(pf.expectedTlPerMwh, 0)} TL/MWh`, `Beklenen prim (${isFullYear(r) ? "yıllık" : "dönem"} ortalaması)`, C.ink],
@@ -1651,7 +1690,8 @@ export async function exportPlantReportPptx(
     // Aylık MWh başına yük (şekillerle)
     const months = pf.months;
     const top = 3.25;
-    const bottom = 6.0;
+    // Geçmişle sınama notu varsa grafiğin altında yer açılır (alt dipnotla çakışmasın)
+    const bottom = rp.backtest ? 5.45 : 6.0;
     const maxV = Math.max(...months.map((m) => m.tlPerMwh), pf.p90MonthTlPerMwh, 1);
     const slot = lw / months.length;
     const bw = Math.min(0.32, slot * 0.65);
@@ -1852,8 +1892,11 @@ export async function exportPlantReportPptx(
       `Netleşme kazancı: aday portföyle tek dengede uzlaştırılsaydı portföy ve adayın birlikte daha az ödeyeceği dengesizlik, ${
         growth.sectorLabel
       }; yüzde, adayın tek başına maliyetine göre. Kazançlar aday başınadır, toplanamaz. Tek başına ve adil prim KÜPST dahil. ` +
-        "Bağımsız: toplayıcı listelerinde yok, grubu 3'ten az santralli, görevli tedarik ya da lisanssız değil; dengeden sorumlu grup üyeliği yayımlanmadığı için tahmindir, görüşmeden önce doğrulanmalı.",
-      { x: M, y: Math.min(ty + (targets.length + 1) * 0.38 + 0.25, 6.2), w: CW, h: 0.7, fontSize: 9.5, color: C.sub, valign: "top" }
+        "Bağımsız: toplayıcı listelerinde yok, grubu 3'ten az santralli, görevli tedarik ya da lisanssız değil; dengeden sorumlu grup üyeliği yayımlanmadığı için tahmindir, görüşmeden önce doğrulanmalı." +
+        (r.candidateBacktest
+          ? ` Geçmişle sınama: ${r.candidateBacktest.fromYear}'te bağımsızken bir toplayıcıya katılan ${r.candidateBacktest.n} santralde ${r.candidateBacktest.fromYear} verisiyle tahmin edilen katkı sırası ${r.candidateBacktest.toYear}'te büyük ölçüde korundu (sıra korelasyonu ${nf(r.candidateBacktest.spearman, 2)}; tahminde en iyi çeyrektekilerin %${nf(r.candidateBacktest.topQuartileHitPct, 0)}'i gerçekte en iyi yarıda); tutar düşük kaldı (gerçek / tahmin medyanı ${nf(r.candidateBacktest.ratio.p50, 2)}). Sıra güvenilir, tutar alt sınırdır.`
+          : ""),
+      { x: M, y: Math.min(ty + (targets.length + 1) * 0.38 + 0.25, 6.05), w: CW, h: 0.85, fontSize: 9.5, color: C.sub, valign: "top", fit: "shrink" }
     );
   }
 
@@ -1923,16 +1966,25 @@ export async function exportPlantReportPptx(
     // netleşmiş dengesizlikteki gerçek azalma + KÜPST azalmasıdır (8.4); santral tek başına kazanç yalnız bağlam olarak
     // verilir (portföyde ters sapmalar zaten birbirini dengelediği için daha büyüktür).
     const fu = r.forecastUpside;
-    const fuValue = fu ? fu.nettedGainTl + fu.kupstGainTl : 0;
+    const fuV = fu ? forecastUpsideValue(fu) : null;
+    const fuValue = fuV ? fuV.main : 0;
     items.push({
       title: fu ? "Zayıf santrallerde tahmin iyileştirme" : "En pahalı saatlere odaklı tahmin iyileştirme",
-      impact: fu && fuValue > 0 ? `≈ ${formatTlShort(fuValue)}` : "Hesaplanmadı",
+      impact: fu && fuV
+        ? fuV.evidence
+          ? `≈ ${formatTlShort(fuV.main)} – ${formatTlShort(fuV.upper)}`
+          : fuValue > 0
+            ? `≈ ${formatTlShort(fuValue)}`
+            : "Hesaplanmadı"
+        : "Hesaplanmadı",
       value: fuValue,
       body:
         (fu
-          ? `${fu.plantCount} santral (${listOf(fu.plantNames, 4, ", ")}) sektör medyanının üstünde; medyana inselerdi ` +
-            `${unit.loc} netleşmiş dengesizlik ${formatTlShort(fu.nettedGainTl)}, KÜPST ${formatTlShort(fu.kupstGainTl)} azalırdı ` +
-            `(santraller tek başına düşünülse ${formatTlShort(fu.standaloneGainTl)}; farkı netleşme zaten karşılıyor). `
+          ? `${fu.plantCount} santral (${listOf(fu.plantNames, 4, ", ")}) sektör medyanının üstünde. ` +
+            (fu.evidence
+              ? `Geçmişle sınama: ${fu.evidence.fromYear}'te benzer durumdaki santrallerin en iyi çeyreği sapmasını bir yılda ${evidenceRates(fu)} azalttı (tipik santral neredeyse hiç iyileşmedi); bu kadar iyileşme ${formatTlShort(fuV!.main)}, medyana inmek (üst sınır) ${formatTlShort(fuV!.upper)} kazandırır (${unit.loc} netleşmiş + KÜPST). `
+              : `Medyana inselerdi ${unit.loc} netleşmiş dengesizlik ${formatTlShort(fu.nettedGainTl)}, KÜPST ${formatTlShort(fu.kupstGainTl)} azalırdı ` +
+                `(santraller tek başına düşünülse ${formatTlShort(fu.standaloneGainTl)}; farkı netleşme zaten karşılıyor). `)
           : `Riskin %${nf(r.alignment.sameDirectionCostPct, 0)} kadarı sistemle aynı yöndeki sapmalardan geliyor. `) +
         (established.filter((p) => p.biasPct > 1).length > established.length / 2 ? "Planlar sistematik olarak yüksek: kalibrasyon ilk adım. " : "") +
         "En pahalı saatlerde tahmin sağlayıcıyla hedefli iyileştirme.",
@@ -2229,6 +2281,23 @@ export async function exportPlantReportPptx(
               "Ne değişti? (ayrıştırma)",
               `${options.costChange.result.a.label} ve ${options.costChange.result.b.label} verisi aynı santraller ve aynı takvim saatleri için eşlendi (29 Şubat hariç). MWh başına maliyet = netleşmiş sapma / üretim × sapma MWh'ı başına bedel. ` +
                 "Tahmin hatası, fiyat makası (PTF, SMF, sistem yönü), katsayı kuralı ve hacim-profil (sapmanın saat ve yön dağılımı) kalemlerinin her biri tek başına diğer yılın değeriyle değiştirilip yeniden fiyatlandı; etki iki yönde geçişin ortalamasıdır, kalan etkileşimdir.",
+            ] as [string, string],
+          ]
+        : []),
+      ...((r.riskPremium?.backtest || r.forecastUpside?.evidence)
+        ? [
+            [
+              "Geçmişle sınama",
+              `Yöntemler bir önceki yılın verisiyle çalıştırılıp sonraki yıl gerçekleşenle karşılaştırıldı (sektör karnesindeki santraller, ${r.riskPremium?.backtest?.months ?? "aynı aylar"}). ` +
+                (r.candidateBacktest
+                  ? `Aday taraması: katılan ${r.candidateBacktest.n} santralde sıra korelasyonu ${nf(r.candidateBacktest.spearman, 2)}, tutar gerçek / tahmin ${nf(r.candidateBacktest.ratio.p50, 2)}. `
+                  : "") +
+                (r.riskPremium?.backtest
+                  ? `Risk primi: gerçek / tahmin medyanı ${nf(r.riskPremium.backtest.stats.ratio.p50, 2)} (%50 aralık ${nf(r.riskPremium.backtest.stats.ratio.p25, 2)}–${nf(r.riskPremium.backtest.stats.ratio.p75, 2)}; fiyat makası ×${nf(r.riskPremium.backtest.stats.priceEffectRatio, 2)}, tahmin ×${nf(r.riskPremium.backtest.stats.forecastEffectRatio, 2)}); prim aralığı bu çeyreklerle, santral bazındaki hata portföyden geniş olduğu için ihtiyatlıdır. `
+                  : "") +
+                (r.forecastUpside?.evidence
+                  ? `Tahmin fırsatı: önceki yıl medyandan pahalı santrallerin sapma oranı bir yılda tipik olarak değişmedi; ana rakam en iyi çeyreğin iyileşmesiyle (${evidenceRates(r.forecastUpside)}), medyana inme üst sınırdır.`
+                  : ""),
             ] as [string, string],
           ]
         : []),

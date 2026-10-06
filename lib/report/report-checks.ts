@@ -154,6 +154,14 @@ export function checkReportData(r: PlantReportData, bridge?: BridgeStep[]): Repo
       err("intraday-first", `Gün içi slaytında ilk plan maliyeti ${fmt(ie.firstCostTl)}, raporun ana rakamı ${fmt(t.imbalanceCostTl)}.`);
   }
 
+  // Geçmişle sınama (12.2, 12.3): aralık sıralı; gözlenen iyileşmeyle fırsat "medyana inse" üst sınırını aşamaz
+  const pb = r.riskPremium?.backtest;
+  if (pb && !(pb.range.low <= pb.range.mid + 1e-9 && pb.range.mid <= pb.range.high + 1e-9))
+    err("premium-range", `Prim aralığı sırasız: ${pb.range.low.toFixed(1)} / ${pb.range.mid.toFixed(1)} / ${pb.range.high.toFixed(1)} TL/MWh.`);
+  const fe = r.forecastUpside?.evidence;
+  if (fe && r.forecastUpside && fe.nettedGainTl + fe.kupstGainTl > r.forecastUpside.nettedGainTl + r.forecastUpside.kupstGainTl + 1000)
+    err("upside-evidence", `Gözlenen iyileşmeyle fırsat ${fmt(fe.nettedGainTl + fe.kupstGainTl)}, medyana inse üst sınırı ${fmt(r.forecastUpside.nettedGainTl + r.forecastUpside.kupstGainTl)}.`);
+
   // Son plan kapsamı: gün içi slaytı ile kapsam satırı aynı santral-saatlerden
   const fp = r.finalPlan;
   if (ie && Math.abs(ie.coveragePct - fp.coveragePct) > 0.05)

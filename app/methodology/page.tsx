@@ -15,7 +15,7 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.12";
+const VERSION = "1.13";
 const VERSION_DATE = "6 Ekim 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
@@ -503,6 +503,38 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
             </p>
           </Section>
 
+          <Section id="sinama" n={next()} title="Geçmişle sınama">
+            <p>
+              &quot;Ne olurdu&quot; rakamları gerçekle karşılaştırılır: yöntem 2025 Ocak–Ağustos verisiyle çalıştırılır, 2026&apos;nın aynı
+              aylarında gerçekte ne olduğuna bakılır (sektör karnesindeki 858 santral; scripts/sector-backtest.mts).
+            </p>
+            <Table
+              head={["Hesap", "Sınama", "Sonuç ve rapordaki kullanım"]}
+              rows={[
+                [
+                  "Risk primi",
+                  "2025 verisi 2026 kurallarıyla (raporun yöntemi) ile 2026 gerçekleşen TL/MWh",
+                  "Gerçek / tahmin medyanı 1,36 (%50 aralık 1,11–1,68), tipik hata %41; farkın çoğu fiyat makasından (×1,20), kalanı tahmin kalitesinden (×1,13). Prim geçmişe bakar, makas açılırsa düşük kalır; rapor primin yanında bu hata dağılımıyla bir aralık verir.",
+                ],
+                [
+                  "Tahmin iyileştirme fırsatı",
+                  "2025'te teknolojisinin medyanından pahalı santrallerin sapma oranı (WAPE) 2026'da",
+                  "Tipik santral iyileşmedi (rüzgâr −%3, hidro +%4, güneş +%21); en iyi çeyrek rüzgârda %12, hidroda %26 iyileşti. Ana rakam bu en iyi çeyrek iyileşmesiyle (en fazla medyana kadar); \"medyana inse\" üst sınırdır.",
+                ],
+                [
+                  "Büyüme adayları",
+                  "2025'te bağımsızken bir toplayıcıya katılan 361 santralin portföye katkısı (TL/MWh), 2025 ve 2026 verisiyle (toplayıcı üyeliği EPİAŞ'tan ay ay)",
+                  "Sıra büyük ölçüde korundu (Spearman 0,67; tahminde en iyi çeyrekteki santrallerin %87'si gerçekte en iyi yarıda); tutar düşük kaldı (gerçek / tahmin 1,67). Sıra güvenilir, tutar alt sınırdır.",
+                ],
+                [
+                  "Arıza tespiti",
+                  "EPİAŞ piyasa mesaj sistemindeki arıza / bakım bildirimleri",
+                  "Sınanamadı: EPİAŞ bu servisin bütün API metotlarını kapattı (ERR-006, Ekim 2026). Arıza blokları yalnız uyarıdır, hesaptan çıkarılmaz.",
+                ],
+              ]}
+            />
+          </Section>
+
           <Section id="kalite" n={next()} title="Veri bütünlüğü ve arıza saatleri">
             <p>
               <b>Veri bütünlüğü:</b> her santral için ay ay beklenen ve mevcut saat sayısı karşılaştırılır; beklenen saatlerin %90&apos;ından azı
@@ -662,6 +694,11 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.13",
+                  "6 Ekim 2026",
+                  "Geçmişle sınama (Aşama 12.2–12.5): risk primi geçmiş yılın hata dağılımıyla aralık olarak verilir (858 santralde gerçek / tahmin medyanı 1,36); tahmin iyileştirme fırsatının ana rakamı benzer santrallerin en iyi çeyreğinin bir yılda gerçekte başardığı iyileşmeyle (rüzgâr %12, hidro %26; önce herkes medyana iniyordu, şimdi bu üst sınır; ör. Gain 1,7 → 1,2 M, Pure 36,5 → 22,2 M); büyüme adaylarında sıra sınandı (361 santral, Spearman 0,67), tutar alt sınır. EPİAŞ arıza bildirimi servisi kapalı olduğu için arıza tespiti sınanamadı.",
+                ],
                 [
                   "1.12",
                   "6 Ekim 2026",

@@ -46,6 +46,7 @@ export async function buildReportContext(plants: ReportPlantMeta[], year: number
   const context: ReportContext = { missingCompanyPlants: new Map(), companyPlantTotals: new Map() };
   context.sector = await loadSectorContext(year);
   context.aggregatorBenchmark = loadAggregatorBenchmark(year);
+  context.sectorBacktest = loadSectorBacktest(year);
 
   const byOrg = await companyPlantIdsFromCache(year);
   if (!byOrg) return { context, check };
@@ -71,6 +72,15 @@ export async function buildReportContext(plants: ReportPlantMeta[], year: number
     if (missingNames.length) check.missing.push({ company: o.name, plants: missingNames });
   }
   return { context, check };
+}
+
+/** Geçmişle sınama (scripts/sector-backtest.mts ile üretilir; hedef yıl = veri yılı); yoksa undefined */
+function loadSectorBacktest(year: number): ReportContext["sectorBacktest"] {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(process.cwd(), ".cache", "epias", `sector-backtest-${year}.json`), "utf8"));
+  } catch {
+    return undefined;
+  }
 }
 
 /** Toplayıcılar arası kıyas (scripts/aggregator-benchmark.mts ile üretilir); yoksa undefined */

@@ -54,8 +54,9 @@ Ayrıntı: uygulamadaki `/methodology` sayfası.
 - 2024–2025 formül fiyatı EPİAŞ resmi dengesizlik fiyatıyla saat saat aynı (ortalama fark 0,01–0,02 TL).
 - Ana rakamlar uygulama kodu kullanılmadan, bağımsız betiklerle havuz verisinden yeniden hesaplandı. Santral bazında ve netleşmiş dengesizlik, KÜPST, WAPE, capture price ve piyasa özeti birebir tuttu ([ANALIZ_RAPORU.md](ANALIZ_RAPORU.md)).
 - `scripts/verify-independent.mts`: hesap motoru kullanılmadan ham havuz dosyası ve EPİAŞ fiyatlarından dengesizlik, KÜPST ve GİP işlem maliyeti yeniden hesaplanır. Gain (219.768), Inavitas (375.192) ve Met (75.816) santral-saatlerinin hepsinde en büyük fark 0,00 TL.
+- `scripts/sector-backtest.mts`: "ne olurdu" rakamları geçmişle sınanır (2025 → 2026, 858 santral). Risk primi geçmişte düşük tahmin etti (gerçek / tahmin medyanı 1,36), rapor aralık verir; zayıf santrallerin tipik olarak iyileşmediği görüldü, tahmin fırsatı en iyi çeyreğin gerçek iyileşmesiyle hesaplanır; aday sıralaması tutarlı (Spearman 0,67).
 - Mevzuat katsayıları Resmî Gazete metinlerinden doğrulandı ve testle sabitlendi.
-- **359 otomatik test** (Vitest); `tsc` ve ESLint temiz.
+- **369 otomatik test** (Vitest); `tsc` ve ESLint temiz.
 
 ## Sınırlar
 

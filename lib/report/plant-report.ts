@@ -17,6 +17,7 @@ import { aggregateMonthly } from "@/lib/calculations/aggregate";
 import { HourlyResult, ImbalancePricingProfile, REGULATORY_IMBALANCE_REGIMES } from "@/lib/calculations/types";
 import { finalPlanCoverage, findDataGaps, findLateStarts, isNotProducing, type FinalPlanCoverage, type LateStart, type PlantDataGap } from "@/lib/analysis/data-completeness";
 import { intradayTradeCost } from "@/lib/analysis/intraday-trade";
+import { premiumRange, type CandidateBacktestStats, type PremiumBacktestStats, type SectorBacktest } from "@/lib/analysis/sector-backtest";
 import { describeAggregatorScope } from "@/lib/projects/aggregator";
 import { detectOutages, markConcurrent, type PlantOutages } from "@/lib/analysis/outage-detection";
 import { analyzeDsgScenario, MAX_EXACT_PLANTS } from "@/lib/analysis/dsg-scenarios";
@@ -115,6 +116,8 @@ export interface ReportContext {
     /** Karnedeki hidro santrallerin alt tipi (EPİAŞ santral kimliği → tip); karnede olmayan santralin tipi kendi serisinden tahmin edilir */
     hydroKindById?: Record<number, HydroKind | null>;
   };
+  /** Geçmişle sınama (scripts/sector-backtest.mts; Aşama 12.2–12.3): toYear veri yılıyla eşleşirse kullanılır */
+  sectorBacktest?: SectorBacktest;
   /** Toplayıcılar arası kıyas (scripts/aggregator-benchmark.mts; PLAN 8.7) */
   aggregatorBenchmark?: {
     year: number;
@@ -190,6 +193,11 @@ export interface PlantReportData {
   riskPremium: {
     rules: string;
     portfolio: RiskPremium;
+    /**
+     * Geçmişle sınama (12.2): aynı yöntemle önceki yılın verisinden hesaplanan prim, sonraki yıl gerçekleşenin kaçta kaçıydı
+     * (sektördeki santrallerde gerçek / tahmin oranı). range: beklenen prim × portföy karışımına göre ağırlıklı oran çeyrekleri.
+     */
+    backtest?: { fromYear: number; toYear: number; months: string; stats: PremiumBacktestStats; range: { low: number; mid: number; high: number } } | null;
     plants: Array<RiskPremium & { name: string; type: string }>;
   } | null;
   /** Şirketin EPİAŞ'taki santrallerinden projede olmayanlar (bilgi yoksa boş) */
@@ -292,6 +300,20 @@ export interface PlantReportData {
    * gerçekten azalan tutar; kupstGainTl KÜPST'teki azalma (santral bazında, netleşmez). Sektör karnesi yoksa null.
    */
   forecastUpside: {
+    /**
+     * Geçmişle sınama (12.3): benzer santrallerin (önceki yıl kendi teknolojisinin medyanından pahalı) en iyi çeyreğinin bir
+     * yılda gerçekte başardığı iyileşmeyle (sapma oranı); en fazla medyana kadar. Ana rakam budur; aşağıdaki
+     * standalone/netted/kupst alanları "medyana inse" üst sınırıdır. Sınama yoksa null.
+     */
+    evidence?: {
+      fromYear: number;
+      toYear: number;
+      /** Teknoloji → uygulanan iyileşme (%) ve sınamadaki santral sayısı, medyan değişim (%) */
+      byType: Record<string, { improvementPct: number; n: number; medianChangePct: number; improvedSharePct: number }>;
+      plantCount: number;
+      nettedGainTl: number;
+      kupstGainTl: number;
+    } | null;
     plantCount: number;
     /** Kazancı en büyükten küçüğe santral adları */
     plantNames: string[];
@@ -381,6 +403,8 @@ export interface PlantReportData {
    * değilse ya da kıyasta son planı yeterli toplayıcı yoksa null.
    */
   intradayPeers: IntradayPeerStats | null;
+  /** Aday taraması geçmişle sınaması (12.5): veri yılıyla eşleşen sınama dosyasından; yoksa null */
+  candidateBacktest?: (CandidateBacktestStats & { fromYear: number; toYear: number }) | null;
 }
 
 /** Planı gün içinde güncellenmeyen santral, ilk plana göre mutlak sapmanın en az bu payını taşıyorsa öneri olarak gösterilir */
@@ -834,9 +858,19 @@ export function buildPlantReport(
         }
       return m;
     };
+    const portfolioPremium = riskPremiumOf(settleByCompany(withData, latestProfile), kupstMonthly(withData, community));
+    const bt = context.sectorBacktest;
+    let premiumBt: NonNullable<PlantReportData["riskPremium"]>["backtest"] = null;
+    if (bt && bt.toYear === new Date(start).getUTCFullYear() && bt.premium.ALL) {
+      const mix: Record<string, number> = {};
+      for (const p of withData) mix[p.plantType] = (mix[p.plantType] ?? 0) + p.hourly.reduce((a, h) => a + h.actualMwh, 0);
+      const range = premiumRange(portfolioPremium.expectedTlPerMwh, mix, bt.premium);
+      if (range) premiumBt = { fromYear: bt.fromYear, toYear: bt.toYear, months: bt.months, stats: bt.premium.ALL, range };
+    }
     riskPremium = {
       rules: `2026 kuralları: sistemle aynı yönde %6 katsayı, KÜPST ${latestKupst.label}`,
-      portfolio: riskPremiumOf(settleByCompany(withData, latestProfile), kupstMonthly(withData, community)),
+      portfolio: portfolioPremium,
+      backtest: premiumBt,
       plants: withData
         .map((p) => ({
           name: p.plantName,
@@ -1092,55 +1126,79 @@ export function buildPlantReport(
     if (scale.size) {
       const hourCost = (d: number, h: HourlyResult) =>
         d > 0 ? d * (h.ptf - h.positivePrice) : d < 0 ? -d * (h.negativePrice - h.ptf) : 0;
-      const units = new Map<string, Map<number, { now: number; improved: number; h: HourlyResult }>>();
-      const gainByPlant = new Map<string, number>();
-      let standaloneGain = 0;
-      let kupstGain = 0;
-      for (const p of withData) {
-        const sc = scale.get(p.plantName) ?? 1;
-        const key = p.organizationId !== null ? `org:${p.organizationId}` : `plant:${p.plantId}`;
-        const u = units.get(key) ?? units.set(key, new Map()).get(key)!;
-        for (const h of p.hourly) {
-          const d = h.actualMwh - h.forecastMwh;
-          const t = new Date(h.timestamp).getTime();
-          const b = u.get(t) ?? { now: 0, improved: 0, h };
-          b.now += d;
-          b.improved += d * sc;
-          u.set(t, b);
-          if (sc < 1) {
-            const g = hourCost(d, h) - hourCost(d * sc, h);
-            standaloneGain += g;
-            gainByPlant.set(p.plantName, (gainByPlant.get(p.plantName) ?? 0) + g);
-            // KÜPST son plana göre: son plandan sapma da aynı oranda küçültülür (santral bazında; toplayıcıda aşağıda topluluk bazında)
-            if (!community) {
-              const kup = h.forecastFinalMwh ?? h.forecastMwh;
-              kupstGain += kupstForHour(h, p.plantType) - kupstForHour({ ...h, actualMwh: kup + (h.actualMwh - kup) * sc }, p.plantType);
+      // Santral → sapmanın küçültülme oranı verildiğinde kazanç: tek başına, uzlaştırma biriminde netleşmiş ve KÜPST
+      const gainFor = (scaleOf: Map<string, number>) => {
+        const units = new Map<string, Map<number, { now: number; improved: number; h: HourlyResult }>>();
+        const gainByPlant = new Map<string, number>();
+        let standaloneGain = 0;
+        let kupstGain = 0;
+        for (const p of withData) {
+          const sc = scaleOf.get(p.plantName) ?? 1;
+          const key = p.organizationId !== null ? `org:${p.organizationId}` : `plant:${p.plantId}`;
+          const u = units.get(key) ?? units.set(key, new Map()).get(key)!;
+          for (const h of p.hourly) {
+            const d = h.actualMwh - h.forecastMwh;
+            const t = new Date(h.timestamp).getTime();
+            const b = u.get(t) ?? { now: 0, improved: 0, h };
+            b.now += d;
+            b.improved += d * sc;
+            u.set(t, b);
+            if (sc < 1) {
+              const g = hourCost(d, h) - hourCost(d * sc, h);
+              standaloneGain += g;
+              gainByPlant.set(p.plantName, (gainByPlant.get(p.plantName) ?? 0) + g);
+              // KÜPST son plana göre: son plandan sapma da aynı oranda küçültülür (santral bazında; toplayıcıda aşağıda topluluk bazında)
+              if (!community) {
+                const kup = h.forecastFinalMwh ?? h.forecastMwh;
+                kupstGain += kupstForHour(h, p.plantType) - kupstForHour({ ...h, actualMwh: kup + (h.actualMwh - kup) * sc }, p.plantType);
+              }
             }
           }
         }
+        if (community) {
+          const improved = communityOf(withData).map((cp, i) => {
+            const sc = scaleOf.get(withData[i].plantName) ?? 1;
+            if (sc >= 1) return cp;
+            return {
+              ...cp,
+              hourly: cp.hourly.map((h) => {
+                const kup = h.forecastFinalMwh ?? h.forecastMwh;
+                return { ...h, actualMwh: kup + (h.actualMwh - kup) * sc };
+              }),
+            };
+          });
+          kupstGain = kupstCommunityTotal(communityOf(withData)) - kupstCommunityTotal(improved);
+        }
+        let nettedGain = 0;
+        for (const u of Array.from(units.values())) for (const b of Array.from(u.values())) nettedGain += hourCost(b.now, b.h) - hourCost(b.improved, b.h);
+        return { standaloneGain, nettedGain, kupstGain, gainByPlant };
+      };
+      const upper = gainFor(scale);
+      // Geçmişle sınama (12.3): benzer santrallerin en iyi çeyreğinin bir yılda başardığı iyileşme, en fazla medyana kadar
+      const bt = context.sectorBacktest;
+      let evidence: NonNullable<PlantReportData["forecastUpside"]>["evidence"] = null;
+      if (bt && bt.toYear === new Date(start).getUTCFullYear()) {
+        const typeOf = new Map(withData.map((p) => [p.plantName, p.plantType]));
+        const evScale = new Map<string, number>();
+        const byType: NonNullable<NonNullable<PlantReportData["forecastUpside"]>["evidence"]>["byType"] = {};
+        for (const [name, sc] of Array.from(scale.entries())) {
+          const type = typeOf.get(name) ?? "";
+          const st = bt.improvement[type];
+          if (!st) continue;
+          byType[type] = { improvementPct: st.goodImprovementPct, n: st.n, medianChangePct: st.change.p50, improvedSharePct: st.improvedSharePct };
+          const e = Math.max(sc, 1 - st.goodImprovementPct / 100);
+          if (e < 1) evScale.set(name, e);
+        }
+        const g = gainFor(evScale);
+        evidence = { fromYear: bt.fromYear, toYear: bt.toYear, byType, plantCount: evScale.size, nettedGainTl: g.nettedGain, kupstGainTl: g.kupstGain };
       }
-      if (community) {
-        const improved = communityOf(withData).map((cp, i) => {
-          const sc = scale.get(withData[i].plantName) ?? 1;
-          if (sc >= 1) return cp;
-          return {
-            ...cp,
-            hourly: cp.hourly.map((h) => {
-              const kup = h.forecastFinalMwh ?? h.forecastMwh;
-              return { ...h, actualMwh: kup + (h.actualMwh - kup) * sc };
-            }),
-          };
-        });
-        kupstGain = kupstCommunityTotal(communityOf(withData)) - kupstCommunityTotal(improved);
-      }
-      let nettedGain = 0;
-      for (const u of Array.from(units.values())) for (const b of Array.from(u.values())) nettedGain += hourCost(b.now, b.h) - hourCost(b.improved, b.h);
       forecastUpside = {
+        evidence,
         plantCount: scale.size,
-        plantNames: Array.from(gainByPlant.entries()).sort((a, b) => b[1] - a[1]).map(([n]) => n),
-        standaloneGainTl: standaloneGain,
-        nettedGainTl: nettedGain,
-        kupstGainTl: kupstGain,
+        plantNames: Array.from(upper.gainByPlant.entries()).sort((a, b) => b[1] - a[1]).map(([n]) => n),
+        standaloneGainTl: upper.standaloneGain,
+        nettedGainTl: upper.nettedGain,
+        kupstGainTl: upper.kupstGain,
       };
     }
   }
@@ -1191,5 +1249,9 @@ export function buildPlantReport(
     peers,
     intraday,
     intradayPeers,
+    candidateBacktest:
+      context.sectorBacktest?.candidates && context.sectorBacktest.toYear === new Date(start).getUTCFullYear()
+        ? { ...context.sectorBacktest.candidates, fromYear: context.sectorBacktest.fromYear, toYear: context.sectorBacktest.toYear }
+        : null,
   };
 }
