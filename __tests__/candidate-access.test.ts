@@ -56,6 +56,9 @@ describe("toplayıcı görünen adı", () => {
     const { aggregatorDisplayName } = await import("@/lib/projects/aggregator");
     expect(aggregatorDisplayName("INAVITAS TOPLAYICILIK VE ENERJİ TİC. A.Ş. (TOPLAYICI)")).toBe("Inavitas Toplayıcı");
     expect(aggregatorDisplayName("GAİN TOPLAYICILIK A.Ş. (TOPLAYICI)")).toBe("Gain Toplayıcı");
+    // Türkçe harfli adlar Türkçe kuralla, ünlüsüz kısaltmalar olduğu gibi (rapor kıyas tablosunda "Kivanç", "Ck" yazıyordu)
+    const { brandWord } = await import("@/lib/projects/aggregator");
+    expect(["KIVANÇ", "CK", "İŞ", "RÖNESANS", "INAVITAS", "GÖKADA", "SOCAR", "MT"].map(brandWord)).toEqual(["Kıvanç", "CK", "İş", "Rönesans", "Inavitas", "Gökada", "Socar", "MT"]);
     expect(aggregatorDisplayName("ZEROS ENERJİ (TOPLAYICI)")).toBe("Zeros Toplayıcı");
   });
 });

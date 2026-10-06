@@ -35,10 +35,19 @@ export const isAggregatorName = (name: string | null | undefined) => !!name && /
 /** Raporda görünecek kısa ad: unvanın ilk kelimesi + "Toplayıcı" ("GAİN TOPLAYICILIK …" → "Gain Toplayıcı") */
 export function aggregatorDisplayName(orgName: string, shortName?: string | null): string {
   const first = (shortName || orgName).trim().split(/\s+/)[0] ?? "";
-  // Marka adları çoğunlukla Latin: Türkçe kural "I" harfini "ı" yapar ("INAVITAS" → "Inavıtas"). Türkçe "İ" önce "i"
-  // yapılır, gerisi Türkçe olmayan kuralla küçültülür ("GAİN" → "Gain", "INAVITAS" → "Inavitas").
-  const rest = first.slice(1).replace(/İ/g, "i").toLowerCase();
-  return `${first.charAt(0)}${rest} Toplayıcı`;
+  return `${brandWord(first)} Toplayıcı`;
+}
+
+/**
+ * Unvandaki büyük harfli kelimenin görünen hali. Marka adları çoğunlukla Latin: Türkçe kural "I" harfini "ı" yapar
+ * ("INAVITAS" → "Inavıtas"). Kelimede Türkçeye özgü harf (Ç, Ğ, Ö, Ş, Ü, İ) varsa Türkçe kuralla ("KIVANÇ" → "Kıvanç",
+ * "GAİN" → "Gain"), yoksa Latin kuralla küçültülür ("INAVITAS" → "Inavitas"); ünlüsüz kısaltmalar olduğu gibi kalır ("CK").
+ */
+export function brandWord(word: string): string {
+  if (!word) return word;
+  if (!/[AEIİOÖUÜ]/i.test(word)) return word;
+  const rest = /[ÇĞÖŞÜİ]/.test(word) ? word.slice(1).toLocaleLowerCase("tr-TR") : word.slice(1).toLowerCase();
+  return `${word.charAt(0)}${rest}`;
 }
 
 /**

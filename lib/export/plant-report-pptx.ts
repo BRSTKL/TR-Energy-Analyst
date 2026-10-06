@@ -29,6 +29,7 @@ import { monthlyRange } from "@/lib/report/deviation-load";
 import { describeGap, describeLateStart, describeLowFinalPlan, FINAL_PLAN_MIN_COVERAGE_PCT } from "@/lib/analysis/data-completeness";
 import { materialTradeCost } from "@/lib/analysis/intraday-trade";
 import { pctIn, pctOf } from "@/lib/format";
+import { brandWord } from "@/lib/projects/aggregator";
 import { COST_FACTORS } from "@/lib/analysis/cost-change";
 import type { ReportCostChange } from "@/lib/services/cost-change";
 import type { ProjectCandidates } from "@/lib/services/candidates";
@@ -268,9 +269,20 @@ export function forecastUpsideValue(fu: NonNullable<PlantReportData["forecastUps
 /** "rüzgâr %12, hidro %26" (sınamada uygulanan iyileşme oranları; yoksa "") */
 export function evidenceRates(fu: NonNullable<PlantReportData["forecastUpside"]>): string {
   const name: Record<string, string> = { RES: "rüzgâr", GES: "güneş", HES: "hidro" };
+  // Yalnız iyileşen teknolojiler ("güneş %0 azalttı" yazmasın); iyileşmeyenler evidenceNone ile ayrıca söylenir
   return Object.entries(fu.evidence?.byType ?? {})
+    .filter(([, v]) => Math.round(v.improvementPct) > 0)
     .map(([t, v]) => `${name[t] ?? t} %${nf(v.improvementPct, 0)}`)
     .join(", ");
+}
+
+/** "; güneş santrallerinde en iyi çeyrek de iyileşmedi" (iyileşmeyen teknoloji yoksa "") */
+export function evidenceNone(fu: NonNullable<PlantReportData["forecastUpside"]>): string {
+  const name: Record<string, string> = { RES: "rüzgâr", GES: "güneş", HES: "hidro" };
+  const none = Object.entries(fu.evidence?.byType ?? {})
+    .filter(([, v]) => Math.round(v.improvementPct) <= 0)
+    .map(([t]) => name[t] ?? t);
+  return none.length ? `; ${none.join(" ve ")} santrallerinde en iyi çeyrek de iyileşmedi` : "";
 }
 
 export interface BridgeStep {
@@ -995,7 +1007,7 @@ export async function exportPlantReportPptx(
       r.plants.length > 1 && excess(biggest) > 0
         ? `En büyük iyileştirme alanı ${biggest.name}: MWh başına ${nf(biggest.unitCostTl, 0)} TL; ${
             bigRef.sector ? "sektör medyanına" : `${biggest.type} ortalamasına`
-          } (${nf(bigRef.value, 0)}) inse ≈ ${formatTlShort(excess(biggest))}`
+          } (${nf(bigRef.value, 0)}) inse en fazla ≈ ${formatTlShort(excess(biggest))}`
         : main.list.length > 1
           ? `${main.type} santralleri arasında en yüksek risk ${worst.name}: MWh başına ${nf(worst.unitCostTl, 0)} TL (${main.type} ortalaması ${nf(main.avg, 0)} TL)`
           : `${worst.name}: MWh başına ${nf(worst.unitCostTl, 0)} TL dengesizlik riski`;
@@ -1211,7 +1223,7 @@ export async function exportPlantReportPptx(
     const self = pe.rows.find((a) => a.id === pe.selfId)!;
     // Kısa ad: unvanın ilk kelimesi; aynı ilk kelimeyi taşıyanlarda ilk iki kelime (Enerjisa Müşteri / Enerjisa Doğal)
     const firstWord = (n: string) => n.trim().split(/\s+/)[0];
-    const cap = (w: string) => `${w.charAt(0)}${w.slice(1).replace(/İ/g, "i").toLowerCase()}`;
+    const cap = brandWord;
     const dup = new Set(pe.rows.map((a) => firstWord(a.name)).filter((w, i, arr) => arr.indexOf(w) !== i));
     const short = (a: (typeof pe.rows)[number]) => {
       if (!/\(TOPLAYICI\)|A\.Ş\./i.test(a.name)) return a.name; // anonim sürümde takma ad
@@ -1392,7 +1404,8 @@ export async function exportPlantReportPptx(
     const half = (pw - nameW - 0.8) / 2;
     const maxB = Math.max(5, ...plantsBias.map((p) => Math.abs(p.biasPct)));
     const top = 2.75;
-    const rowH = Math.min(0.32, 3.4 / plantsBias.length);
+    // Çubuklar alttaki yorum ve arıza notuna yer bırakır (yorum en çok iki satır, arıza notu 6,6'da)
+    const rowH = Math.min(0.32, 3.1 / plantsBias.length);
     plantsBias.forEach((p, i) => {
       const y = top + i * rowH;
       text(s, p.name, { x: px, y, w: nameW, h: rowH, fontSize: 10.5, valign: "middle" });
@@ -1417,8 +1430,16 @@ export async function exportPlantReportPptx(
       s,
       overCount > established.length / 2
         ? `${established.length} santralin ${overCount} tanesinde plan sistematik olarak yüksek: plan kalibrasyonu en hızlı kazanç kalemlerinden biri.`
-        : "Belirgin bir sistematik sapma yok; maliyet saatlik tahmin hatasından kaynaklanıyor.",
-      { x: px, y: Math.min(Math.max(yEnd + 0.2, 5.75), 6.2), w: pw, h: 0.5, fontSize: 11.5, valign: "top" }
+        : (() => {
+            // Çoğunlukta sistematik sapma yoksa bile listede uç santraller olabilir (Gain: ÜZÜMLÜ İÇMESUYU +%19,5): "sapma yok"
+            // demek grafikle çelişiyordu; çoğunluk ve uçlar ayrı söylenir
+            const strong = established.filter((p) => Math.abs(p.biasPct) >= 10).sort((x, y) => Math.abs(y.biasPct) - Math.abs(x.biasPct));
+            const head = "Çoğu santralde belirgin sistematik sapma yok; maliyet büyük ölçüde saatlik tahmin hatasından.";
+            return strong.length
+              ? `${head} İstisna (önce plan kalibrasyonu): ${listOf(strong.map((p) => `${p.name} (${p.biasPct >= 0 ? "+" : "−"}%${nf(Math.abs(p.biasPct), 1)})`), 2, ", ")}.`
+              : head;
+          })(),
+      { x: px, y: Math.min(Math.max(yEnd + 0.15, 5.75), 6.0), w: pw, h: 6.55 - Math.min(Math.max(yEnd + 0.15, 5.75), 6.0), fontSize: 10.5, valign: "top", fit: "shrink" }
     );
     // Olası arıza / kısıntı: tahmin yüksekken üretim ~0 olan bloklar tahmin hatası değildir
     const ev = r.outages.plants.flatMap((o) => o.events);
@@ -1982,7 +2003,7 @@ export async function exportPlantReportPptx(
         (fu
           ? `${fu.plantCount} santral (${listOf(fu.plantNames, 4, ", ")}) sektör medyanının üstünde. ` +
             (fu.evidence
-              ? `Geçmişle sınama: ${fu.evidence.fromYear}'te benzer durumdaki santrallerin en iyi çeyreği sapmasını bir yılda ${evidenceRates(fu)} azalttı (tipik santral neredeyse hiç iyileşmedi); bu kadar iyileşme ${formatTlShort(fuV!.main)}, medyana inmek (üst sınır) ${formatTlShort(fuV!.upper)} kazandırır (${unit.loc} netleşmiş + KÜPST). `
+              ? `Geçmişle sınama: ${fu.evidence.fromYear}'te benzer durumdaki santrallerin en iyi çeyreği sapmasını bir yılda ${evidenceRates(fu) || "hiç"} azalttı${evidenceNone(fu)} (tipik santral neredeyse hiç iyileşmedi); bu kadar iyileşme ${formatTlShort(fuV!.main)}, medyana inmek (üst sınır) ${formatTlShort(fuV!.upper)} kazandırır (${unit.loc} netleşmiş + KÜPST). `
               : `Medyana inselerdi ${unit.loc} netleşmiş dengesizlik ${formatTlShort(fu.nettedGainTl)}, KÜPST ${formatTlShort(fu.kupstGainTl)} azalırdı ` +
                 `(santraller tek başına düşünülse ${formatTlShort(fu.standaloneGainTl)}; farkı netleşme zaten karşılıyor). `)
           : `Riskin %${nf(r.alignment.sameDirectionCostPct, 0)} kadarı sistemle aynı yöndeki sapmalardan geliyor. `) +
@@ -2296,7 +2317,7 @@ export async function exportPlantReportPptx(
                   ? `Risk primi: gerçek / tahmin medyanı ${nf(r.riskPremium.backtest.stats.ratio.p50, 2)} (%50 aralık ${nf(r.riskPremium.backtest.stats.ratio.p25, 2)}–${nf(r.riskPremium.backtest.stats.ratio.p75, 2)}; fiyat makası ×${nf(r.riskPremium.backtest.stats.priceEffectRatio, 2)}, tahmin ×${nf(r.riskPremium.backtest.stats.forecastEffectRatio, 2)}); prim aralığı bu çeyreklerle, santral bazındaki hata portföyden geniş olduğu için ihtiyatlıdır. `
                   : "") +
                 (r.forecastUpside?.evidence
-                  ? `Tahmin fırsatı: önceki yıl medyandan pahalı santrallerin sapma oranı bir yılda tipik olarak değişmedi; ana rakam en iyi çeyreğin iyileşmesiyle (${evidenceRates(r.forecastUpside)}), medyana inme üst sınırdır.`
+                  ? `Tahmin fırsatı: önceki yıl medyandan pahalı santrallerin sapma oranı bir yılda tipik olarak değişmedi; ana rakam en iyi çeyreğin iyileşmesiyle (${evidenceRates(r.forecastUpside) || "iyileşme yok"}${evidenceNone(r.forecastUpside)}), medyana inme üst sınırdır.`
                   : ""),
             ] as [string, string],
           ]
