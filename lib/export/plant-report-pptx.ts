@@ -1133,8 +1133,10 @@ export async function exportPlantReportPptx(
       const d = t.unitImbalanceTl;
       const vals = [d.p10, d.p90, ...t.plants.filter((p) => !late.has(p.name)).map((p) => p.unitTl), t.portfolioUnitTl];
       const lo = Math.max(0, Math.min(...vals) * 0.9);
-      const hi = Math.max(...vals) * 1.05;
-      const xOf = (v: number) => left + ((v - lo) / (hi - lo)) * width;
+      // Tek bir uç değer (ör. 429 TL'lik santral) ölçeği uzatıp diğerlerini sola sıkıştırmasın: eksen P90'ın (ya da portföy
+      // ortalamasının) 1,6 katında kesilir, ötesindeki santral eksenin sonunda değeriyle işaretlenir
+      const hi = Math.min(Math.max(...vals) * 1.05, Math.max(d.p90, t.portfolioUnitTl) * 1.6);
+      const xOf = (v: number) => left + ((Math.min(v, hi) - lo) / (hi - lo)) * width;
       // 4 ve daha çok satırda (hidro alt tipleri) sıkışık yerleşim: etiketler üçgenin yanında, özet satırı bandın hemen altında
       const compact = rowH < 1.3;
       const bandY = top + (compact ? 0.62 : 0.95);
@@ -1156,20 +1158,37 @@ export async function exportPlantReportPptx(
       const perCol = Math.ceil(shown.length / cols);
       const listRoom = top + rowH - listTop;
       const numbered = listRoom >= perCol * 0.17;
+      // Santral noktalarının yeri önce bulunur: çok yakın değerli santraller aynı noktaya düşmesin diye bandın üstüne doğru
+      // sıralanır (her santral görünür); üçgen, altındaki nokta yığınının üstüne çıkar
+      const dots = numbered ? shown : tPlants;
+      const placed: Array<{ x: number; level: number }> = [];
+      for (const p of dots) {
+        const x = xOf(p.unitTl);
+        let level = 0;
+        while (placed.some((q) => q.level === level && Math.abs(q.x - x) < 0.13)) level++;
+        placed.push({ x, level });
+      }
       // Portföy ortalaması: bandın üstünde üçgen (numara yoksa banda daha yakın)
       const px = xOf(t.portfolioUnitTl);
-      const triY = numbered ? bandY - 0.72 : compact ? bandY - 0.36 : bandY - 0.42;
+      // Yakın noktaların dikey kayması: sıkışık yerleşimde (4 satır) üstte yer yok, noktalar sırayla bandın üstüne ve altına
+      // (üçgen yerinde kalır); geniş yerleşimde yukarı yığılır ve üçgen yığının üstüne çıkar (satırın üstünü aşmadan)
+      const offsetOf = (level: number) => (compact ? (level % 2 ? -1 : 1) * Math.ceil(level / 2) * 0.12 : -level * 0.13);
+      const stackUnder = compact ? 0 : Math.max(0, ...placed.filter((q) => Math.abs(q.x - px) < 0.2).map((q) => q.level));
+      const triY = Math.max((numbered ? bandY - 0.72 : compact ? bandY - 0.4 : bandY - 0.42) - stackUnder * 0.13, top + 0.3);
       s.addShape(pptx.ShapeType.triangle, { x: px - 0.12, y: triY, w: 0.24, h: 0.2, fill: { color: C.risk }, line: { color: C.risk, width: 0 }, rotate: 180 });
-      if (compact) text(s, `Portföyünüz ${nf(t.portfolioUnitTl, 0)} TL`, { x: px + 0.16, y: triY - 0.02, w: 2.4, h: 0.24, fontSize: 10, bold: true, align: "left", color: C.risk });
-      else text(s, `Portföyünüz ${nf(t.portfolioUnitTl, 0)} TL`, { x: px - 1.2, y: triY - 0.28, w: 2.4, h: 0.26, fontSize: 10, bold: true, align: "center", color: C.risk });
+      // Sıkışık yerleşimde (4 satır) üçgenin yanında yazıya yer yok (nokta yığınlarıyla çakışıyordu): portföy değeri satırın
+      // özet cümlesinin başında yazılır
+      if (!compact || numbered) text(s, `Portföyünüz ${nf(t.portfolioUnitTl, 0)} TL`, { x: px - 1.2, y: triY - 0.28, w: 2.4, h: 0.26, fontSize: 10, bold: true, align: "center", color: C.risk });
       // Santraller: noktalar ve üstünde sıra numarası (yakın noktalarda numaralar iki sıraya dağılır)
-      const dots = numbered ? shown : tPlants;
       dots.forEach((p, pi) => {
-        const x = xOf(p.unitTl);
+        const { x, level } = placed[pi];
+        const dy = -offsetOf(level);
         const above = p.unitTl > d.median;
-        s.addShape(pptx.ShapeType.ellipse, { x: x - 0.07, y: bandY - 0.07, w: 0.14, h: 0.14, fill: { color: above ? C.cost : C.gain }, line: { color: C.white, width: 0.75 } });
+        s.addShape(pptx.ShapeType.ellipse, { x: x - 0.07, y: bandY - 0.07 - dy, w: 0.14, h: 0.14, fill: { color: above ? C.cost : C.gain }, line: { color: C.white, width: 0.75 } });
+        if (p.unitTl > hi)
+          text(s, `${nf(p.unitTl, 0)} ▸`, { x: x - 0.75, y: bandY - 0.32 - dy, w: 0.7, h: 0.2, fontSize: 8, bold: true, align: "right", color: above ? C.cost : C.gain });
         if (numbered)
-          text(s, String(pi + 1), { x: x - 0.15, y: bandY - 0.42 - (pi % 2) * 0.16, w: 0.3, h: 0.18, fontSize: 8, bold: true, align: "center", color: above ? C.cost : C.gain });
+          text(s, String(pi + 1), { x: x - 0.15, y: bandY - 0.42 - dy - (pi % 2) * 0.16, w: 0.3, h: 0.18, fontSize: 8, bold: true, align: "center", color: above ? C.cost : C.gain });
       });
       if (!numbered) {
         const best = tPlants.filter((p) => p.rankPct <= 25).length;
@@ -1177,7 +1196,7 @@ export async function exportPlantReportPptx(
         const worst2 = [...tPlants].sort((a, b) => b.unitTl - a.unitTl).slice(0, 2);
         text(
           s,
-          `${tPlants.length} santral: ${best} tanesi en iyi çeyrekte, ${worstQ} tanesi en kötü çeyrekte · en yüksek: ${worst2
+          `${compact ? `▼ Portföyünüz ${nf(t.portfolioUnitTl, 0)} TL · ` : ""}${tPlants.length} santral: ${best} tanesi en iyi çeyrekte, ${tPlants.length - best - worstQ} tanesi ortada, ${worstQ} tanesi en kötü çeyrekte · en yüksek: ${worst2
             .map((p) => `${p.name} ${nf(p.unitTl, 0)} TL`)
             .join(", ")}`,
           { x: left, y: bandY + (compact ? 0.46 : 0.42), w: width, h: 0.22, fontSize: 9, color: C.sub, valign: "middle" }
@@ -1209,9 +1228,9 @@ export async function exportPlantReportPptx(
         k.median,
         0
       )} TL (${TECH_TR[main.type] ?? main.type}). Kaynak: EPİAŞ, ${sec.label}; kalite süzgecinden geçen lisanslı santraller.${
-        r.plants.some((p) => !sec.types.some((t) => t.type === p.type)) ? " HES ve diğer türler sektör karnesinin kapsamında değil." : ""
-      }${lateNote ? ` ${lateNote}` : ""}`,
-      { x: M, y: 6.45, w: CW, h: 0.45, fontSize: 9.5, color: C.sub, valign: "top" }
+        r.plants.some((p) => !sec.types.some((t) => t.type === p.type) && !(sec.unlicensed ?? []).includes(p.name)) ? " HES ve diğer türler sektör karnesinin kapsamında değil." : ""
+      }${sec.unlicensed?.length ? ` Lisanssız birimler (${listOf(sec.unlicensed, 2, ", ")}) birçok küçük santralin birleşik birimi olduğu için kıyasa alınmadı.` : ""}${lateNote ? ` ${lateNote}` : ""}`,
+      { x: M, y: 6.45, w: CW, h: 0.45, fontSize: 9.5, color: C.sub, valign: "top", fit: "shrink" }
     );
   }
 

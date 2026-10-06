@@ -17,6 +17,7 @@ import { aggregateMonthly } from "@/lib/calculations/aggregate";
 import { HourlyResult, ImbalancePricingProfile, REGULATORY_IMBALANCE_REGIMES } from "@/lib/calculations/types";
 import { finalPlanCoverage, findDataGaps, findLateStarts, isNotProducing, type FinalPlanCoverage, type LateStart, type PlantDataGap } from "@/lib/analysis/data-completeness";
 import { intradayTradeCost } from "@/lib/analysis/intraday-trade";
+import { isUnlicensedName } from "@/lib/analysis/candidate-access";
 import { premiumRange, type CandidateBacktestStats, type PremiumBacktestStats, type SectorBacktest } from "@/lib/analysis/sector-backtest";
 import { describeAggregatorScope } from "@/lib/projects/aggregator";
 import { detectOutages, markConcurrent, type PlantOutages } from "@/lib/analysis/outage-detection";
@@ -173,6 +174,8 @@ export interface PlantReportData {
     year: number;
     /** Karnenin dönemi: "2025" ya da "2026 (Ocak–Ağustos)" */
     label: string;
+    /** Kıyas dışı tutulan lisanssız birimler (LÜY): sektör dağılımı lisanslı santrallerden oluşur */
+    unlicensed?: string[];
     types: Array<{
       type: string;
       /** Hidroda alt tip: santraller kendi alt tipindeki sektör dağılımıyla kıyaslanır (yoksa bütün hidrolarla) */
@@ -899,7 +902,8 @@ export function buildPlantReport(
     const groups: Group[] = [];
     for (const [type, d] of Object.entries(sectorCtx.byType)) {
       if (type.includes(":") || !d || d.values.length < 10) continue;
-      const own = plants.filter((p) => p.type === type && p.actualMwh > 0);
+      // LÜY birimleri (birçok lisanssız santralin birleşik uzlaştırma birimi) lisanslı santral dağılımıyla kıyaslanmaz
+      const own = plants.filter((p) => p.type === type && p.actualMwh > 0 && !isUnlicensedName(p.name));
       if (own.length === 0) continue;
       if (type !== "HES") {
         groups.push({ type, dist: d, own });
@@ -916,10 +920,22 @@ export function buildPlantReport(
       // Alt tipi belirsiz santraller yalnızca en az 3 tane ise ayrı satır olur (tek santralik satır slaytı kalabalıklaştırır)
       if (rest.length >= 3) groups.push({ type, dist: d, own: rest });
     }
+    // Portföy ortalaması grafikteki santrallerden: dönem içinde devreye giren santrallerin devreye alma dönemi grafikte
+    // gösterilmiyor; ortalamaya girince ortalama bütün santrallerin üstüne çıkabiliyordu (Inavitas güneş 230 TL, en pahalı
+    // santral 180 TL)
+    const lateNames = new Set(
+      findLateStarts(
+        data.plants
+          .filter((p) => !isNotProducing(p.hourly))
+          .map((p) => ({ plantName: p.plantName, timestamps: p.hourly.map((h) => new Date(h.timestamp).getTime()) }))
+      ).map((l) => l.plantName)
+    );
     for (const g of groups) {
       const { type, kind, dist: d, own } = g;
-      const mwh = own.reduce((a, p) => a + p.actualMwh, 0);
-      const portfolioUnitTl = own.reduce((a, p) => a + p.imbalanceCostTl, 0) / mwh;
+      const established = own.filter((p) => !lateNames.has(p.name));
+      const base = established.length ? established : own;
+      const mwh = base.reduce((a, p) => a + p.actualMwh, 0);
+      const portfolioUnitTl = base.reduce((a, p) => a + p.imbalanceCostTl, 0) / mwh;
       types.push({
         type,
         ...(kind ? { kind } : {}),
@@ -932,7 +948,8 @@ export function buildPlantReport(
           .sort((a, b) => a.unitTl - b.unitTl),
       });
     }
-    if (types.length) sector = { year: sectorCtx.year, label: sectorCtx.label ?? String(sectorCtx.year), types };
+    const unlicensed = plants.filter((p) => p.actualMwh > 0 && isUnlicensedName(p.name)).map((p) => p.name);
+    if (types.length) sector = { year: sectorCtx.year, label: sectorCtx.label ?? String(sectorCtx.year), types, ...(unlicensed.length ? { unlicensed } : {}) };
   }
 
   // Toplayıcılar arası kıyas: 300 GWh üstü toplayıcılar (küçük portföylerde oran anlamsız) ve projenin toplayıcısı

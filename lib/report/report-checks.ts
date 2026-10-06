@@ -154,6 +154,17 @@ export function checkReportData(r: PlantReportData, bridge?: BridgeStep[]): Repo
       err("intraday-first", `Gün içi slaytında ilk plan maliyeti ${fmt(ie.firstCostTl)}, raporun ana rakamı ${fmt(t.imbalanceCostTl)}.`);
   }
 
+  // Sektör kıyası: portföy ortalaması grafikteki santrallerin (devreye girenler hariç) arasında kalmalı (üretim ağırlıklı
+  // ortalama hiçbir santralden yüksek ya da düşük olamaz; Inavitas güneşte 230 TL'lik ortalama, en pahalı santral 180 TL)
+  if (r.sector) {
+    const late = new Set((r.lateStarts ?? []).map((l) => l.plantName));
+    for (const t of r.sector.types) {
+      const vals = t.plants.filter((p) => !late.has(p.name)).map((p) => p.unitTl);
+      if (vals.length && (t.portfolioUnitTl < Math.min(...vals) - 0.5 || t.portfolioUnitTl > Math.max(...vals) + 0.5))
+        err("sector-portfolio", `Sektör kıyası (${t.type}${t.kind ? ` ${t.kind}` : ""}): portföy ortalaması ${t.portfolioUnitTl.toFixed(0)} TL, gösterilen santraller ${Math.min(...vals).toFixed(0)}–${Math.max(...vals).toFixed(0)} TL.`);
+    }
+  }
+
   // Geçmişle sınama (12.2, 12.3): aralık sıralı; gözlenen iyileşmeyle fırsat "medyana inse" üst sınırını aşamaz
   const pb = r.riskPremium?.backtest;
   if (pb && !(pb.range.low <= pb.range.mid + 1e-9 && pb.range.mid <= pb.range.high + 1e-9))
