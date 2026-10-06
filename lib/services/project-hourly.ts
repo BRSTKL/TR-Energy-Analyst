@@ -14,6 +14,8 @@ export interface ProjectHourly {
     plantName: string;
     plantType: string;
     capacityMw: number;
+    /** Kurulu gücün kaynağı (lib/epias-plant/installed-capacity.ts); null: belirlenmemiş eski kayıt (tahmin sayılır) */
+    capacitySource?: string | null;
     /**
      * Uzlaştırma birimi: santralin sahibi (EPİAŞ); dengesizlik şirket bazında uzlaştırıldığından aynı şirketin santralleri
      * birlikte netleşir. Toplayıcı portföyünde tüm santraller için toplayıcı (AGGREGATOR_ORG_ID).
@@ -53,6 +55,7 @@ export async function loadProjectHourly(projectId: string): Promise<ProjectHourl
       plantName: plant.name,
       plantType: plant.type,
       capacityMw: plant.capacityMw,
+      capacitySource: plant.capacitySource,
       ...settlementIdentity(plant, project.aggregatorName),
       yekdem: plant.yekdem,
       yekdemNextYear: plant.yekdemNextYear,

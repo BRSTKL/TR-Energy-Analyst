@@ -64,6 +64,17 @@ interface PlantForm {
   name: string;
   type: PlantTechnology | "";
   capacity: string;
+  /** Kullanıcı kurulu gücü elle değiştirdi: kayıtta korunur (kaynak "kullanıcı girdisi") */
+  capacityEdited?: boolean;
+}
+
+/** Kurulu güç önizlemesi (EPİAŞ YEKDEM kaydı ya da tahmin; kural lib/epias-plant/installed-capacity.ts) */
+interface CapacityInfo {
+  key: string;
+  source: "EPIAS_YEKDEM" | "PEAK_ESTIMATE" | "USER";
+  mw: number;
+  ref: string;
+  warning: string | null;
 }
 
 const inputClass =
@@ -117,6 +128,7 @@ function EpiasPlantImport() {
   /** Santrallerin sahibi (şirket) ve YEKDEM durumu: dengesizlik şirket bazında uzlaştırılır */
   const [meta, setMeta] = useState<Record<number, PlantMeta>>({});
   const [metaError, setMetaError] = useState<string | null>(null);
+  const [capInfo, setCapInfo] = useState<Record<number, CapacityInfo>>({});
 
   useEffect(() => {
     fetch("/api/projects")
@@ -273,6 +285,38 @@ function EpiasPlantImport() {
   const [gapsAcknowledged, setGapsAcknowledged] = useState(false);
   useEffect(() => setGapsAcknowledged(false), [gapSummary.length, fetchKey]);
 
+  // Kurulu güç: türü ve sahibi belli, verisi hazır santraller için EPİAŞ YEKDEM kaydı (yoksa tahmin)
+  useEffect(() => {
+    const want = selected
+      .map((p) => {
+        const m = merged[p.id];
+        const type = forms[p.id]?.type || m?.tech.type || "";
+        if (!m || !type) return null;
+        const key = `${startDay}|${endDay}|${type}|${meta[p.id]?.organizationName ?? ""}|${m.peakMw}`;
+        return capInfo[p.id]?.key === key ? null : { p, m, type, key };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+    if (want.length === 0) return;
+    let cancelled = false;
+    postJson<{ matches: Array<Omit<CapacityInfo, "key">> }>("/api/epias/plants/capacity", {
+      plants: want.map(({ p, m, type }) => ({
+        name: p.name,
+        type,
+        organizationName: meta[p.id]?.organizationName ?? null,
+        peakMw: m.peakMw,
+        hours: m.series.rows.length,
+      })),
+    })
+      .then((d) => {
+        if (cancelled) return;
+        setCapInfo((prev) => ({ ...prev, ...Object.fromEntries(want.map((w, i) => [w.p.id, { ...d.matches[i], key: w.key }])) }));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [selected, merged, forms, meta, capInfo, startDay, endDay]);
+
   // Önerileri bir kez doldur; kullanıcı değiştirirse ezme
   useEffect(() => {
     setForms((prev) => {
@@ -283,13 +327,18 @@ function EpiasPlantImport() {
         const filled: PlantForm = {
           name: cur.name,
           type: cur.type || m?.tech.type || "",
-          capacity: cur.capacity || (m && m.capacity > 0 ? String(m.capacity) : ""),
+          capacity: cur.capacityEdited
+            ? cur.capacity
+            : capInfo[p.id] && capInfo[p.id].mw > 0
+              ? String(capInfo[p.id].mw)
+              : cur.capacity || (m && m.capacity > 0 ? String(m.capacity) : ""),
+          capacityEdited: cur.capacityEdited,
         };
         if (!prev[p.id] || filled.type !== cur.type || filled.capacity !== cur.capacity) next = { ...next, [p.id]: filled };
       }
       return next;
     });
-  }, [selected, merged]);
+  }, [selected, merged, capInfo]);
 
   const setForm = (id: number, patch: Partial<PlantForm>) => setForms((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
 
@@ -324,6 +373,8 @@ function EpiasPlantImport() {
             plantName: f.name,
             type: f.type,
             capacityMw: Number(f.capacity.replace(",", ".")),
+            // Elle girilmediyse sunucu kurulu gücü EPİAŞ YEKDEM kaydından yeniden bulur
+            ...(f.capacityEdited ? { capacitySource: "USER" } : {}),
             source: { powerPlantId: p.id, uevcbIds: j.uevcbs.map((u) => u.id), kgupVersion: j.version },
             meta: meta[p.id] ?? null,
             // Saatlik veri veri havuzunda: sunucu dönemden okur (PLAN 7.7), gönderilmez
@@ -573,6 +624,7 @@ function EpiasPlantImport() {
                   merged={merged[p.id]}
                   form={forms[p.id]}
                   meta={meta[p.id]}
+                  capacity={capInfo[p.id]}
                   onForm={(patch) => setForm(p.id, patch)}
                   onRetry={() => retryFailed(p)}
                   onRemove={() => setSelected((prev) => prev.filter((s) => s.id !== p.id))}
@@ -668,6 +720,7 @@ function buildMerged(j: PlantJob, startDay: string, endDay: string) {
     series: mergePlantSeries(kgup, uevm, startDay, endDay),
     tech: detectTechnology(uevm.byFuel),
     capacity: suggestCapacityMw(uevm.values.values()),
+    peakMw: Array.from(uevm.values.values()).reduce((a, v) => (v > a ? v : a), 0),
     skipped: kgup.skipped + uevm.skipped,
   };
 }
@@ -679,6 +732,7 @@ function PlantReview({
   merged,
   form,
   meta,
+  capacity,
   onForm,
   onRetry,
   onRemove,
@@ -690,6 +744,7 @@ function PlantReview({
   merged?: ReturnType<typeof buildMerged>;
   form?: PlantForm;
   meta?: PlantMeta;
+  capacity?: CapacityInfo;
   onForm: (patch: Partial<PlantForm>) => void;
   onRetry: () => void;
   onRemove: () => void;
@@ -821,8 +876,16 @@ function PlantReview({
               inputMode="decimal"
               value={form.capacity}
               disabled={busy}
-              onChange={(e) => onForm({ capacity: e.target.value })}
+              onChange={(e) => onForm({ capacity: e.target.value, capacityEdited: true })}
             />
+            <span className="mt-0.5 block font-normal text-slate-500">
+              {form.capacityEdited
+                ? "Elle girildi"
+                : capacity
+                  ? `${capacity.source === "EPIAS_YEKDEM" ? "Kaynak" : "Tahmin"}: ${capacity.ref}`
+                  : "Tahmin: en yüksek saatlik üretim (kayıt aranıyor)"}
+              {!form.capacityEdited && capacity?.warning && <span className="block text-amber-700">Uyarı: {capacity.warning}</span>}
+            </span>
           </label>
         </div>
       )}

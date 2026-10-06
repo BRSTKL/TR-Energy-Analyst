@@ -32,6 +32,13 @@ export interface ReportPlantRow {
   name: string;
   type: string;
   capacityMw: number;
+  /**
+   * Kurulu güç tahmin mi: resmî kayıt (EPİAŞ YEKDEM) yok ya da üretim kaydı aştı, değer en yüksek saatlik üretimden
+   * (alt sınır). Raporda işaretlenir (kural: lib/epias-plant/installed-capacity.ts)
+   */
+  capacityEstimated: boolean;
+  /** Dönemdeki en yüksek saatlik üretim (MWh/h) */
+  peakMw: number;
   organizationName: string | null;
   /** Veri döneminde YEKDEM'de (null: bilinmiyor) */
   yekdem: boolean | null;
@@ -136,7 +143,7 @@ export interface PlantReportData {
    * Portföy toplamı, şirket bazında uzlaştırmayla (aynı şirketin santralleri netleşmiş). imbalanceCostTl ana rakamdır.
    * costShareOfRevenuePct: portföyde YEKDEM santrali varsa null.
    */
-  totals: Omit<ReportPlantRow, "name" | "type" | "organizationName" | "yekdem" | "yekdemNextYear" | "biasPct" | "sameDirectionPct"> & { plantCount: number };
+  totals: Omit<ReportPlantRow, "name" | "type" | "organizationName" | "yekdem" | "yekdemNextYear" | "biasPct" | "sameDirectionPct" | "capacityEstimated" | "peakMw"> & { plantCount: number };
   /**
    * Tahmini KÜPST (tüm santraller; YEKDEM santralleri dahil şirkete aittir). next2026Tl: aynı saatlik veri, en güncel
    * oran tablosuyla (2026: rüzgâr %15, güneş %8); veri zaten 2026+ ise null.
@@ -507,7 +514,9 @@ function plantRow(p: Plant): ReportPlantRow {
   let cost = 0;
   let absDev = 0;
   let sameDev = 0;
+  let peak = 0;
   for (const h of p.hourly) {
+    if (h.actualMwh > peak) peak = h.actualMwh;
     actual += h.actualMwh;
     forecast += h.forecastMwh;
     revenue += h.totalRevenue;
@@ -519,6 +528,8 @@ function plantRow(p: Plant): ReportPlantRow {
     name: p.plantName,
     type: p.plantType,
     capacityMw: p.capacityMw,
+    capacityEstimated: p.capacitySource !== "EPIAS_YEKDEM" && p.capacitySource !== "USER",
+    peakMw: peak,
     // Toplayıcı portföyünde uzlaştırma birimi toplayıcıdır; santral satırında lisans sahibi gösterilir
     organizationName: p.ownerName !== undefined ? p.ownerName : p.organizationName,
     yekdem: p.yekdem,

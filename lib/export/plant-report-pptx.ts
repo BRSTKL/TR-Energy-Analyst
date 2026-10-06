@@ -375,6 +375,20 @@ export function buildBridgeSteps(r: PlantReportData): { steps: BridgeStep[]; loa
   return { steps, loadEnd, imb2026, intradaySaving, afterIntraday };
 }
 
+/** Ek B: kurulu gücün kaynağı (kural: lib/epias-plant/installed-capacity.ts) */
+function capacitySourceSentence(r: PlantReportData): string {
+  const est = r.plants.filter((p) => p.capacityEstimated);
+  const rec = r.plants.length - est.length;
+  return (
+    `Kurulu güç: EPİAŞ YEKDEM katılımcı listesindeki lisanslı kurulu güç (${rec} santral)` +
+    (est.length
+      ? `; ${est.length} santralde kayıt yok ya da üretim kaydı aştığı için dönemdeki en yüksek saatlik üretim (tahmin, alt sınır). Kurulu güç yalnızca arıza tespiti${
+          r.plants.length > 1 ? ", topluluk KÜPST toleransının ağırlığı" : ""
+        } ve tabloda kullanılır; dengesizlik ve santral KÜPST'ü kurulu güce bağlı değildir.`
+      : ".")
+  );
+}
+
 export async function exportPlantReportPptx(
   r: PlantReportData,
   author: ReportAuthor = {},
@@ -1083,7 +1097,8 @@ export async function exportPlantReportPptx(
         color: above ? C.cost : C.sub,
       });
       text(s, mShort(p.imbalanceCostTl), { x: colX, y, w: 1.5, h: rowH, fontSize: 11, align: "right", valign: "middle" });
-      text(s, nf(p.capacityMw, 0), { x: colX + 1.55, y, w: 0.6, h: rowH, fontSize: 11, align: "right", valign: "middle", color: C.sub });
+      // Tahmini kurulu güç "~" ile (kural: lib/epias-plant/installed-capacity.ts; açıklaması Ek A ve Ek B'de)
+      text(s, `${p.capacityEstimated ? "~" : ""}${nf(p.capacityMw, p.capacityMw < 10 ? 1 : 0)}`, { x: colX + 1.55, y, w: 0.6, h: rowH, fontSize: 11, align: "right", valign: "middle", color: C.sub });
     });
     text(
       s,
@@ -2169,7 +2184,8 @@ export async function exportPlantReportPptx(
         return [
           cell(p.name, fill),
           cell(p.yekdem ? `${p.type} (YEKDEM${p.yekdemNextYear === false ? ", çıkıyor" : ""})` : p.type, { ...fill, fontSize: p.yekdem ? 9 : 10 }),
-          cell(nf(p.capacityMw, 0), { ...fill, align: "right" }),
+          // Tahmini kurulu güç "~" ile işaretlenir (kural: lib/epias-plant/installed-capacity.ts); küçük santral ondalıklı
+          cell(`${p.capacityEstimated ? "~" : ""}${nf(p.capacityMw, p.capacityMw < 10 ? 1 : 0)}`, { ...fill, align: "right" }),
           cell(formatEnergy(p.actualMwh), { ...fill, align: "right" }),
           cell(formatTlShort(p.imbalanceCostTl, 2), { ...fill, align: "right" }),
           cell(nf(p.unitCostTl, 0), { ...fill, align: "right" }),
@@ -2255,9 +2271,13 @@ export async function exportPlantReportPptx(
       : r.settlement.companies.length > 6
         ? `${r.settlement.companies.length} şirket; her şirketin santralleri kendi dengesinde netleşir.${missingNote}`
         : `Şirketler: ${r.settlement.companies.map((c) => `${c.name ?? "sahibi bulunamadı"} (${c.plantNames.join(", ")})`).join("; ")}.${missingNote}`;
+    const estimated = r.plants.filter((p) => p.capacityEstimated);
+    const capacityNote = estimated.length
+      ? ` MW: EPİAŞ YEKDEM kaydındaki kurulu güç; "~" işaretli ${estimated.length} santralde kayıt yok ya da üretim kaydı aşıyor (kapasite artışı), en yüksek saatlik üretim kullanıldı (alt sınır).`
+      : " MW: EPİAŞ YEKDEM kaydındaki kurulu güç.";
     text(
       s,
-      `${owners} ${agg ? "KÜPST topluluk (portföy) bazındadır; santral satırındaki KÜPST, santral tek başına olsaydı rakamdır." : `KÜPST santral bazındadır ve ${unit.loc} netleşmez.`} Plan farkı: saatlik |gerçekleşen − plan| toplamının gerçekleşen üretime oranı.`,
+      `${owners}${capacityNote} ${agg ? "KÜPST topluluk (portföy) bazındadır; santral satırındaki KÜPST, santral tek başına olsaydı rakamdır." : `KÜPST santral bazındadır ve ${unit.loc} netleşmez.`} Plan farkı: saatlik |gerçekleşen − plan| toplamının gerçekleşen üretime oranı.`,
       { x: M, y: Math.min(tableBottom + 0.2, 6.3), w: CW, h: 0.6, fontSize: 9.5, color: C.sub, valign: "top" }
     );
   }
@@ -2275,7 +2295,8 @@ export async function exportPlantReportPptx(
           r
         )}, ${nf(r.period.hours, 0)} saat. ` +
           // Veri çekme yönteminin doğrulaması (bir kez, şirketin kendi dosyasıyla): mülakattaki "veri doğru mu?" sorusunun cevabı
-          "Doğrulama: veri çekme yöntemi bir rüzgâr santralinde şirketin kendi verisiyle karşılaştırıldı; KGÜP ilk versiyonu 5.880 saatin tamamında, UEVM Mayıs–Aralık 2025 saatlerinde birebir aynı.",
+          "Doğrulama: veri çekme yöntemi bir rüzgâr santralinde şirketin kendi verisiyle karşılaştırıldı; KGÜP ilk versiyonu 5.880 saatin tamamında, UEVM Mayıs–Aralık 2025 saatlerinde birebir aynı. " +
+          capacitySourceSentence(r),
       ],
       [
         "Dengesizlik fiyatı",

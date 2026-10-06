@@ -56,6 +56,8 @@ export async function GET(_request: Request, { params }: { params: { id: string 
         name: p.name,
         type: p.type,
         capacityMw: p.capacityMw,
+        capacitySource: p.capacitySource,
+        capacityRef: p.capacityRef,
         recordCount: counts.get(p.id)?.count ?? 0,
       })),
     },

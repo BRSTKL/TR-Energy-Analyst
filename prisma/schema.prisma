@@ -38,6 +38,14 @@ model PowerPlant {
   name        String
   type        String             // "RES" | "HES" | "GES"
   capacityMw  Float
+  /// Kurulu gücün kaynağı: "EPIAS_YEKDEM" (EPİAŞ YEKDEM katılımcı listesi, lisanslı kurulu güç), "PEAK_ESTIMATE"
+  /// (kayıt bulunamadı: dönemdeki en yüksek saatlik üretim, gerçeğin altında kalır) ya da "USER" (elle girildi).
+  /// null: kaynak belirlenmemiş eski kayıt (tahmin sayılır). Kural: lib/epias-plant/installed-capacity.ts
+  capacitySource   String?
+  /// Okunur kaynak notu (YEKDEM yılı, tesis ve şirket adı ya da tahmin açıklaması; varsa uyarı)
+  capacityRef      String?
+  /// Eski yöntemin tahmini (en yüksek saatlik üretim, MW): hatayı ölçmek için saklanır
+  capacityPeakMw   Float?
   /// EPİAŞ santral kimliği (UEVM santral listesi); EPİAŞ'tan eklenen santrallerde dolu
   epiasPlantId     Int?
   /// EPİAŞ'tan eklenen santralin veri kaynağı: KGÜP versiyonu ("FIRST" | "FINAL") ve uzlaştırma birimleri (virgülle)

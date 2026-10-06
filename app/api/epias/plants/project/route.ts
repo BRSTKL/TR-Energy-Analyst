@@ -10,6 +10,7 @@ import { projectPeriod } from "@/lib/services/project-records";
 import { aggregatorDisplayName, isAggregatorName } from "@/lib/projects/aggregator";
 import { fetchAggregatorPortfolio } from "@/lib/services/epias-plants";
 import type { ParsedGenerationRow } from "@/lib/parsers/generation-parser";
+import { resolveInstalledCapacities } from "@/lib/services/installed-capacity";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,8 @@ interface PlantPayload {
   plantName: unknown;
   type: unknown;
   capacityMw: unknown;
+  /** "USER": kullanıcı kurulu gücü elle girdi (korunur); yoksa sunucu EPİAŞ YEKDEM kaydından bulur */
+  capacitySource?: string;
   source?: { powerPlantId?: number; uevcbIds?: number[]; kgupVersion?: string };
   /** EPİAŞ'tan bulunan sahip şirket ve YEKDEM durumu (bulunamadıysa null) */
   meta?: { organizationId?: number | null; organizationName?: string | null; yekdem?: boolean | null; yekdemNextYear?: boolean | null };
@@ -78,6 +81,9 @@ export async function POST(request: Request) {
       organizationName?: string;
       yekdem?: boolean;
       yekdemNextYear?: boolean;
+      capacitySource?: string;
+      capacityRef?: string;
+      capacityPeakMw?: number;
       kgupVersion?: string;
       uevcbIds?: string;
     };
@@ -85,6 +91,8 @@ export async function POST(request: Request) {
       input: PlantInput & EpiasFields & { poolBacked: boolean };
       rows: ParsedGenerationRow[];
       hours: number;
+      peakMw: number;
+      userCapacity: boolean;
       source: PlantPayload["source"];
     }> = [];
     for (const p of payloads) {
@@ -114,7 +122,40 @@ export async function POST(request: Request) {
       }
       if (typeof p.meta?.yekdem === "boolean") epias.yekdem = p.meta.yekdem;
       if (typeof p.meta?.yekdemNextYear === "boolean") epias.yekdemNextYear = p.meta.yekdemNextYear;
-      plants.push({ input: { ...v.value, ...epias, poolBacked }, rows: poolBacked ? [] : rows, hours: hours.length, source: p.source });
+      let peakMw = 0;
+      for (const h of hours) if (h.actualMwh > peakMw) peakMw = h.actualMwh;
+      plants.push({
+        input: { ...v.value, ...epias, poolBacked },
+        rows: poolBacked ? [] : rows,
+        hours: hours.length,
+        peakMw,
+        userCapacity: p.capacitySource === "USER",
+        source: p.source,
+      });
+    }
+
+    // 1b. Kurulu güç (kural: lib/epias-plant/installed-capacity.ts): elle girilmediyse EPİAŞ YEKDEM kaydı, yoksa tahmin
+    const capacityErrors: string[] = [];
+    {
+      const auto = plants.filter((p) => !p.userCapacity);
+      const { matches, errors } = await resolveInstalledCapacities(
+        auto.map((p) => ({ name: p.input.name, type: p.input.type, organizationName: p.input.organizationName ?? null, epiasPlantId: p.input.epiasPlantId ?? null })),
+        null,
+        auto.map((p) => ({ peakMw: p.peakMw, hours: p.hours }))
+      );
+      capacityErrors.push(...errors);
+      auto.forEach((p, i) => {
+        const m = matches[i];
+        if (m.mw > 0) p.input.capacityMw = m.mw;
+        p.input.capacitySource = m.source;
+        p.input.capacityRef = m.ref + (m.warning ? ` · Uyarı: ${m.warning}` : "");
+        p.input.capacityPeakMw = p.peakMw;
+      });
+      for (const p of plants.filter((x) => x.userCapacity)) {
+        p.input.capacitySource = "USER";
+        p.input.capacityRef = "Kullanıcı girdisi";
+        p.input.capacityPeakMw = p.peakMw;
+      }
     }
 
     // 2. Piyasa fiyatı eksik ayları senkronla
@@ -239,6 +280,7 @@ export async function POST(request: Request) {
       ],
       noOverlapWithExisting: overlap === 0,
       syncErrors,
+      capacityErrors,
     });
   } catch (error) {
     console.error("EPİAŞ plant project error:", error);

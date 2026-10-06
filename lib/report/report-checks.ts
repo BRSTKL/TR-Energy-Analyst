@@ -93,6 +93,14 @@ export function checkReportData(r: PlantReportData, bridge?: BridgeStep[]): Repo
   const plantMwh = sum(r.plants, (p) => p.actualMwh);
   if (!near(plantMwh, t.actualMwh, 1))
     err("plants-sum-mwh", `Santral satırlarının üretim toplamı ${fmt(plantMwh)} MWh, toplam ${fmt(t.actualMwh)} MWh.`);
+  // Kurulu güç (kural: lib/epias-plant/installed-capacity.ts): kaydı olan santralde üretim kurulu gücü aşamaz;
+  // aşıyorsa kayıt eski (kapasite artışı) ya da yanlış santrale ait. Tahmin en yüksek üretimden küçük olamaz
+  for (const p of r.plants) {
+    if (!p.capacityEstimated && p.peakMw > p.capacityMw * 1.1)
+      err("capacity-peak", `${p.name}: kurulu güç ${p.capacityMw} MW, en yüksek saatlik üretim ${p.peakMw.toFixed(1)} MWh; kayıt santrale uymuyor (installed-capacity-backfill).`);
+    if (p.capacityEstimated && p.capacityMw + 0.05 < p.peakMw)
+      err("capacity-estimate", `${p.name}: tahmini kurulu güç ${p.capacityMw} MW en yüksek saatlik üretimin (${p.peakMw.toFixed(1)}) altında.`);
+  }
   const plantMw = sum(r.plants, (p) => p.capacityMw);
   if (!near(plantMw, t.capacityMw, 0.5)) err("plants-sum-mw", `Kurulu güç toplamı ${plantMw.toFixed(1)} MW, toplam ${t.capacityMw.toFixed(1)} MW.`);
 

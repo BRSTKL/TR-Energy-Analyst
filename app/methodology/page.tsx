@@ -15,7 +15,7 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.13";
+const VERSION = "1.14";
 const VERSION_DATE = "6 Ekim 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
@@ -694,6 +694,11 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.14",
+                  "6 Ekim 2026",
+                  "Kurulu güç resmî kayıttan: EPİAŞ santral listelerinde kurulu güç yok, önce dönemdeki en yüksek saatlik üretimin yukarı yuvarlanmışı kullanılıyordu. Artık EPİAŞ YEKDEM katılımcı listesindeki (2016–2025) lisanslı kurulu güç ad, teknoloji ve sahip şirketle eşleştirilir; 367 proje santralinin 236'sında kayıt bulundu. Kayıt yoksa ya da üretim kaydı %10'dan fazla aşıyorsa (YEKDEM'e girdikten sonraki kapasite artışı; 69 santral, üretim kaydın medyan 1,38 katı) en yüksek saatlik üretim alt sınır olarak kullanılır ve raporda '~' ile işaretlenir. Eski tahminin hatası (kaydı bulunan 236 santral): toplamda +%1,8; 20 MW üstü santrallerde medyan mutlak %2,9, 5–20 MW %5,6, 5 MW altı %18. Dengesizlik maliyeti ve santral KÜPST'ü kurulu güce bağlı olmadığı için değişmedi; topluluk KÜPST'ü en fazla %3 (Pure 4,36 → 4,48 M), arıza tespiti küçük santrallerde daha çok saat işaretler, maliyet payı aynı.",
+                ],
                 [
                   "1.13",
                   "6 Ekim 2026",

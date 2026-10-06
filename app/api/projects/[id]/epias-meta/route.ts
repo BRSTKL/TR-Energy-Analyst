@@ -3,12 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { projectPeriod } from "@/lib/services/project-records";
 import { listUevmPowerPlants, resolvePlantMeta } from "@/lib/services/epias-plants";
 import { normalizePlantName } from "@/lib/epias-plant/plant-data";
+import { resolveInstalledCapacities } from "@/lib/services/installed-capacity";
 
 export const dynamic = "force-dynamic";
 
 /**
  * POST /api/projects/[id]/epias-meta
- * Projedeki santrallerin EPİAŞ kimliğini, sahibini (şirket) ve YEKDEM durumunu doldurur.
+ * Projedeki santrallerin EPİAŞ kimliğini, sahibini (şirket), YEKDEM durumunu ve kurulu gücünü doldurur.
  * EPİAŞ kimliği yoksa önce proje açıklamasındaki "EPİAŞ: <ad>: ... Santral kimliği N" notundan, sonra
  * EPİAŞ santral listesinde birebir ad eşleşmesinden bulunur. YEKDEM durumu verinin ilk yılı ve son yılından sonraki
  * yıl için alınır (sonraki yıl YEKDEM'de değilse santral YEKDEM'den çıkıyor demektir).
@@ -64,7 +65,27 @@ export async function POST(_request: Request, { params }: { params: { id: string
         yekdemNextYear: plant.yekdemNextYear,
       });
     }
-    return NextResponse.json({ success: true, year, updated, unmatched, errors });
+    // Kurulu güç (kural: lib/epias-plant/installed-capacity.ts): elle girilmemiş santrallerde YEKDEM kaydı, yoksa tahmin
+    const fresh = await prisma.powerPlant.findMany({ where: { projectId: project.id } });
+    const auto = fresh.filter((p) => p.capacitySource !== "USER" && p.poolBacked);
+    const cap = await resolveInstalledCapacities(auto, period);
+    errors.push(...cap.errors);
+    const capacity = [];
+    for (let i = 0; i < auto.length; i++) {
+      const m = cap.matches[i];
+      if (m.mw <= 0) continue;
+      await prisma.powerPlant.update({
+        where: { id: auto[i].id },
+        data: {
+          capacityMw: m.mw,
+          capacitySource: m.source,
+          capacityRef: m.ref + (m.warning ? ` · Uyarı: ${m.warning}` : ""),
+          capacityPeakMw: cap.peaks[i].peakMw,
+        },
+      });
+      capacity.push({ name: auto[i].name, from: auto[i].capacityMw, to: m.mw, source: m.source });
+    }
+    return NextResponse.json({ success: true, year, updated, unmatched, errors, capacity });
   } catch (error) {
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : "EPİAŞ bilgileri güncellenemedi." },

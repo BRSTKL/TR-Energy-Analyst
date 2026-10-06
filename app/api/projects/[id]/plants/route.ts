@@ -27,7 +27,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     }
 
     const plant = await prisma.powerPlant.create({
-      data: { ...result.value, projectId: project.id },
+      data: { ...result.value, projectId: project.id, capacitySource: "USER", capacityRef: "Kullanıcı girdisi" },
       select: { id: true, name: true, type: true, capacityMw: true },
     });
 

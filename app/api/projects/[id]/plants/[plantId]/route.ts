@@ -48,9 +48,11 @@ export async function PATCH(request: Request, { params }: Params) {
       return NextResponse.json({ success: false, error: `Santral güncellenemedi: ${result.error}.` }, { status: 400 });
     }
 
+    // Kurulu güç elle değiştiyse kaynağı "kullanıcı girdisi" olur (kural: lib/epias-plant/installed-capacity.ts)
+    const capacityChanged = body.capacityMw !== undefined && result.value.capacityMw !== plant.capacityMw;
     const updated = await prisma.powerPlant.update({
       where: { id: plant.id },
-      data: result.value,
+      data: { ...result.value, ...(capacityChanged ? { capacitySource: "USER", capacityRef: "Kullanıcı girdisi" } : {}) },
     });
 
     const warnings: string[] = [];

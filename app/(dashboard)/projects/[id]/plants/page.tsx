@@ -14,6 +14,9 @@ interface Plant {
   name: string;
   type: string;
   capacityMw: number;
+  /** Kurulu gücün kaynağı (lib/epias-plant/installed-capacity.ts); null: belirlenmemiş eski kayıt (tahmin) */
+  capacitySource?: string | null;
+  capacityRef?: string | null;
   recordCount: number;
 }
 
@@ -266,6 +269,10 @@ export default function PlantsPage() {
                     {plant.recordCount > 0
                       ? `${plant.recordCount.toLocaleString("tr-TR")} saatlik kayıt`
                       : "Henüz veri yüklenmedi"}
+                    {" · Kurulu güç: "}
+                    <span className={plant.capacitySource === "EPIAS_YEKDEM" || plant.capacitySource === "USER" ? "" : "text-amber-700"}>
+                      {plant.capacityRef ?? "tahmin (kaynak belirlenmemiş; EPİAŞ bilgilerini güncelleyin)"}
+                    </span>
                   </div>
 
                   {confirmDelete === plant.id && (
