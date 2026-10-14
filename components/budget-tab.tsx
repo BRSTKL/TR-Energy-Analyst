@@ -6,17 +6,17 @@ import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, T
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { BudgetHydro, BudgetRule, BudgetSpread, ProjectBudget } from "@/lib/services/imbalance-budget";
+import type { BudgetLevel, BudgetRule, BudgetSpread, ProjectBudget } from "@/lib/services/imbalance-budget";
 
 const COLOR = { p50: "#2a78d6", p90: "#eb6834", p95: "#e34948", grid: "#e2e8f0", axis: "#64748b" };
 const MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
 const nf = (v: number, d = 0) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
 const m = (v: number) => `${nf(v / 1e6, 1)} M`;
 
-const HYDRO: Array<{ id: BudgetHydro; label: string }> = [
-  { id: "dry", label: "Kurak (2025 gibi)" },
+const LEVELS: Array<{ id: BudgetLevel; label: string }> = [
+  { id: "low", label: "Düşük üretim yılı" },
   { id: "normal", label: "Normal" },
-  { id: "wet", label: "Yağışlı (2026 gibi)" },
+  { id: "high", label: "Yüksek üretim yılı" },
   { id: "custom", label: "Kendi tahminim" },
 ];
 const SPREAD: Array<{ id: BudgetSpread; label: string }> = [
@@ -49,7 +49,7 @@ function Choice<T extends string>({ label, value, options, onChange }: { label: 
  * kötü durum aralığı. Hesap /api/projects/[id]/budget; birim reel TL (son ayın fiyat düzeyi), isteğe bağlı nominal ve USD.
  */
 export function BudgetTab({ projectId }: { projectId: string }) {
-  const [hydro, setHydro] = useState<BudgetHydro>("normal");
+  const [level, setLevel] = useState<BudgetLevel>("normal");
   const [spread, setSpread] = useState<BudgetSpread>("y2026");
   const [rule, setRule] = useState<BudgetRule>("r2026");
   const [gwhInput, setGwhInput] = useState("");
@@ -67,8 +67,8 @@ export function BudgetTab({ projectId }: { projectId: string }) {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    const q = new URLSearchParams({ spread, rule, hydro, intraday: intraday === "on" ? "1" : "0" });
-    if (hydro === "custom" && gwh) q.set("gwh", String(gwh));
+    const q = new URLSearchParams({ spread, rule, level, intraday: intraday === "on" ? "1" : "0" });
+    if (level === "custom" && gwh) q.set("gwh", String(gwh));
     if (inflationApplied !== null) q.set("inflation", String(inflationApplied));
     fetch(`/api/projects/${projectId}/budget?${q}`)
       .then((r) => r.json())
@@ -81,7 +81,7 @@ export function BudgetTab({ projectId }: { projectId: string }) {
       .finally(() => setLoading(false));
     // gwhInput yalnız ilk yüklemede doldurulur
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, spread, rule, hydro, gwh, intraday, inflationApplied]);
+  }, [projectId, spread, rule, level, gwh, intraday, inflationApplied]);
 
   const applyInflation = () => {
     const v = Number(inflation.replace(",", "."));
@@ -139,8 +139,14 @@ export function BudgetTab({ projectId }: { projectId: string }) {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          <Choice label="Üretim" value={hydro} options={HYDRO} onChange={setHydro} />
-          {hydro === "custom" && (
+          <Choice label="Üretim" value={level} options={LEVELS} onChange={setLevel} />
+          {data && (level === "low" || level === "high") && (
+            <p className="pl-20 text-xs text-slate-500">
+              {level === "low" ? "Düşük" : "Yüksek"} üretim yılı: {data.levelDetail[level]} (teknoloji bazında, iki yılın {level === "low" ? "düşük" : "yüksek"} olanı:
+              hidroda yağış, rüzgârda rüzgâr, güneşte güneşlenme).
+            </p>
+          )}
+          {level === "custom" && (
             <div className="flex flex-wrap items-center gap-2 pl-20 text-sm">
               <input
                 className="w-28 rounded border border-slate-300 px-2 py-1 text-right tabular-nums"
@@ -243,8 +249,9 @@ export function BudgetTab({ projectId }: { projectId: string }) {
                 {money(Math.max(...rows.map((r) => r.p90)))}.
               </p>
               <p className="text-xs text-slate-600">
-                Senaryo: {data.labels.hydro}; {data.labels.spread.toLocaleLowerCase("tr-TR")}; {data.labels.rule}. Üretim senaryoları: kurak{" "}
-                {nf(data.production.dry / 1000)} GWh, normal {nf(data.production.normal / 1000)} GWh, yağışlı {nf(data.production.wet / 1000)} GWh.
+                Senaryo: {data.labels.level}; {data.labels.spread.toLocaleLowerCase("tr-TR")}; {data.labels.rule}. Üretim: düşük yıl{" "}
+                {nf(data.production.low / 1000)} GWh ({data.levelDetail.low}), normal {nf(data.production.normal / 1000)} GWh, yüksek yıl{" "}
+                {nf(data.production.high / 1000)} GWh ({data.levelDetail.high}).
               </p>
             </CardContent>
           </Card>
@@ -345,7 +352,7 @@ export function BudgetTab({ projectId }: { projectId: string }) {
             {nf(data.qualityScale, 2)}; varsayım: en güncel tahmin kalitesi sürer). Fiyat: her yılın makası seçilen düzeye ölçeklenir (reel ortalama
             makas 2025 {data.spread.y2025 !== null ? nf(data.spread.y2025) : "–"}, 2026 {data.spread.y2026 !== null ? nf(data.spread.y2026) : "–"}, senaryo{" "}
             {data.spread.target !== null ? nf(data.spread.target) : "–"} TL/MWh); dengesizlik fiyatı formülle (resmi fiyat senaryoda geçerli değil).
-            Üretim: yıl içinde devreye giren santraller tam yıl; hidro kurak = 2025, yağışlı = 2026, normal = ortalama; diğer türler son yılın düzeyinde.
+            Üretim: yıl içinde devreye giren santraller tam yıl; düşük / yüksek üretim yılı teknoloji bazında iki yılın düşük / yüksek olanı, normal ortalama (yalnız iki yıl: gerçek oynaklık daha geniş olabilir).
             Fiyat tahmini değildir: {data.year} fiyatları geçmiş günlerin içinde kalır.
           </p>
         </>

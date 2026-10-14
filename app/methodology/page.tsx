@@ -15,8 +15,8 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.19";
-const VERSION_DATE = "14 Ekim 2026";
+const VERSION = "1.20";
+const VERSION_DATE = "15 Ekim 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
   { id: "ozet", title: "Özet" },
@@ -35,6 +35,7 @@ const SECTIONS: Array<{ id: string; title: string }> = [
   { id: "uretici-katki", title: "Üreticilerin portföye katkısı" },
   { id: "aday", title: "Aday ve hedef santraller" },
   { id: "sozlesme", title: "Sözleşme fiyatı" },
+  { id: "butce", title: "Gelecek yıl bütçesi" },
   { id: "gip", title: "Gün içi piyasa senaryosu" },
   { id: "gun-ici-etkinlik", title: "Gün içi etkinlik ve tahmin fırsatı" },
   { id: "sinama", title: "Geçmişle sınama" },
@@ -576,6 +577,41 @@ Tavan = (tek başına dengesizlik + KÜPST) / üretim          santralin bağım
             </p>
           </Section>
 
+          <Section id="butce" n={next()} title="Gelecek yıl bütçesi">
+            <p>
+              Planlama sayfasındaki bütçe sekmesi ve rapordaki bütçe slaytı, portföyün gelecek yıl dengesizlik + KÜPST için ödemesi beklenen tutarı
+              verir. Fiyat tahmini yapılmaz: portföyün geçmiş günleri yeniden oynatılır.
+            </p>
+            <F>
+              {`Bütçe (ay) = MWh başına maliyet (ay) × üretim (ay)
+MWh başına maliyet: aynı ayın geçmiş günlerinden 7 günlük bloklarla 2.000 kez çekilen ay; medyan, P90, P95
+Gün: portföyün 24 saati, sapma ve fiyat aynı günden (sapma ile sistem yönü aynı havadan etkilenir)`}
+            </F>
+            <Table
+              head={["Girdi", "Nasıl"]}
+              rows={[
+                ["Günler", "Son iki yıl (2025 ve 2026'nın verisi olan ayları). Eski yılın günleri son yılın tahmin kalitesine taşınır (ortak aylarda MWh başına maliyet oranı)."],
+                ["Fiyat", "Dengesizlik fiyatı formülle (makas ve kural değişince resmi fiyat geçerli değil). Makas reel olarak seçilen düzeye ölçeklenir: SMF′ = PTF + s × (SMF − PTF)."],
+                ["Kural", "2026 kuralı (aynı yönde %6, ters yönde %3), 2025 kuralı (düz %3) ya da sertleşme (aynı yönde %9). Mevzuat değişikliğinin etkisi bu seçimle görülür."],
+                ["Üretim", "Yeni santraller tam yıl. Düşük / yüksek üretim yılı teknoloji bazında iki yılın düşük / yüksek olanı (hidroda yağış, rüzgârda rüzgâr, güneşte güneşlenme); normal ortalama; ya da kullanıcının yıllık tahmini."],
+                ["Plan ve gün içi", "Sapma ilk KGÜP'e göre (havuzda 2025'in son planı yok). Gün içi düzeltme son yıldaki gibi sürerse: son plana göre dengesizlik ve KÜPST + GİP işlem maliyeti, ilk plana göre maliyetin katı olarak uygulanır."],
+                ["Birim", "Reel TL (son ayın fiyat düzeyi, TÜFE). Nominal: yıllık enflasyon ay ay bileşik. USD: kur beklentisi girilirse nominal TL ÷ kur, girilmezse reel TL ÷ taban ayın kuru (reel kur sabit)."],
+              ]}
+            />
+            <p>
+              <b>Geçmişle sınama.</b> Aynı yöntemle 2026 bütçesi yalnız 2025 verisiyle kurulup 2026 Ocak–Ağustos gerçekleşenle karşılaştırıldı (13 portföy):
+              gerçek / bütçe medyanı 1,02, 9 portföy ±%25 içinde; sapanların hepsi bütçenin üstünde. Kötü durum aralığı dar: P90&apos;ın altında kalan ay
+              payı %54 (beklenen %90; 7 günlük bloklarla %56). Iskalamaların çoğu üretimden (2025 kurak yıl: aynı hidro santraller 2026&apos;da ×1,41);
+              üretim doğru bilinseydi P90 kapsamı %69. Kalan kısım portföyün tahmin kalitesinin yıldan yıla değişmesi. Bu yüzden P90 ve P95 alt sınır
+              olarak okunmalıdır. <Tag kind="estimate" />
+            </p>
+            <p>
+              Sınırlar: iki yılın günleri ve üretimi; daha uç bir yıl aralıkta görünmez (çok yıllık veri bekleyen işlerde). Portföy bugünkü
+              santrallerdir. Gün içi oranı ve tahmin kalitesi taşıması tek yıldan gelir ve sınanmadı. Bütçe dengesizlik + KÜPST&apos;tür; satış geliri
+              ve toplayıcının hizmet bedeli dahil değildir.
+            </p>
+          </Section>
+
           <Section id="gip" n={next()} title="Gün içi piyasa senaryosu">
             <p>
               Tahmin hatasının bir kısmı teslimattan önce görülüp gün içi piyasasında kapatılsaydı riskin ne kadar azalacağı test edilir. GİP
@@ -860,6 +896,11 @@ Tavan = (tek başına dengesizlik + KÜPST) / üretim          santralin bağım
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.20",
+                  "15 Ekim 2026",
+                  "Gelecek yıl bütçesi (Aşama 17): Planlama sayfasında bütçe sekmesi ve raporda bütçe slaytı. Tarihsel benzetim (sapma ve fiyat aynı günden, 7 günlük bloklar), bütçe = MWh başına maliyet × üretim; düşük / yüksek üretim yılı teknoloji bazında; makas, kural ve gün içi senaryoları; reel TL, nominal (ay ay enflasyon) ve USD (kur beklentisi). Geçmişle sınama: merkez tutuyor (1,02), aralık dar (P90 kapsamı %54), alt sınır olarak okunur. Diğer hesaplar değişmedi.",
+                ],
                 [
                   "1.19",
                   "14 Ekim 2026",

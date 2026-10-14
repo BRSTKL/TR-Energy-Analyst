@@ -11,7 +11,8 @@ import { buildReportContext } from "@/lib/services/report-context";
 import { buildBridgeSteps, exportPlantReportPptx, type ReportAuthor } from "@/lib/export/plant-report-pptx";
 import { reportCostChange } from "@/lib/services/cost-change";
 import { projectCandidates } from "@/lib/services/candidates";
-import { checkAggregatorText, checkCostChangeText, checkSlideGeometry, checkGrowthYekdemText, checkFinalPlanText, checkIntradayText, checkDsgText, checkCapacityText, checkReportData, checkSlideTables, checkSlideTexts, extractSlideTables, extractSlideTexts, type ReportIssue } from "@/lib/report/report-checks";
+import { projectBudget } from "@/lib/services/imbalance-budget";
+import { checkAggregatorText, checkCostChangeText, checkSlideGeometry, checkGrowthYekdemText, checkBudgetText, checkFinalPlanText, checkIntradayText, checkDsgText, checkCapacityText, checkReportData, checkSlideTables, checkSlideTexts, extractSlideTables, extractSlideTexts, type ReportIssue } from "@/lib/report/report-checks";
 
 export interface ReportVariant {
   /** Anonim örnek: santral, üretici ve toplayıcı adları takma adla */
@@ -48,12 +49,19 @@ export async function buildReportExport(projectId: string, variant: ReportVarian
           return null;
         })
     : null;
+  // Gelecek yılın dengesizlik bütçesi (PLAN 17.4): varsayılan senaryo ve alternatifler; havuz verisi yoksa ya da hata verirse rapor onsuz
+  const budget = await projectBudget(projectId, { alternatives: true })
+    .then((b) => ("error" in b ? null : b))
+    .catch((e) => {
+      console.error("Report budget error:", e);
+      return null;
+    });
   const anon = !!variant.anon;
   const built = buildPlantReport(data, context);
   const anonymized = anon ? anonymizeReport(built, growth) : null;
   const report = anonymized ? anonymized.report : built;
   const growthOut = anonymized ? anonymized.growth : growth;
-  const buffer = await exportPlantReportPptx(report, author, { costChange: anon ? null : costChange, growth: growthOut, summaryOnly: !!variant.summaryOnly });
+  const buffer = await exportPlantReportPptx(report, author, { costChange: anon ? null : costChange, growth: growthOut, budget, summaryOnly: !!variant.summaryOnly });
 
   // Denetim: veri (köprü dahil), üretilen slayt metni ve tablo toplamları. Anonim sürümde gerçek adlar aranır: takma ad verilenler,
   // projenin santral ve sahip adları
@@ -73,6 +81,7 @@ export async function buildReportExport(projectId: string, variant: ReportVarian
     ...checkAggregatorText(report, slides),
     ...checkCostChangeText(anon ? null : costChange, slides),
     ...checkGrowthYekdemText(growthOut, slides),
+    ...checkBudgetText(budget, slides),
     ...checkSlideTables(await extractSlideTables(buffer)),
     ...(await checkSlideGeometry(buffer)),
   ];

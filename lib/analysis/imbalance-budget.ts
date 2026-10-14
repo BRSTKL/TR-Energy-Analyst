@@ -299,21 +299,24 @@ export function runRateProduction(
   return { total, perPlant, filled };
 }
 
-export type HydroScenario = "dry" | "normal" | "wet";
+export type ProductionLevel = "low" | "normal" | "high";
 
 /**
- * Üretim senaryoları (17.3): santral başına iki yılın aylık üretimi (önceki yıl tam, son yıl verisi olan aylar; ikisi de
- * yeni santraller için tam yıla tamamlanmış). Son yılın verisi olmayan ayı = önceki yılın o ayı × santralin son yıl /
- * önceki yıl oranı (ortak aylardan). Hidro (HES): kurak = önceki yıl, yağışlı = son yıl, normal = ortalama. Diğer
- * türler her senaryoda son yılın düzeyinde (yağışa bağlı değil; kapasite değişimini izler).
+ * Üretim senaryoları (17.3, 17.4): santral başına iki yılın aylık üretimi (önceki yıl tam; son yıl verisi olan aylar, eksik
+ * ay = önceki yılın o ayı × santralin son yıl / önceki yıl oranı; ikisi de yeni santraller için tam yıla tamamlanmış).
+ * Düşük / yüksek üretim yılı **teknoloji bazında** seçilir: portföyde o teknolojinin toplam üretimi hangi yıl düşükse
+ * "düşük yıl" odur (hidroda yağış, rüzgârda rüzgâr, güneşte güneşlenme). Santral santral seçmek bütün santrallerin aynı
+ * anda en kötü yılını yaşadığını varsayar (fazla kötümser); teknoloji içinde birlikte iyi / kötü yıl korunur. Normal =
+ * ortalama. Verisi tek yılda olan santral iki senaryoda da o yılla.
  */
 export function productionScenarios(
   plants: Array<{ key: string; type: string }>,
   prev: Record<string, number[]>,
-  latest: Record<string, Array<number | null>>
-): Record<HydroScenario, number[]> {
-  const out: Record<HydroScenario, number[]> = { dry: new Array(12).fill(0), normal: new Array(12).fill(0), wet: new Array(12).fill(0) };
-  for (const p of plants) {
+  latest: Record<string, Array<number | null>>,
+  years: { prev: number; last: number }
+): { months: Record<ProductionLevel, number[]>; choice: Record<string, { low: number; high: number }> } {
+  const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+  const rows = plants.map((p) => {
     const a = prev[p.key] ?? new Array(12).fill(0);
     const b = latest[p.key] ?? new Array(12).fill(null);
     let sa = 0;
@@ -325,15 +328,29 @@ export function productionScenarios(
       }
     const r = sa > 0 ? sb / sa : 1;
     const full = Array.from({ length: 12 }, (_, m) => (b[m] !== null && b[m] !== undefined ? b[m]! : (a[m] ?? 0) * r));
-    const hydro = p.type === "HES";
+    const prevFull = Array.from({ length: 12 }, (_, m) => a[m] ?? 0);
+    // Tek yılda verisi olan santral: iki yıl da o yıl
+    const pa = sum(prevFull) > 0 ? prevFull : full;
+    const pl = sum(full) > 0 ? full : prevFull;
+    return { type: p.type, prev: pa, last: pl };
+  });
+  const choice: Record<string, { low: number; high: number }> = {};
+  for (const type of Array.from(new Set(rows.map((r) => r.type)))) {
+    const g = rows.filter((r) => r.type === type);
+    const lowIsPrev = sum(g.map((r) => sum(r.prev))) <= sum(g.map((r) => sum(r.last)));
+    choice[type] = lowIsPrev ? { low: years.prev, high: years.last } : { low: years.last, high: years.prev };
+  }
+  const out: Record<ProductionLevel, number[]> = { low: new Array(12).fill(0), normal: new Array(12).fill(0), high: new Array(12).fill(0) };
+  for (const r of rows) {
+    const lowIsPrev = choice[r.type].low === years.prev;
+    const [lo, hi] = lowIsPrev ? [r.prev, r.last] : [r.last, r.prev];
     for (let m = 0; m < 12; m++) {
-      const dry = hydro ? a[m] ?? 0 : full[m];
-      out.dry[m] += dry;
-      out.wet[m] += full[m];
-      out.normal[m] += (dry + full[m]) / 2;
+      out.low[m] += lo[m];
+      out.high[m] += hi[m];
+      out.normal[m] += (lo[m] + hi[m]) / 2;
     }
   }
-  return out;
+  return { months: out, choice };
 }
 
 /**

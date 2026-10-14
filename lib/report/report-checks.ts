@@ -12,7 +12,8 @@
 import { pctIn, pctOf } from "@/lib/format";
 import JSZip from "jszip";
 import type { PlantReportData } from "@/lib/report/plant-report";
-import type { BridgeStep } from "@/lib/export/plant-report-pptx";
+import { formatTlShort, type BridgeStep } from "@/lib/export/plant-report-pptx";
+import type { ProjectBudget } from "@/lib/services/imbalance-budget";
 import { FINAL_PLAN_MIN_COVERAGE_PCT } from "@/lib/analysis/data-completeness";
 import { materialTradeCost } from "@/lib/analysis/intraday-trade";
 
@@ -468,6 +469,36 @@ export function checkGrowthYekdemText(
   if (!slide) return [];
   if (/YEKDEM çıkışı: \d/.test(slide.text) && /ilk görüldüğü yıldan tahmin edilir/.test(slide.text)) return [];
   return [{ level: "error", rule: "growth-yekdem", message: `Büyüme slaytında (${slide.slide}) YEKDEM çıkışı sayısı ya da tahmin yöntemi yazmıyor.` }];
+}
+
+/**
+ * Bütçe slaytı (PLAN 17.4): aylık beklenenlerin toplamı yılınkine eşit; medyan ≤ P90 ≤ P95 (her ay ve yıl); üretim
+ * senaryoları sıralı (düşük ≤ normal ≤ yüksek üretim yılı, normal yılda); slayt başlığı normal yıl ve P90 tutarlarını yazar, güven
+ * notu "alt sınır" der.
+ */
+export function checkBudgetText(budget: ProjectBudget | null | undefined, slides: Array<{ slide: number; text: string }>): ReportIssue[] {
+  if (!budget || !budget.alternatives || budget.months.length !== 12) return [];
+  const issues: ReportIssue[] = [];
+  const err = (message: string) => issues.push({ level: "error", rule: "budget", message });
+  const sumExpected = budget.months.reduce((a, m) => a + m.expected, 0);
+  if (Math.abs(sumExpected - budget.total.expected) > Math.max(1, Math.abs(budget.total.expected) * 1e-9))
+    err(`Bütçe: aylık beklenen toplamı ${fmt(sumExpected)} ≠ yıl ${fmt(budget.total.expected)}.`);
+  const eps = 1e-6;
+  for (const [label, x] of [...budget.months.map((m) => [`ay ${m.month}`, m] as const), ["yıl", budget.total] as const])
+    if (x.p50 > x.p90 + eps || x.p90 > x.p95 + eps) err(`Bütçe (${label}): medyan ≤ P90 ≤ P95 değil (${fmt(x.p50)} / ${fmt(x.p90)} / ${fmt(x.p95)}).`);
+  const alt = budget.alternatives;
+  if (budget.options.level === "normal" && (alt.low.p50 > budget.total.p50 + eps || budget.total.p50 > alt.high.p50 + eps))
+    err(`Bütçe: düşük ≤ normal ≤ yüksek üretim yılı değil (${fmt(alt.low.p50)} / ${fmt(budget.total.p50)} / ${fmt(alt.high.p50)}).`);
+  if (slides.length > 1) {
+    const slide = slides.find((x) => /^\s*BÜTÇE/m.test(x.text) || /BÜTÇE\s/.test(x.text.slice(0, 40)));
+    if (!slide) err("Bütçe slaytı yok (bütçe verisi var).");
+    else {
+      for (const v of [budget.total.p50, budget.total.p90])
+        if (!slide.text.includes(formatTlShort(v))) err(`Bütçe slaytında (${slide.slide}) ${formatTlShort(v)} yazmıyor.`);
+      if (!/alt sınır/.test(slide.text)) err(`Bütçe slaytında (${slide.slide}) güven notu ("alt sınır") yok.`);
+    }
+  }
+  return issues;
 }
 
 /** Slayt metninde bozuk değer: biçimlendirilmemiş sayı, boş alan, eksi işaretli yüzde */

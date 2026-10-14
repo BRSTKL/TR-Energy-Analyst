@@ -121,21 +121,31 @@ describe("Bütçe: birim maliyet × üretim (17.5)", () => {
   });
 });
 
-describe("Bütçe: üretim senaryoları (17.3)", () => {
-  it("hidro kurak = önceki yıl, yağışlı = son yıl (eksik ay oranla), normal = ortalama; diğer türler son yıl", () => {
-    const prev = { h: [10, 10, ...new Array(10).fill(10)], r: new Array(12).fill(5) };
-    // Son yıl yalnız ilk iki ay: HES 20, 20 (oran 2) → kalan aylar 10 × 2 = 20; RES 6, 6 (oran 1,2) → 6
+describe("Bütçe: üretim senaryoları, teknoloji bazında (17.4)", () => {
+  const Y = { prev: 2025, last: 2026 };
+  it("düşük yıl teknolojiye göre: hidroda önceki yıl, rüzgârda son yıl; eksik ay oranla", () => {
+    const prev = { h: new Array(12).fill(10), r: new Array(12).fill(7) };
+    // Son yıl yalnız ilk iki ay: HES 20, 20 (oran 2 → kalan aylar 20); RES 6, 6 (oran 6/7 → kalan aylar 6)
     const latest = { h: [20, 20, ...new Array(10).fill(null)], r: [6, 6, ...new Array(10).fill(null)] };
-    const s = productionScenarios([{ key: "h", type: "HES" }, { key: "r", type: "RES" }], prev, latest);
-    expect(s.dry[5]).toBeCloseTo(10 + 6, 9);
-    expect(s.wet[5]).toBeCloseTo(20 + 6, 9);
-    expect(s.normal[5]).toBeCloseTo(15 + 6, 9);
-    expect(s.wet[0]).toBeCloseTo(26, 9);
+    const s = productionScenarios([{ key: "h", type: "HES" }, { key: "r", type: "RES" }], prev, latest, Y);
+    expect(s.choice).toEqual({ HES: { low: 2025, high: 2026 }, RES: { low: 2026, high: 2025 } });
+    expect(s.months.low[5]).toBeCloseTo(10 + 6, 9);
+    expect(s.months.high[5]).toBeCloseTo(20 + 7, 9);
+    expect(s.months.normal[5]).toBeCloseTo(15 + 6.5, 9);
   });
 
-  it("önceki yılı olmayan santral son yılın verisiyle, eksik ay 0", () => {
-    const s = productionScenarios([{ key: "n", type: "GES" }], {}, { n: [3, 4, ...new Array(10).fill(null)] });
-    expect(s.normal.slice(0, 3)).toEqual([3, 4, 0]);
+  it("yalnız rüzgâr portföyü: düşük ≤ normal ≤ yüksek, hidro yok", () => {
+    const s = productionScenarios([{ key: "a", type: "RES" }, { key: "b", type: "RES" }], { a: new Array(12).fill(5), b: new Array(12).fill(5) }, { a: new Array(12).fill(6), b: new Array(12).fill(3) }, Y);
+    // Toplam: 2025 120, 2026 108 → düşük yıl 2026 (tek tek santrale göre seçilmez: a'nın 2026'sı yüksek olsa da)
+    expect(s.choice).toEqual({ RES: { low: 2026, high: 2025 } });
+    expect(s.months.low[0]).toBe(9);
+    expect(s.months.high[0]).toBe(10);
+  });
+
+  it("tek yılda verisi olan santral iki senaryoda da o yılla", () => {
+    const s = productionScenarios([{ key: "n", type: "GES" }], {}, { n: [3, 4, ...new Array(10).fill(null)] }, Y);
+    expect(s.months.low.slice(0, 3)).toEqual([3, 4, 0]);
+    expect(s.months.high.slice(0, 3)).toEqual([3, 4, 0]);
   });
 });
 
