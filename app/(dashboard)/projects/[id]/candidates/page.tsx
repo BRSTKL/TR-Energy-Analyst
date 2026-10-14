@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { AlertCircle, ArrowLeft, Download, Loader2, Target } from "lucide-react";
+import { AlertCircle, ArrowLeft, ChevronDown, ChevronRight, Download, Loader2, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -13,6 +13,8 @@ import type { CandidateAccessKind } from "@/lib/analysis/candidate-access";
 import type { SectorTech } from "@/lib/sector/benchmark";
 
 import { MethodLink } from "@/components/method-link";
+import { ContractOffer } from "@/components/contract-offer";
+import { priceContract, DEFAULT_MARGIN_SHARE } from "@/lib/analysis/contract-pricing";
 import { yearAblative, yearLocative } from "@/lib/format";
 const nf = (v: number, d = 0) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
 const tl = (v: number) => (Math.abs(v) >= 1e6 ? `${nf(v / 1e6, 1)} M ₺` : `${nf(v / 1e3, 0)} bin ₺`);
@@ -75,6 +77,8 @@ function YekdemExitBadge({ c }: { c: CandidateResult }) {
   );
 }
 
+const MARGIN_SHARES = [0.25, DEFAULT_MARGIN_SHARE, 0.75];
+
 const SORTS: Array<{ id: CandidateSort; label: string }> = [
   { id: "total", label: "Toplam kazanç" },
   { id: "perMwh", label: "MWh başına kazanç" },
@@ -111,6 +115,8 @@ export default function CandidatesPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAll, setShowAll] = useState(false);
+  const [marginShare, setMarginShare] = useState(DEFAULT_MARGIN_SHARE);
+  const [open, setOpen] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -140,6 +146,14 @@ export default function CandidatesPage() {
   const maxMetric = Math.max(...top.map(metric), 1);
   const pf = data?.result.portfolio;
   const minGwh = data?.result.minActualMwh != null ? data.result.minActualMwh / 1000 : null;
+  const offerOf = (c: CandidateResult) =>
+    priceContract({
+      fairUnitTl: c.fair!.fairUnitTl,
+      standaloneUnitTl: c.fair!.standaloneUnitTl,
+      capturePtfTl: c.capturePtfTl,
+      worstRatio: data?.pricing.worstRatio[c.type] ?? data?.pricing.worstRatio.ALL ?? null,
+      marginShare,
+    });
 
   return (
     <div className="min-h-screen bg-slate-50/60 pb-20">
@@ -277,8 +291,17 @@ export default function CandidatesPage() {
                   portföyünkünü dengelediği saatlerden gelir.
                   {perMwh && minGwh !== null
                     ? ` MWh başına sıralamada üretimi ${nf(minGwh, 1)} GWh'tan (portföyün %5'i) az olan santraller sona alınır.`
-                    : " Toplam kazanç büyük santralleri öne çıkarır; santral büyüklüğünden bağımsız karşılaştırma için MWh başına sıralamayı seçin."}
+                    : " Toplam kazanç büyük santralleri öne çıkarır; santral büyüklüğünden bağımsız karşılaştırma için MWh başına sıralamayı seçin."}{" "}
+                  Önerilen bedel: adil prim (taban) ile tek başına maliyet (tavan) arasında; ayrıntı için satıra tıklayın.
                 </CardDescription>
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="text-xs text-slate-500">Toplayıcının pazarlık alanından payı:</span>
+                  {MARGIN_SHARES.map((m) => (
+                    <Button key={m} size="sm" variant={marginShare === m ? "default" : "outline"} onClick={() => setMarginShare(m)}>
+                      %{nf(m * 100)}
+                    </Button>
+                  ))}
+                </div>
               </CardHeader>
               <CardContent className="overflow-x-auto p-0">
                 <Table>
@@ -293,12 +316,22 @@ export default function CandidatesPage() {
                       <TableHead className="text-right">Zıt yönde saat</TableHead>
                       <TableHead className="text-right">Tek başına TL/MWh</TableHead>
                       <TableHead className="text-right">Adil prim TL/MWh</TableHead>
+                      <TableHead className="text-right">Önerilen bedel TL/MWh</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {top.map((c, i) => (
-                      <TableRow key={c.key}>
-                        <TableCell className="text-slate-500">{i + 1}</TableCell>
+                    {top.map((c, i) => {
+                      const price = offerOf(c);
+                      const isOpen = open === c.key;
+                      return (
+                      <React.Fragment key={c.key}>
+                      <TableRow className="cursor-pointer" onClick={() => setOpen(isOpen ? null : c.key)} aria-expanded={isOpen}>
+                        <TableCell className="text-slate-500">
+                          <span className="flex items-center gap-1">
+                            {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                            {i + 1}
+                          </span>
+                        </TableCell>
                         <TableCell>
                           <p className="font-medium text-slate-900">{c.name}</p>
                           <p className="text-xs text-slate-500">{sub(c)}</p>
@@ -324,11 +357,30 @@ export default function CandidatesPage() {
                           <span className="font-semibold text-slate-900">{nf(c.fair!.fairUnitTl, 1)}</span>
                           <span className="ml-1 text-xs text-slate-500">(−%{nf(c.fair!.discountPct)})</span>
                         </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {price.offerTl === null ? (
+                            <span className="text-xs text-slate-500">teklif yok</span>
+                          ) : (
+                            <span className="font-semibold text-emerald-800">{nf(price.offerTl, 1)}</span>
+                          )}
+                        </TableCell>
                       </TableRow>
-                    ))}
+                      {isOpen && data && (
+                        <TableRow className="bg-emerald-50/30 hover:bg-emerald-50/30">
+                          <TableCell colSpan={10} className="p-4">
+                            {/* Tablo yatay kayarken kutu görünür alanda kalır */}
+                            <div className="sticky left-4 max-w-[calc(100vw-6rem)] whitespace-normal lg:max-w-5xl">
+                              <ContractOffer c={c} price={price} pricing={data.pricing} />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      </React.Fragment>
+                      );
+                    })}
                     {top.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={9} className="py-8 text-center text-sm text-slate-500">
+                        <TableCell colSpan={10} className="py-8 text-center text-sm text-slate-500">
                           Bu süzgeçlerle aday yok.
                         </TableCell>
                       </TableRow>

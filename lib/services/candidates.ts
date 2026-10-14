@@ -18,6 +18,12 @@ import { decodeHourly } from "@/lib/sector/hourly-store";
 import { sectorPeriodLabel, SECTOR_TECHS, type SectorTech } from "@/lib/sector/benchmark";
 import { listSectorHourlyIds, loadSectorBenchmark, loadSectorHourly } from "@/lib/services/sector";
 import { loadProjectHourly, type ProjectHourly } from "@/lib/services/project-hourly";
+import fs from "node:fs";
+import path from "node:path";
+import type { ContractFormStats } from "@/lib/analysis/contract-pricing";
+import type { PremiumBacktestStats } from "@/lib/analysis/sector-backtest";
+import { macroSeries } from "@/lib/macro/series";
+import { averagePriceLevel, latestMonth, monthLabelTr, monthsBetween } from "@/lib/macro/price-units";
 
 /**
  * YEKDEM süzgeci: hepsi, yalnız YEKDEM dışı (serbest piyasa), yalnız YEKDEM santralleri ya da YEKDEM'den bu yıl çıkan
@@ -48,9 +54,61 @@ export interface ProjectCandidates {
   /** YEKDEM çıkış sayımı (teknoloji süzgecinden geçen, projede ve toplayıcı portföyünde olmayan adaylarda); liste alınamadıysa null */
   yekdemExits: { currentYear: number; exited: number; endsThisYear: number; endsSoon: number; mw: number } | null;
   result: ScreeningResult;
+  /** Sözleşme fiyatı (PLAN 16.3) için girdiler; teklif sayfada priceContract ile hesaplanır */
+  pricing: CandidatePricing;
+}
+
+/** Teklif kutusunun girdileri: kötü senaryo oranı, sözleşme biçimi sınaması ve birim çarpanları */
+export interface CandidatePricing {
+  /** Geçmişle sınamanın dönemi ("2025 → 2026, Ocak–Ağustos"); dosya yoksa null */
+  backtestLabel: string | null;
+  /** Teknoloji → gerçek / tahmin oranının P90'ı (12.2) */
+  worstRatio: Record<string, number>;
+  /** Teknoloji → gerçek / tahmin oranının medyanı (12.2): geçen yılın verisiyle fiyatlanan bedelin tipik sapması */
+  typicalRatio: Record<string, number>;
+  /** Teknoloji (ve ALL) → kâr payı %50'de zarar eden santral payı, sabit TL ve PTF yüzdesi (16.2) */
+  contractForms: Record<string, { n: number; fixedLossPct: number; ptfShareLossPct: number; ptfChange: number }>;
+  /** Projenin dönemindeki TL'yi son ayın fiyat düzeyine çeviren çarpan ve etiketi */
+  real: { factor: number; label: string } | null;
+  /** Projenin dönemindeki TL'yi ABD dolarına çeviren çarpan (dönemin ortalama kuru) */
+  usdFactor: number | null;
+}
+
+/** Geçmişle sınama dosyası: verinin yılı hedef yıl olan, yoksa bir sonraki yılın (scripts/sector-backtest.mts) */
+function loadPricing(year: number, start: string, end: string): CandidatePricing {
+  let bt: { fromYear: number; toYear: number; months: string; premium: Record<string, PremiumBacktestStats>; contractForms?: Record<string, ContractFormStats> } | null = null;
+  for (const y of [year, year + 1]) {
+    try {
+      bt = JSON.parse(fs.readFileSync(path.join(process.cwd(), ".cache", "epias", `sector-backtest-${y}.json`), "utf8"));
+      break;
+    } catch {
+      /* sonraki yıl */
+    }
+  }
+  const series = macroSeries();
+  const months = monthsBetween(start, end);
+  const level = averagePriceLevel(series, months);
+  const base = latestMonth(series.cpi);
+  const usd = months.map((m) => series.usdTry[m]).filter((v) => v > 0);
+  return {
+    backtestLabel: bt ? `${bt.fromYear} → ${bt.toYear}, ${bt.months}` : null,
+    worstRatio: bt ? Object.fromEntries(Object.entries(bt.premium).map(([t, s]) => [t, s.ratio.p90])) : {},
+    typicalRatio: bt ? Object.fromEntries(Object.entries(bt.premium).map(([t, s]) => [t, s.ratio.p50])) : {},
+    contractForms: bt?.contractForms
+      ? Object.fromEntries(
+          Object.entries(bt.contractForms).map(([t, s]) => [
+            t,
+            { n: s.n, fixedLossPct: s.forms.fixed.lossSharePct["0.5"], ptfShareLossPct: s.forms.ptfShare.lossSharePct["0.5"], ptfChange: s.ptfChangeMedian },
+          ])
+        )
+      : {},
+    real: level && base ? { factor: series.cpi[base] / level, label: `${monthLabelTr(base)} TL'si` } : null,
+    usdFactor: usd.length ? 1 / (usd.reduce((a, v) => a + v, 0) / usd.length) : null,
+  };
 }
 
 type Plant = ProjectHourly["plants"][number];
+const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
 
 /** Raporun adil pay slaytıyla aynı üyeler (verilen santrallerden) */
 function members(data: ProjectHourly, withData: Plant[]): { basis: ProjectCandidates["basis"]; members: ScreeningMember[] } {
@@ -198,5 +256,9 @@ export async function projectCandidates(
         })()
       : null,
     result: screenCandidates(m.members, candidates, data.profile, { top, sortBy }),
+    pricing: (() => {
+      const ts = withData.flatMap((p) => [new Date(p.hourly[0].timestamp).getTime(), new Date(p.hourly[p.hourly.length - 1].timestamp).getTime()]);
+      return loadPricing(year, iso(Math.min(...ts)), iso(Math.max(...ts)));
+    })(),
   };
 }
