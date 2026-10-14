@@ -127,6 +127,8 @@ export interface ReportContext {
   };
   /** Geçmişle sınama (scripts/sector-backtest.mts; Aşama 12.2–12.3): toYear veri yılıyla eşleşirse kullanılır */
   sectorBacktest?: SectorBacktest;
+  /** EPİAŞ toplayıcı listesi (scripts/aggregator-collect.mts): santral kimliği → toplayıcı kısa adları */
+  aggregatorMembership?: { asOf: string; byPlant: Map<number, string[]> };
   /** EPİAŞ arıza / bakım bildirimleri (lib/services/outage-notices; Aşama 12.4): olası arıza bloklarını doğrulamak için */
   outageNotices?: OutageNoticeContext | null;
   /** Toplayıcılar arası kıyas (scripts/aggregator-benchmark.mts; PLAN 8.7) */
@@ -168,6 +170,12 @@ export interface PlantReportData {
     companies: ReportCompany[];
     /** Sahibi bilinmeyen santral sayısı (her biri ayrı şirket sayıldı) */
     unknownOwnerCount: number;
+    /**
+     * Toplayıcı projesi değilken EPİAŞ toplayıcı listesinde başka bir toplayıcının portföyünde görünen santraller (yoksa
+     * null). Bu santrallerin dengesizliği o portföyde netleşir: şirket bazındaki maliyet fazla görünür (üst sınır); grup
+     * senaryosuna (dsg) alınmazlar. standaloneTl: bu santrallerin santral bazında dengesizlik riski toplamı.
+     */
+    inOtherAggregator: { asOf: string; plants: Array<{ plantName: string; aggregator: string }>; standaloneTl: number } | null;
   };
   /**
    * Veri döneminde YEKDEM'de olan santraller (yoksa null). Bilgi amaçlıdır: YEKDEM katılımcısı üretimini serbest
@@ -231,6 +239,10 @@ export interface PlantReportData {
   coefficients2026: { baseCostTl: number; cost2026Tl: number; deltaTl: number; deltaPct: number } | null;
   /** SENARYO: farklı şirketlerdeki santraller tek dengeden sorumlu grupta netleşseydi (en az 2 şirket) */
   dsg: {
+    /** Gruba girebilecek şirket sayısı (toplayıcı portföyündeki santraller hariç, en az 2) */
+    companyCount: number;
+    /** Başka bir toplayıcının portföyünde olduğu için gruba alınmayan santraller */
+    excludedPlantNames: string[];
     companyLevelCostTl: number;
     nettedCostTl: number;
     benefitTl: number;
@@ -239,6 +251,30 @@ export interface PlantReportData {
     offsettingHourSharePct: number;
     /** Ay ay fayda oranı (%): faydanın her ay tekrarlanıp tekrarlanmadığı */
     monthlyBenefit: Array<{ month: string; benefitPct: number }>;
+    /**
+     * Hesabın planı. "final": gün içi piyasası kapandıktan sonraki son KGÜP (son plan saatlerin en az %90'ında varsa).
+     * Şirketler gün içinde zaten düzeltme yaptığı için grup faydası bu sapmayla hesaplanır; ilk planla hesaplanan fayda
+     * gün içi kazancıyla üst üste biner (Polat 2026: ilk planla 44,0 M, son planla 35,6 M). "first": son plan yoksa.
+     */
+    basis: "final" | "first";
+    /** Aynı grup faydası ilk plana göre (bağlam; basis "first" ise benefitTl ile aynı) */
+    firstPlanBenefitTl: number;
+    /**
+     * Projenin bazı santralleri zaten bir toplayıcının portföyündeyse: bağımsız şirketler de o portföye girseydi (projedeki
+     * portföy santralleriyle birlikte netleşme; portföyün diğer üyeleri hesapta yok, bu yüzden alt sınır). Bağımsız
+     * şirketlerin kendi aralarında grup kurmasından genellikle büyüktür ve şirketin zaten kullandığı bir yapıdır. Yoksa null.
+     */
+    joinAggregator: {
+      aggregator: string;
+      /** Projede o portföyde olan santraller */
+      memberPlantNames: string[];
+      /** Bugün: bağımsız şirketler kendi dengesinde + portföydeki santraller kendi aralarında netleşmiş */
+      currentCostTl: number;
+      /** Hepsi aynı portföyde */
+      nettedCostTl: number;
+      benefitTl: number;
+      benefitPct: number;
+    } | null;
   } | null;
   /** Veri döneminde ayı eksik olan santraller (ör. EPİAŞ'ta bir ay yayımlanmamış); eksik ay hesaplara girmez */
   dataGaps: PlantDataGap[];
@@ -476,6 +512,29 @@ function settleGroup(plants: HourlyResult[][], profile: ImbalancePricingProfile)
 
 const sumCost = (hours: HourlyResult[]) => hours.reduce((s, h) => s + h.imbalanceCost, 0);
 
+/** DSG senaryosu son planla hesaplanır, son plan bu saat payında varsa (gün içi slaytıyla aynı eşik) */
+export const DSG_FINAL_PLAN_MIN_COVERAGE = 0.9;
+
+/** Grup senaryosunun planı: son plan saatlerin en az DSG_FINAL_PLAN_MIN_COVERAGE kadarında varsa "final" (rapor ve DSG sayfası ortak) */
+export function dsgPlanBasis(plants: Array<{ hourly: HourlyResult[] }>): "final" | "first" {
+  let hours = 0;
+  let withFinal = 0;
+  for (const p of plants)
+    for (const h of p.hourly) {
+      hours++;
+      if (h.forecastFinalMwh !== null && h.forecastFinalMwh !== undefined) withFinal++;
+    }
+  return hours > 0 && withFinal >= DSG_FINAL_PLAN_MIN_COVERAGE * hours ? "final" : "first";
+}
+
+/** Santralin saatlerinde planı son KGÜP'le değiştirir (son plan yoksa ilk plan kalır); fiyatlar settleGroup'ta yeniden hesaplanır */
+export function toFinalPlan<P extends { hourly: HourlyResult[] }>(p: P): P {
+  return {
+    ...p,
+    hourly: p.hourly.map((h) => (h.forecastFinalMwh !== null && h.forecastFinalMwh !== undefined ? { ...h, forecastMwh: h.forecastFinalMwh } : h)),
+  };
+}
+
 export { deviationLoad } from "@/lib/report/deviation-load";
 
 /**
@@ -563,7 +622,11 @@ export function buildPlantReport(
   context: ReportContext = {},
   options: { intraday?: boolean } = {}
 ): PlantReportData {
-  const withData = data.plants.filter((p) => p.hourly.length > 0);
+  // EPİAŞ unvanlarında yinelenen nokta olabiliyor ("A.Ş..")
+  const cleanName = <T extends string | null | undefined>(n: T): T => (n ? (n.replace(/\.{2,}/g, ".") as T) : n);
+  const withData = data.plants
+    .filter((p) => p.hourly.length > 0)
+    .map((p) => ({ ...p, organizationName: cleanName(p.organizationName), ownerName: cleanName(p.ownerName) }));
   const all = withData.flatMap((p) => p.hourly);
   if (all.length === 0) throw new Error("Projede piyasa fiyatı eşleşmiş saatlik veri yok; rapor üretilemez.");
 
@@ -696,17 +759,59 @@ export function buildPlantReport(
     };
   };
 
-  // DSG: farklı şirketler tek grupta. Aynı şirket içi netleşme zaten tabanda olduğundan fayda yalnızca şirketler arası
+  // Toplayıcı projesi olmayan raporda başka bir toplayıcının portföyündeki santraller (EPİAŞ toplayıcı listesine göre):
+  // dengesizlikleri o portföyde netleşir, şirketin kendi dengesinde ya da kurulacak bir grupta olamazlar
+  const inAggregatorIds = new Set<number>();
+  if (!data.aggregator && context.aggregatorMembership) {
+    for (const p of withData) if (p.epiasPlantId !== null && context.aggregatorMembership.byPlant.has(p.epiasPlantId)) inAggregatorIds.add(p.epiasPlantId);
+  }
+  const inAggregator = (p: Plant) => p.epiasPlantId !== null && inAggregatorIds.has(p.epiasPlantId);
+
+  // DSG: farklı şirketler tek grupta. Aynı şirket içi netleşme zaten tabanda olduğundan fayda yalnızca şirketler arası.
+  // Toplayıcı portföyündeki santraller gruba giremez: fayda yalnız kalan (bağımsız) santrallerin şirketleri arasında
   let dsg: PlantReportData["dsg"] = null;
-  if (groupList.length >= 2) {
-    const x = crossGroup(groupList.map((g) => g.plants));
+  const dsgGroups = groupList.map((g) => g.plants.filter((p) => !inAggregator(p))).filter((g) => g.length > 0);
+  if (dsgGroups.length >= 2) {
+    // Son plan: şirketlerin gün içi düzeltmelerinden sonra kalan sapma. İlk planla hesaplanan fayda gün içi kazancıyla
+    // aynı sapmayı ikinci kez sayardı
+    const basis = dsgPlanBasis(dsgGroups.flat());
+    const onBasis = (p: Plant): Plant => (basis === "final" ? toFinalPlan(p) : p);
+    const groups = dsgGroups.map((g) => g.map(onBasis));
+    const x = crossGroup(groups);
+    const first = basis === "final" ? crossGroup(dsgGroups).benefit : x.benefit;
+
+    // Bağımsızlar, projenin santrallerini zaten barındıran toplayıcıya girseydi (en çok santral barındıran toplayıcı)
+    let joinAggregator: NonNullable<PlantReportData["dsg"]>["joinAggregator"] = null;
+    const byAgg = new Map<string, Plant[]>();
+    for (const p of withData.filter(inAggregator))
+      for (const a of context.aggregatorMembership!.byPlant.get(p.epiasPlantId!) ?? []) byAgg.set(a, [...(byAgg.get(a) ?? []), p]);
+    const host = Array.from(byAgg.entries()).sort((a, b) => b[1].length - a[1].length)[0];
+    if (host) {
+      const members = host[1].map(onBasis);
+      const memberCost = sumCost(settleGroup(members.map((p) => p.hourly), data.profile));
+      const current = x.standalone + memberCost;
+      const netted = sumCost(settleGroup([...groups.flat(), ...members].map((p) => p.hourly), data.profile));
+      joinAggregator = {
+        aggregator: host[0],
+        memberPlantNames: host[1].map((p) => p.plantName),
+        currentCostTl: current,
+        nettedCostTl: netted,
+        benefitTl: current - netted,
+        benefitPct: pct(current - netted, current),
+      };
+    }
     dsg = {
+      companyCount: dsgGroups.length,
+      excludedPlantNames: withData.filter(inAggregator).map((p) => p.plantName),
       companyLevelCostTl: x.standalone,
       nettedCostTl: x.netted,
       benefitTl: x.benefit,
       benefitPct: x.benefitPct,
       offsettingHourSharePct: x.offsettingPct,
       monthlyBenefit: x.monthly,
+      basis,
+      firstPlanBenefitTl: first,
+      joinAggregator,
     };
   }
 
@@ -1275,6 +1380,13 @@ export function buildPlantReport(
       sameCompanyNettingTl: plantLevelCost - companyCost,
       companies: groupList.map((g) => ({ name: g.name, plantNames: g.plants.map((p) => p.plantName) })),
       unknownOwnerCount: withData.filter((p) => p.organizationId === null).length,
+      inOtherAggregator: (() => {
+        const m = context.aggregatorMembership;
+        if (!m || !inAggregatorIds.size) return null;
+        const list = withData.filter(inAggregator).map((p) => ({ plantName: p.plantName, aggregator: m.byPlant.get(p.epiasPlantId!)!.join(", ") }));
+        const standaloneTl = withData.filter(inAggregator).reduce((sum, p) => sum + sumCost(p.hourly), 0);
+        return { asOf: m.asOf, plants: list, standaloneTl };
+      })(),
     },
     yekdem: hasYekdem ? { plantNames: withData.filter((p) => p.yekdem).map((p) => p.plantName) } : null,
     coverage,

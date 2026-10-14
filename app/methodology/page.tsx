@@ -15,8 +15,8 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.14";
-const VERSION_DATE = "6 Ekim 2026";
+const VERSION = "1.18";
+const VERSION_DATE = "14 Ekim 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
   { id: "ozet", title: "Özet" },
@@ -307,6 +307,15 @@ Netleşme değeri       = Σ_i risk(sapma_i) − Σ_saat risk(Σ_i sapma_i)`}
               Değerin kalıcı olup olmadığını görmek için ay ay netleşme oranı ve &quot;bir üyenin fazla, diğerinin eksik ürettiği saatlerin
               payı&quot; birlikte verilir. <Tag kind="exact" />
             </p>
+            <p>
+              <b>Grup senaryosu (şirket projelerinde):</b> projedeki farklı şirketler tek dengeden sorumlu grupta netleşseydi. Şirketler
+              gün içinde planlarını zaten düzelttiği için fayda <b>son planla</b> (gün içi piyasası kapandıktan sonraki KGÜP; saatlerin en
+              az %90&apos;ında varsa) hesaplanır: ilk planla hesaplanan fayda gün içi kazancıyla aynı sapmayı ikinci kez sayar (Polat 2026:
+              ilk planla 44,0 M, son planla 35,6 M). Projenin bazı santralleri zaten bir toplayıcının portföyündeyse asıl seçenek, bağımsız
+              şirketleri o portföye almaktır: bağımsızlar + portföydeki proje santralleri birlikte netleşir; portföyün diğer üyeleri hesapta
+              olmadığı için alt sınırdır (Polat: ≥ 53,0 M). Dengeden sorumlu grup üyeliği EPİAŞ&apos;ta yayımlanmadığı için kalem
+              &quot;olası kaldıraç&quot;tır ve görüşmeden önce doğrulanmalıdır DSG sayfası aynı kuralla çalışır: şirket projelerinde son plan, başka bir toplayıcıdaki santraller işaretli ve varsayılan seçim dışında (toplayıcı projesinde sayfa raporun toplayıcı bloğuyla aynı tabanda, ilk planla) (denetim dsg-basis, dsg-join, dsg-text). <Tag kind="scenario" />
+            </p>
           </Section>
 
           <Section id="yekdem" n={next()} title="YEKDEM santralleri">
@@ -497,20 +506,6 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
               ya da şirket adındaki markanın EPİAŞ&apos;ta en az 3 santrali varsa &quot;grup portföyü&quot;; (4) hiçbiri değilse &quot;hedef&quot;.
               Dengeden sorumlu grup üyeliği santral bazında yayımlanmadığı için &quot;hedef&quot; bir tahmindir. <Tag kind="estimate" />
             </p>
-          </Section>
-
-          <Section id="gip" n={next()} title="Gün içi piyasa senaryosu">
-            <p>
-              Tahmin hatasının bir kısmı teslimattan önce görülüp gün içi piyasasında kapatılsaydı riskin ne kadar azalacağı test edilir. GİP
-              teslimattan 60 dakika önce kapandığı için uygulanabilir en kısa gecikme <b>2 saat</b> kabul edilir; 1 saatlik gecikme
-              &quot;teorik&quot; olarak ayrılır.
-            </p>
-            <p>
-              Kapatma oranı önceki 4 aydan öğrenilir ve sonraki ayda test edilir (ileriye dönük, veri sızıntısı yok). İşlem fiyatı saatin
-              gerçekleşen GİP ağırlıklı ortalamasıdır; zor saatlerde daha kötü fiyat varsayılır. Sonuç üst sınırdır: şirket gün içinde zaten
-              işlem yapıyorsa kazancın bir kısmı hâlihazırda alınıyordur. &quot;Kusursuz öngörü&quot; ile hesaplanan tavan ayrıca etiketlenir.{" "}
-              <Tag kind="scenario" />
-            </p>
             <p>
               <b>YEKDEM çıkışı.</b> YEKDEM fiyatları tesisin işletmeye giriş tarihinden itibaren 10 yıl uygulanır (5346 s. Kanun md. 6;
               2013/5625 s. BKK; 2021 sonrası TL mekanizması da 10 yıl); kısmen işletmeye girmiş tesiste süre ilk katılımdan başlar. Katılım her
@@ -534,6 +529,20 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
               kısmı YEKDEM&apos;de kalabilir. Görüşmeden önce santralle doğrulanmalı. 2026 sektör karnesinde (1.011 santral) 82 santral 2026&apos;da
               çıktı (2.935 MW; 58&apos;inde süre dolmuş, 18&apos;i kendi isteğiyle), 4&apos;ünün süresi 2026&apos;da, 110&apos;unun tahminen 2026–2028&apos;de
               doluyor. <Tag kind="estimate" />
+            </p>
+          </Section>
+
+          <Section id="gip" n={next()} title="Gün içi piyasa senaryosu">
+            <p>
+              Tahmin hatasının bir kısmı teslimattan önce görülüp gün içi piyasasında kapatılsaydı riskin ne kadar azalacağı test edilir. GİP
+              teslimattan 60 dakika önce kapandığı için uygulanabilir en kısa gecikme <b>2 saat</b> kabul edilir; 1 saatlik gecikme
+              &quot;teorik&quot; olarak ayrılır.
+            </p>
+            <p>
+              Kapatma oranı önceki 4 aydan öğrenilir ve sonraki ayda test edilir (ileriye dönük, veri sızıntısı yok). İşlem fiyatı saatin
+              gerçekleşen GİP ağırlıklı ortalamasıdır; zor saatlerde daha kötü fiyat varsayılır. Sonuç üst sınırdır: şirket gün içinde zaten
+              işlem yapıyorsa kazancın bir kısmı hâlihazırda alınıyordur. &quot;Kusursuz öngörü&quot; ile hesaplanan tavan ayrıca etiketlenir.{" "}
+              <Tag kind="scenario" />
             </p>
           </Section>
 
@@ -807,6 +816,26 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.18",
+                  "14 Ekim 2026",
+                  "Grup senaryosu (Polat 2026 değerlendirmesi): fayda son planla (gün içi sonrası) hesaplanır; ilk planla hesaplanan fayda gün içi kazancıyla üst üste biniyordu (Polat 44,0 → 35,6 M). Portföyün bir kısmı bir toplayıcıdaysa bağımsız şirketleri o portföye almak ayrıca hesaplanır, alt sınır (Polat ≥ 53,0 M) ve büyükse öneri odur. Grup üyeliği yayımlanmadığı için başlıkta 'olası kaldıraç', metinde doğrulama notu. Kurulu gücü tahmini santral varken toplam kurulu güç kapakta, özette ve Ek A toplamında '~' ile. DSG sayfası da şirket projelerinde son planla (toplayıcı projesinde raporun toplayıcı bloğuyla aynı, ilk planla) ve başka bir toplayıcıdaki santralleri işaretleyip varsayılan seçime almaz. Denetim: dsg-basis, dsg-join, dsg-text, capacity-total. Depolama senaryosu (1.15) şimdilik kaldırıldı: slayt, Ek B bloğu, uygulama sayfası ve denetimler. Diğer hesaplar değişmedi.",
+                ],
+                [
+                  "1.17",
+                  "14 Ekim 2026",
+                  "YEKDEM çıkışı: aday santral taramasında 'YEKDEM'den çıkan / çıkacak' süzgeci ve rozeti (bu yıl çıkan, süresi bu yıl ya da yakında dolan; ilk YEKDEM yılından ±1 yıl tahmin), toplayıcı raporunun büyüme slaytında sayı ve hedeflerin serbest piyasa yılı (denetim growth-yekdem). Fiyat birimleri: piyasa sayfası, karşılaştırma ve raporun 'Ne değişti?' slaytı nominal TL'nin yanında reel TL (TCMB TÜFE serisi) ve USD (EPİAŞ PTF TL / USD oranı) verir; makasın PTF'ye oranı her yerde. Yıllar arası ayrıştırma varsayılan olarak aynı fiyat düzeyinde: nominal 'fiyat makası' kalemi genel fiyat artışını da içeriyordu. Sektör satırı reel medyan değişim ve reel olarak maliyeti artan pay yazar. Denetim: cost-change-real. Nominal hesaplar değişmedi.",
+                ],
+                [
+                  "1.16",
+                  "13 Ekim 2026",
+                  "Sistem yönü tahmini (Aşama 14): her saat için sistemin açık verme olasılığı iki karar anında (gün öncesi, gün içi 2 saat önce) yalnız o anda bilinen veriyle tahmin edilir ve walk-forward ile iki basit rakibe karşı sınanır; ikisi de geçti. Plan ayarı (KÜPST dahil) geriye dönük test sayfasında ayrı kartta, ölçüm olarak. Gün içi kalıcılık + yön tahmini birleşik kuralı (düz kalıcılık karşılaştırma satırıyla). Arıza blokları EPİAŞ arıza / bakım bildirimleriyle karşılaştırılır (doğrulanan / bildirimsiz, neden sınıfı); 'Geçmişle sınama' bölümünde arıza tespitinin ölçülen isabet ve yakalama oranları. Piyasa sayfasında 'Sistem yönü tahmini' kartı ve kalibrasyon grafiği. İçindekiler listesine eksik 'Geçmişle sınama' bölümü eklendi. Önceki hesaplar değişmedi.",
+                ],
+                [
+                  "1.15",
+                  "10 Ekim 2026",
+                  "Depolama senaryosu (Aşama 13): santrallere kurulu gücün %25 / %50 / %100'ü kadar 2 saatlik batarya eklenseydi birleşik işletmenin değeri: gün öncesi arbitrajı + gerçek zamanda sapma takibi + KÜPST + yaşlanma maliyeti. Gerçekçi işletme (doluluk %10–90, günde en çok bir arbitraj döngüsü, kullanılabilirlik %97, enerjinin %25'i dengesizlik için, yaşlanma 20 $/MWh × EPİAŞ kuru). Sapma takibi yalnız yaşlanma ve KÜPST sonrası kazandırıyorsa; barajlı HES ve YEKDEM'de arbitraj yok. KÜPST EPDK 14029'a göre: bütünleşik ünite ayrı birim (şirket projesinde maliyet), toplayıcıda topluluk (kazanç). Piyasa tavanı, önceki yıl ve fiyat farkı daralması (%25 / %50) duyarlılığı; frekans kontrolü (PFK / SFK) fırsatı ve pazar büyüklüğü ayrı satırda, toplama eklenmez. Raporda 'Depolama' slaytı ve Ek B bloğu, uygulamada depolama sayfası. Denetim: storage-base, storage-bound, storage-sum, storage-cap, storage-ceiling, storage-yekdem, storage-monotone, storage-text. %50 senaryosu: Gain 28,8 M (tavanın %23'ü), Polat 62,4 M, Inavitas 182,6 M. Önceki hesaplar değişmedi.",
+                ],
                 [
                   "1.14",
                   "6 Ekim 2026",

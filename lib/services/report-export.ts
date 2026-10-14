@@ -11,7 +11,7 @@ import { buildReportContext } from "@/lib/services/report-context";
 import { buildBridgeSteps, exportPlantReportPptx, type ReportAuthor } from "@/lib/export/plant-report-pptx";
 import { reportCostChange } from "@/lib/services/cost-change";
 import { projectCandidates } from "@/lib/services/candidates";
-import { checkFinalPlanText, checkIntradayText, checkReportData, checkSlideTables, checkSlideTexts, extractSlideTables, extractSlideTexts, type ReportIssue } from "@/lib/report/report-checks";
+import { checkAggregatorText, checkCostChangeText, checkSlideGeometry, checkGrowthYekdemText, checkFinalPlanText, checkIntradayText, checkDsgText, checkCapacityText, checkReportData, checkSlideTables, checkSlideTexts, extractSlideTables, extractSlideTexts, type ReportIssue } from "@/lib/report/report-checks";
 
 export interface ReportVariant {
   /** Anonim örnek: santral, üretici ve toplayıcı adları takma adla */
@@ -70,7 +70,11 @@ export async function buildReportExport(projectId: string, variant: ReportVarian
     ...checkSlideTexts(slides, forbidden),
     ...checkIntradayText(report, slides),
     ...checkFinalPlanText(report, slides),
+    ...checkAggregatorText(report, slides),
+    ...checkCostChangeText(anon ? null : costChange, slides),
+    ...checkGrowthYekdemText(growthOut, slides),
     ...checkSlideTables(await extractSlideTables(buffer)),
+    ...(await checkSlideGeometry(buffer)),
   ];
 
   const base = anon ? "Toplayici_Portfoyu_anonim" : data.project.name.replace(/\s+/g, "_");

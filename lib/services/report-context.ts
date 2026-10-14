@@ -9,6 +9,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { loadAggregatorMembership } from "@/lib/services/aggregator-membership";
 import { companyPlantIdsFromCache, listUevmPowerPlants } from "@/lib/services/epias-plants";
 import { loadSectorBenchmark } from "@/lib/services/sector";
 import { loadOutageNotices } from "@/lib/services/outage-notices";
@@ -47,6 +48,12 @@ export async function buildReportContext(plants: ReportPlantMeta[], year: number
   const context: ReportContext = { missingCompanyPlants: new Map(), companyPlantTotals: new Map() };
   context.sector = await loadSectorContext(year);
   context.aggregatorBenchmark = loadAggregatorBenchmark(year);
+  const membership = await loadAggregatorMembership();
+  if (membership)
+    context.aggregatorMembership = {
+      asOf: membership.asOf,
+      byPlant: new Map(Array.from(membership.byPlant, ([id, list]) => [id, list.map((a) => a.name)])),
+    };
   context.sectorBacktest = loadSectorBacktest(year);
   // Olası arıza bloklarını doğrulamak için EPİAŞ bildirimleri (havuz yoksa null; hata raporu durdurmaz)
   context.outageNotices = await loadOutageNotices(plants.map((p) => p.epiasPlantId)).catch(() => null);

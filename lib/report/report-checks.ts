@@ -9,6 +9,7 @@
  * toplamda 876 bin); anonim sürümde Ek B'de gerçek santral adı geçiyordu.
  */
 
+import { pctIn, pctOf } from "@/lib/format";
 import JSZip from "jszip";
 import type { PlantReportData } from "@/lib/report/plant-report";
 import type { BridgeStep } from "@/lib/export/plant-report-pptx";
@@ -125,6 +126,23 @@ export function checkReportData(r: PlantReportData, bridge?: BridgeStep[]): Repo
   if (r.dsg) {
     if (!near(r.dsg.benefitTl, r.dsg.companyLevelCostTl - r.dsg.nettedCostTl))
       err("dsg-benefit", `DSG faydası ${fmt(r.dsg.benefitTl)}, şirket bazı − netleşmiş ${fmt(r.dsg.companyLevelCostTl - r.dsg.nettedCostTl)}.`);
+    // Başka bir toplayıcının portföyündeki santral aynı anda kurulacak gruba giremez: grup faydasına sayılmamalı
+    const inAgg = st.inOtherAggregator?.plants.map((p) => p.plantName) ?? [];
+    const counted = inAgg.filter((n) => !r.dsg!.excludedPlantNames.includes(n));
+    if (counted.length) err("dsg-aggregator", `Grup senaryosu toplayıcı portföyündeki santralleri de sayıyor: ${counted.slice(0, 4).join(", ")}.`);
+    if (r.dsg.companyCount < 2) err("dsg-aggregator", `Grup senaryosunda ${r.dsg.companyCount} şirket var (en az 2).`);
+    // Şirketler gün içinde zaten düzeltiyorsa grup faydası son planla hesaplanır; ilk planla gün içi kazancıyla üst üste biner
+    if (r.dsg.basis !== "final" && r.finalPlan.coveragePct >= 90)
+      err("dsg-basis", `Grup senaryosu ilk planla hesaplanmış, son plan saatlerin %${r.finalPlan.coveragePct.toFixed(0)}'inde var.`);
+    // Portföyün bir kısmı zaten bir toplayıcıdaysa "bağımsızları o portföye almak" seçeneği hesaplanmalı
+    if (inAgg.length && !r.dsg.joinAggregator)
+      err("dsg-join", "Santrallerin bir kısmı bir toplayıcıda ama bağımsız şirketlerin o portföye girmesi hesaplanmamış.");
+    const ja = r.dsg.joinAggregator;
+    if (ja) {
+      if (!near(ja.benefitTl, ja.currentCostTl - ja.nettedCostTl))
+        err("dsg-join", `Portföye katılma faydası ${fmt(ja.benefitTl)}, bugün − netleşmiş ${fmt(ja.currentCostTl - ja.nettedCostTl)}.`);
+      if (ja.benefitTl < -1000) err("dsg-join", `Portföye katılma faydası negatif (${fmt(ja.benefitTl)}).`);
+    }
   }
 
   // Aylar ve ısı haritası toplamı = dönem toplamı
@@ -284,7 +302,7 @@ export function checkIntradayBridge(r: PlantReportData, bridge: BridgeStep[]): R
     issues.push({
       level: "error",
       rule: "kupst-upper-bound",
-      message: `Son plan saatlerin yalnız %${fp.coveragePct.toFixed(0)}'inde var, KÜPST'ün %${fp.kupstFirstPlanSharePct.toFixed(0)}'i ilk plana göre; köprü etiketi "${kupstStep.label}" üst sınır demiyor.`,
+      message: `Son plan saatlerin yalnız ${pctIn(fp.coveragePct)} var, KÜPST'ün ${pctOf(fp.kupstFirstPlanSharePct)} ilk plana göre; köprü etiketi "${kupstStep.label}" üst sınır demiyor.`,
     });
   const realized = realizedIntraday(r);
   const realizedStep = bridge.find((st) => st.kind === "realized");
@@ -321,7 +339,7 @@ export function checkIntradayBridge(r: PlantReportData, bridge: BridgeStep[]): R
   // Son plan kapsamı eşiğin altındaysa gerçekleşen adımı olmaz (yalnız kapsanan saatlere dayanır)
   const ie = r.intradayEffect;
   if (realizedStep && ie && ie.coveragePct < FINAL_PLAN_MIN_COVERAGE_PCT)
-    issues.push({ level: "error", rule: "intraday-coverage", message: `Son plan saatlerin yalnız %${ie.coveragePct.toFixed(0)}'inde var ama köprüde gerçekleşen gün içi adımı var.` });
+    issues.push({ level: "error", rule: "intraday-coverage", message: `Son plan saatlerin yalnız ${pctIn(ie.coveragePct)} var ama köprüde gerçekleşen gün içi adımı var.` });
   // GİP işlem maliyeti: anlamlıysa köprüde ayrı adım, tam kapsamda tutarı veriden
   const tradeStep = bridge.find((st) => st.kind === "trade");
   if (realizedStep && ie) {
@@ -374,6 +392,25 @@ export function checkFinalPlanText(r: PlantReportData, slides: Array<{ slide: nu
   ];
 }
 
+/**
+ * Grup (DSG) fırsatı: dengeden sorumlu grup üyeliği açık veride yok, bu yüzden kalem doğrulanmalı der ve başlığa çıkarsa
+ * "olası kaldıraç" olur; son planla hesaplandıysa gün içi kazancıyla üst üste binmediğini söyler; portföyün bir kısmı
+ * bir toplayıcıdaysa ve katılma daha büyükse öneri "toplayıcı portföyüne almak"tır (Polat 2026 değerlendirmesi).
+ */
+export function checkDsgText(r: PlantReportData, slides: Array<{ slide: number; text: string }>): ReportIssue[] {
+  if (!r.dsg || slides.length <= 1) return [];
+  const slide = slides.find((s) => /FIRSATLAR/.test(s.text));
+  if (!slide) return [];
+  const issues: ReportIssue[] = [];
+  const e = (message: string) => issues.push({ level: "error", rule: "dsg-text", message: `Fırsatlar (slayt ${slide.slide}): ${message}` });
+  if (!/doğrulayın/.test(slide.text)) e("grup fırsatı üyeliğin doğrulanması gerektiğini söylemiyor.");
+  if (r.dsg.basis === "final" && !/Gün içi düzeltmelerden sonra kalan sapmayla/.test(slide.text)) e("grup faydasının gün içi sonrası hesaplandığı yazmıyor.");
+  const ja = r.dsg.joinAggregator;
+  if (ja && ja.benefitTl > r.dsg.benefitTl && !/toplayıcı portföyüne almak/.test(slide.text)) e(`santrallerin bir kısmı ${ja.aggregator} portföyünde ama öneri o portföye katılma değil.`);
+  if (/En büyük kaldıraç: [^\n]*(dengeden sorumlu grupta|toplayıcı portföyüne almak)/.test(slide.text)) e("doğrulanmamış grup fırsatı başlıkta kesin kaldıraç gibi.");
+  return issues;
+}
+
 /** Bir santralin kurulu gücü bile tahminse toplam kurulu güç "~" ile yazılır (kapak, özet, Ek A toplamı; CLAUDE.md) */
 export function checkCapacityText(r: PlantReportData, slides: Array<{ slide: number; text: string }>): ReportIssue[] {
   if (!r.plants.some((p) => p.capacityEstimated)) return [];
@@ -383,6 +420,54 @@ export function checkCapacityText(r: PlantReportData, slides: Array<{ slide: num
   return slides
     .filter((s) => bare.test(s.text))
     .map((s) => ({ level: "error" as const, rule: "capacity-total", message: `Slayt ${s.slide}: toplam kurulu güç ${total} MW "~" olmadan yazılmış; ${r.plants.filter((p) => p.capacityEstimated).length} santralinki tahmin.` }));
+}
+
+/**
+ * Toplayıcı projesi değilken santrallerin bir kısmı başka bir toplayıcının portföyündeyse, özet bunu söylemeli: o santrallerin
+ * dengesizliği portföyde netleşir, rapordaki tutar onlar için üst sınırdır (yoksa okuyucu ana rakamı "ödenen" sanar).
+ */
+export function checkAggregatorText(r: PlantReportData, slides: Array<{ slide: number; text: string }>): ReportIssue[] {
+  const o = r.settlement.inOtherAggregator;
+  if (!o || slides.length <= 1) return [];
+  const summary = slides.find((s) => /YÖNETİCİ ÖZETİ/.test(s.text));
+  if (!summary) return [];
+  // En çok 3 santral adıyla yazılır, fazlası sayıyla
+  const missing = o.plants.length <= 3 ? o.plants.filter((p) => !summary.text.includes(p.plantName)).map((p) => p.plantName) : [];
+  if (/toplayıcı(nın)? portföyünde/.test(summary.text) && /üst sınır/.test(summary.text) && !missing.length) return [];
+  return [
+    {
+      level: "error",
+      rule: "aggregator-summary",
+      message: `Yönetici özeti (slayt ${summary.slide}) toplayıcı portföyündeki santralleri (${o.plants.map((p) => p.plantName).slice(0, 4).join(", ")}) ve rakamın onlar için üst sınır olduğunu söylemiyor.`,
+    },
+  ];
+}
+
+/**
+ * "Ne değişti?" slaytı yıllar arası TL kıyasıdır: enflasyon düşülmeden yazılırsa "fiyat makası" kalemi genel fiyat artışını
+ * da içerir. Kur ve TÜFE serisi varken başlık reel değişimi ve nominali birlikte, sağ panel USD karşılığını vermeli.
+ */
+export function checkCostChangeText(costChange: { units: unknown | null } | null | undefined, slides: Array<{ slide: number; text: string }>): ReportIssue[] {
+  if (!costChange || slides.length <= 1) return [];
+  const slide = slides.find((s) => /NE DEĞİŞTİ\?/.test(s.text));
+  if (!slide) return [{ level: "error", rule: "cost-change-slide", message: "Önceki yıl ayrıştırması var ama \"Ne değişti?\" slaytı yok." }];
+  if (!costChange.units)
+    return [{ level: "error", rule: "cost-change-real", message: `"Ne değişti?" slaytı (${slide.slide}) yıllar arası kıyası yalnız nominal TL ile veriyor; kur / TÜFE serisi yok (scripts/macro-sync.mts).` }];
+  if (/enflasyon düşülünce/.test(slide.text) && /\(nominal %\d/.test(slide.text) && /USD\/MWh/.test(slide.text)) return [];
+  return [{ level: "error", rule: "cost-change-real", message: `"Ne değişti?" slaytında (${slide.slide}) reel değişim, nominal karşılığı ya da USD satırı yazmıyor.` }];
+}
+
+/** Büyüme slaytı: YEKDEM'den çıkan / çıkacak aday varsa sayısı ve tahmin yöntemi yazmalı */
+export function checkGrowthYekdemText(
+  growth: { yekdemExits: { exited: number; endsThisYear: number; endsSoon: number } | null } | null | undefined,
+  slides: Array<{ slide: number; text: string }>
+): ReportIssue[] {
+  const ye = growth?.yekdemExits;
+  if (!ye || ye.exited + ye.endsThisYear + ye.endsSoon === 0 || slides.length <= 1) return [];
+  const slide = slides.find((s) => /BÜYÜME FIRSATI/.test(s.text));
+  if (!slide) return [];
+  if (/YEKDEM çıkışı: \d/.test(slide.text) && /ilk görüldüğü yıldan tahmin edilir/.test(slide.text)) return [];
+  return [{ level: "error", rule: "growth-yekdem", message: `Büyüme slaytında (${slide.slide}) YEKDEM çıkışı sayısı ya da tahmin yöntemi yazmıyor.` }];
 }
 
 /** Slayt metninde bozuk değer: biçimlendirilmemiş sayı, boş alan, eksi işaretli yüzde */
@@ -408,6 +493,25 @@ export function checkSlideTexts(slides: Array<{ slide: number; text: string }>, 
       if (m) {
         const at = Math.max(0, (m.index ?? 0) - 40);
         issues.push({ level: "error", rule: "slide-text", message: `Slayt ${slide}: bozuk değer "${what}" (…${text.slice(at, at + 90).trim()}…).` });
+      }
+    }
+    // Yüzdeye elle yazılan Türkçe ek ("%22'i"): okunuşa göre doğrusu pctOf / pctIn ("%22'si", "%22'sinde")
+    for (const m of text.matchAll(/(?<![\d,.])%(\d{1,3})'(s?[iıuü](?:nd[ae])?)(?![a-zçğıöşü])/g)) {
+      const n = Number(m[1]);
+      const expected = /nd[ae]$/.test(m[2]) ? pctIn(n) : pctOf(n);
+      if (expected !== `%${m[1]}'${m[2]}`) {
+        const at = Math.max(0, (m.index ?? 0) - 40);
+        issues.push({ level: "error", rule: "pct-suffix", message: `Slayt ${slide}: "${m[0]}" yanlış ek, doğrusu "${expected}" (…${text.slice(at, at + 90).trim()}…).` });
+      }
+    }
+    // Etiket açıklaması yalnız raporda olan slaytlara atıf yapmalı (ör. adil prim slaytı çıkınca "adil prim paylaşımı" kalmasın)
+    const labels = text.match(/VARSAYIMA BAĞLI: bir varsayıma dayanır \(([^)]*)\)/);
+    if (labels) {
+      const all = slides.map((x) => x.text).join("\n");
+      const heading: Record<string, RegExp> = { "risk primi": /RİSK PRİMİ/, "adil prim paylaşımı": /ADİL PRİM/ };
+      for (const item of labels[1].split(", ")) {
+        const re = heading[item];
+        if (re && !re.test(all)) issues.push({ level: "error", rule: "label-reference", message: `Slayt ${slide}: etiket açıklaması "${item}" diyor ama raporda o slayt yok.` });
       }
     }
     const leaked = names.filter((n) => text.includes(n));

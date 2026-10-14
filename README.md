@@ -10,10 +10,12 @@ Soru şu: *"Bu portföyün gün öncesi planı (KGÜP) ile gerçekleşen üretim
 
 Uygulamanın kendi motoruyla, yalnızca EPİAŞ Şeffaflık Platformu verisinden:
 
-- **2026'da maliyet artışı tahmin hatasından değil, fiyattan geldi.** SMF–PTF makası saat başına ortalama 395 TL (2024) → 469 TL (2025) → **763 TL** (2026 Ocak–Ağustos). Rüzgâr santrallerinin tahmin hatası aynı kaldı, MWh başına dengesizlik maliyeti arttı. Bir rüzgâr portföyünde maliyet 65 → 95 TL/MWh çıktı; farkın %97'si dört kaleme ayrıldı, en büyük kalem fiyat makası.
+- **2026'da maliyet artışı tahmin hatasından değil, fiyattan geldi; enflasyon düşülünce de.** Aynı santrallerin MWh başına dengesizlik maliyeti 2025 → 2026 (Ocak–Ağustos) nominal TL'de rüzgârda medyan +%61 arttı; genel fiyat artışı (×1,26) düşülünce **+%27**, ve rüzgâr santrallerinin %95'inde reel olarak arttı. Medyan sapma aynı kaldı (%30,4 → %30,7). Güneşte reel +%51, hidroda +%22.
+- **Makas reel olarak az, satış fiyatına göre çok büyüdü.** SMF–PTF makası nominal 376 → 483 → 763 TL/MWh (2024 → 2026, Ocak–Ağustos), ama Eylül 2026 TL'siyle 743 → 696 → 830 (dolar bazında 11,8 → 12,8 → 16,9 $/MWh). Asıl değişim PTF'de: reel olarak 4.196 → 2.047 TL/MWh'ye indi, makas PTF'nin %17,5'inden **%40,8'ine** çıktı. Aynı tahmin hatası, MWh başına satış fiyatına göre iki kat pahalı.
 - **Sıfır fiyatlı saatler patladı:** 5 (2024) → 48 (2025) → 394 (2026 Ocak–Ağustos).
-- **Toplayıcı portföyünün değeri ölçülebilir.** 61 santrallik bir toplayıcı portföyünde santraller tek tek uzlaşsa 543 M TL olacak dengesizlik, portföyde netleşince 246 M TL'ye iniyor (%55 netleşme).
+- **Toplayıcı portföyünün değeri ölçülebilir.** 61 santrallik bir toplayıcı portföyünde santraller tek tek uzlaşsa 543 M TL olacak dengesizlik, portföyde netleşince 246 M TL'ye iniyor (%55 netleşme). Bunun bir kısmı aynı sahibin santrallerinin kendi içinde netleşmesi: sahipler tek başına 514 M TL'ye inerdi, toplayıcının kattığı değer 514 → 246 M TL.
 - **Rüzgâr adaylarının %65'i zaten bir toplayıcıda.** Bir toplayıcının büyüme listesinde 364 adaydan yalnız 44'ü bağımsız hedef.
+- **YEKDEM'den çıkanlar toplayıcının doğal hedefi.** YEKDEM süresi işletmeye girişten 10 yıl. 2026 sektör karnesinde 82 santral (2.935 MW) 2026'da YEKDEM'den çıktı, 114 santralin süresi 2026–2028'de doluyor; bunlar üretimini serbest piyasada satar ve dengesizliğini kendisi taşır. Bir toplayıcının aday listesinde bunların 57'si bağımsız hedef (giriş tarihi açık veride yok: EPİAŞ YEKDEM listelerinde ilk görülme yılından ±1 yıl).
 
 Sektör karnesi (2026 Ocak–Ağustos, MWh başına dengesizlik medyanı): rüzgâr 175 TL (291 santral), güneş 143 TL (85), hidro 90 TL (635).
 
@@ -57,7 +59,7 @@ Ayrıntı: uygulamadaki `/methodology` sayfası.
 - `scripts/verify-independent.mts`: hesap motoru kullanılmadan ham havuz dosyası ve EPİAŞ fiyatlarından dengesizlik, KÜPST ve GİP işlem maliyeti yeniden hesaplanır. Gain (219.768), Inavitas (375.192) ve Met (75.816) santral-saatlerinin hepsinde en büyük fark 0,00 TL.
 - `scripts/sector-backtest.mts`: "ne olurdu" rakamları geçmişle sınanır (2025 → 2026, 858 santral). Risk primi geçmişte düşük tahmin etti (gerçek / tahmin medyanı 1,36), rapor aralık verir; zayıf santrallerin tipik olarak iyileşmediği görüldü, tahmin fırsatı en iyi çeyreğin gerçek iyileşmesiyle hesaplanır; aday sıralaması tutarlı (Spearman 0,67).
 - Mevzuat katsayıları Resmî Gazete metinlerinden doğrulandı ve testle sabitlendi.
-- **369 otomatik test** (Vitest); `tsc` ve ESLint temiz.
+- **447 otomatik test** (Vitest); `tsc` ve ESLint temiz.
 
 ## Sınırlar
 

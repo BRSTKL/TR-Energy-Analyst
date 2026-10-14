@@ -19,6 +19,8 @@ interface PlantOption {
   /** Üye bir şirketse santralleri (üye = piyasa katılımcısı) */
   memberPlants: string[];
   isCompany: boolean;
+  /** Üyenin başka bir toplayıcının portföyündeki santralleri (şirket projelerinde) */
+  inAggregator: Array<{ plantName: string; aggregators: string[] }>;
 }
 
 interface DsgResponse extends DsgScenarioResult {
@@ -30,6 +32,10 @@ interface DsgResponse extends DsgScenarioResult {
   unknownOwnerPlants: string[];
   /** Veri döneminde YEKDEM'de olan santraller (bilgi; dengesizlikleri de kendilerine aittir) */
   yekdemPlants: string[];
+  /** Hesabın planı: "final" gün içi düzeltmeleri sonrası son plan (şirket projeleri), "first" ilk plan */
+  basis: "final" | "first";
+  /** EPİAŞ toplayıcı listesinin tarihi (şirket projelerinde; yoksa null) */
+  aggregatorListAsOf: string | null;
 }
 
 const MONTHS_TR = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
@@ -131,6 +137,23 @@ export default function DsgScenarioPage() {
                 <CardDescription>
                   En az iki üye (şirket) seçin. {loading && "Hesaplanıyor..."}
                 </CardDescription>
+                <p className="mt-2 text-xs text-slate-600">
+                  {data.basis === "final"
+                    ? "Hesap son planla (gün içi piyasası kapandıktan sonraki KGÜP): şirketlerin gün içi düzeltmelerinden sonra kalan sapma. Fayda gün içi kazancının üstüne eklenir, onunla üst üste binmez."
+                    : "Hesap ilk planla (gün öncesi KGÜP). Şirketler gün içinde düzeltme yapıyorsa gerçek fayda daha küçüktür."}{" "}
+                  Grup üyeliği EPİAŞ&apos;ta yayımlanmaz: şirketler zaten bir gruptaysa bu fayda alınıyordur.
+                </p>
+                {data.plants.some((p) => (p.inAggregator?.length ?? 0) > 0) && (
+                  <p className="mt-2 flex items-start gap-1 text-xs text-amber-800">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>
+                      EPİAŞ toplayıcı listesine göre{data.aggregatorListAsOf ? ` (${data.aggregatorListAsOf})` : ""}{" "}
+                      {shortList(data.plants.flatMap((p) => (p.inAggregator ?? []).map((x) => x.plantName)))} bir toplayıcının portföyünde: dengesizlikleri orada
+                      netleşir, kurulacak bir gruba giremezler; bu yüzden varsayılan seçimde yoklar. Seçerseniz fayda gerçekte alınamayacak netleşmeyi
+                      de sayar. Asıl seçenek bağımsız şirketleri o portföye almak olabilir (rapordaki Fırsatlar slaytı).
+                    </span>
+                  </p>
+                )}
                 {data.yekdemPlants.length > 0 && (
                   <p className="mt-2 text-xs text-slate-600">
                     YEKDEM&apos;deki {data.yekdemPlants.length} santral ({shortList(data.yekdemPlants)}) de gruba dahildir: YEKDEM katılımcısı üretimini serbest
@@ -160,6 +183,12 @@ export default function DsgScenarioPage() {
                         {!p.isCompany && " · sahibi bilinmiyor"}
                         {!p.hasData && " · veri yok"}
                       </div>
+                      {(p.inAggregator?.length ?? 0) > 0 && (
+                        <div className="mt-0.5 max-w-xs text-2xs font-medium text-amber-700">
+                          {p.inAggregator.length === p.memberPlants.length ? "Toplayıcıda" : `${p.inAggregator.length} santrali toplayıcıda`}:{" "}
+                          {Array.from(new Set(p.inAggregator.flatMap((x) => x.aggregators))).join(", ")}
+                        </div>
+                      )}
                       {p.isCompany && p.memberPlants.length > 1 && (
                         <div className="mt-0.5 max-w-xs text-2xs text-slate-400">{p.memberPlants.join(", ")}</div>
                       )}

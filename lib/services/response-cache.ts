@@ -28,6 +28,34 @@ const store = (g.__trResponseCache ??= new Map());
 /** Aynı anda gelen aynı istekler tek hesap yapar */
 const inflight = (g.__trResponseInflight ??= new Map());
 
+/**
+ * Geliştirmede hesap kodunun sürümü: lib/ ve app/api/ altındaki dosyaların en son değişme anı (5 sn bellekte). Sunucu
+ * açıkken motor değişince önbellek eski rakamı vermesin (DSG son plana geçince sayfa ilk planlı sonucu gösteriyordu).
+ * Üretim derlemesinde kod çalışırken değişmediği için 0.
+ */
+let codeStamp = { at: 0, value: 0 };
+async function codeVersion(): Promise<number> {
+  if (process.env.NODE_ENV === "production") return 0;
+  if (Date.now() - codeStamp.at < 5000) return codeStamp.value;
+  let max = 0;
+  const walk = async (dir: string) => {
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) await walk(full);
+      else if (/\.(ts|tsx)$/.test(e.name)) max = Math.max(max, await mtime(full));
+    }
+  };
+  await Promise.all([walk(path.join(process.cwd(), "lib")), walk(path.join(process.cwd(), "app", "api"))]);
+  codeStamp = { at: Date.now(), value: max };
+  return max;
+}
+
 async function mtime(file: string): Promise<number> {
   try {
     return (await fs.stat(file)).mtimeMs;
@@ -47,6 +75,7 @@ export async function projectVersion(projectId: string): Promise<string | null> 
   if (!project) return null;
   const period = await projectPeriod(project);
   const parts: Array<string | number> = [
+    await codeVersion(),
     project.updatedAt.getTime(),
     project.plants.length,
     Math.max(0, ...project.plants.map((p) => p.updatedAt.getTime())),

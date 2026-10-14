@@ -122,10 +122,42 @@ const periodTag = (r: PlantReportData) => {
 };
 /** Veri tam bir yılı kapsıyor mu (değilse "yıllık" yerine "dönem" denir: ör. Ocak–Ağustos 2026) */
 const isFullYear = (r: PlantReportData) => r.monthly.length >= 12;
+/** Kısa gösterimde aynı görünen iki tutar */
+const sameTlShort = (a: number, b: number) => formatTlShort(a) === formatTlShort(b);
 /** Toplam kurulu güç: bir santralinki bile tahminse (en yüksek üretim, alt sınır) toplam da tahmindir ve "~" ile yazılır (CLAUDE.md) */
 const totalMw = (r: PlantReportData, mw: number) => `${r.plants.some((p) => p.capacityEstimated) ? "~" : ""}${nf(mw, 0)}`;
+/** "POYRAZ RES ve EGE RES İŞ PERAKENDE toplayıcı portföyünde" (toplayıcı başına santraller) */
+function otherAggregatorText(o: NonNullable<PlantReportData["settlement"]["inOtherAggregator"]>): string {
+  const byAgg = new Map<string, string[]>();
+  for (const p of o.plants) byAgg.set(p.aggregator, [...(byAgg.get(p.aggregator) ?? []), p.plantName]);
+  const and = (l: string[]) => (l.length > 1 ? `${l.slice(0, -1).join(", ")} ve ${l[l.length - 1]}` : l[0]);
+  return Array.from(byAgg, ([agg, plants]) => `${and(plants)} ${agg} toplayıcı portföyünde`).join("; ");
+}
+/** Özet dipnotu için kısa biçim: en çok 3 santral adıyla, fazlası sayıyla ("12 santral 2 toplayıcının portföyünde") */
+function otherAggregatorBrief(o: NonNullable<PlantReportData["settlement"]["inOtherAggregator"]>): string {
+  if (o.plants.length <= 3) return otherAggregatorText(o);
+  const aggs = Array.from(new Set(o.plants.flatMap((p) => p.aggregator.split(", "))));
+  return `${nf(o.plants.length)} santral ${aggs.length === 1 ? `${aggs[0]} toplayıcı portföyünde` : `${nf(aggs.length)} toplayıcının portföyünde`}`;
+}
+/** KÜPST tolerans ve katsayısı: yalnız rapor döneminin kapsadığı yılların kuralı yazılır */
+function kupstRegimeText(r: PlantReportData): string {
+  const y0 = Number(r.period.start.slice(0, 4));
+  const y1 = Number(r.period.end.slice(0, 4));
+  const parts: string[] = [];
+  if (y0 < 2025) parts.push("2025 öncesi: rüzgâr %21, güneş %12, katsayı 0,03.");
+  if (y0 <= 2025 && y1 >= 2025) parts.push("2025: rüzgâr %17, güneş %10, diğer %5, katsayı 0,03 (EPDK 13025).");
+  if (y1 >= 2026) parts.push("2026'dan itibaren: rüzgâr %15, güneş %8, diğer %5, katsayı 0,05 (EPDK 14029, RG 29.12.2025).");
+  return parts.join(" ");
+}
+/** Adil prim slaytı var mı: yalnız toplayıcı sahipleri ya da tek şirketin santralleri için (şirketler arası paylaşım yok) */
+const hasFairShareSlide = (r: PlantReportData) => !!r.fairShare && r.fairShare.basis !== "companies" && r.fairShare.members.length >= 2;
 /** İlk harfi büyük (Türkçe: "işlem" → "İşlem") */
 const capitalize = (t: string) => (t ? t.charAt(0).toLocaleUpperCase("tr-TR") + t.slice(1) : t);
+/** Kural tabanlı kapatma testinin sonucu; %0'a yuvarlanan sonuç "yalnız %0" yerine "ek kazanç sağlamazdı" */
+const strategyPhrase = (pct: number, lagHours: number) =>
+  Math.round(pct) <= 0
+    ? `${lagHours} saat önceden kural tabanlı kapatma ek kazanç sağlamazdı`
+    : `${lagHours} saat önceden kural tabanlı kapatma yalnız %${nf(pct, 0)} sağlardı`;
 const hourRange = (h: number) => `${String(h).padStart(2, "0")}:00–${String((h + 1) % 24).padStart(2, "0")}:00`;
 
 /** İki renk arasında doğrusal ara renk (ısı haritası) */
@@ -466,7 +498,9 @@ export async function exportPlantReportPptx(
     page++;
     s.background = { color: C.white };
     text(s, section.toLocaleUpperCase("tr-TR"), { x: M, y: 0.42, w: 8, h: 0.25, fontSize: 10, bold: true, charSpacing: 2, color: C.gain });
-    text(s, title, { x: M, y: 0.72, w: kind ? CW - 1.5 : CW, h: 0.95, fontSize: 26, bold: true, fontFace: FONT_HEAD, valign: "top" });
+    // Uzun başlık (santral adı uzunsa) 26 puntoda üç satıra taşıp altındaki içeriğe biniyordu: iki satıra sığacak puntoya iner
+    const titleSize = title.length > (kind ? 100 : 115) ? 22 : 26;
+    text(s, title, { x: M, y: 0.72, w: kind ? CW - 1.5 : CW, h: 0.95, fontSize: titleSize, bold: true, fontFace: FONT_HEAD, valign: "top" });
     if (kind) tag(s, kind, W - M - TAGS[kind].w, 0.42);
     const credit = author.name ? ` · Hazırlayan: ${author.name}` : "";
     text(s, `${r.projectName} · Dengesizlik Karnesi · ${periodLabel(r)} · Kaynak: EPİAŞ Şeffaflık Platformu${credit}`, {
@@ -529,7 +563,7 @@ export async function exportPlantReportPptx(
             iv.peers
               ? `; ${intradayPeerPhrase(iv)}`
               : iv.strategyPct !== null && !iv.extra
-                ? `; 2 saat önceden kural tabanlı kapatma yalnız %${nf(iv.strategyPct, 0)} sağlardı`
+                ? `; ${strategyPhrase(iv.strategyPct, 2)}`
                 : ""
           }${iv.realized.staticPlants.length ? `; ${iv.realized.staticPlants.length} santralin planı gün içinde hiç güncellenmiyor` : ""}.`
         : ie
@@ -711,7 +745,7 @@ export async function exportPlantReportPptx(
           (iv.extra
             ? `Kural tabanlı ek kapatma en fazla %${nf(iv.extra.pct, 0)} daha azaltabilir (üst sınır${iv.extra.cappedByPeers ? ", sektörün en iyi çeyreğiyle sınırlı" : ""}).`
             : iv.strategyPct !== null && !iv.peers
-              ? `${r.intraday!.lagHours} saat önceden kural tabanlı kapatma yalnız %${nf(iv.strategyPct, 0)} sağlardı; gün içi operasyon bundan etkin.`
+              ? `${capitalize(strategyPhrase(iv.strategyPct, r.intraday!.lagHours))}; gün içi operasyon bundan etkin.`
               : ""),
       });
     } else if (iv.extra && points.length < 4) {
@@ -732,14 +766,18 @@ export async function exportPlantReportPptx(
     const gapNote =
       (r.dataGaps.length ? `Veri eksik (hesaba girmedi): ${listOf(r.dataGaps.map(describeGap), 3)}. ` : "") +
       (r.lateStarts?.length ? `Dönem içinde devreye giren: ${listOf(r.lateStarts.map(describeLateStart), 4)}. ` : "");
+    const otherAgg = r.settlement.inOtherAggregator;
     const scope =
       gapNote +
       (cov.length
         ? `Kapsam: ${cov.map((c) => `${c.company} şirketinin EPİAŞ'ta üretimi yayımlanan ${c.total} santralinden ${c.total - c.missing.length} tanesi (eksik: ${listOf(c.missing, 4, ", ")})`).join("; ")}. `
         : "") +
       (finalPlanNote(r) ? `${finalPlanNote(r)} ` : "") +
+      (otherAgg
+        ? `${capitalize(otherAggregatorBrief(otherAgg))} (santral bazında ${formatTlShort(otherAgg.standaloneTl)}): dengesizlikleri orada netleşir, bu santrallerde rakam üst sınırdır. `
+        : "") +
       `Sapma yükü = dengesizlik riski (gün içi işlemler öncesi) + tahmini KÜPST${iv.realized ? "; gün içi düzeltmeler sonrası rakam ayrıca verildi" : ""}.`;
-    text(s, scope, { x: M, y: 6.68, w: CW, h: 0.32, fontSize: 9, color: cov.length || gapNote || finalPlanNote(r) ? C.scenTx : C.sub, valign: "top", fit: "shrink" });
+    text(s, scope, { x: M, y: 6.68, w: CW, h: 0.32, fontSize: 9, color: cov.length || gapNote || finalPlanNote(r) || otherAgg ? C.scenTx : C.sub, valign: "top", fit: "shrink" });
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -1033,10 +1071,17 @@ export async function exportPlantReportPptx(
     const excess = (p: (typeof r.plants)[number]) => Math.max(0, p.unitCostTl - refOf(p).value) * p.actualMwh;
     const biggest = [...(established.length ? established : r.plants)].sort((a, b) => excess(b) - excess(a))[0];
     const bigRef = refOf(biggest);
+    // Ölçüte (sektör medyanı) göre hiçbir santral belirgin pahalı değilse (%5 içinde) "en büyük iyileştirme alanı" denmez:
+    // medyanın 1 TL üstündeki santrali öne çıkarmak, portföyün iyi durumunu gizler
+    const benchmarked = (established.length ? established : r.plants).filter((p) => refOf(p).sector);
+    const nearMedian = benchmarked.length === (established.length ? established : r.plants).length && benchmarked.every((p) => p.unitCostTl <= refOf(p).value * 1.05);
+    const highest = [...benchmarked].sort((a, b) => b.unitCostTl - a.unitCostTl)[0];
     const title =
-      r.plants.length > 1 && excess(biggest) > 0
-        ? `En büyük iyileştirme alanı ${biggest.name}: MWh başına ${nf(biggest.unitCostTl, 0)} TL; ${
-            bigRef.sector ? "sektör medyanına" : `${biggest.type} ortalamasına`
+      r.plants.length > 1 && nearMedian && highest
+        ? `Hiçbir santral sektör medyanından belirgin pahalı değil: en yüksek ${highest.name} MWh başına ${nf(highest.unitCostTl, 0)} TL (medyan ${nf(refOf(highest).value, 0)})`
+        : r.plants.length > 1 && excess(biggest) > 0
+        ? `En büyük iyileştirme alanı ${biggest.name}: ${nf(biggest.unitCostTl, 0)} TL/MWh; ${
+            bigRef.sector ? "medyana" : `${biggest.type} ortalamasına`
           } (${nf(bigRef.value, 0)}) inse en fazla ≈ ${formatTlShort(excess(biggest))}`
         : main.list.length > 1
           ? `${main.type} santralleri arasında en yüksek risk ${worst.name}: MWh başına ${nf(worst.unitCostTl, 0)} TL (${main.type} ortalaması ${nf(main.avg, 0)} TL)`
@@ -1119,7 +1164,7 @@ export async function exportPlantReportPptx(
     text(
       s,
       (hidden > 0
-        ? `Her teknolojiden ölçütün üstünde en çok TL kaybettiren ${perGroup} santral; diğer ${hidden} santral Ek A'da. `
+        ? `Her teknolojiden ${perGroup} santral: önce ölçütün (sektör medyanı) üstünde en çok TL kaybettirenler, sonra MWh başına en pahalılar; diğer ${hidden} santral Ek A'da. `
         : "") +
         (lateNote ? `${lateNote} ` : "") +
         `Kırmızı: kendi teknolojisinin ortalamasından %10'dan fazla yüksek. Santral tek başına uzlaştırılsaydı oluşacak risktir; ${unit.netting}yle toplam daha düşüktür.`,
@@ -1143,8 +1188,18 @@ export async function exportPlantReportPptx(
     const mainPlants = main.plants.filter((p) => !late.has(p.name));
     const topQ = mainPlants.filter((p) => p.rankPct <= 25).length;
     const bottomQ = mainPlants.filter((p) => p.rankPct >= 75).length;
-    const split = mainPlants.length >= 3 && topQ > 0 && bottomQ > 0;
-    const title = split
+    // "İkiye ayrılıyor" yalnız santrallerin en az yarısı uç çeyreklerdeyse (Bilgin hidro: 8 santralin 6'sı ortadaydı)
+    const split = mainPlants.length >= 3 && topQ > 0 && bottomQ > 0 && topQ + bottomQ >= mainPlants.length / 2;
+    /** Birden çok teknolojide her biri ayrı: tek teknolojiyi başlığa çıkarmak diğerinin bulgusunu gizliyordu */
+    const typePhrase = (t: (typeof sec.types)[number]) => {
+      const d = ((t.portfolioUnitTl - t.unitImbalanceTl.median) / t.unitImbalanceTl.median) * 100;
+      return Math.abs(d) < 5
+        ? `${rowName(t)} medyan civarında (${nf(t.portfolioUnitTl, 0)} TL, medyan ${nf(t.unitImbalanceTl.median, 0)})`
+        : `${rowName(t)} ${nf(t.portfolioUnitTl, 0)} TL ile medyanın %${nf(Math.abs(d), 0)} ${d < 0 ? "altında" : "üstünde"} (sektörün %${nf(100 - t.portfolioRankPct, 0)} kadarından iyi)`;
+    };
+    const title = sec.types.length === 2 && !split
+      ? `MWh başına risk: ${[...sec.types].sort((a, b) => a.portfolioUnitTl / a.unitImbalanceTl.median - b.portfolioUnitTl / b.unitImbalanceTl.median).map(typePhrase).join("; ")}`
+      : split
       ? `${sec.types.length > 1 ? `${rowName(main)} santralleri` : "Portföy"} ikiye ayrılıyor: ${topQ} santral sektörün en iyi çeyreğinde, ${bottomQ} santral en kötü çeyreğinde`
       : diffPct >= 0
         ? `${rowName(main)} santralleriniz MWh başına ${nf(main.portfolioUnitTl, 0)} TL ile sektör medyanının %${nf(diffPct, 0)} üstünde; sektörün yalnızca %${nf(better, 0)} kadarından iyi`
@@ -1445,7 +1500,11 @@ export async function exportPlantReportPptx(
     // Sağ: santral bazında sistematik sapma (sapan çubuklar, sıfır ortada)
     const px = M + lw + 0.6;
     const pw = W - M - px;
-    const plantsBias = [...established].sort((x, y) => y.biasPct - x.biasPct).slice(0, 11);
+    // En çok 13 santral; fazlasında mutlak sapması en büyük 13 (planı düşük santraller de kaybolmasın)
+    const plantsBias = [...established]
+      .sort((x, y) => Math.abs(y.biasPct) - Math.abs(x.biasPct))
+      .slice(0, 13)
+      .sort((x, y) => y.biasPct - x.biasPct);
     const overCount = established.filter((p) => p.biasPct > 1).length;
     text(s, "Santral bazında sistematik sapma", { x: px, y: 1.9, w: pw, h: 0.35, fontSize: 14, bold: true, fontFace: FONT_HEAD });
     text(s, `Plan, ${isFullYear(r) ? "yıl" : "dönem"} boyunca gerçekleşen üretimden ne kadar fazla (+) ya da az (−)`, { x: px, y: 2.25, w: pw, h: 0.3, fontSize: 10.5, color: C.sub });
@@ -1479,7 +1538,7 @@ export async function exportPlantReportPptx(
     text(
       s,
       overCount > established.length / 2
-        ? `${established.length} santralin ${overCount} tanesinde plan sistematik olarak yüksek: plan kalibrasyonu en hızlı kazanç kalemlerinden biri.`
+        ? `${established.length} santralin ${overCount} tanesinde plan sistematik olarak %1'den fazla yüksek: plan kalibrasyonu en hızlı kazanç kalemlerinden biri.`
         : (() => {
             // Çoğunlukta sistematik sapma yoksa bile listede uç santraller olabilir (Gain: ÜZÜMLÜ İÇMESUYU +%19,5): "sapma yok"
             // demek grafikle çelişiyordu; çoğunluk ve uçlar ayrı söylenir
@@ -1728,14 +1787,14 @@ export async function exportPlantReportPptx(
         `Beklenen değer ${isFullYear(r) ? "yıllık" : "dönem"} ortalamasıdır; ihtiyatlı değer ayların %90'ının altında kaldığı seviyedir. Toplayıcılar teklif verirken bu iki rakam arasında bir prim seçer. ` +
         "Santral tablosu, portföye yeni santral alırken ya da santral bazında sözleşme yaparken kullanılır; santral tek başına uzlaştırılır, bu yüzden portföy priminden yüksektir." +
         (rp.backtest
-          ? ` Geçmişle sınama: aynı yöntemle ${rp.backtest.fromYear} verisinden hesaplanan prim, ${rp.backtest.toYear}'te gerçekleşenin altında kaldı (${rp.backtest.stats.n} santralde gerçek / tahmin medyanı ${nf(rp.backtest.stats.ratio.p50, 2)}; fiyat makası ×${nf(rp.backtest.stats.priceEffectRatio, 2)}, tahmin ×${nf(rp.backtest.stats.forecastEffectRatio, 2)}). Prim geçmişe bakar; fiyat makası açılırsa düşük kalır.`
+          ? ` Geçmişle sınama: aynı yöntemle ${rp.backtest.fromYear} verisinden hesaplanan prim, ${yearLocative(String(rp.backtest.toYear))} gerçekleşenin altında kaldı (${rp.backtest.stats.n} santralde gerçek / tahmin medyanı ${nf(rp.backtest.stats.ratio.p50, 2)}; fiyat makası ×${nf(rp.backtest.stats.priceEffectRatio, 2)}, tahmin ×${nf(rp.backtest.stats.forecastEffectRatio, 2)}). Prim geçmişe bakar; fiyat makası açılırsa düşük kalır.`
           : "")
     );
     if (rp.backtest) {
       const b = rp.backtest;
       text(
         s,
-        `Geçmişle sınama: bu yöntemle ${b.fromYear} ${b.months} verisinden hesaplanan prim, ${b.toYear}'te gerçekleşenin medyanda %${nf((1 - 1 / b.stats.ratio.p50) * 100, 0)} altında kaldı ` +
+        `Geçmişle sınama: bu yöntemle ${b.fromYear} ${b.months} verisinden hesaplanan prim, ${yearLocative(String(b.toYear))} gerçekleşenin medyanda %${nf((1 - 1 / b.stats.ratio.p50) * 100, 0)} altında kaldı ` +
           `(${b.stats.n} santral; tipik hata %${nf(b.stats.medianAbsErrorPct, 0)}). Geçen yılın hata dağılımı uygulanırsa: ${nf(b.range.low, 0)}–${nf(b.range.high, 0)} TL/MWh${
           b.range.low > pf.expectedTlPerMwh ? " (yöntem geçmişte düşük tahmin ettiği için aralık beklenen primin üstünde)" : ""
         }.`,
@@ -1853,8 +1912,10 @@ export async function exportPlantReportPptx(
   // ---------------------------------------------------------------------------------------------
   // 7c. ADİL PRİM (Shapley): netleşen maliyetin üyelere paylaştırılması
   // ---------------------------------------------------------------------------------------------
-  if (r.fairShare && r.fairShare.members.length >= 2) {
-    const fs = r.fairShare;
+  // Birden çok şirketli projede (ör. bir grubun şirketleri) şirketler arası paylaşım sorusu yok: slayt yalnız toplayıcı
+  // sahipleri ya da tek şirketin santralleri için
+  if (hasFairShareSlide(r)) {
+    const fs = r.fairShare!;
     const who = { owners: "Santral sahibi", plants: "Santral", companies: "Şirket" }[fs.basis];
     const rows = [...fs.members].sort((a, b) => b.discountPct - a.discountPct);
     const best = rows[0];
@@ -1993,7 +2054,11 @@ export async function exportPlantReportPptx(
   // ---------------------------------------------------------------------------------------------
   {
     /** value: TL etkisi (başlıkta en büyük eyleme dönük kalem seçilir); realised: zaten alınan fayda, başlığa aday değil */
-    type Item = { title: string; impact: string; body: string; kind: TagKind; effort: string; value?: number; realised?: boolean };
+    /**
+     * lowerBound: tutar alt sınırdır (başlıkta "≥"). unverified: dayanağı açık veride doğrulanamaz (grup üyeliği);
+     * başlığa çıkarsa "olası kaldıraç" denir
+     */
+    type Item = { title: string; impact: string; body: string; kind: TagKind; effort: string; value?: number; realised?: boolean; lowerBound?: boolean; unverified?: boolean };
     const items: Item[] = [];
     // Gün içi (intradayView): şirketin gerçekleşen düzeltmesi kural tabanlı stratejiden büyükse kalem "zaten alınıyor" (kesin
     // hesap); strateji daha fazlasını vaat ediyorsa yalnız aradaki fark fırsat (senaryo). Gün içi güncelleme yalnız
@@ -2015,7 +2080,7 @@ export async function exportPlantReportPptx(
           (iv.peers
             ? `${capitalize(intradayPeerPhrase(iv))}. `
             : iv.strategyPct !== null
-              ? `Kural tabanlı 2 saatlik kapatma testi yalnız %${nf(iv.strategyPct, 0)} verdi; mevcut gün içi operasyon bunun üstünde. `
+              ? `${capitalize(strategyPhrase(iv.strategyPct, 2))}; mevcut gün içi operasyon bunun üstünde. `
               : "") +
           (iv.realized.staticPlants.length
             ? `Planı gün içinde hiç güncellenmeyen ${iv.realized.staticPlants.length} santral (${listOf(iv.realized.staticPlants, 3, ", ")}) kapsam dışında: en hızlı ek kazanım bunları gün içi operasyona almak.`
@@ -2031,7 +2096,7 @@ export async function exportPlantReportPptx(
         impact: `en fazla %${nf(iv.extra.pct, 0)} · ≈ ${formatTlShort(iv.extra.tl)}`,
         body:
           (iv.realized
-            ? `Mevcut gün içi düzeltmeler GİP işlem maliyeti düşülünce dengesizliği net %${nf(iv.realized.netPct, 1)} azaltıyor; kural tabanlı kapatma %${nf(iv.strategyPct ?? 0, 1)} verdi` +
+            ? `Mevcut gün içi düzeltmeler GİP işlem maliyeti düşülünce dengesizliği net %${nf(iv.realized.netPct, 1)} azaltıyor; ${strategyPhrase(iv.strategyPct ?? 0, 2)}` +
               (iv.extra.cappedByPeers
                 ? `, ama sektörün en iyi çeyreği net %${nf(iv.peers!.topQuartilePct, 1)}'de: ek fırsat bu seviyeyle sınırlı (%${nf(iv.extra.pct, 1)}). `
                 : `, fark %${nf(iv.extra.pct, 1)}${iv.peers ? ` (sektörün en iyi çeyreği net %${nf(iv.peers.topQuartilePct, 1)})` : ""}. `)
@@ -2055,12 +2120,16 @@ export async function exportPlantReportPptx(
     // verilir (portföyde ters sapmalar zaten birbirini dengelediği için daha büyüktür).
     const fu = r.forecastUpside;
     const fuV = fu ? forecastUpsideValue(fu) : null;
+    /** Kısa gösterimde aynı görünen iki tutar ("482 bin TL – 482 bin TL" yazılmaz) */
+    const sameTl = (a: number, b: number) => formatTlShort(a) === formatTlShort(b);
     const fuValue = fuV ? fuV.main : 0;
     items.push({
       title: fu ? "Zayıf santrallerde tahmin iyileştirme" : "En pahalı saatlere odaklı tahmin iyileştirme",
       impact: fu && fuV
-        ? fuV.evidence
+        ? fuV.evidence && !sameTl(fuV.main, fuV.upper)
           ? `≈ ${formatTlShort(fuV.main)} – ${formatTlShort(fuV.upper)}`
+          : fuV.evidence
+          ? `≈ ${formatTlShort(fuV.upper)}`
           : fuValue > 0
             ? `≈ ${formatTlShort(fuValue)}`
             : "Hesaplanmadı"
@@ -2069,8 +2138,17 @@ export async function exportPlantReportPptx(
       body:
         (fu
           ? `${fu.plantCount} santral (${listOf(fu.plantNames, 4, ", ")}) sektör medyanının üstünde. ` +
+            // Toplayıcıdaki santralin sapması portföyde netleşir: kazancın şirkete kalan kısmı toplayıcı sözleşmesine bağlı
+            (() => {
+              const inAgg = (r.settlement.inOtherAggregator?.plants ?? []).map((p) => p.plantName).filter((n) => fu.plantNames.includes(n));
+              if (!inAgg.length) return "";
+              return `${inAgg.length === fu.plantNames.length ? (inAgg.length > 1 ? "Hepsi" : "Santral") : listOf(inAgg, 4, ", ")} toplayıcı portföyünde: kazancın şirkete kalan kısmı toplayıcı sözleşmesine bağlı. `;
+            })() +
             (fu.evidence
-              ? `Geçmişle sınama: ${fu.evidence.fromYear}'te benzer durumdaki santrallerin en iyi çeyreği sapmasını bir yılda ${evidenceRates(fu) || "hiç"} azalttı${evidenceNone(fu)} (tipik santral neredeyse hiç iyileşmedi); bu kadar iyileşme ${formatTlShort(fuV!.main)}, medyana inmek (üst sınır) ${formatTlShort(fuV!.upper)} kazandırır (${unit.loc} netleşmiş + KÜPST). `
+              ? `Geçmişle sınama: ${yearLocative(String(fu.evidence.fromYear))} benzer durumdaki santrallerin en iyi çeyreği sapmasını bir yılda ${evidenceRates(fu) || "hiç"} azalttı${evidenceNone(fu)} (tipik santral neredeyse hiç iyileşmedi); ` +
+                (sameTl(fuV!.main, fuV!.upper)
+                  ? `bu kadar iyileşme onları medyana indirir: ${formatTlShort(fuV!.upper)} (${unit.loc} netleşmiş + KÜPST). `
+                  : `bu kadar iyileşme ${formatTlShort(fuV!.main)}, medyana inmek (üst sınır) ${formatTlShort(fuV!.upper)} kazandırır (${unit.loc} netleşmiş + KÜPST). `)
               : `Medyana inselerdi ${unit.loc} netleşmiş dengesizlik ${formatTlShort(fu.nettedGainTl)}, KÜPST ${formatTlShort(fu.kupstGainTl)} azalırdı ` +
                 `(santraller tek başına düşünülse ${formatTlShort(fu.standaloneGainTl)}; farkı netleşme zaten karşılıyor). `)
           : `Riskin %${nf(r.alignment.sameDirectionCostPct, 0)} kadarı sistemle aynı yöndeki sapmalardan geliyor. `) +
@@ -2080,20 +2158,58 @@ export async function exportPlantReportPptx(
       effort: "Düşük–orta · tahmin sağlayıcı",
     });
     if (r.dsg) {
-      items.push({
-        title: "Başka şirketlerle dengeden sorumlu grup",
-        impact: r.dsg.benefitTl > 0 ? `${formatTlShort(r.dsg.benefitTl)} · %${nf(r.dsg.benefitPct, 0)}` : "Belirgin fayda yok",
-        value: r.dsg.benefitTl,
-        body:
-          `${r.dsg.offsettingHourSharePct >= 99.5 ? "Neredeyse her saatte" : `Saatlerin %${nf(r.dsg.offsettingHourSharePct, 0)} kadarında`} bir şirket fazla, bir diğeri eksik üretiyor; grup bu saatlerde kendi içinde dengelenir. ` +
-          (() => {
-            const mr = monthlyRange(r.dsg.monthlyBenefit);
-            return mr ? `Fayda her ay %${nf(mr.min, 0)}–${nf(mr.max, 0)}. ` : "";
-          })() +
-          "Varsayım: grubun dengesizliği saatlik net toplamdan fiyatlanır; paylaşım ayrıca kararlaştırılır.",
-        kind: "scenario",
-        effort: "Orta · sözleşme",
-      });
+      // Projedeki şirketler (ör. bir grubun şirketleri) birlikte. EPİAŞ grup üyeliğini yayımlamadığı için
+      // (dsg-organization-list kapalı) zaten tek grupta olup olmadıkları bilinmez: kalem "olası" kaldıraçtır ve doğrulanmalı.
+      // Hesap son planla (gün içi sonrası): ilk planla gün içi kazancıyla üst üste binerdi (dsg-basis).
+      // Portföyün bir kısmı zaten bir toplayıcıdaysa asıl seçenek bağımsızları o portföye almaktır (joinAggregator):
+      // şirketin kullandığı bir yapı, fayda daha büyük; önce neden dışarıda oldukları sorulmalı
+      const d = r.dsg;
+      const ja = d.joinAggregator && d.joinAggregator.benefitTl > d.benefitTl ? d.joinAggregator : null;
+      const monthly = (() => {
+        const mr = monthlyRange(d.monthlyBenefit);
+        return mr ? `Fayda her ay %${nf(mr.min, 0)}–${nf(mr.max, 0)}. ` : "";
+      })();
+      const basisText =
+        d.basis === "final"
+          ? `Gün içi düzeltmelerden sonra kalan sapmayla hesaplandı, gün içi kazancına eklenebilir${
+              sameTlShort(d.firstPlanBenefitTl, d.benefitTl) ? "" : ` (ilk planla ${formatTlShort(d.firstPlanBenefitTl)}, ama o rakam gün içi kazancıyla üst üste biner)`
+            }. `
+          : "İlk planla hesaplandı (son plan yok): şirketler gün içinde düzeltme yapıyorsa fayda daha küçüktür. ";
+      const verify = "Grup üyeliği EPİAŞ'ta yayımlanmıyor: şirketler zaten bir grupta ise bu fayda alınıyordur, görüşmeden önce doğrulayın.";
+      if (ja) {
+        items.push({
+          title: `Kalan ${nf(d.companyCount)} bağımsız şirketi toplayıcı portföyüne almak`,
+          impact: `≥ ${formatTlShort(ja.benefitTl)} · %${nf(ja.benefitPct, 0)}`,
+          value: ja.benefitTl,
+          lowerBound: true,
+          unverified: true,
+          body:
+            `${listOf(ja.memberPlantNames, 3, ", ")} zaten ${ja.aggregator} portföyünde. Bağımsız şirketler de girse portföy daha çok saatte kendi içinde dengelenir; ` +
+            `portföyün diğer üyeleriyle netleşme hesapta yok (alt sınır). Yalnız kendi aralarında grup kurmak ${formatTlShort(d.benefitTl)}. ` +
+            "Önce sorun: bu santraller neden portföy dışında (ortaklık, finansman, mevcut sözleşme)? " +
+            basisText +
+            verify,
+          kind: "scenario",
+          effort: "Orta · sözleşme",
+        });
+      } else {
+        items.push({
+          title: `${nf(d.companyCount)} ${d.excludedPlantNames.length ? "bağımsız " : ""}şirketi tek dengeden sorumlu grupta toplamak`,
+          impact: d.benefitTl > 0 ? `${formatTlShort(d.benefitTl)} · %${nf(d.benefitPct, 0)}` : "Belirgin fayda yok",
+          value: d.benefitTl,
+          unverified: true,
+          body:
+            `${d.offsettingHourSharePct >= 99.5 ? "Neredeyse her saatte" : `Saatlerin %${nf(d.offsettingHourSharePct, 0)} kadarında`} bir şirket fazla, bir diğeri eksik üretiyor; grup bu saatlerde kendi içinde dengelenir. ` +
+            monthly +
+            (d.excludedPlantNames.length && r.settlement.inOtherAggregator
+              ? `${otherAggregatorText(r.settlement.inOtherAggregator)}: dengesizlikleri orada netleştiği için gruba alınmadı. `
+              : "") +
+            basisText +
+            verify,
+          kind: "scenario",
+          effort: "Orta · sözleşme",
+        });
+      }
     } else if (agg && agg.benefitTl > 0) {
       items.push({
         title: `${agg.name} portföyünde netleşme (zaten alınıyor)`,
@@ -2122,7 +2238,7 @@ export async function exportPlantReportPptx(
     // Başlık: TL etkisi en büyük eyleme dönük kalem (zaten alınan fayda aday değil)
     const best = items.filter((it) => !it.realised && (it.value ?? 0) > 0).sort((a, b) => (b.value ?? 0) - (a.value ?? 0))[0];
     const title = best
-      ? `En büyük kaldıraç: ${best.title.charAt(0).toLocaleLowerCase("tr-TR")}${best.title.slice(1)} (≈ ${formatTlShort(best.value!)})`
+      ? `En büyük ${best.unverified ? "olası " : ""}kaldıraç: ${best.title.charAt(0).toLocaleLowerCase("tr-TR")}${best.title.slice(1)} (${best.lowerBound ? "≥" : "≈"} ${formatTlShort(best.value!)})`
       : "Riski azaltmanın yolları";
     const s = contentSlide("Fırsatlar", title);
     s.addNotes(
@@ -2139,7 +2255,7 @@ export async function exportPlantReportPptx(
       s.addShape(pptx.ShapeType.ellipse, { x: M + 0.3, y: y + 0.22, w: 0.48, h: 0.48, fill: { color: C.navy }, line: { color: C.navy, width: 0 } });
       text(s, String(i + 1), { x: M + 0.3, y: y + 0.22, w: 0.48, h: 0.48, fontSize: 16, bold: true, color: C.white, align: "center", valign: "middle" });
       text(s, it.title, { x: M + 1.0, y: y + 0.2, w: 7.2, h: 0.4, fontSize: 15, bold: true, fontFace: FONT_HEAD });
-      text(s, it.body, { x: M + 1.0, y: y + 0.62, w: 7.2, h: h - 0.72, fontSize: 11, color: C.sub, valign: "top" });
+      text(s, it.body, { x: M + 1.0, y: y + 0.62, w: 7.2, h: h - 0.72, fontSize: 11, color: C.sub, valign: "top", fit: "shrink" });
       tag(s, it.kind, rx, y + 0.22);
       text(s, it.impact, {
         x: rx,
@@ -2328,7 +2444,7 @@ export async function exportPlantReportPptx(
           r
         )}, ${nf(r.period.hours, 0)} saat. ` +
           // Veri çekme yönteminin doğrulaması (bir kez, şirketin kendi dosyasıyla): mülakattaki "veri doğru mu?" sorusunun cevabı
-          "Doğrulama: veri çekme yöntemi bir rüzgâr santralinde şirketin kendi verisiyle karşılaştırıldı; KGÜP ilk versiyonu 5.880 saatin tamamında, UEVM Mayıs–Aralık 2025 saatlerinde birebir aynı. " +
+          "Doğrulama (2025): veri çekme yöntemi bir rüzgâr santralinde şirketin kendi verisiyle karşılaştırıldı; KGÜP ilk versiyonu 5.880 saatin tamamında, UEVM Mayıs–Aralık 2025 saatlerinde birebir aynı. " +
           capacitySourceSentence(r),
       ],
       [
@@ -2346,13 +2462,16 @@ export async function exportPlantReportPptx(
             "Portföyün değeri, santrallerin lisans sahiplerinin kendi dengesinde uzlaştırılmasıyla karşılaştırılarak hesaplandı; toplayıcı ile üreticiler arasındaki paylaşım rapora yansımaz."
           : "Şirket bazındadır: aynı şirketin santralleri saat saat birlikte netleştirildi. Santral sahipleri EPİAŞ katılımcı kayıtlarından alındı" +
             (r.settlement.unknownOwnerCount > 0 ? `; sahibi bulunamayan ${r.settlement.unknownOwnerCount} santral ayrı şirket sayıldı.` : ".") +
-            " Şirket zaten bir dengeden sorumlu grubun üyesiyse grup içi netleşme ve paylaşım bu rapora yansımaz.",
+            " Şirket zaten bir dengeden sorumlu grubun üyesiyse grup içi netleşme ve paylaşım bu rapora yansımaz." +
+            (r.settlement.inOtherAggregator
+              ? ` EPİAŞ toplayıcı listesine göre (${r.settlement.inOtherAggregator.asOf}) ${otherAggregatorText(r.settlement.inOtherAggregator)}: bu santrallerin dengesizliği portföyde netleşir, buradaki tek başına değer üst sınırdır.`
+              : ""),
       ],
       [
         "Sınırlar",
         "Şirketin gün içi işlem fiyatları ve ikili anlaşmaları açık veride yok: GİP işlem maliyeti ortalama fiyatla tahmindir, gerçek fiyat farklı olabilir. TEİAŞ yük atma/alma talimatları (kısıntı) santral bazında yayımlanmadığından ayrılamadı; talimatla düşen üretim dengesizlik sayılmaz, bu yüzden kısıntı yaşayan santrallerde risk olduğundan yüksek görünebilir." +
           (r.yekdem
-            ? " YEKDEM santralleri dahildir: YEKDEM katılımcısı üretimini serbest piyasada kendisi satar ve dengesizliği kendisine aittir (YEK Yönetmeliği md. 15/1, 23/1; YEKDEM portföyü dengesizliğini düzenleyen md. 16–17 29.4.2016'da kaldırıldı); yalnızca geliri PTF yerine YEK fiyatından oluşur."
+            ? " YEKDEM santralleri dahildir: üretimini kendisi satar, dengesizliği kendisine aittir (YEK Yönetmeliği md. 15/1, 23/1; portföy dengesizliğini düzenleyen md. 16–17 2016'da kaldırıldı); yalnız geliri YEK fiyatından oluşur."
             : "") +
           (r.lateStarts?.length ? ` Dönem içinde devreye giren santraller (öncesi eksik sayılmadı): ${listOf(r.lateStarts.map(describeLateStart), 6)}.` : "") +
           (r.notProducing?.length ? ` Henüz üretime geçmeyen (plan ve üretim sıfır, hesaba etkisi yok): ${listOf(r.notProducing, 4)}.` : "") +
@@ -2360,14 +2479,14 @@ export async function exportPlantReportPptx(
             ? ` Eksik veri: ${listOf(r.dataGaps.map(describeGap), 4)}; bu aylar santral ve portföy rakamlarına girmedi.`
             : "") +
           (r.outages.plants.length
-            ? ` Olası arıza/kısıntı blokları (tahmin ≥ kurulu gücün %30'u, üretim ≤ %2, ≥ 3 saat) santral bazında riskin %${nf(r.outages.sharePct, 1)} kadarı; hesaplardan çıkarılmadı.`
+            ? ` Olası arıza/kısıntı blokları (tahmin kalitesi slaytı, riskin %${nf(r.outages.sharePct, 1)} kadarı) hesaplardan çıkarılmadı.`
             : ""),
       ],
       [
         "KÜPST (tahmini)",
         `Saatlik |gerçekleşen − KÜP| sapmanın tolerans payını aşan kısmı × max(PTF, SMF) × katsayı; KÜP gün içi piyasası kapandıktan sonraki son KGÜP'tür (yoksa ilk plan; son plan saatlerin ${pctIn(r.finalPlan.coveragePct)} var${
           r.finalPlan.kupstFirstPlanSharePct >= 0.5 ? `, KÜPST'ün ${pctOf(r.finalPlan.kupstFirstPlanSharePct)} ilk plana göre${kupstUpperBound(r) ? ", üst sınır" : ""}` : ""
-        }); ${agg ? "toplayıcı portföyünde topluluk birimi bazında (toplam UEVM ile toplam KÜP karşılaştırılır; tolerans kaynak türlerinin kurulu gücüne göre ağırlıklı; katsayı topluluk için 2025'te 0,03, 2026'da 0,05; EPDK 14029 / 13025 md. 4)" : "santral bazında"}, YEKDEM santralleri dahil ${unit.dat} ait. Tolerans plana oranlandı. 2025: rüzgâr %17, güneş %10, diğer %5, katsayı 0,03 (EPDK 13025). 2026'dan itibaren: rüzgâr %15, güneş %8, diğer %5, katsayı 0,05 (EPDK 11/12/2025 tarihli 14029 sayılı karar, RG 29.12.2025). 2025 öncesi %21 / %12, katsayı 0,03. Arıza sayısına bağlı katsayı artışı kapsam dışı (alt sınır).`,
+        }); ${agg ? "toplayıcı portföyünde topluluk birimi bazında (toplam UEVM ile toplam KÜP karşılaştırılır; tolerans kaynak türlerinin kurulu gücüne göre ağırlıklı; katsayı topluluk için 2025'te 0,03, 2026'da 0,05; EPDK 14029 / 13025 md. 4)" : "santral bazında"}, YEKDEM santralleri dahil ${unit.dat} ait. Tolerans plana oranlandı. ${kupstRegimeText(r)} Arıza sayısına bağlı katsayı artışı kapsam dışı (alt sınır).`,
       ],
       ...(options.costChange
         ? [
@@ -2386,7 +2505,8 @@ export async function exportPlantReportPptx(
             [
               "Geçmişle sınama",
               `Yöntemler bir önceki yılın verisiyle çalıştırılıp sonraki yıl gerçekleşenle karşılaştırıldı (sektör karnesindeki santraller, ${r.riskPremium?.backtest?.months ?? "aynı aylar"}). ` +
-                (r.candidateBacktest
+                // Aday taraması yalnız büyüme slaytı varsa (aday slaytı olmayan şirket raporunda yer kaplamasın)
+                (r.candidateBacktest && growth && targets.length
                   ? `Aday taraması: katılan ${r.candidateBacktest.n} santralde sıra korelasyonu ${nf(r.candidateBacktest.spearman, 2)}, tutar gerçek / tahmin ${nf(r.candidateBacktest.ratio.p50, 2)}. `
                   : "") +
                 (r.riskPremium?.backtest
@@ -2400,7 +2520,13 @@ export async function exportPlantReportPptx(
         : []),
       [
         "Etiketler",
-        `KESİN HESAP: veriden doğrudan. TAHMİNİ: mevzuata dayanır ama açık veriyle tam yeniden üretilemez (KÜPST: arıza sayısına bağlı katsayı ve tolerans ayrıntıları; GİP işlem maliyeti: ortalama fiyat). VARSAYIMA BAĞLI: bir varsayıma dayanır (risk primi, adil prim paylaşımı). SENARYO: davranış varsayımı; taahhüt değildir.`,
+        `KESİN HESAP: veriden doğrudan. TAHMİNİ: mevzuata dayanır ama açık veriyle tam yeniden üretilemez (KÜPST: arıza sayısına bağlı katsayı ve tolerans ayrıntıları; GİP işlem maliyeti: ortalama fiyat). ` +
+          // Yalnız raporda olan slaytlar sayılır (slayt çıkınca etiket metni ona atıf yapmasın)
+          (() => {
+            const assumed = [r.riskPremium ? "risk primi" : null, hasFairShareSlide(r) ? "adil prim paylaşımı" : null].filter((x): x is string => !!x);
+            return assumed.length ? `VARSAYIMA BAĞLI: bir varsayıma dayanır (${assumed.join(", ")}). ` : "";
+          })() +
+          "SENARYO: davranış varsayımı; taahhüt değildir.",
       ],
     ];
     // Yerleşim metin uzunluğuna göre (lib/export/text-layout.ts): bloklar okuma sırasıyla iki sütuna dengeli bölünür, sığan

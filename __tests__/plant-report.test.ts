@@ -93,6 +93,24 @@ describe("Santral raporu verisi", () => {
     expect(two.dsg!.offsettingHourSharePct).toBe(100);
   });
 
+  it("başka bir toplayıcının portföyündeki santral işaretlenir; unvandaki yinelenen nokta temizlenir", () => {
+    const t = at(2026, 1, 1, 12);
+    const data = project([
+      { name: "A", type: "RES", hourly: [hour(t, 10, 12, 2000, 1800, "SURPLUS")], org: 1 },
+      { name: "B", type: "RES", hourly: [hour(t, 10, 8, 2000, 2400, "DEFICIT")], org: 2 },
+    ]);
+    data.plants[0].epiasPlantId = 101 as never;
+    data.plants[1].organizationName = "B ENERJİ A.Ş..";
+    const context = { aggregatorMembership: { asOf: "2026-09-28", byPlant: new Map([[101, ["TOPLAYICI Y"]]]) } };
+    const r = buildPlantReport(data, context);
+    expect(r.settlement.inOtherAggregator).toEqual({ asOf: "2026-09-28", plants: [{ plantName: "A", aggregator: "TOPLAYICI Y" }], standaloneTl: expect.any(Number) });
+    // A toplayıcıda: gruba girebilecek tek şirket kalır, grup senaryosu yok
+    expect(r.dsg).toBeNull();
+    expect(r.settlement.companies.map((c) => c.name)).toContain("B ENERJİ A.Ş.");
+    // Toplayıcı listesi yoksa işaret yok
+    expect(buildPlantReport(data).settlement.inOtherAggregator).toBeNull();
+  });
+
   it("YEKDEM santralinde gelir oranı verilmez ve santral işaretlenir", () => {
     const t = at(2025, 5, 1, 12);
     const r = buildPlantReport(project([

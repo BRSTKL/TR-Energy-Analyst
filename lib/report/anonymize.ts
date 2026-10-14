@@ -49,6 +49,8 @@ export function anonymizeReport(
     // Marka adı tek başına da geçebilir ("Inavitas"): uzun adlar önce değiştirildiği için güvenli
     add(r.aggregator.name.split(/\s+/)[0], "Toplayıcı X");
   }
+  // Santrallerin bulunduğu başka toplayıcılar (toplayıcı projesi değilken)
+  for (const p of r.settlement?.inOtherAggregator?.plants ?? []) for (const a of p.aggregator.split(", ")) add(a, "başka bir toplayıcı");
   for (const [i, a] of (r.peers?.rows ?? []).entries()) {
     if (a.id === r.peers!.selfId) add(a.name, "Bu portföy");
     else add(a.name, `Toplayıcı ${letters(i)}`);
