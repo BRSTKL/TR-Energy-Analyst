@@ -95,6 +95,11 @@ export interface BudgetOptions {
   production?: Record<string, number>;
   /** Yıl → gün maliyeti çarpanı (ör. eski yılın günlerini son yılın tahmin kalitesine taşımak; yearQualityScale) */
   yearCostScale?: Record<string, number>;
+  /** Ay ("MM") → tutar çarpanı (ör. reel TL'den nominal TL'ye aylık enflasyon yolu; inflationPath). Birim maliyete de uygulanır */
+  monthScale?: Record<string, number>;
+  /** Blok uzunluğu (gün): ay, aynı yılın aynı ayından art arda günlerle doldurulur (hava ve sistem yönü birkaç gün sürer).
+   *  1 = günler bağımsız. Blok ay içinde başa sarar. */
+  blockDays?: number;
 }
 
 const DAY = 86_400_000;
@@ -155,20 +160,21 @@ export function imbalanceBudget(hours: BudgetHour[], scenario: BudgetScenario, o
   const scaleOf = (y: string) => (scenario.targetSpreadReal !== null && realSpread[y] > 0 ? scenario.targetSpreadReal / realSpread[y] : 1);
 
   // Günler: takvim günü → maliyet ve üretim (gün tam olmasa da toplanır; eksik saatler maliyeti düşük gösterir, kaynak yıl sayılır)
-  const days = new Map<string, { month: string; year: string; cost: number; mwh: number }>();
+  const days = new Map<string, { date: string; month: string; year: string; cost: number; mwh: number }>();
   for (const h of hours) {
     const key = new Date(Math.floor(h.t / DAY) * DAY).toISOString().slice(0, 10);
     const year = key.slice(0, 4);
-    const d = days.get(key) ?? { month: key.slice(5, 7), year, cost: 0, mwh: 0 };
+    const d = days.get(key) ?? { date: key, month: key.slice(5, 7), year, cost: 0, mwh: 0 };
     d.cost += hourCost(h, scenario, scaleOf(year), opts.priceScale) * (opts.yearCostScale?.[year] ?? 1);
     d.mwh += h.actualMwh;
     days.set(key, d);
   }
-  const byMonth = new Map<string, Array<{ year: string; cost: number; mwh: number }>>();
-  for (const d of Array.from(days.values())) {
+  const byMonth = new Map<string, Array<{ date: string; year: string; cost: number; mwh: number }>>();
+  for (const d of Array.from(days.values()).sort((a, b) => a.date.localeCompare(b.date))) {
     if (!byMonth.has(d.month)) byMonth.set(d.month, []);
     byMonth.get(d.month)!.push(d);
   }
+  const block = Math.max(1, Math.floor(opts.blockDays ?? 1));
 
   const rand = rng(opts.seed ?? 1);
   const yearSims = new Float64Array(sims);
@@ -187,21 +193,33 @@ export function imbalanceBudget(hours: BudgetHour[], scenario: BudgetScenario, o
     const meanMwh = pool.reduce((a, d) => a + d.mwh, 0) / pool.length;
     const prod = opts.production?.[mm];
     const mwh = (prod ?? meanMwh * n) * growth;
+    const ms = opts.monthScale?.[mm] ?? 1;
+    // Yıl bölütleri (aynı yılın bu ayının günleri, tarih sırasıyla): blok bir bölütün içinde art arda gider
+    const segStart = new Map<string, { from: number; len: number }>();
+    pool.forEach((d, i) => {
+      const g = segStart.get(d.year);
+      if (g) g.len++;
+      else segStart.set(d.year, { from: i, len: 1 });
+    });
     const vals = new Array<number>(sims);
     const units = new Array<number>(sims);
     for (let s = 0; s < sims; s++) {
       let c = 0;
       let w = 0;
-      for (let i = 0; i < n; i++) {
-        const d = pool[Math.floor(rand() * pool.length)];
-        c += d.cost;
-        w += d.mwh;
+      for (let i = 0; i < n; ) {
+        const start = Math.floor(rand() * pool.length);
+        const seg = segStart.get(pool[start].year)!;
+        for (let b = 0; b < block && i < n; b++, i++) {
+          const d = pool[seg.from + ((start - seg.from + b) % seg.len)];
+          c += d.cost;
+          w += d.mwh;
+        }
       }
-      units[s] = w > 0 ? c / w : 0;
-      vals[s] = prod === undefined ? c * growth : units[s] * mwh;
+      units[s] = w > 0 ? (c / w) * ms : 0;
+      vals[s] = (prod === undefined ? c * growth : (c / (w || 1)) * mwh) * ms;
       yearSims[s] += vals[s];
     }
-    const meanUnit = meanMwh > 0 ? meanCost / meanMwh : 0;
+    const meanUnit = (meanMwh > 0 ? meanCost / meanMwh : 0) * ms;
     const st = stat(vals);
     const sourceDays: Record<string, number> = {};
     for (const d of pool) sourceDays[d.year] = (sourceDays[d.year] ?? 0) + 1;
@@ -212,7 +230,7 @@ export function imbalanceBudget(hours: BudgetHour[], scenario: BudgetScenario, o
       mwh,
       unit: { ...stat(units), expected: meanUnit },
       ...st,
-      expected: prod === undefined ? meanCost * n * growth : meanUnit * mwh,
+      expected: prod === undefined ? meanCost * n * growth * ms : meanUnit * mwh,
     });
     totalMwh += mwh;
   }
@@ -339,4 +357,20 @@ export function yearQualityScale(hours: BudgetHour[], scenario: BudgetScenario, 
   const a = acc[prevYear].w > 0 ? acc[prevYear].c / acc[prevYear].w : 0;
   const b = acc[lastYear].w > 0 ? acc[lastYear].c / acc[lastYear].w : 0;
   return a > 0 && b > 0 ? b / a : 1;
+}
+
+/**
+ * Aylık enflasyon yolu (17.6): yıllık oran ay ay bileşik uygulanır. Taban ay ("YYYY-MM", reel TL'nin fiyat düzeyi) ile
+ * hedef yılın her ayı arasındaki ay farkı k için çarpan = (1 + yıllık)^(k / 12). Ör. taban Eylül 2026, yıllık %42:
+ * Ocak 2027 ×1,12, Aralık 2027 ×1,55; yıl ortalaması ≈ ×1,32 (tek çarpan ×1,42 değil).
+ */
+export function inflationPath(annualPct: number, baseMonth: string, year: number): Record<string, number> {
+  const by = Number(baseMonth.slice(0, 4));
+  const bm = Number(baseMonth.slice(5, 7));
+  return Object.fromEntries(
+    Array.from({ length: 12 }, (_, i) => {
+      const k = (year - by) * 12 + (i + 1 - bm);
+      return [String(i + 1).padStart(2, "0"), Math.pow(1 + annualPct / 100, k / 12)];
+    })
+  );
 }

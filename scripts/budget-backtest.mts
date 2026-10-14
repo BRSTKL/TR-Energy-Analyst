@@ -9,6 +9,7 @@
  * Üretim varsayımları (17.5): asIs = 2025 günlerinin üretimi (birim ayrımı yok); runRate = birim maliyet × 2025 üretimi,
  * yıl içinde devreye giren santraller tam yıl; oracle = birim maliyet × gerçekleşen 2026 üretimi (üretim doğru bilinseydi
  * ulaşılabilecek en iyi). Hidro üretimi (yağış) önceden bilinemez: runRate ile oracle arasındaki fark çoğunlukla odur.
+ * asIs7 / oracle7: aynıları 7 günlük bloklarla (17.6; kötü günlerin art arda gelmesi).
  *
  * Çıktı: .cache/epias/budget-backtest-2026.json
  */
@@ -60,15 +61,17 @@ for (const pr of projects) {
   }
   const toRecord = (xs: number[]) => Object.fromEntries(xs.map((v, m) => [String(m + 1).padStart(2, "0"), v]));
   const months26 = await plantMonths(both, 2026, lastMonth);
-  const variants: Array<{ key: string; sc: BudgetScenario; production?: Record<string, number> }> = [
+  const variants: Array<{ key: string; sc: BudgetScenario; production?: Record<string, number>; blockDays?: number }> = [
     { key: "asIs", sc: scenario },
     { key: "wide", sc: wide },
     { key: "runRate", sc: scenario, production: toRecord(runRateProduction(await plantMonths(both, 2025, lastMonth), lastMonth).total) },
     { key: "oracle", sc: scenario, production: toRecord(Array.from({ length: lastMonth }, (_, m) => months26.reduce((a, p) => a + (p.mwh[m] ?? 0), 0))) },
   ];
+  // 17.6: 7 günlük bloklarla aynı varsayımlar
+  variants.push(...variants.filter((v) => v.key === "asIs" || v.key === "oracle").map((v) => ({ ...v, key: `${v.key}7`, blockDays: 7 })));
   const row: ProjectRow = { project: pr.name, plants: both.length, scenarios: {}, monthly: [] };
   for (const v of variants) {
-    const b = imbalanceBudget(h25.hours, v.sc, { year: 2026, priceScale, seed: 1, production: v.production });
+    const b = imbalanceBudget(h25.hours, v.sc, { year: 2026, priceScale, seed: 1, production: v.production, blockDays: v.blockDays });
     const ms = b.months.filter((m) => actualByMonth.has(m.month) && Number(m.month) <= lastMonth);
     const actual = ms.reduce((a, m) => a + actualByMonth.get(m.month)!, 0);
     const budget = ms.reduce((a, m) => a + m.p50, 0);
@@ -95,7 +98,7 @@ const med = (xs: number[]) => {
 };
 const unique = rows.filter((r) => !/^Met Türkiye/.test(r.project));
 const summary = Object.fromEntries(
-  ["asIs", "wide", "runRate", "oracle"].map((k) => {
+  ["asIs", "wide", "runRate", "oracle", "asIs7", "oracle7"].map((k) => {
     const xs = unique.map((r) => r.scenarios[k]);
     const months = xs.reduce((a, s) => a + s.months, 0);
     return [

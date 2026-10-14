@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hourCost, imbalanceBudget, productionScenarios, realSpreadByYear, runRateProduction, yearQualityScale, type BudgetHour, type BudgetScenario } from "@/lib/analysis/imbalance-budget";
+import { hourCost, imbalanceBudget, inflationPath, productionScenarios, realSpreadByYear, runRateProduction, yearQualityScale, type BudgetHour, type BudgetScenario } from "@/lib/analysis/imbalance-budget";
 
 const FLAT_3 = { positiveSurplusCoef: 0.97, positiveOtherCoef: 0.97, negativeDeficitCoef: 1.03, negativeOtherCoef: 1.03, floors: false };
 const RULE_2026 = { positiveSurplusCoef: 0.94, positiveOtherCoef: 0.97, negativeDeficitCoef: 1.06, negativeOtherCoef: 1.03, floors: true };
@@ -152,5 +152,38 @@ describe("Bütçe: tahmin kalitesi taşıma (17.3)", () => {
     const r = imbalanceBudget(hours, scenario(), { year: 2027, priceScale: one, sims: 10, yearCostScale: { "2025": k } });
     const oct = r.months.find((m) => m.month === "10")!;
     expect(oct.expected).toBeCloseTo(31 * 3880 * 0.5, 6);
+  });
+});
+
+describe("Bütçe: enflasyon yolu ve blok örnekleme (17.6)", () => {
+  it("yıllık oran ay ay bileşik: taban Eylül 2026, %42", () => {
+    const f = inflationPath(42, "2026-09", 2027);
+    expect(f["01"]).toBeCloseTo(Math.pow(1.42, 4 / 12), 12);
+    expect(f["12"]).toBeCloseTo(Math.pow(1.42, 15 / 12), 12);
+    const avg = Object.values(f).reduce((a, b) => a + b, 0) / 12;
+    expect(avg).toBeGreaterThan(1.3);
+    expect(avg).toBeLessThan(1.34);
+  });
+
+  it("ay çarpanı tutara ve birim maliyete uygulanır", () => {
+    const hours = Array.from({ length: 12 }, (_, m) => hour(Date.UTC(2025, m, 1, 12)));
+    const r = imbalanceBudget(hours, scenario(), { year: 2027, priceScale: one, sims: 10, production: { "01": 1000 }, monthScale: { "01": 2 } });
+    expect(r.months[0].expected).toBeCloseTo(38.8 * 1000 * 2, 6);
+    expect(r.months[0].unit.expected).toBeCloseTo(77.6, 9);
+    expect(r.months[0].p50).toBeCloseTo(77600, 6);
+    expect(r.months[1].expected).toBeCloseTo(28 * 3880, 6);
+  });
+
+  it("ay uzunluğunda blok: her benzetim ayın tamamı (başa sararak), dağılım tek nokta; tek gün blokta değil", () => {
+    // Ocak 2025'in 31 günü, gün d'nin maliyeti d × 3880 (sapmalar ölçekli)
+    const hours = Array.from({ length: 31 }, (_, d) =>
+      hour(Date.UTC(2025, 0, d + 1, 12), { unitDeviations: [10 * (d + 1), -5 * (d + 1)], kupstQty: 2 * (d + 1) })
+    );
+    const monthSum = (31 * 32) / 2 * 3880;
+    const full = imbalanceBudget(hours, scenario(), { year: 2027, priceScale: one, sims: 200, blockDays: 31 });
+    expect(full.months[0].p50).toBeCloseTo(monthSum, 4);
+    expect(full.months[0].p95).toBeCloseTo(monthSum, 4);
+    const daily = imbalanceBudget(hours, scenario(), { year: 2027, priceScale: one, sims: 200, blockDays: 1 });
+    expect(daily.months[0].p95).toBeGreaterThan(daily.months[0].p50);
   });
 });

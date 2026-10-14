@@ -55,6 +55,10 @@ export function BudgetTab({ projectId }: { projectId: string }) {
   const [gwhInput, setGwhInput] = useState("");
   const [gwh, setGwh] = useState<number | null>(null);
   const [inflation, setInflation] = useState("");
+  const [inflationApplied, setInflationApplied] = useState<number | null>(null);
+  const [intraday, setIntraday] = useState<"on" | "off">("on");
+  const [rateInput, setRateInput] = useState("");
+  const [rate, setRate] = useState<number | null>(null);
   const [unit, setUnit] = useState<Unit>("REAL");
   const [data, setData] = useState<ProjectBudget | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -63,8 +67,9 @@ export function BudgetTab({ projectId }: { projectId: string }) {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    const q = new URLSearchParams({ spread, rule, hydro });
+    const q = new URLSearchParams({ spread, rule, hydro, intraday: intraday === "on" ? "1" : "0" });
     if (hydro === "custom" && gwh) q.set("gwh", String(gwh));
+    if (inflationApplied !== null) q.set("inflation", String(inflationApplied));
     fetch(`/api/projects/${projectId}/budget?${q}`)
       .then((r) => r.json())
       .then((d) => {
@@ -76,16 +81,32 @@ export function BudgetTab({ projectId }: { projectId: string }) {
       .finally(() => setLoading(false));
     // gwhInput yalnız ilk yüklemede doldurulur
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, spread, rule, hydro, gwh]);
+  }, [projectId, spread, rule, hydro, gwh, intraday, inflationApplied]);
 
-  const infl = Number(inflation.replace(",", "."));
-  const hasInflation = inflation.trim() !== "" && Number.isFinite(infl);
-  const factor = unit === "USD" ? data?.unit.usdPerTl ?? 1 : unit === "NOMINAL" && hasInflation ? 1 + infl / 100 : 1;
-  const unitLabel = unit === "USD" ? "USD" : unit === "NOMINAL" && hasInflation ? `${data?.year ?? ""} TL, enflasyon varsayımı +%${nf(infl, 1)}` : data?.unit.label ?? "reel TL";
+  const applyInflation = () => {
+    const v = Number(inflation.replace(",", "."));
+    setInflationApplied(inflation.trim() !== "" && Number.isFinite(v) ? v : null);
+  };
+
+  // Nominal: sunucuda aylık enflasyon yoluyla ayrı benzetim.
+  // USD: kur beklentisi ve enflasyon girildiyse nominal TL ÷ beklenen kur; yoksa reel TL × taban ayın kuru (reel kur sabit varsayımı)
+  const usdFromNominal = unit === "USD" && rate !== null && rate > 0 && !!data?.nominal;
+  const nominal = unit === "NOMINAL" || usdFromNominal ? data?.nominal ?? null : null;
+  const view = nominal ?? (data ? { months: data.months, total: data.total } : null);
+  const factor = unit === "USD" ? (usdFromNominal ? 1 / rate! : data?.unit.usdPerTl ?? 1) : 1;
+  const baseLabel = data?.unit.label.replace(/ TL'si$/, "") ?? "";
+  const unitLabel =
+    unit === "USD"
+      ? usdFromNominal
+        ? `USD, ${data?.year ?? ""} ortalama kuru ${nf(rate!, 2)} TL`
+        : `USD, ${baseLabel} kuru ${data?.unit.usdPerTl ? nf(1 / data.unit.usdPerTl, 2) : "–"} TL; reel kur sabit`
+      : unit === "NOMINAL" && nominal
+        ? `nominal ${data?.year ?? ""} TL, yıllık enflasyon %${nf(nominal.annualInflationPct, 1)}`
+        : data?.unit.label ?? "reel TL";
   const money = (v: number) => (unit === "USD" ? `${nf((v * factor) / 1e6, 2)} M USD` : `${m(v * factor)} TL`);
   const perMwh = (v: number) => (unit === "USD" ? `${nf(v * factor, 2)} USD` : `${nf(v * factor, 1)} TL`);
 
-  const rows = data?.months ?? [];
+  const rows = view?.months ?? [];
   const chart = rows.map((r) => ({
     ay: MONTHS[Number(r.month) - 1],
     Bütçe: (r.p50 * factor) / 1e6,
@@ -142,23 +163,64 @@ export function BudgetTab({ projectId }: { projectId: string }) {
             <Button size="sm" variant={unit === "REAL" ? "default" : "outline"} onClick={() => setUnit("REAL")}>
               {data?.unit.label ?? "Reel TL"}
             </Button>
-            <Button size="sm" variant={unit === "NOMINAL" ? "default" : "outline"} onClick={() => setUnit("NOMINAL")} disabled={!hasInflation}>
+            <Button size="sm" variant={unit === "NOMINAL" ? "default" : "outline"} onClick={() => setUnit("NOMINAL")} disabled={!data?.nominal}>
               Nominal {data?.year ?? ""} TL
             </Button>
             <Button size="sm" variant={unit === "USD" ? "default" : "outline"} onClick={() => setUnit("USD")} disabled={!data?.unit.usdPerTl}>
               USD
             </Button>
-            <span className="ml-2 text-xs text-slate-500">Enflasyon varsayımı (%):</span>
+            <span className="ml-2 text-xs text-slate-500">Yıllık enflasyon (%):</span>
             <input
               className="w-16 rounded border border-slate-300 px-2 py-1 text-right text-sm tabular-nums"
               inputMode="decimal"
               placeholder="boş"
               value={inflation}
               onChange={(e) => setInflation(e.target.value)}
-              aria-label="Enflasyon varsayımı"
+              onKeyDown={(e) => e.key === "Enter" && applyInflation()}
+              aria-label="Yıllık enflasyon varsayımı"
             />
-            <span className="text-xs text-slate-500">{data ? `${data.year} ortalama fiyat düzeyinin ${data.unit.label.replace(/ TL'si$/, "")} düzeyine göre artışı` : ""}</span>
+            <Button size="sm" variant="outline" onClick={applyInflation}>
+              Uygula
+            </Button>
+            <span className="text-xs text-slate-500">
+              {data?.nominal
+                ? `Ay ay bileşik: ${data.unit.label.replace(/ TL'si$/, "")} düzeyinden; yıl ortalaması ×${nf(data.nominal.averageFactor, 2)}`
+                : "Girilirse nominal TL ay ay hesaplanır"}
+            </span>
           </div>
+          {unit === "USD" && (
+            <div className="flex flex-wrap items-center gap-2 pl-20 text-sm">
+              <span className="text-xs text-slate-500">{data?.year ?? ""} ortalama TL/USD kuru beklentisi:</span>
+              <input
+                className="w-20 rounded border border-slate-300 px-2 py-1 text-right tabular-nums"
+                inputMode="decimal"
+                placeholder="boş"
+                value={rateInput}
+                onChange={(e) => setRateInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && setRate(Number(rateInput.replace(",", ".")) || null)}
+                aria-label="Ortalama TL/USD kuru beklentisi"
+              />
+              <Button size="sm" variant="outline" onClick={() => setRate(Number(rateInput.replace(",", ".")) || null)}>
+                Uygula
+              </Button>
+              <span className="text-xs text-slate-500">
+                {rate !== null && !data?.nominal
+                  ? "Kur beklentisi nominal TL ister: önce yıllık enflasyonu girin."
+                  : usdFromNominal
+                    ? "USD = nominal TL bütçesi ÷ beklenen kur (enflasyon ve kur birlikte)."
+                    : `Boşsa: reel TL ÷ ${baseLabel} kuru (TL'nin enflasyon kadar değer kaybettiği varsayılır).`}
+              </span>
+            </div>
+          )}
+          <Choice
+            label="Gün içi"
+            value={intraday}
+            options={[
+              { id: "on", label: `${data ? data.year - 1 : ""}'daki gibi sürer` },
+              { id: "off", label: "Yok (ilk plan)" },
+            ]}
+            onChange={setIntraday}
+          />
           {loading && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
         </CardContent>
       </Card>
@@ -175,9 +237,9 @@ export function BudgetTab({ projectId }: { projectId: string }) {
           <Card className="border-amber-200 bg-amber-50/50 shadow-sm">
             <CardContent className="space-y-1 p-4 text-sm text-slate-800">
               <p className="text-base">
-                {data.year} için dengesizlik + KÜPST bütçesi <b>{money(data.total.p50)}</b>{unit === "USD" ? "" : ` (${unitLabel})`}: aylık ortalama{" "}
-                <b>{money(data.total.p50 / 12)}</b>, MWh başına <b>{perMwh(data.total.expected / data.total.mwh)}</b>,{" "}
-                {nf(data.total.mwh / 1000)} GWh üretimle. Kötü durumda yıl {money(data.total.p90)} (P90); en pahalı ayın kötü durumu{" "}
+                {data.year} için dengesizlik + KÜPST bütçesi <b>{money(view!.total.p50)}</b> ({unitLabel}): aylık ortalama{" "}
+                <b>{money(view!.total.p50 / 12)}</b>, MWh başına <b>{perMwh(view!.total.expected / view!.total.mwh)}</b>,{" "}
+                {nf(view!.total.mwh / 1000)} GWh üretimle. Kötü durumda yıl {money(view!.total.p90)} (P90); en pahalı ayın kötü durumu{" "}
                 {money(Math.max(...rows.map((r) => r.p90)))}.
               </p>
               <p className="text-xs text-slate-600">
@@ -260,11 +322,11 @@ export function BudgetTab({ projectId }: { projectId: string }) {
                   ))}
                   <TableRow className="bg-slate-50 font-semibold">
                     <TableCell>Yıl</TableCell>
-                    <TableCell className="text-right tabular-nums">{nf(data.total.mwh / 1000)} GWh</TableCell>
-                    <TableCell className="text-right tabular-nums">{perMwh(data.total.expected / data.total.mwh)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{money(data.total.p50)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{money(data.total.p90)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{money(data.total.p95)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{nf(view!.total.mwh / 1000)} GWh</TableCell>
+                    <TableCell className="text-right tabular-nums">{perMwh(view!.total.expected / view!.total.mwh)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{money(view!.total.p50)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{money(view!.total.p90)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{money(view!.total.p95)}</TableCell>
                     <TableCell />
                   </TableRow>
                 </TableBody>
@@ -275,8 +337,11 @@ export function BudgetTab({ projectId }: { projectId: string }) {
           <p className="text-xs text-slate-500">
             Varsayımlar: portföy bugünkü {nf(data.plantsUsed)} santraldir
             {data.plantsSkipped.length ? ` (${data.plantsSkipped.length} santralin bir yılda havuz verisi yok)` : ""}; günler {data.sourceLabel}{" "}
-            döneminden. Sapma ilk KGÜP&apos;e göredir (havuzda 2025&apos;in son planı yok): bütçe gün içi düzeltmeden önceki maruziyettir, KÜPST de
-            ilk plana göre (üst sınır). 2025 günleri portföyün son yıldaki tahmin kalitesine taşındı (MWh başına maliyet ×
+            döneminden, 7 günlük bloklar halinde (hava ve sistem yönü birkaç gün sürer). Sapma ilk KGÜP&apos;e göre ölçülür (havuzda 2025&apos;in son
+            planı yok);{" "}
+            {data.options.intraday && data.intraday
+              ? `gün içi düzeltme ${data.year - 1}'daki gibi sürer: son plana göre dengesizlik ve KÜPST + GİP işlem maliyeti, ilk plana göre maliyetin ${nf(data.intraday.ratio, 2)} katı (${data.year - 1}, son plan kapsamı %${nf(data.intraday.coveragePct)}).`
+              : "gün içi düzeltme yok sayıldı: bütçe gün içinden önceki maruziyettir, KÜPST de ilk plana göre (üst sınır)."} 2025 günleri portföyün son yıldaki tahmin kalitesine taşındı (MWh başına maliyet ×
             {nf(data.qualityScale, 2)}; varsayım: en güncel tahmin kalitesi sürer). Fiyat: her yılın makası seçilen düzeye ölçeklenir (reel ortalama
             makas 2025 {data.spread.y2025 !== null ? nf(data.spread.y2025) : "–"}, 2026 {data.spread.y2026 !== null ? nf(data.spread.y2026) : "–"}, senaryo{" "}
             {data.spread.target !== null ? nf(data.spread.target) : "–"} TL/MWh); dengesizlik fiyatı formülle (resmi fiyat senaryoda geçerli değil).

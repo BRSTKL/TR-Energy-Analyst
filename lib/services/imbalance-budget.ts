@@ -19,7 +19,9 @@ import { KUPST_REGIMES, kupstCommunityHours, kupstForHour } from "@/lib/calculat
 import { AGGREGATOR_ORG_ID } from "@/lib/projects/aggregator";
 import { readPoolYearCached } from "@/lib/pool/pool-store";
 import {
+  hourCost,
   imbalanceBudget,
+  inflationPath,
   productionScenarios,
   realSpreadByYear,
   runRateProduction,
@@ -184,12 +186,18 @@ export const BUDGET_HYDRO: Record<BudgetHydro, string> = {
 export interface ProjectBudget {
   project: { id: string; name: string };
   year: number;
-  options: { spread: BudgetSpread; rule: BudgetRule; hydro: BudgetHydro; customGwh: number | null };
+  options: { spread: BudgetSpread; rule: BudgetRule; hydro: BudgetHydro; customGwh: number | null; intraday: boolean; inflation: number | null };
   labels: { spread: string; rule: string; hydro: string };
   /** Reel TL'nin fiyat düzeyi ("Eylül 2026 TL'si") ve 1 reel TL'nin USD karşılığı */
   unit: { label: string; usdPerTl: number | null };
   months: BudgetResult["months"];
   total: BudgetResult["total"];
+  /** Aynı benzetim nominal TL'de (aylık enflasyon yolu, inflationPath); enflasyon girilmediyse null */
+  nominal: { annualInflationPct: number; months: BudgetResult["months"]; total: BudgetResult["total"]; averageFactor: number } | null;
+  /** Gün içi düzeltmenin son yıldaki etkisi; bütçeye uygulandıysa options.intraday = true */
+  intraday: IntradayEffect | null;
+  /** Örnekleme blok uzunluğu (gün) */
+  blockDays: number;
   /** Senaryoların yıllık üretimi (MWh) */
   production: Record<HydroScenario, number>;
   /** Reel ortalama makas (TL/MWh): 2025, 2026 ve senaryonun hedefi */
@@ -217,7 +225,14 @@ function loadBacktest(): ProjectBudget["backtest"] {
 /** Projenin gelecek yıl (son veri yılı + 1) dengesizlik + KÜPST bütçesi; reel TL */
 export async function projectBudget(
   projectId: string,
-  { spread = "y2026", rule = "r2026", hydro = "normal", customGwh = null }: { spread?: BudgetSpread; rule?: BudgetRule; hydro?: BudgetHydro; customGwh?: number | null } = {}
+  {
+    spread = "y2026",
+    rule = "r2026",
+    hydro = "normal",
+    customGwh = null,
+    intraday = true,
+    inflation = null,
+  }: { spread?: BudgetSpread; rule?: BudgetRule; hydro?: BudgetHydro; customGwh?: number | null; intraday?: boolean; inflation?: number | null } = {}
 ): Promise<ProjectBudget | { error: string }> {
   const data = await loadProjectHourly(projectId);
   if (!data) return { error: "Proje bulunamadı." };
@@ -250,19 +265,34 @@ export async function projectBudget(
   const scenario: BudgetScenario = { key: `${spread}-${rule}-${hydro}`, label: "", rule: BUDGET_RULES[rule].rule, targetSpreadReal: target };
   // Eski yılın günleri son yılın tahmin kalitesine taşınır (son yılın verisi olmayan aylar yalnız eski yıldan çekilir)
   const quality = yearQualityScale(loaded.hours, scenario, priceScale, prevYear, lastYear);
-  const result = imbalanceBudget(loaded.hours, scenario, { year: lastYear + 1, priceScale, production, seed: 1, yearCostScale: { [prevYear]: quality } });
+  // Gün içi düzeltme son yıldaki gibi sürer (bütün aylara aynı oran)
+  const intra = await intradayEffect(plants, lastYear, lastMonth, !!data.aggregator, scenario, priceScale);
+  const intraScale = intraday && intra ? intra.ratio : 1;
+  const flat = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [String(i + 1).padStart(2, "0"), intraScale]));
+  const blockDays = 7;
+  const common = { year: lastYear + 1, priceScale, production, seed: 1, yearCostScale: { [prevYear]: quality }, blockDays };
+  const result = imbalanceBudget(loaded.hours, scenario, { ...common, monthScale: flat });
 
   const series = macroSeries();
   const base = latestMonth(series.cpi);
+  let nominal: ProjectBudget["nominal"] = null;
+  if (inflation !== null && Number.isFinite(inflation) && base) {
+    const path = inflationPath(inflation, base, lastYear + 1);
+    const r = imbalanceBudget(loaded.hours, scenario, { ...common, monthScale: Object.fromEntries(Object.entries(path).map(([k, v]) => [k, v * intraScale])) });
+    nominal = { annualInflationPct: inflation, months: r.months, total: r.total, averageFactor: Object.values(path).reduce((a, b) => a + b, 0) / 12 };
+  }
   const usd = base ? series.usdTry[base] ?? series.usdTry[latestMonth(series.usdTry) ?? ""] : null;
   return {
     project: data.project,
     year: lastYear + 1,
-    options: { spread, rule, hydro, customGwh: hydro === "custom" ? customGwh : null },
+    options: { spread, rule, hydro, customGwh: hydro === "custom" ? customGwh : null, intraday: intraday && !!intra, inflation },
     labels: { spread: BUDGET_SPREADS[spread], rule: BUDGET_RULES[rule].label, hydro: BUDGET_HYDRO[hydro] },
     unit: { label: base ? `${monthLabelTr(base)} TL'si` : "reel TL", usdPerTl: usd ? 1 / usd : null },
     months: result.months,
     total: result.total,
+    nominal,
+    intraday: intra,
+    blockDays,
     production: { dry: sum(scen.dry), normal: sum(scen.normal), wet: sum(scen.wet) },
     spread: { y2025: s25, y2026: s26, target },
     plantsUsed: loaded.plantsUsed,
@@ -270,5 +300,74 @@ export async function projectBudget(
     sourceLabel: `${prevYear} Ocak – ${monthLabelTr(`${lastYear}-${String(lastMonth).padStart(2, "0")}`)}`,
     qualityScale: quality,
     backtest: loadBacktest(),
+  };
+}
+
+export interface IntradayEffect {
+  /** (son plana göre dengesizlik + KÜPST + GİP işlem maliyeti) / ilk plana göre dengesizlik + KÜPST */
+  ratio: number;
+  firstCost: number;
+  finalCost: number;
+  tradeCost: number;
+  /** Son planı olan santral-saat payı (%) */
+  coveragePct: number;
+}
+
+/**
+ * Gün içi düzeltmenin etkisi (17.7): portföyün son yılda gerçekleşen gün içi düzeltmesi, aynı senaryoyla (kural, makas
+ * ölçeği, reel TL). İşlem maliyeti saat başına Δ × (GİP − PTF), Δ = ilk KGÜP − son KGÜP (Aşama 11.2 ile aynı). GİP fiyatı
+ * olmayan saatte işlem maliyeti 0. Bütçe bu oranla çarpılır: "gün içi düzeltme son yıldaki gibi sürer".
+ */
+export async function intradayEffect(
+  plants: ProjectHourly["plants"],
+  year: number,
+  untilMonth: number,
+  aggregator: boolean,
+  scenario: BudgetScenario,
+  priceScale: (t: number) => number
+): Promise<IntradayEffect | null> {
+  const [first, final] = await Promise.all([
+    loadBudgetHours(plants, [year], { aggregator, untilMonth, plan: "first" }),
+    loadBudgetHours(plants, [year], { aggregator, untilMonth, plan: "final" }),
+  ]);
+  if (!first.hours.length) return null;
+  const spread = realSpreadByYear(first.hours, priceScale)[String(year)];
+  const scale = scenario.targetSpreadReal !== null && spread > 0 ? scenario.targetSpreadReal / spread : 1;
+  const firstCost = first.hours.reduce((a, h) => a + hourCost(h, scenario, scale, priceScale), 0);
+  const finalCost = final.hours.reduce((a, h) => a + hourCost(h, scenario, scale, priceScale), 0);
+  const gip = new Map(
+    (
+      await prisma.marketData.findMany({
+        where: { timestamp: { gte: new Date(Date.UTC(year, 0, 1)), lt: new Date(Date.UTC(year, untilMonth, 1)) }, gipPrice: { not: null } },
+        select: { timestamp: true, ptf: true, gipPrice: true },
+      })
+    ).map((m) => [m.timestamp.getTime(), { ptf: m.ptf, gip: m.gipPrice! }])
+  );
+  let tradeCost = 0;
+  let withFinal = 0;
+  let all = 0;
+  for (const p of plants) {
+    const doc = p.epiasPlantId !== null ? await readPoolYearCached(p.epiasPlantId, year) : null;
+    if (!doc) continue;
+    const start = Date.parse(doc.start);
+    for (let i = 0; i < doc.uevm.length; i++) {
+      const t = start + i * HOUR;
+      if (new Date(t).getUTCMonth() >= untilMonth) break;
+      const a = doc.kgupFirst[i];
+      const b = doc.kgupFinal[i];
+      if (a === null || doc.uevm[i] === null) continue;
+      all++;
+      if (b === null) continue;
+      withFinal++;
+      const g = gip.get(t);
+      if (g) tradeCost += (a - b) * (g.gip - g.ptf) * priceScale(t);
+    }
+  }
+  return {
+    ratio: firstCost > 0 ? (finalCost + tradeCost) / firstCost : 1,
+    firstCost,
+    finalCost,
+    tradeCost,
+    coveragePct: all > 0 ? (withFinal / all) * 100 : 0,
   };
 }
