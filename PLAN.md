@@ -358,6 +358,42 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 2. KÜPST toplayıcıda (topluluk KÜPST'ü md. 4): taban ve tavan KÜPST dahil.
 3. Rapora sütun şimdilik yok.
 
+### Aşama 17: 2027 dengesizlik bütçesi ▶ · karar 14.10.2026
+**Amaç:** Bir portföy için 2027'nin aylık dengesizlik + KÜPST bütçesi ve kötü durum aralığı: "2027'de aylık ortalama X M TL bekleyin; kötü bir ayda Y M TL; kural sertleşirse Z." Bütçe dönemi (Ekim–Aralık) müdürün masasındaki soru. Ticaret müdürü değerlendirmesinin 9. ve 10. maddesi; 10 (mevzuat takvimi) burada kural senaryosu olarak.
+**Kural:** Yeni veri kaynağı yok (havuz, MarketData, `lib/macro`). Yeni sayfa yok: Planlama sayfasına bir sekme (karar 3). Rapora en fazla bir slayt (karar 4). Fiyat tahmini yapılmaz: geçmiş fiyat yılları yeniden oynatılır.
+
+**Yöntem (tarihsel benzetim):** 2027'nin her saati için portföyün sapması ve piyasa fiyatı geçmişten alınır, takvimde eşlenir (ayrıştırma motorundaki gibi aynı ay, gün, saat):
+- **Sapma yılları:** portföyün kendi sapmaları, 2025 (tam yıl, havuzdan) ve 2026 (Ocak–Eylül). Portföy bugünkü santrallerden kurulur; uzlaştırma birimi ve netleşme sonuç sayfasıyla aynı.
+- **Fiyat yılları:** 2024, 2025, 2026 (Ocak–Eylül; Ekim–Aralık için 2024–2025). Her fiyat yılı reel TL'ye (son ayın fiyat düzeyi) çevrilir; makas düzeyi senaryosu fiyat yılının makasını hedef düzeye ölçekler (karar 1).
+- **Kural senaryoları:** 2026 kuralı (taban), 2025 kuralı (düz %3, rahatlama), sertleşme (ör. aynı yönde %9, ters yönde %3; kullanıcı girer). Motorun özel katsayı profili kullanılır.
+- **Büyüme:** portföy üretimi ±%; birim maliyet değişmez, toplam ölçeklenir. Aday santral eklemek kapsam dışı (sınır).
+- **Dağılım:** sapma yılı × fiyat yılı ızgarası ve gün blokları ile yeniden örnekleme (aynı ay içinde, sapma günü ile fiyat günü ayrı çekilir) → her ay için medyan (bütçe), P90 ve P95 (riske maruz değer). Çıktı reel TL ve USD; nominal 2027 TL için enflasyon varsayımı kullanıcıdan (karar 2).
+
+**Adımlar:**
+- [x] **17.1 Saf hesap.** ✅ 14.10.2026. `lib/analysis/imbalance-budget.ts` (`imbalanceBudget`, `hourCost`, `realSpreadByYear`; sabit tohumlu rastgele sayı), 8 test (elle hesaplanmış saat maliyeti, makas ölçeği, kural senaryosu, reel çarpan, tek günlük havuzda dağılımın tek noktaya inmesi, büyüme, tohum). Veri: `lib/services/imbalance-budget.ts` (`loadBudgetHours`: havuz + MarketData; uzlaştırma birimi sonuç sayfasıyla aynı; KÜPST miktarı mevzuat fonksiyonlarıyla, toplayıcıda topluluk).
+  - Taslaktan sapmalar: (1) Sapma ve fiyat **aynı günden birlikte** örneklenir (sapma ile sistem yönü aynı havadan etkilenir; ayrı çekmek 2026'nın "aynı yönde %6" maliyetini düşük gösterir). Bu yüzden 2024 fiyat yılı kullanılmaz (havuzda 2024 sapması yok); günler 2025 ve 2026'dan. (2) Plan **ilk KGÜP**: havuzda 2025'in son planı hiç yok (2026'da %100); karışık taban sınamada bütçeyi şişirdi (ilk koşu: medyan oran 0,80). Bütçe gün içi düzeltmeden önceki maruziyettir (üst sınır), KÜPST de ilk plana göre. (3) Fiyat formülle (resmi dengesizlik fiyatı makas ve kural değişince geçerli değil).
+- [x] **17.2 Geçmişle sınama (kapı).** ✅ 14.10.2026. `scripts/budget-backtest.mts` → `.cache/epias/budget-backtest-2026.json`: 2026 bütçesi yalnız 2025 verisiyle (2026 kuralı, 2025 makası), 2026 Ocak–Ağustos gerçekleşenle; 14 proje (Met iki kez: aynı portföy), portföy iki yılda da havuzda olan santraller, reel TL.
+  - **Merkez tutuyor:** gerçek / bütçe medyanı **1,00**; 14 projenin 9'u ±%25 içinde (Atam 0,97, Enerjisa Müşteri 1,03, Enko 0,95, Gain 0,96, Polat 0,99, Zeros 1,02 …). Sapanların hepsi bütçenin üstünde: Pure 1,72, Bilgin 1,51, Gökada 1,45, Inavitas 1,36, Doğuş 4,15 (2 santral). Bütçe nadiren yüksek, bazen çok düşük kalıyor.
+  - **Bant dar:** tek yılın günlerinden çekilen P90'ın içinde ayların yalnız %55'i (P95 %59) kaldı; olması gereken %90. Yıldan yıla değişim (makas, tahmin kalitesi, arızalar) tek yılın günlerinde yok. Makas %20 açılır senaryosunda %65.
+  - **Ayar için ölçü:** aylık gerçek / medyan bütçe oranı (112 ay): medyan 1,10, P90 1,98, P95 3,43. Bant 12.2'deki gibi bu oranlarla kurulabilir (karar 5).
+  - Sınanmadı: sektör karnesinin santral bazında bütçesi (taslakta vardı; 12.2 santral bazında aynı soruyu zaten cevaplıyor). 461 test, 56 rapor 0 hata.
+- [ ] **17.3 Ekran.** Planlama sayfasında "2027 bütçesi" sekmesi: aylık bütçe ve P90 / P95 bandı (grafik + tablo), senaryo seçiciler (makas düzeyi, kural, büyüme, enflasyon), tek cümlelik özet, 17.2 sonucuna göre güven notu. CSV.
+- [ ] **17.4 Rapor (karar 4) ve metin.** Onaylanırsa tek slayt "2027 dengesizlik bütçesi"; Ek B yöntem notu; denetim kuralı (aylık toplam = yıllık, medyan ≤ P90 ≤ P95, senaryo etiketi metinle tutarlı). Metodoloji bölümü.
+- [ ] **Kabul.** Gain 2026 ve Inavitas: bütçe ve bant; bir ay bağımsız betikle yeniden hesaplanır (17.1 sabit tohumla birebir). `npm test`, `npm run check:reports` 0 hata.
+
+**Sınırlar (metodolojide):**
+- Fiyat tahmini değildir: 2027'nin fiyatları geçmiş üç yılın içinde kalır; daha uç bir yıl bantta görünmez.
+- Portföy değişmez varsayılır (büyüme yalnız ölçek); yeni santralin netleşme etkisi aday sayfasındadır.
+- Sapma yılları portföyün kendi geçmişidir; tahmin süreci değişirse (yeni tedarikçi, gün içi stratejisi) bütçe bunu bilmez.
+- Kural senaryosu yalnız katsayıları değiştirir; KÜPST oranları 2026 kararıyla sabit (değişen bir taslak varsa ayrıca girilir).
+
+**Kararlar (14.10.2026, kullanıcı onayı):**
+1. Makas düzeyi: her fiyat yılının makası 2026 düzeyine ölçeklenir (ana senaryo); ek senaryolar "makas 2025 düzeyine iner" ve "makas %20 daha açılır".
+2. Nominal 2027 TL: enflasyon varsayımını kullanıcı girer, varsayılan boş; çıktı reel TL (son ayın fiyat düzeyi) ve USD.
+3. Ekran: Planlama sayfasında "2027 bütçesi" sekmesi.
+4. Rapor: tek slayt "2027 dengesizlik bütçesi".
+5. (17.2 sonucu, bekliyor) Risk bandı: geçmişle sınamadan ayarlı bant (medyan × 1,98 / × 3,43) ana bant, tek yılın benzetimi "aynı yıl tekrarlanırsa" olarak ikincil (önerim) ya da yalnız benzetim bandı + uyarı.
+
 ---
 
 ## 3. Karar noktaları (sizin onayınız gerekiyor)
