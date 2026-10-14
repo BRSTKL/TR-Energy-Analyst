@@ -40,6 +40,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { BudgetTab } from "@/components/budget-tab";
 import {
   Activity,
   AlertCircle,
@@ -65,6 +66,7 @@ import {
   TrendingDown,
   TrendingUp,
   Wind,
+  Wallet,
   Zap,
 } from "lucide-react";
 import {
@@ -219,7 +221,7 @@ export default function PlanningEfficiencyPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedScope, setSelectedScope] = useState<string>("portfolio");
-  const [activeSectionTab, setActiveSectionTab] = useState<"efficiency" | "arbitrage">("efficiency");
+  const [activeSectionTab, setActiveSectionTab] = useState<"efficiency" | "arbitrage" | "budget">("efficiency");
   const [divergenceMode, setDivergenceMode] = useState<"hourly" | "monthly">("hourly");
 
   // 24s Drill-Down Modal State
@@ -249,8 +251,8 @@ export default function PlanningEfficiencyPage() {
         if (initial && typeof window !== "undefined") {
           const urlParams = new URLSearchParams(window.location.search);
           const tabParam = urlParams.get("tab");
-          if (tabParam === "arbitrage" || tabParam === "efficiency") {
-            setActiveSectionTab(tabParam as "arbitrage" | "efficiency");
+          if (tabParam === "arbitrage" || tabParam === "efficiency" || tabParam === "budget") {
+            setActiveSectionTab(tabParam as "arbitrage" | "efficiency" | "budget");
           }
           if (plant) {
             requestedDetail.current = plant;
@@ -685,6 +687,18 @@ export default function PlanningEfficiencyPage() {
                   GİP Verisi Yok
                 </span>
               )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSectionTab("budget")}
+              className={`inline-flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition-all ${
+                activeSectionTab === "budget"
+                  ? "border-indigo-600 bg-indigo-50/60 text-indigo-900 shadow-sm"
+                  : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800"
+              }`}
+            >
+              <Wallet className="h-4 w-4 text-indigo-600" />
+              Gelecek yıl bütçesi
             </button>
           </div>
         </div>
@@ -1792,6 +1806,8 @@ export default function PlanningEfficiencyPage() {
         )}
 
         {/* 5. 24 SAATLİK DRILL-DOWN İKİLİ EKSENLİ MODAL / DİALOG */}
+        {activeSectionTab === "budget" && <BudgetTab projectId={projectId} />}
+
         <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
           <DialogContent className="max-w-4xl w-full">
             {selectedDayDetail && (

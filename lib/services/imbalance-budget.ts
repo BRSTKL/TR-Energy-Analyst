@@ -10,14 +10,29 @@
  * Havuzda olmayan santraller (dosyadan yüklenen) atlanır ve sayılır.
  */
 
+import fs from "node:fs";
+import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import { processHourlyRecord } from "@/lib/calculations/engine";
-import { DEFAULT_IMBALANCE_PROFILE, type HourlyResult, type MarketPriceRecord, type SystemDirection } from "@/lib/calculations/types";
+import { DEFAULT_IMBALANCE_PROFILE, REGULATORY_IMBALANCE_REGIMES, type HourlyResult, type MarketPriceRecord, type SystemDirection } from "@/lib/calculations/types";
 import { KUPST_REGIMES, kupstCommunityHours, kupstForHour } from "@/lib/calculations/kupst";
 import { AGGREGATOR_ORG_ID } from "@/lib/projects/aggregator";
 import { readPoolYearCached } from "@/lib/pool/pool-store";
-import type { BudgetHour, PlantMonths } from "@/lib/analysis/imbalance-budget";
-import type { ProjectHourly } from "@/lib/services/project-hourly";
+import {
+  imbalanceBudget,
+  productionScenarios,
+  realSpreadByYear,
+  runRateProduction,
+  yearQualityScale,
+  type BudgetHour,
+  type BudgetResult,
+  type BudgetScenario,
+  type HydroScenario,
+  type PlantMonths,
+} from "@/lib/analysis/imbalance-budget";
+import { converterFor, macroSeries } from "@/lib/macro/series";
+import { latestMonth, monthLabelTr } from "@/lib/macro/price-units";
+import { loadProjectHourly, type ProjectHourly } from "@/lib/services/project-hourly";
 
 const HOUR = 3_600_000;
 const latestKupst = KUPST_REGIMES[KUPST_REGIMES.length - 1];
@@ -140,4 +155,120 @@ export async function plantMonths(plants: ProjectHourly["plants"], year: number,
     out.push({ key: p.plantId, type: p.plantType, mwh });
   }
   return out;
+}
+
+export type BudgetSpread = "y2026" | "y2025" | "wide";
+export type BudgetRule = "r2026" | "r2025" | "strict";
+export type BudgetHydro = HydroScenario | "custom";
+
+export const BUDGET_SPREADS: Record<BudgetSpread, string> = {
+  y2026: "Makas 2026 düzeyinde",
+  y2025: "Makas 2025 düzeyine iner",
+  wide: "Makas %20 daha açılır",
+};
+export const BUDGET_RULES: Record<BudgetRule, { label: string; rule: BudgetScenario["rule"] }> = {
+  r2026: { label: "2026 kuralı (aynı yönde %6, ters yönde %3)", rule: REGULATORY_IMBALANCE_REGIMES[REGULATORY_IMBALANCE_REGIMES.length - 1].coefficients },
+  r2025: { label: "2025 kuralı (düz %3)", rule: REGULATORY_IMBALANCE_REGIMES[0].coefficients },
+  strict: {
+    label: "Sertleşme (aynı yönde %9, ters yönde %3)",
+    rule: { positiveSurplusCoef: 0.91, positiveOtherCoef: 0.97, negativeDeficitCoef: 1.09, negativeOtherCoef: 1.03, floors: true },
+  },
+};
+export const BUDGET_HYDRO: Record<BudgetHydro, string> = {
+  dry: "Kurak yıl (hidro 2025 gibi)",
+  normal: "Normal yıl (hidro 2025 ile 2026'nın ortalaması)",
+  wet: "Yağışlı yıl (hidro 2026 gibi)",
+  custom: "Kendi üretim tahmininiz",
+};
+
+export interface ProjectBudget {
+  project: { id: string; name: string };
+  year: number;
+  options: { spread: BudgetSpread; rule: BudgetRule; hydro: BudgetHydro; customGwh: number | null };
+  labels: { spread: string; rule: string; hydro: string };
+  /** Reel TL'nin fiyat düzeyi ("Eylül 2026 TL'si") ve 1 reel TL'nin USD karşılığı */
+  unit: { label: string; usdPerTl: number | null };
+  months: BudgetResult["months"];
+  total: BudgetResult["total"];
+  /** Senaryoların yıllık üretimi (MWh) */
+  production: Record<HydroScenario, number>;
+  /** Reel ortalama makas (TL/MWh): 2025, 2026 ve senaryonun hedefi */
+  spread: { y2025: number | null; y2026: number | null; target: number | null };
+  plantsUsed: number;
+  plantsSkipped: string[];
+  /** Örneklenen günlerin dönemi */
+  sourceLabel: string;
+  /** Önceki yılın günlerine uygulanan tahmin kalitesi çarpanı (son yıl / önceki yıl MWh başına maliyet, ortak aylar) */
+  qualityScale: number;
+  /** Geçmişle sınama özeti (scripts/budget-backtest.mts); dosya yoksa null */
+  backtest: { asIs: { ratioMedian: number; monthsWithinP90Pct: number }; oracle: { ratioMedian: number; monthsWithinP90Pct: number }; projects: number } | null;
+}
+
+function loadBacktest(): ProjectBudget["backtest"] {
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(process.cwd(), ".cache", "epias", "budget-backtest-2026.json"), "utf8"));
+    const pick = (k: string) => ({ ratioMedian: j.summary[k].ratioMedian, monthsWithinP90Pct: j.summary[k].monthsWithinP90Pct });
+    return j.summary?.asIs && j.summary?.oracle ? { asIs: pick("asIs"), oracle: pick("oracle"), projects: j.summary.asIs.projects } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Projenin gelecek yıl (son veri yılı + 1) dengesizlik + KÜPST bütçesi; reel TL */
+export async function projectBudget(
+  projectId: string,
+  { spread = "y2026", rule = "r2026", hydro = "normal", customGwh = null }: { spread?: BudgetSpread; rule?: BudgetRule; hydro?: BudgetHydro; customGwh?: number | null } = {}
+): Promise<ProjectBudget | { error: string }> {
+  const data = await loadProjectHourly(projectId);
+  if (!data) return { error: "Proje bulunamadı." };
+  const plants = data.plants.filter((p) => p.epiasPlantId !== null);
+  if (!plants.length) return { error: "Projede EPİAŞ santrali yok: bütçe havuz verisiyle kurulur." };
+  const [prevYear, lastYear] = [2025, 2026];
+  // Son yılın verisi olan son ay (havuz)
+  const m26 = await plantMonths(plants, lastYear, 12);
+  const lastMonth = Math.max(0, ...m26.map((p) => p.mwh.reduce<number>((a, v, i) => (v !== null && v > 0 ? i + 1 : a), 0)));
+  if (lastMonth === 0) return { error: `${lastYear} havuz verisi yok.` };
+  const loaded = await loadBudgetHours(plants, [prevYear, lastYear], { aggregator: !!data.aggregator, untilMonth: lastMonth });
+  if (!loaded.hours.length) return { error: "Bütçe için saatlik veri yok (havuz ve piyasa verisi eşleşmedi)." };
+
+  const priceScale = converterFor("REAL").factor as (t: number) => number;
+  const spreads = realSpreadByYear(loaded.hours, priceScale);
+  const s25 = spreads[String(prevYear)] ?? null;
+  const s26 = spreads[String(lastYear)] ?? null;
+  const target = spread === "y2025" ? s25 : spread === "wide" ? (s26 ?? 0) * 1.2 : s26;
+
+  // Üretim: iki yıl, yeni santraller tam yıla
+  const rrPrev = runRateProduction(await plantMonths(plants, prevYear, 12), 12).perPlant;
+  const rrLast = runRateProduction(m26.map((p) => ({ ...p, mwh: p.mwh.slice(0, lastMonth) })), lastMonth).perPlant;
+  const latest = Object.fromEntries(Object.entries(rrLast).map(([k, v]) => [k, Array.from({ length: 12 }, (_, m) => (m < lastMonth ? v[m] : null))]));
+  const scen = productionScenarios(plants.map((p) => ({ key: p.plantId, type: p.plantType })), rrPrev, latest);
+  const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+  let monthly = hydro === "custom" ? scen.normal : scen[hydro];
+  if (hydro === "custom" && customGwh !== null && customGwh > 0 && sum(scen.normal) > 0) monthly = scen.normal.map((v) => (v / sum(scen.normal)) * customGwh * 1000);
+  const production = Object.fromEntries(monthly.map((v, m) => [String(m + 1).padStart(2, "0"), v]));
+
+  const scenario: BudgetScenario = { key: `${spread}-${rule}-${hydro}`, label: "", rule: BUDGET_RULES[rule].rule, targetSpreadReal: target };
+  // Eski yılın günleri son yılın tahmin kalitesine taşınır (son yılın verisi olmayan aylar yalnız eski yıldan çekilir)
+  const quality = yearQualityScale(loaded.hours, scenario, priceScale, prevYear, lastYear);
+  const result = imbalanceBudget(loaded.hours, scenario, { year: lastYear + 1, priceScale, production, seed: 1, yearCostScale: { [prevYear]: quality } });
+
+  const series = macroSeries();
+  const base = latestMonth(series.cpi);
+  const usd = base ? series.usdTry[base] ?? series.usdTry[latestMonth(series.usdTry) ?? ""] : null;
+  return {
+    project: data.project,
+    year: lastYear + 1,
+    options: { spread, rule, hydro, customGwh: hydro === "custom" ? customGwh : null },
+    labels: { spread: BUDGET_SPREADS[spread], rule: BUDGET_RULES[rule].label, hydro: BUDGET_HYDRO[hydro] },
+    unit: { label: base ? `${monthLabelTr(base)} TL'si` : "reel TL", usdPerTl: usd ? 1 / usd : null },
+    months: result.months,
+    total: result.total,
+    production: { dry: sum(scen.dry), normal: sum(scen.normal), wet: sum(scen.wet) },
+    spread: { y2025: s25, y2026: s26, target },
+    plantsUsed: loaded.plantsUsed,
+    plantsSkipped: loaded.plantsSkipped,
+    sourceLabel: `${prevYear} Ocak – ${monthLabelTr(`${lastYear}-${String(lastMonth).padStart(2, "0")}`)}`,
+    qualityScale: quality,
+    backtest: loadBacktest(),
+  };
 }

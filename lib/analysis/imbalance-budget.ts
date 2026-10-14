@@ -93,6 +93,8 @@ export interface BudgetOptions {
   seed?: number;
   /** Ay ("MM") → üretim (MWh). Verilirse bütçe = birim maliyet × üretim; verilmeyen ay geçmiş günlerin üretimiyle */
   production?: Record<string, number>;
+  /** Yıl → gün maliyeti çarpanı (ör. eski yılın günlerini son yılın tahmin kalitesine taşımak; yearQualityScale) */
+  yearCostScale?: Record<string, number>;
 }
 
 const DAY = 86_400_000;
@@ -158,7 +160,7 @@ export function imbalanceBudget(hours: BudgetHour[], scenario: BudgetScenario, o
     const key = new Date(Math.floor(h.t / DAY) * DAY).toISOString().slice(0, 10);
     const year = key.slice(0, 4);
     const d = days.get(key) ?? { month: key.slice(5, 7), year, cost: 0, mwh: 0 };
-    d.cost += hourCost(h, scenario, scaleOf(year), opts.priceScale);
+    d.cost += hourCost(h, scenario, scaleOf(year), opts.priceScale) * (opts.yearCostScale?.[year] ?? 1);
     d.mwh += h.actualMwh;
     days.set(key, d);
   }
@@ -238,15 +240,20 @@ export interface PlantMonths {
  * üretimi / aynı aylarda emsallerin üretimi. Aynı türde tam yıl emsali yoksa ay doldurulmaz. İlk ay (kısmi olabilir)
  * var sayılır: yeni santralin yıllığı biraz düşük kalabilir.
  */
-export function runRateProduction(plants: PlantMonths[], months = 12): { total: number[]; filled: Array<{ key: string; addedMwh: number }> } {
+export function runRateProduction(
+  plants: PlantMonths[],
+  months = 12
+): { total: number[]; perPlant: Record<string, number[]>; filled: Array<{ key: string; addedMwh: number }> } {
   const missing = (p: PlantMonths) => {
     const start = p.mwh.slice(0, months).findIndex((v) => v !== null && v > 0);
     return Array.from({ length: months }, (_, m) => start < 0 || m < start || p.mwh[m] === null);
   };
   const miss = new Map(plants.map((p) => [p.key, missing(p)]));
   const total = new Array<number>(months).fill(0);
+  const perPlant: Record<string, number[]> = {};
   const filled: Array<{ key: string; addedMwh: number }> = [];
   for (const p of plants) {
+    perPlant[p.key] = Array.from({ length: months }, (_, m) => p.mwh[m] ?? 0);
     for (let m = 0; m < months; m++) total[m] += p.mwh[m] ?? 0;
     const pm = miss.get(p.key)!;
     if (!pm.some(Boolean) || pm.every(Boolean)) continue;
@@ -266,9 +273,70 @@ export function runRateProduction(plants: PlantMonths[], months = 12): { total: 
       if (pm[m]) {
         const v = (own / base) * peerAt(m) - (p.mwh[m] ?? 0);
         total[m] += v;
+        perPlant[p.key][m] += v;
         added += v;
       }
     filled.push({ key: p.key, addedMwh: added });
   }
-  return { total, filled };
+  return { total, perPlant, filled };
+}
+
+export type HydroScenario = "dry" | "normal" | "wet";
+
+/**
+ * Üretim senaryoları (17.3): santral başına iki yılın aylık üretimi (önceki yıl tam, son yıl verisi olan aylar; ikisi de
+ * yeni santraller için tam yıla tamamlanmış). Son yılın verisi olmayan ayı = önceki yılın o ayı × santralin son yıl /
+ * önceki yıl oranı (ortak aylardan). Hidro (HES): kurak = önceki yıl, yağışlı = son yıl, normal = ortalama. Diğer
+ * türler her senaryoda son yılın düzeyinde (yağışa bağlı değil; kapasite değişimini izler).
+ */
+export function productionScenarios(
+  plants: Array<{ key: string; type: string }>,
+  prev: Record<string, number[]>,
+  latest: Record<string, Array<number | null>>
+): Record<HydroScenario, number[]> {
+  const out: Record<HydroScenario, number[]> = { dry: new Array(12).fill(0), normal: new Array(12).fill(0), wet: new Array(12).fill(0) };
+  for (const p of plants) {
+    const a = prev[p.key] ?? new Array(12).fill(0);
+    const b = latest[p.key] ?? new Array(12).fill(null);
+    let sa = 0;
+    let sb = 0;
+    for (let m = 0; m < 12; m++)
+      if (b[m] !== null && b[m] !== undefined) {
+        sa += a[m] ?? 0;
+        sb += b[m]!;
+      }
+    const r = sa > 0 ? sb / sa : 1;
+    const full = Array.from({ length: 12 }, (_, m) => (b[m] !== null && b[m] !== undefined ? b[m]! : (a[m] ?? 0) * r));
+    const hydro = p.type === "HES";
+    for (let m = 0; m < 12; m++) {
+      const dry = hydro ? a[m] ?? 0 : full[m];
+      out.dry[m] += dry;
+      out.wet[m] += full[m];
+      out.normal[m] += (dry + full[m]) / 2;
+    }
+  }
+  return out;
+}
+
+/**
+ * Tahmin kalitesi taşıma (17.3): son yılın verisi olmayan aylar yalnız önceki yılın günlerinden çekilir; portföyün tahmini
+ * yıldan yıla değiştiyse (ör. Gain 2026'da MWh başına maliyet ×0,72) o aylar eski kaliteyi taşır. Çarpan: ortak aylarda
+ * (her iki yılın verisi olan aylar) son yılın MWh başına maliyeti / önceki yılınki, aynı senaryoyla. Önceki yılın bütün
+ * günlerine uygulanır: varsayım "en güncel tahmin kalitesi sürer".
+ */
+export function yearQualityScale(hours: BudgetHour[], scenario: BudgetScenario, priceScale: (t: number) => number, prevYear: number, lastYear: number): number {
+  const realSpread = realSpreadByYear(hours, priceScale);
+  const scale = (y: string) => (scenario.targetSpreadReal !== null && realSpread[y] > 0 ? scenario.targetSpreadReal / realSpread[y] : 1);
+  const lastMonths = new Set(hours.filter((h) => new Date(h.t).getUTCFullYear() === lastYear).map((h) => new Date(h.t).getUTCMonth()));
+  const acc: Record<string, { c: number; w: number }> = { [prevYear]: { c: 0, w: 0 }, [lastYear]: { c: 0, w: 0 } };
+  for (const h of hours) {
+    const d = new Date(h.t);
+    const y = String(d.getUTCFullYear());
+    if (!acc[y] || !lastMonths.has(d.getUTCMonth())) continue;
+    acc[y].c += hourCost(h, scenario, scale(y), priceScale);
+    acc[y].w += h.actualMwh;
+  }
+  const a = acc[prevYear].w > 0 ? acc[prevYear].c / acc[prevYear].w : 0;
+  const b = acc[lastYear].w > 0 ? acc[lastYear].c / acc[lastYear].w : 0;
+  return a > 0 && b > 0 ? b / a : 1;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hourCost, imbalanceBudget, realSpreadByYear, runRateProduction, type BudgetHour, type BudgetScenario } from "@/lib/analysis/imbalance-budget";
+import { hourCost, imbalanceBudget, productionScenarios, realSpreadByYear, runRateProduction, yearQualityScale, type BudgetHour, type BudgetScenario } from "@/lib/analysis/imbalance-budget";
 
 const FLAT_3 = { positiveSurplusCoef: 0.97, positiveOtherCoef: 0.97, negativeDeficitCoef: 1.03, negativeOtherCoef: 1.03, floors: false };
 const RULE_2026 = { positiveSurplusCoef: 0.94, positiveOtherCoef: 0.97, negativeDeficitCoef: 1.06, negativeOtherCoef: 1.03, floors: true };
@@ -116,5 +116,41 @@ describe("Bütçe: birim maliyet × üretim (17.5)", () => {
     );
     expect(r.total).toEqual([15, 30, 50, 65]);
     expect(r.filled).toEqual([{ key: "new", addedMwh: 15 }]);
+    expect(r.perPlant.new).toEqual([5, 10, 15, 20]);
+    expect(r.perPlant.hes).toEqual([0, 0, 5, 5]);
+  });
+});
+
+describe("Bütçe: üretim senaryoları (17.3)", () => {
+  it("hidro kurak = önceki yıl, yağışlı = son yıl (eksik ay oranla), normal = ortalama; diğer türler son yıl", () => {
+    const prev = { h: [10, 10, ...new Array(10).fill(10)], r: new Array(12).fill(5) };
+    // Son yıl yalnız ilk iki ay: HES 20, 20 (oran 2) → kalan aylar 10 × 2 = 20; RES 6, 6 (oran 1,2) → 6
+    const latest = { h: [20, 20, ...new Array(10).fill(null)], r: [6, 6, ...new Array(10).fill(null)] };
+    const s = productionScenarios([{ key: "h", type: "HES" }, { key: "r", type: "RES" }], prev, latest);
+    expect(s.dry[5]).toBeCloseTo(10 + 6, 9);
+    expect(s.wet[5]).toBeCloseTo(20 + 6, 9);
+    expect(s.normal[5]).toBeCloseTo(15 + 6, 9);
+    expect(s.wet[0]).toBeCloseTo(26, 9);
+  });
+
+  it("önceki yılı olmayan santral son yılın verisiyle, eksik ay 0", () => {
+    const s = productionScenarios([{ key: "n", type: "GES" }], {}, { n: [3, 4, ...new Array(10).fill(null)] });
+    expect(s.normal.slice(0, 3)).toEqual([3, 4, 0]);
+  });
+});
+
+describe("Bütçe: tahmin kalitesi taşıma (17.3)", () => {
+  it("ortak aylardaki MWh başına maliyet oranı; çarpan eski yılın günlerine uygulanır", () => {
+    // 2025 Ocak: gün 3880 TL / 100 MWh; 2026 Ocak: sapmalar yarıda (5, −2,5) ve KÜPST 1 → 1940 TL / 100 MWh → oran 0,5
+    const hours = [
+      hour(Date.UTC(2025, 0, 1, 12)),
+      hour(Date.UTC(2025, 9, 1, 12)), // Ekim: yalnız 2025
+      hour(Date.UTC(2026, 0, 1, 12), { unitDeviations: [5, -2.5], kupstQty: 1 }),
+    ];
+    const k = yearQualityScale(hours, scenario(), one, 2025, 2026);
+    expect(k).toBeCloseTo(0.5, 9);
+    const r = imbalanceBudget(hours, scenario(), { year: 2027, priceScale: one, sims: 10, yearCostScale: { "2025": k } });
+    const oct = r.months.find((m) => m.month === "10")!;
+    expect(oct.expected).toBeCloseTo(31 * 3880 * 0.5, 6);
   });
 });
