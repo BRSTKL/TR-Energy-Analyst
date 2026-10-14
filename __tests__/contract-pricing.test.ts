@@ -55,12 +55,14 @@ describe("Sözleşme fiyatı (16.1)", () => {
 });
 
 describe("Sözleşme biçimi sınaması (16.2)", () => {
-  const plant = (predicted: number, actual: number, ptfFrom: number | null, ptfTo: number | null, type = "RES") => ({
+  const plant = (predicted: number, actual: number, ptfFrom: number | null, ptfTo: number | null, type = "RES", spreadFrom: number | null = 400, spreadTo: number | null = 600) => ({
     type,
     predictedTlPerMwh: predicted,
     actualTlPerMwh: actual,
     capturePtfFrom: ptfFrom,
     capturePtfTo: ptfTo,
+    spreadFrom,
+    spreadTo,
   });
 
   it("sabit TL ve PTF yüzdesi: elle hesaplanmış karşılama ve zarar payı", () => {
@@ -75,11 +77,21 @@ describe("Sözleşme biçimi sınaması (16.2)", () => {
     // m = 0: yalnız A zarar eder; m = 0,5: sabitte A kurtulur (1,2), PTF payında kurtulamaz (0,96 < 1)
     expect(all.forms.fixed.lossSharePct).toEqual({ "0": 50, "0.5": 0 });
     expect(all.forms.ptfShare.lossSharePct).toEqual({ "0": 50, "0.5": 50 });
+    // Makas 400 → 600 (×1,5): A 0,8 × 1,5 = 1,2; B 1,25 × 1,5 = 1,875 → hiçbiri zarar etmez
+    expect(all.spreadChangeMedian).toBeCloseTo(1.5, 9);
+    expect(all.forms.spreadShare.cover.p50).toBeCloseTo((1.2 + 1.875) / 2, 9);
+    expect(all.forms.spreadShare.lossSharePct).toEqual({ "0": 0, "0.5": 0 });
     expect(r.RES.n).toBe(2);
   });
 
   it("eksik ya da sıfır değerli santral dışarıda; teknoloji ayrı gruplanır", () => {
-    const r = contractFormBacktest([plant(100, 100, 2000, 2000, "GES"), plant(0, 50, 2000, 2000), plant(100, 50, null, 2000), plant(100, 50, 2000, 0)]);
+    const r = contractFormBacktest([
+      plant(100, 100, 2000, 2000, "GES"),
+      plant(0, 50, 2000, 2000),
+      plant(100, 50, null, 2000),
+      plant(100, 50, 2000, 0),
+      plant(100, 50, 2000, 2000, "RES", null, 600),
+    ]);
     expect(r.ALL.n).toBe(1);
     expect(r.GES.n).toBe(1);
     expect(r.RES).toBeUndefined();

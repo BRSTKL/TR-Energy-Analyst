@@ -96,6 +96,8 @@ export function priceContract(input: ContractPricingInput): ContractPrice {
  * kadar karşılardı? Bedel tahmini maliyetin (1 + kâr payı) katı:
  *   sabit TL:    bedel = tahmin × (1 + m)                                  (TL/MWh, hedef yılda aynı)
  *   PTF yüzdesi: bedel = tahmin / PTF_geçmiş × PTF_hedef × (1 + m)         (PTF'nin sabit yüzdesi)
+ *   makas endeksi: bedel = tahmin / makas_geçmiş × makas_hedef × (1 + m)   (16.2b; makas = dönemin piyasa ortalaması
+ *                  |SMF − PTF|, EPİAŞ'ın yayımladığı fiyatlardan; sözleşmeye yazılabilen tek sayı)
  * Karşılama oranı = bedel / gerçekleşen maliyet (m = 0'da); < 1 / (1 + m) ise o kâr payıyla zarar.
  * PTF santralin üretim ağırlıklı PTF'sidir (iki yılda ayrı). Santral bazındadır: portföyde sapmalar kısmen
  * dengelendiği için toplayıcının gerçek maliyeti daha düşüktür; biçimlerin göreli dayanıklılığını ölçer.
@@ -106,19 +108,26 @@ export interface ContractFormPlant {
   actualTlPerMwh: number;
   capturePtfFrom: number | null;
   capturePtfTo: number | null;
+  /** Dönemin piyasa ortalaması |SMF − PTF|, TL/MWh (iki yıl) */
+  spreadFrom: number | null;
+  spreadTo: number | null;
 }
 
 export interface ContractFormStats {
   n: number;
   /** Hedef yıl / geçmiş yıl üretim ağırlıklı PTF oranının medyanı */
   ptfChangeMedian: number;
-  forms: Record<"fixed" | "ptfShare", {
+  /** Hedef yıl / geçmiş yıl piyasa makası oranı (medyan; piyasa ortalaması olduğundan santraller arasında aynı) */
+  spreadChangeMedian: number;
+  forms: Record<ContractForm, {
     /** Karşılama oranı (bedel / gerçek, kâr payı 0) dağılımı */
     cover: { p10: number; p25: number; p50: number; p75: number; p90: number };
     /** Kâr payına göre zarar eden santral payı (%) */
     lossSharePct: Record<string, number>;
   }>;
 }
+
+export type ContractForm = "fixed" | "ptfShare" | "spreadShare";
 
 export const CONTRACT_MARKUPS = [0, 0.5, 1];
 
@@ -131,12 +140,14 @@ const q = (sorted: number[], p: number) => {
 };
 
 export function contractFormBacktest(plants: ContractFormPlant[], markups = CONTRACT_MARKUPS): Record<string, ContractFormStats> {
-  const groups = new Map<string, Array<{ fixed: number; ptfShare: number; ptfChange: number }>>();
+  const groups = new Map<string, Array<{ fixed: number; ptfShare: number; spreadShare: number; ptfChange: number; spreadChange: number }>>();
+  const positive = (v: number | null) => v !== null && v > 0;
   for (const p of plants) {
-    if (!(p.predictedTlPerMwh > 0) || !(p.actualTlPerMwh > 0) || !(p.capturePtfFrom! > 0) || !(p.capturePtfTo! > 0)) continue;
+    if (!(p.predictedTlPerMwh > 0) || !(p.actualTlPerMwh > 0) || ![p.capturePtfFrom, p.capturePtfTo, p.spreadFrom, p.spreadTo].every(positive)) continue;
     const ptfChange = p.capturePtfTo! / p.capturePtfFrom!;
+    const spreadChange = p.spreadTo! / p.spreadFrom!;
     const fixed = p.predictedTlPerMwh / p.actualTlPerMwh;
-    const row = { fixed, ptfShare: fixed * ptfChange, ptfChange };
+    const row = { fixed, ptfShare: fixed * ptfChange, spreadShare: fixed * spreadChange, ptfChange, spreadChange };
     for (const key of [p.type, "ALL"]) {
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(row);
@@ -154,7 +165,12 @@ export function contractFormBacktest(plants: ContractFormPlant[], markups = CONT
     out[key] = {
       n: rows.length,
       ptfChangeMedian: q(rows.map((r) => r.ptfChange).sort((a, b) => a - b), 0.5),
-      forms: { fixed: form(rows.map((r) => r.fixed)), ptfShare: form(rows.map((r) => r.ptfShare)) },
+      spreadChangeMedian: q(rows.map((r) => r.spreadChange).sort((a, b) => a - b), 0.5),
+      forms: {
+        fixed: form(rows.map((r) => r.fixed)),
+        ptfShare: form(rows.map((r) => r.ptfShare)),
+        spreadShare: form(rows.map((r) => r.spreadShare)),
+      },
     };
   }
   return out;

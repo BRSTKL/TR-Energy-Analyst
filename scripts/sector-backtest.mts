@@ -62,6 +62,12 @@ function readHourly(y: number, id: number): { forecast: (number | null)[]; actua
 }
 
 const [mFrom, mTo] = await Promise.all([market(fromYear), market(toYear)]);
+// Piyasa makası (16.2b): dönemin ortalama |SMF − PTF|; makas endeksli sözleşmenin endeksi
+const avgSpread = (m: (MarketPriceRecord | undefined)[]) => {
+  const xs = m.filter((r): r is MarketPriceRecord => !!r).map((r) => Math.abs(r.smf - r.ptf));
+  return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+};
+const [spreadFrom, spreadTo] = [avgSpread(mFrom), avgSpread(mTo)];
 const toRows = new Map(readSector(toYear).plants.map((p) => [p.epiasPlantId, p]));
 const inputs: PlantBacktestInput[] = [];
 const contractPlants: ContractFormPlant[] = [];
@@ -131,6 +137,8 @@ for (const p of readSector(fromYear).plants) {
     actualTlPerMwh: actual / mwhB,
     capturePtfFrom: ptfA / mwhA,
     capturePtfTo: ptfB / mwhB,
+    spreadFrom,
+    spreadTo,
   });
 }
 
@@ -221,9 +229,10 @@ if (c)
 console.log("\nSözleşme biçimi (16.2): bedel 2025 verisiyle, 2026'da uygulanır; karşılama = bedel / gerçek maliyet (kâr payı 0)");
 for (const [t, s] of Object.entries(out.contractForms)) {
   const line = (name: string, x: (typeof s.forms)["fixed"]) =>
-    `    ${name.padEnd(12)} karşılama medyan ${f(x.cover.p50)} (%50 aralık ${f(x.cover.p25)}–${f(x.cover.p75)}, P10 ${f(x.cover.p10)})  zarar eden: ${CONTRACT_MARKUPS.map((m) => `kâr payı %${m * 100} → %${f(x.lossSharePct[String(m)], 0)}`).join(", ")}`;
-  console.log(`  ${t.padEnd(4)} n=${String(s.n).padStart(4)}  PTF değişimi medyan ×${f(s.ptfChangeMedian)}`);
+    `    ${name.padEnd(14)} karşılama medyan ${f(x.cover.p50)} (%50 aralık ${f(x.cover.p25)}–${f(x.cover.p75)}, P10 ${f(x.cover.p10)})  zarar eden: ${CONTRACT_MARKUPS.map((m) => `kâr payı %${m * 100} → %${f(x.lossSharePct[String(m)], 0)}`).join(", ")}`;
+  console.log(`  ${t.padEnd(4)} n=${String(s.n).padStart(4)}  PTF değişimi medyan ×${f(s.ptfChangeMedian)}  makas ×${f(s.spreadChangeMedian)}`);
   console.log(line("sabit TL", s.forms.fixed));
   console.log(line("PTF yüzdesi", s.forms.ptfShare));
+  console.log(line("makas endeksi", s.forms.spreadShare));
 }
 await prisma.$disconnect();

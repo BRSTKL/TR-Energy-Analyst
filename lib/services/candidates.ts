@@ -67,7 +67,12 @@ export interface CandidatePricing {
   /** Teknoloji → gerçek / tahmin oranının medyanı (12.2): geçen yılın verisiyle fiyatlanan bedelin tipik sapması */
   typicalRatio: Record<string, number>;
   /** Teknoloji (ve ALL) → kâr payı %50'de zarar eden santral payı, sabit TL ve PTF yüzdesi (16.2) */
-  contractForms: Record<string, { n: number; fixedLossPct: number; ptfShareLossPct: number; ptfChange: number }>;
+  contractForms: Record<
+    string,
+    { n: number; fixedLossPct: number; ptfShareLossPct: number; spreadShareLossPct: number | null; ptfChange: number; spreadChange: number | null }
+  >;
+  /** Makas endeksli sözleşmenin referansı: projenin dönemindeki piyasa ortalaması |SMF − PTF|, TL/MWh (16.2b) */
+  referenceSpreadTl: number | null;
   /** Projenin dönemindeki TL'yi son ayın fiyat düzeyine çeviren çarpan ve etiketi */
   real: { factor: number; label: string } | null;
   /** Projenin dönemindeki TL'yi ABD dolarına çeviren çarpan (dönemin ortalama kuru) */
@@ -75,7 +80,7 @@ export interface CandidatePricing {
 }
 
 /** Geçmişle sınama dosyası: verinin yılı hedef yıl olan, yoksa bir sonraki yılın (scripts/sector-backtest.mts) */
-function loadPricing(year: number, start: string, end: string): CandidatePricing {
+function loadPricing(year: number, start: string, end: string, referenceSpreadTl: number | null): CandidatePricing {
   let bt: { fromYear: number; toYear: number; months: string; premium: Record<string, PremiumBacktestStats>; contractForms?: Record<string, ContractFormStats> } | null = null;
   for (const y of [year, year + 1]) {
     try {
@@ -98,12 +103,21 @@ function loadPricing(year: number, start: string, end: string): CandidatePricing
       ? Object.fromEntries(
           Object.entries(bt.contractForms).map(([t, s]) => [
             t,
-            { n: s.n, fixedLossPct: s.forms.fixed.lossSharePct["0.5"], ptfShareLossPct: s.forms.ptfShare.lossSharePct["0.5"], ptfChange: s.ptfChangeMedian },
+            {
+              n: s.n,
+              fixedLossPct: s.forms.fixed.lossSharePct["0.5"],
+              ptfShareLossPct: s.forms.ptfShare.lossSharePct["0.5"],
+              // Eski önbellekte makas endeksi yok (16.2b öncesi)
+              spreadShareLossPct: s.forms.spreadShare?.lossSharePct["0.5"] ?? null,
+              ptfChange: s.ptfChangeMedian,
+              spreadChange: s.spreadChangeMedian ?? null,
+            },
           ])
         )
       : {},
     real: level && base ? { factor: series.cpi[base] / level, label: `${monthLabelTr(base)} TL'si` } : null,
     usdFactor: usd.length ? 1 / (usd.reduce((a, v) => a + v, 0) / usd.length) : null,
+    referenceSpreadTl,
   };
 }
 
@@ -258,7 +272,11 @@ export async function projectCandidates(
     result: screenCandidates(m.members, candidates, data.profile, { top, sortBy }),
     pricing: (() => {
       const ts = withData.flatMap((p) => [new Date(p.hourly[0].timestamp).getTime(), new Date(p.hourly[p.hourly.length - 1].timestamp).getTime()]);
-      return loadPricing(year, iso(Math.min(...ts)), iso(Math.max(...ts)));
+      // Piyasa makası portföyün saatlerinden (her saat bir kez)
+      const spread = new Map<number, number>();
+      for (const p of withData) for (const h of p.hourly) spread.set(new Date(h.timestamp).getTime(), Math.abs(h.smf - h.ptf));
+      const ref = spread.size ? Array.from(spread.values()).reduce((a, b) => a + b, 0) / spread.size : null;
+      return loadPricing(year, iso(Math.min(...ts)), iso(Math.max(...ts)), ref);
     })(),
   };
 }

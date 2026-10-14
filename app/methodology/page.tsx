@@ -15,7 +15,7 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.18";
+const VERSION = "1.19";
 const VERSION_DATE = "14 Ekim 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
@@ -34,6 +34,7 @@ const SECTIONS: Array<{ id: string; title: string }> = [
   { id: "toplayici-kiyas", title: "Toplayıcılar arası kıyas" },
   { id: "uretici-katki", title: "Üreticilerin portföye katkısı" },
   { id: "aday", title: "Aday ve hedef santraller" },
+  { id: "sozlesme", title: "Sözleşme fiyatı" },
   { id: "gip", title: "Gün içi piyasa senaryosu" },
   { id: "gun-ici-etkinlik", title: "Gün içi etkinlik ve tahmin fırsatı" },
   { id: "sinama", title: "Geçmişle sınama" },
@@ -170,7 +171,7 @@ export default function MethodologyPage() {
             <p>
               Veri yalnızca kamuya açık EPİAŞ Şeffaflık Platformu&apos;dur. Şirketin gün içi işlemleri, ikili anlaşmaları ve fiili uzlaştırma
               faturaları açık veride yoktur; bu yüzden rakamlar &quot;kapatılması gereken risk&quot; olarak okunmalı, gerçekleşen bedel olarak
-              değil. Her rakamın ne kadar kesin olduğu rapordaki etiketlerle belirtilir (bölüm 19).
+              değil. Her rakamın ne kadar kesin olduğu rapordaki etiketlerle belirtilir (&quot;Etiketler, varsayımlar ve sınırlar&quot; bölümü).
             </p>
           </Section>
 
@@ -448,7 +449,7 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
             <p>
               <b>Kalite süzgeci:</b> dönem saatlerinin en az %90&apos;ında verisi olan ve plan / gerçekleşen oranı 0,5–2 arasında olan ve net sapma hacmi üretimin %60&apos;ını aşmayan santraller
               kıyaslanır (eksik ya da bariz tutarsız veri elenir; dar aralık kötü tahmin eden santralleri de eleyip medyanı düşürdüğü için genişletildi). Dağılım santral sayısına göre P10, P25, medyan, P75 ve P90 ile, ayrıca üretim
-              ağırlıklı ortalamayla verilir; santralin yeri teknoloji içindeki yüzdelik sırasıdır. <b>K1 görünümü</b> olası arıza / kısıntı saatlerini (bölüm 17) dışarıda bırakır.
+              ağırlıklı ortalamayla verilir; santralin yeri teknoloji içindeki yüzdelik sırasıdır. <b>K1 görünümü</b> olası arıza / kısıntı saatlerini (&quot;Veri bütünlüğü ve arıza saatleri&quot; bölümü) dışarıda bırakır.
             </p>
             <p>
               Hidro alt tipi (barajlı / nehir tipi) addan ya da gün içi üretim esnekliğinden tahmin edilir. <Tag kind="exact" /> (alt tip:{" "}
@@ -529,6 +530,49 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
               kısmı YEKDEM&apos;de kalabilir. Görüşmeden önce santralle doğrulanmalı. 2026 sektör karnesinde (1.011 santral) 82 santral 2026&apos;da
               çıktı (2.935 MW; 58&apos;inde süre dolmuş, 18&apos;i kendi isteğiyle), 4&apos;ünün süresi 2026&apos;da, 110&apos;unun tahminen 2026–2028&apos;de
               doluyor. <Tag kind="estimate" />
+            </p>
+          </Section>
+
+          <Section id="sozlesme" n={next()} title="Sözleşme fiyatı">
+            <p>
+              Aday sayfasında, adil primi hesaplanan her aday için toplayıcının teklif edebileceği dengesizlik hizmet bedeli (TL/MWh) üç
+              çizgiden çıkar. KÜPST toplayıcıdadır (topluluk KÜPST&apos;ü), taban ve tavan KÜPST dahildir.
+            </p>
+            <F>
+              {`Taban = adil prim = (Shapley payı + KÜPST) / üretim      toplayıcının beklenen maliyeti
+Tavan = (tek başına dengesizlik + KÜPST) / üretim          santralin bağımsız kalma alternatifi
+Öneri = taban + pay × (tavan − taban)                      pay varsayılanı %50 (%25 / %75 seçilebilir)`}
+            </F>
+            <p>
+              Tavan ≤ taban ise teklif verilmez (portföye katılmak santrale kazandırmıyor). Taban eksiyse öneri 0&apos;a çekilir. <Tag kind="exact" />
+            </p>
+            <p>
+              <b>Sözleşme biçimi geçmişle sınandı (16.2).</b> Sektör karnesinin 858 santralinde bedel 2025 verisiyle (2026 kurallarıyla) tahmini
+              maliyetin (1 + kâr payı) katı olarak belirlenip 2026&apos;da üç biçimde uygulandı: sabit TL/MWh; PTF&apos;nin sabit yüzdesi (santralin
+              üretim ağırlıklı PTF&apos;siyle); makasa endeksli (bedel × 2026 piyasa makası / 2025 piyasa makası; makas = dönemin ortalama |SMF − PTF|).
+            </p>
+            <Table
+              head={["Ocak–Ağustos, 2025 → 2026", "Sabit TL", "PTF yüzdesi", "Makas endeksi"]}
+              rows={[
+                ["Karşılama medyanı (bedel / gerçek maliyet, kâr payı 0)", "0,73", "0,55", "1,16"],
+                ["Zarar eden santral, kâr payı %50: tümü", "%36", "%74", "%10"],
+                ["Rüzgâr / hidro / güneş", "%24 / %41 / %63", "%75 / %71 / %100", "%0 / %16 / %7"],
+              ]}
+            />
+            <p>
+              Neden: maliyet arttı (gerçek / tahmin medyanı ×1,36) ve bunu makas yönetti (piyasa makası ×1,58); santrallerin üretim ağırlıklı
+              PTF&apos;si ise nominal düştü (medyan ×0,75, güneşte ×0,60). PTF&apos;ye bağlı bedel maliyet artarken azaldı. Öneri bu yüzden makasa
+              endeksli verilir: uzlaştırma döneminde bedel = öneri × gerçekleşen piyasa makası / referans makas (projenin dönemindeki ortalama).
+              Sabit TL karşılaştırma için durur; sabit TL&apos;de tipik durum (×1,35) ve kötü senaryo (P90) marjı ayrıca gösterilir. Gain 2026&apos;nın
+              bağımsız ilk 10 adayında pazarlık alanı 14–41 TL/MWh; sabit TL&apos;de tipik durumda bile hepsinde marj eksi (−35 ile −59 TL/MWh):
+              adil prim, gelecek yılın maliyeti için sabit bir bedelin tabanı olamaz. <Tag kind="estimate" />
+            </p>
+            <p>
+              Sınırlar: sınama tek yılı kapsar ve o yıl makas açıldı; makas daralırsa endeksli bedel de düşer (iki yönlü). Endeks maliyetin yalnız
+              fiyat kısmını izler; santralin tahmin kalitesi değişirse bedel bunu yakalamaz. Santral bazındadır; portföyde netleşme maliyeti düşürür,
+              biçimlerin sırası değişmez. Rakiplerin teklif fiyatı açık veride yoktur (toplayıcı kıyasındaki MWh başına maliyet rakip fiyatının ancak
+              alt sınırıdır). Toplayıcının işletme gideri ve GİP işlem kâr/zararı bedele dahil değildir; tavana santralin kendi ticaret ekibinin
+              gideri eklenmez (gerçek tavan daha yüksektir). Ölçümdür, işlem önerisi değildir.
             </p>
           </Section>
 
@@ -816,6 +860,11 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.19",
+                  "14 Ekim 2026",
+                  "Sözleşme fiyatı (Aşama 16): aday sayfasında önerilen dengesizlik hizmet bedeli (taban = adil prim, tavan = tek başına maliyet, öneri = taban + %50 pazarlık alanı) ve teklif kutusu. Sözleşme biçimi 2025 → 2026 sınandı: kâr payı %50'de zarar eden santral sabit TL'de %36, PTF yüzdesinde %74, makasa endeksli bedelde %10; öneri makasa endeksli verilir. Aday taramasına üretim ağırlıklı PTF. Diğer hesaplar değişmedi.",
+                ],
                 [
                   "1.18",
                   "14 Ekim 2026",
