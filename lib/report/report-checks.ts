@@ -374,6 +374,17 @@ export function checkFinalPlanText(r: PlantReportData, slides: Array<{ slide: nu
   ];
 }
 
+/** Bir santralin kurulu gücü bile tahminse toplam kurulu güç "~" ile yazılır (kapak, özet, Ek A toplamı; CLAUDE.md) */
+export function checkCapacityText(r: PlantReportData, slides: Array<{ slide: number; text: string }>): ReportIssue[] {
+  if (!r.plants.some((p) => p.capacityEstimated)) return [];
+  const total = Math.round(r.totals.capacityMw).toLocaleString("tr-TR");
+  // "803 MW" önünde "~" yoksa (MWh değil)
+  const bare = new RegExp(`(?:^|[^~\\d.,])${total.replace(/\./g, "\\.")} MW\\b`);
+  return slides
+    .filter((s) => bare.test(s.text))
+    .map((s) => ({ level: "error" as const, rule: "capacity-total", message: `Slayt ${s.slide}: toplam kurulu güç ${total} MW "~" olmadan yazılmış; ${r.plants.filter((p) => p.capacityEstimated).length} santralinki tahmin.` }));
+}
+
 /** Slayt metninde bozuk değer: biçimlendirilmemiş sayı, boş alan, eksi işaretli yüzde */
 const BROKEN_TEXT: Array<{ re: RegExp; what: string }> = [
   { re: /\bNaN\b/, what: "NaN" },

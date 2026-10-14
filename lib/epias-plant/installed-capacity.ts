@@ -11,6 +11,7 @@
 
 import { normalizePlantName } from "./plant-data";
 import { brandOf, isUnlicensedName } from "@/lib/analysis/candidate-access";
+import { pctOf } from "@/lib/format";
 
 export type CapacitySource = "EPIAS_YEKDEM" | "PEAK_ESTIMATE" | "USER";
 
@@ -219,7 +220,7 @@ export function matchInstalledCapacity(q: CapacityQuery, index: CapacityIndex): 
     };
   }
   const lowPeak = q.hours >= MIN_HOURS_FOR_LOW_CHECK && q.peakMw < entry.mw * MIN_PEAK_SHARE;
-  const lowText = `en yüksek saatlik üretim kurulu gücün %${Math.round((q.peakMw / entry.mw) * 100)}'i`;
+  const lowText = `en yüksek saatlik üretim kurulu gücün ${pctOf((q.peakMw / entry.mw) * 100)}`;
   // Şirketi doğrulanmamış ad eşleşmesi üretimle de uyuşmuyorsa büyük olasılıkla aynı adlı başka santral
   if (lowPeak && method === "name") {
     return peakEstimate(q, `YEKDEM'de aynı adlı tesis (${entry.facilityName}, ${entry.orgName}, ${fmtMw(entry.mw)} MW) şirketi farklı ve ${lowText}; kullanılmadı`);

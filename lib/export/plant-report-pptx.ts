@@ -122,6 +122,8 @@ const periodTag = (r: PlantReportData) => {
 };
 /** Veri tam bir yılı kapsıyor mu (değilse "yıllık" yerine "dönem" denir: ör. Ocak–Ağustos 2026) */
 const isFullYear = (r: PlantReportData) => r.monthly.length >= 12;
+/** Toplam kurulu güç: bir santralinki bile tahminse (en yüksek üretim, alt sınır) toplam da tahmindir ve "~" ile yazılır (CLAUDE.md) */
+const totalMw = (r: PlantReportData, mw: number) => `${r.plants.some((p) => p.capacityEstimated) ? "~" : ""}${nf(mw, 0)}`;
 /** İlk harfi büyük (Türkçe: "işlem" → "İşlem") */
 const capitalize = (t: string) => (t ? t.charAt(0).toLocaleUpperCase("tr-TR") + t.slice(1) : t);
 const hourRange = (h: number) => `${String(h).padStart(2, "0")}:00–${String((h + 1) % 24).padStart(2, "0")}:00`;
@@ -494,7 +496,7 @@ export async function exportPlantReportPptx(
     s.background = { color: C.white };
     rect(s, 0, 0, W, 1.35, C.navy);
     text(s, `DENGESİZLİK KARNESİ · ÖZET · ${periodTag(r).toLocaleUpperCase("tr-TR")}`, { x: M, y: 0.25, w: 9, h: 0.25, fontSize: 10, bold: true, charSpacing: 2, color: "7FD1C7" });
-    text(s, agg ? `${agg.name} portföyü: ${r.plants.length} santral, ${nf(t.capacityMw, 0)} MW, ${formatEnergy(t.actualMwh)}` : `${r.projectName}: ${r.plants.length} santral, ${formatEnergy(t.actualMwh)}`, {
+    text(s, agg ? `${agg.name} portföyü: ${r.plants.length} santral, ${totalMw(r, t.capacityMw)} MW, ${formatEnergy(t.actualMwh)}` : `${r.projectName}: ${r.plants.length} santral, ${formatEnergy(t.actualMwh)}`, {
       x: M, y: 0.55, w: CW, h: 0.6, fontSize: 24, bold: true, fontFace: FONT_HEAD, color: C.white, valign: "middle",
     });
     // Dört gösterge
@@ -586,7 +588,7 @@ export async function exportPlantReportPptx(
     text(s, r.projectName, { x: M + 0.1, y: 1.7, w: CW - 0.2, h: 1.3, fontSize: 44, bold: true, fontFace: FONT_HEAD, color: C.white, valign: "top" });
     text(
       s,
-      `${periodLabel(r)} · ${t.plantCount} santral · ${nf(t.capacityMw, 0)} MW${
+      `${periodLabel(r)} · ${t.plantCount} santral · ${totalMw(r, t.capacityMw)} MW${
         agg ? ` · ${agg.name} portföyü` : singleCompany ? ` · ${singleCompany}` : ""
       }`,
       { x: M + 0.1, y: 3.05, w: CW - 0.2, h: 0.45, fontSize: 16, color: "C9D6E3" }
@@ -2243,7 +2245,7 @@ export async function exportPlantReportPptx(
     rows.push([
       cell("Toplam (santral bazında)", bold),
       cell("", bold),
-      cell(nf(t.capacityMw, 0), { ...bold, align: "right" }),
+      cell(totalMw(r, t.capacityMw), { ...bold, align: "right" }),
       cell(formatEnergy(t.actualMwh), { ...bold, align: "right" }),
       cell(formatTlShort(r.settlement.plantLevelCostTl, 2), { ...bold, align: "right" }),
       cell(nf(plantLevelUnit, 0), { ...bold, align: "right" }),

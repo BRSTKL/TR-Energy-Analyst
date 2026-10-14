@@ -358,6 +358,28 @@ function EpiasPlantImport() {
     return f && f.name.trim() && f.type && Number(f.capacity.replace(",", ".")) > 0;
   });
   const needFetch = selected.some((p) => ["none", "stale", "error"].includes(plantStatus(p)));
+  /** Kayıt düğmesi neden pasif: kullanıcıya hangi alanı düzelteceğini söyler */
+  const formProblems = selected.flatMap((p) => {
+    const f = forms[p.id];
+    const label = f?.name.trim() || p.name;
+    if (!f) return [`${label}: form yüklenmedi`];
+    const missing = [
+      !f.name.trim() && "ad",
+      !f.type && "tür",
+      !(Number(f.capacity.replace(",", ".")) > 0) && "kurulu güç (0'dan büyük olmalı)",
+    ].filter((x): x is string => !!x);
+    return missing.length ? [`${label}: ${missing.join(", ")} eksik`] : [];
+  });
+  const notReady = selected.filter((p) => plantStatus(p) !== "ready").map((p) => forms[p.id]?.name.trim() || p.name);
+  const saveBlockers = [
+    selected.length === 0 && "Santral seçilmedi.",
+    notReady.length > 0 && `Verisi hazır olmayan santral: ${notReady.slice(0, 5).join(", ")}${notReady.length > 5 ? ` ve ${notReady.length - 5} santral daha` : ""}.`,
+    allReady && gapSummary.length > 0 && !gapsAcknowledged && "Eksik aylar için onay kutusunu işaretleyin.",
+    ...formProblems.slice(0, 5).map((x) => `${x}.`),
+    formProblems.length > 5 && `ve ${formProblems.length - 5} santralde daha eksik alan var.`,
+    target === "new" && !projectName.trim() && "Proje adı boş (sayfanın üstünde).",
+    target === "existing" && !targetProjectId && "Eklenecek proje seçilmedi (sayfanın üstünde).",
+  ].filter((x): x is string => !!x);
 
   const save = async () => {
     setCreating(true);
@@ -705,6 +727,16 @@ function EpiasPlantImport() {
                     ? `Projeyi oluştur ve analiz et (${selected.length} santral)`
                     : `Projeye ekle ve analiz et (${selected.length} santral)`}
               </Button>
+              {!creating && !fetching && addedNotice === null && saveBlockers.length > 0 && (
+                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                  <p className="font-semibold">Kaydetmek için:</p>
+                  <ul className="mt-1 list-disc pl-5">
+                    {saveBlockers.map((b) => (
+                      <li key={b}>{b}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
