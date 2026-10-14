@@ -878,18 +878,29 @@ export async function exportPlantReportPptx(
   // 3b. NE DEĞİŞTİ? (aynı santrallerin önceki yıl projesi varsa)
   // ---------------------------------------------------------------------------------------------
   if (options.costChange) {
-    const { result: cc, previousProject, sector } = options.costChange;
+    const { result: nominal, previousProject, sector, units } = options.costChange;
+    // Yıllar arası kıyas aynı fiyat düzeyinde: önceki yıl TÜFE ile son yılın fiyatlarına taşınır (son yıl nominalle aynı)
+    const cc = units?.real ?? nominal;
     const [a, b] = [cc.a, cc.b];
-    const change = a.unitCostTl > 0 ? (cc.totalTlPerMwh / a.unitCostTl) * 100 : 0;
+    const changeOf = (x: typeof cc) => (x.a.unitCostTl > 0 ? (x.totalTlPerMwh / x.a.unitCostTl) * 100 : 0);
+    const change = changeOf(cc);
+    const nominalChange = changeOf(nominal);
     const lead = [...cc.effects].sort((x, y) => Math.abs(y.tlPerMwh) - Math.abs(x.tlPerMwh))[0];
     const errorSame = Math.abs(b.errorPct - a.errorPct) < 1;
     const signedTl = (v: number) => (Math.abs(v) < 0.05 ? "≈0" : `${v > 0 ? "+" : "−"}${nf(Math.abs(v), 1)}`);
-    const title =
-      `${yearLocative(b.label)} MWh başına dengesizlik maliyeti %${nf(Math.abs(change), 0)} ${change >= 0 ? "arttı" : "azaldı"}: ` +
-      `en büyük kalem ${lead.label.toLocaleLowerCase("tr-TR")} (${signedTl(lead.tlPerMwh)} TL)${errorSame ? ", tahmin hatası neredeyse aynı" : ""}`;
+    const pctWord = (v: number) => `%${nf(Math.abs(v), 0)} ${v >= 0 ? "arttı" : "azaldı"}`;
+    const title = units
+      ? `${yearLocative(b.label)} MWh başına dengesizlik maliyeti enflasyon düşülünce ${pctWord(change)} (nominal %${nf(Math.abs(nominalChange), 0)}): ` +
+        `en büyük kalem ${lead.label.toLocaleLowerCase("tr-TR")} (${signedTl(lead.tlPerMwh)} TL)${errorSame ? ", tahmin hatası neredeyse aynı" : ""}`
+      : `${yearLocative(b.label)} MWh başına dengesizlik maliyeti ${pctWord(change)}: ` +
+        `en büyük kalem ${lead.label.toLocaleLowerCase("tr-TR")} (${signedTl(lead.tlPerMwh)} TL)${errorSame ? ", tahmin hatası neredeyse aynı" : ""}`;
     const s = contentSlide("Ne değişti?", title, "exact");
     s.addNotes(
       `Aynı santrallerin ${a.label} ve ${b.label} verisi aynı takvim saatlerinde eşlendi; MWh başına maliyet farkı dört kaleme ayrıldı. ` +
+        (units
+          ? `${a.label} fiyatları her saatin ayının TÜFE'siyle ${b.label} fiyat düzeyine taşındı (genel fiyat oranı ×${nf(units.priceRatio ?? 1, 2)}); şelale bu yüzden enflasyondan arınmıştır. ` +
+            `Nominal TL'de maliyet %${nf(Math.abs(nominalChange), 0)} ${nominalChange >= 0 ? "arttı" : "azaldı"}; dolar bazında ${nf(units.usd.a.unitCostTl, 2)} → ${nf(units.usd.b.unitCostTl, 2)} $/MWh. `
+          : "") +
         "Her kalem tek başına diğer yılın değeriyle değiştirilip yeniden fiyatlandı; kalemlerin birlikte değişmesinden kalan kısım etkileşimdir. " +
         `Tahmin hatası netleşmiş sapmanın üretime oranıdır (%${nf(a.errorPct, 1)} → %${nf(b.errorPct, 1)}). Fiyat makası kalemi, aynı sapmaların ${b.label} fiyatları ve sistem yönleriyle fiyatlanmasının farkıdır; ` +
         "makas yalnızca sistemle aynı yöndeki sapmayı fiyatlar. Katsayı kuralı 2026'da sistemle aynı yöndeki sapmayı %6'dan fiyatlayan kuraldır. " +
@@ -897,7 +908,7 @@ export async function exportPlantReportPptx(
     );
     text(
       s,
-      `TL/MWh · aynı santraller, ${nf(cc.coverage.commonHours)} ortak takvim saati · dört kalemin açıkladığı pay %${nf(cc.explainedPct, 1)} · karşılaştırılan proje: ${previousProject}`,
+      `${units ? `TL/MWh, ${b.label} fiyatlarıyla (${a.label} TÜFE ile taşındı)` : "TL/MWh"} · aynı santraller, ${nf(cc.coverage.commonHours)} ortak takvim saati · dört kalemin açıkladığı pay %${nf(cc.explainedPct, 1)} · karşılaştırılan proje: ${previousProject}`,
       { x: M, y: 1.8, w: CW, h: 0.3, fontSize: 10.5, color: C.sub }
     );
 
@@ -960,13 +971,20 @@ export async function exportPlantReportPptx(
       ["Sistemle aynı yönde sapma", `%${nf(a.sameDirectionPct, 0)} → %${nf(b.sameDirectionPct, 0)}`],
       ["Ortalama SMF–PTF makası", `${nf(a.meanSpreadTl, 0)} → ${nf(b.meanSpreadTl, 0)} TL`],
       ["Sapma MWh'ı başına bedel", `${nf(a.penaltyTlPerMwh, 0)} → ${nf(b.penaltyTlPerMwh, 0)} TL`],
+      ...(units
+        ? ([
+            ["Maliyet, nominal TL/MWh", `${nf(nominal.a.unitCostTl, 1)} → ${nf(nominal.b.unitCostTl, 1)}`],
+            ["Maliyet, USD/MWh", `${nf(units.usd.a.unitCostTl, 2)} → ${nf(units.usd.b.unitCostTl, 2)}`],
+          ] as Array<[string, string]>)
+        : []),
     ];
-    text(s, `${a.label} → ${b.label}`, { x: px, y: 2.2, w: pw, h: 0.3, fontSize: 12, bold: true, fontFace: FONT_HEAD, color: C.navy });
+    const rowH = units ? 0.35 : 0.5;
+    text(s, `${a.label} → ${b.label}${units ? ` · ${b.label} fiyatlarıyla` : ""}`, { x: px, y: 2.2, w: pw, h: 0.3, fontSize: 12, bold: true, fontFace: FONT_HEAD, color: C.navy });
     rows.forEach(([label, value], i) => {
-      const y = 2.6 + i * 0.5;
-      text(s, label, { x: px, y, w: pw * 0.55, h: 0.4, fontSize: 11, color: C.sub, valign: "middle" });
-      text(s, value, { x: px + pw * 0.55, y, w: pw * 0.45, h: 0.4, fontSize: 12, bold: true, align: "right", valign: "middle" });
-      s.addShape(pptx.ShapeType.line, { x: px, y: y + 0.45, w: pw, h: 0, line: { color: C.line, width: 0.75 } });
+      const y = 2.58 + i * rowH;
+      text(s, label, { x: px, y, w: pw * 0.55, h: rowH - 0.05, fontSize: units ? 10.5 : 11, color: C.sub, valign: "middle" });
+      text(s, value, { x: px + pw * 0.55, y, w: pw * 0.45, h: rowH - 0.05, fontSize: units ? 11 : 12, bold: true, align: "right", valign: "middle" });
+      s.addShape(pptx.ShapeType.line, { x: px, y: y + rowH - 0.03, w: pw, h: 0, line: { color: C.line, width: 0.75 } });
     });
     const TECH_TR: Record<string, string> = { RES: "Rüzgâr", GES: "Güneş", HES: "Hidro" };
     const sectorLines = sector
@@ -974,7 +992,8 @@ export async function exportPlantReportPptx(
           .filter((type) => sector.byType[type])
           .map((type) => {
             const x = sector.byType[type]!;
-            return `${TECH_TR[type]}: ${nf(x.plants)} santral · maliyeti artan pay %${nf(x.increasedPct, 0)} · medyan ${x.medianCostChangePct >= 0 ? "+" : "−"}%${nf(Math.abs(x.medianCostChangePct), 0)} · medyan sapma %${nf(x.medianDeviationPct.prev, 1)} → %${nf(x.medianDeviationPct.cur, 1)}`;
+            const [inc, med, tag] = x.real ? [x.real.increasedPct, x.real.medianCostChangePct, "reel "] : [x.increasedPct, x.medianCostChangePct, ""];
+            return `${TECH_TR[type]}: ${nf(x.plants)} santral · ${tag}maliyeti artan pay %${nf(inc, 0)} · ${tag}medyan ${med >= 0 ? "+" : "−"}%${nf(Math.abs(med), 0)} · medyan sapma %${nf(x.medianDeviationPct.prev, 1)} → %${nf(x.medianDeviationPct.cur, 1)}`;
           })
       : [];
     // Sektör karnesi iki yıl için toplanmışsa sektör desteği, değilse okuma notu
@@ -2344,7 +2363,10 @@ export async function exportPlantReportPptx(
             [
               "Ne değişti? (ayrıştırma)",
               `${options.costChange.result.a.label} ve ${options.costChange.result.b.label} verisi aynı santraller ve aynı takvim saatleri için eşlendi (29 Şubat hariç). MWh başına maliyet = netleşmiş sapma / üretim × sapma MWh'ı başına bedel. ` +
-                "Tahmin hatası, fiyat makası (PTF, SMF, sistem yönü), katsayı kuralı ve hacim-profil (sapmanın saat ve yön dağılımı) kalemlerinin her biri tek başına diğer yılın değeriyle değiştirilip yeniden fiyatlandı; etki iki yönde geçişin ortalamasıdır, kalan etkileşimdir.",
+                "Tahmin hatası, fiyat makası (PTF, SMF, sistem yönü), katsayı kuralı ve hacim-profil (sapmanın saat ve yön dağılımı) kalemlerinin her biri tek başına diğer yılın değeriyle değiştirilip yeniden fiyatlandı; etki iki yönde geçişin ortalamasıdır, kalan etkileşimdir." +
+                (options.costChange.units
+                  ? ` Enflasyon: ${options.costChange.result.a.label} fiyatları her saatin ayının TÜFE'siyle (TCMB, TÜİK verisi) ${options.costChange.result.b.label} fiyat düzeyine taşındı; USD karşılığı EPİAŞ PTF TL / USD oranıyla (aylık medyan). Sektör satırındaki değişimler de reeldir.`
+                  : ""),
             ] as [string, string],
           ]
         : []),

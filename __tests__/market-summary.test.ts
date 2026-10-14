@@ -43,8 +43,8 @@ describe("Piyasa özeti", () => {
     const prev = summarizeMarket([h("2025-05-01T12:00:00Z", 2500, 2900, "DEFICIT"), h("2025-05-01T13:00:00Z", 2400, 2000, "SURPLUS")])!;
     const cur = summarizeMarket(hours)!;
     const lines = compareMarkets(prev, cur, "2025", "2026");
-    expect(lines[0]).toMatch(/^SMF–PTF makası %25 daraldı/);
-    expect(lines.some((l) => l.startsWith("Ortalama PTF %41 düştü"))).toBe(true);
+    expect(lines[0]).toMatch(/^SMF–PTF makası nominal TL'de %25 daraldı/);
+    expect(lines.some((l) => l.startsWith("Ortalama PTF nominal %41 düştü"))).toBe(true);
     expect(lines.some((l) => l === "Sıfır fiyatlı saat 0 → 1. 1.000 TL/MWh altındaki saat 0 → 2.")).toBe(true);
   });
 
@@ -64,10 +64,13 @@ describe("Piyasa özeti", () => {
     expect(pairMonths(null, cur).every((p) => p.prev === null)).toBe(true);
     const lines = compareMarkets(prev, cur, "2025", "2026");
     // Makas: 1000/6 → 1600/8 TL, %20 açıldı; Ocak ve Mart geniş, Şubat dar, Nisan eşsiz
-    expect(lines[0]).toMatch(/^SMF–PTF makası %20 açıldı: saat başına ortalama 167 TL'den 200 TL'ye/);
-    expect(lines[1]).toBe("Makas, karşılaştırılan 3 aydan 2 ayda geçen yılın aynı ayından geniş.");
+    expect(lines[0]).toMatch(/^SMF–PTF makası nominal TL'de %20 açıldı: saat başına ortalama 167 TL'den 200 TL'ye/);
+    // Birim görünümü verilmese de PTF'ye oran yazılır (birimden bağımsız): 167/2000 → 200/2000
+    expect(lines[1]).toBe("PTF'ye oranla %8 → %10.");
+    expect(lines[2]).toBe("Aynı tahmin hatası daha pahalıya uzlaşır.");
+    expect(lines[3]).toBe("Makas, karşılaştırılan 3 aydan 2 ayda geçen yılın aynı ayından geniş.");
     const all = compareMarkets(prev, summarizeMarket([...month(2026, "01", 400), ...month(2026, "02", 400), ...month(2026, "03", 400)])!, "2025", "2026");
-    expect(all[1]).toBe("Makas, karşılaştırılan 3 ayın hepsinde geçen yılın aynı ayından geniş.");
+    expect(all).toContain("Makas, karşılaştırılan 3 ayın hepsinde geçen yılın aynı ayından geniş.");
   });
 
   it("sıfır fiyatlı saat artışı 'kat' olarak yalnızca önceki dönemde sıfır saat varken yazılır", () => {
@@ -78,5 +81,29 @@ describe("Piyasa özeti", () => {
     const none = summarizeMarket(base(2025))!;
     expect(compareMarkets(a, b, "2025", "2026").find((l) => l.startsWith("Sıfır"))).toMatch(/^Sıfır fiyatlı saat 10 → 25: 2,5 kat\./);
     expect(compareMarkets(none, b, "2025", "2026").find((l) => l.startsWith("Sıfır"))).toMatch(/^Sıfır fiyatlı saat 0 → 25\. /);
+  });
+
+  it("birim dönüştürülmüş özet: fiyatlar çarpanla, sıfır ve düşük fiyat eşikleri nominal TL'de", () => {
+    const hs = [h("2026-05-01T12:00:00Z", 0.5, 400, "DEFICIT"), h("2026-05-01T13:00:00Z", 900, 1500, "SURPLUS"), h("2026-05-01T14:00:00Z", 2000, 2100, "DEFICIT")];
+    const nominal = summarizeMarket(hs)!;
+    const half = summarizeMarket(hs, () => 0.5)!;
+    expect(half.spread.mean).toBeCloseTo(nominal.spread.mean / 2, 10);
+    expect(half.ptf.mean).toBeCloseTo(nominal.ptf.mean / 2, 10);
+    // 900 TL'lik saat 450'ye iner ama düşük fiyat sayısı aynı kalır; PTF'ye oran birimden bağımsız
+    expect([half.zeroHours, half.lowHours]).toEqual([nominal.zeroHours, nominal.lowHours]);
+    expect(half.spreadPctOfPtf).toBeCloseTo(nominal.spreadPctOfPtf!, 10);
+  });
+
+  it("reel makas sabitken nominal artış 'genel fiyat artışı' diye okunur", () => {
+    const yr = (y: number, spread: number) => [h(`${y}-03-01T10:00:00Z`, 2000, 2000 + spread, "DEFICIT"), h(`${y}-03-01T11:00:00Z`, 2000, 2000 - spread, "SURPLUS")];
+    const prev = summarizeMarket(yr(2025, 300))!;
+    const cur = summarizeMarket(yr(2026, 390))!;
+    // 2025 fiyatları %30 yukarı taşınınca (2026 TL'si) iki dönemin makası eşit
+    const real = { prev: summarizeMarket(yr(2025, 300), () => 1.3)!, cur, label: "Mart 2026 TL'si" };
+    const usd = { prev: summarizeMarket(yr(2025, 300), () => 1 / 36)!, cur: summarizeMarket(yr(2026, 390), () => 1 / 44)! };
+    const lines = compareMarkets(prev, cur, "2025", "2026", { real, usd });
+    expect(lines[0]).toMatch(/^SMF–PTF makası nominal TL'de %30 açıldı/);
+    expect(lines[1]).toBe("Fiyatların genel artışı düşülünce (Mart 2026 TL'si) makas %0 açıldı: 390 → 390 TL; dolar bazında 8,3 → 8,9 $/MWh (+%6); PTF'ye oranla %15 → %20.");
+    expect(lines[2]).toBe("Enflasyon düşülünce makasın yükü belirgin değişmedi; nominal artışın çoğu genel fiyat artışı.");
   });
 });

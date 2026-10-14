@@ -15,7 +15,7 @@ const series = (year: number, hours: Hour[], profile: ImbalancePricingProfile) =
   });
 
 /** İki santral, tek uzlaştırma birimi; saatler 1–2 Ocak */
-function period(year: number, label: string, profile: ImbalancePricingProfile, opts: { errorScale?: number; spread?: number; flipProfile?: boolean } = {}): CostChangePeriodInput {
+function period(year: number, label: string, profile: ImbalancePricingProfile, opts: { errorScale?: number; spread?: number; flipProfile?: boolean; priceLevel?: number } = {}): CostChangePeriodInput {
   const e = opts.errorScale ?? 1;
   const sp = opts.spread ?? 400;
   const base: Array<[number, number, number, number, SystemDirection]> = [
@@ -27,8 +27,9 @@ function period(year: number, label: string, profile: ImbalancePricingProfile, o
   ];
   const rows = (flip: boolean): Hour[] =>
     base.map(([d, h, f, a, dir]) => {
-      const ptf = 2000 + h * 10;
-      const smf = dir === "SURPLUS" ? ptf - sp : ptf + sp;
+      const lvl = opts.priceLevel ?? 1;
+      const ptf = (2000 + h * 10) * lvl;
+      const smf = dir === "SURPLUS" ? ptf - sp * lvl : ptf + sp * lvl;
       return { d, h, forecast: f, actual: flip ? 2 * f - a : a, ptf, smf, dir };
     });
   return {
@@ -125,5 +126,24 @@ describe("Maliyet değişimi ayrıştırması", () => {
     expect(r.coverage).toMatchObject({ commonHours: 4, hoursA: 4, hoursB: 5, commonPlants: ["RES 1", "RES 2"], onlyA: ["RES 3"], onlyB: [] });
     expect(r.totalTlPerMwh).toBeCloseTo(0, 9);
     expect(decomposeCostChange(a, { ...b, plants: [{ ...b.plants[0], key: "x" }] })).toBeNull();
+  });
+
+  it("reel birimde genel fiyat artışı fiyat makası kalemine girmez", () => {
+    // B'de bütün fiyatlar ×1,3 (enflasyon), sapmalar aynı
+    const a = period(2025, "2025", CUSTOM_3);
+    const b = period(2026, "2026", CUSTOM_3, { priceLevel: 1.3 });
+    const nominal = decomposeCostChange(a, b)!;
+    expect(nominal.b.unitCostTl / nominal.a.unitCostTl).toBeCloseTo(1.3, 10);
+    expect(effect(nominal, "market")).toBeCloseTo(nominal.totalTlPerMwh, 6);
+    // Reel: A'nın fiyatları B düzeyine taşınır (×1,3), B olduğu gibi → fark ve makas kalemi sıfır
+    const real = decomposeCostChange({ ...a, priceScale: () => 1.3, unit: "TL (Oca 2026)" }, { ...b, priceScale: () => 1, unit: "TL (Oca 2026)" })!;
+    expect(real.totalTlPerMwh).toBeCloseTo(0, 8);
+    expect(effect(real, "market")).toBeCloseTo(0, 8);
+    expect(real.a.unitCostTl).toBeCloseTo(nominal.b.unitCostTl, 8);
+    expect(real.a.meanSpreadTl).toBeCloseTo(real.b.meanSpreadTl, 8);
+    expect(real.sentences[0]).toMatch(/TL \(Oca 2026\) \(\+%0\)\.$|TL \(Oca 2026\) \(−%0\)\.$/);
+    // USD: birim cümlede, makas bir ondalıkla
+    const usd = decomposeCostChange({ ...a, priceScale: () => 1 / 36, unit: "USD" }, { ...b, priceScale: () => 1 / 43, unit: "USD" })!;
+    expect(usd.sentences.at(-1)).toMatch(/USD\/MWh\.$/);
   });
 });

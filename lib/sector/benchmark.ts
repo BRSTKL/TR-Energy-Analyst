@@ -329,13 +329,15 @@ export interface SectorTypeChange {
   medianCostChangePct: number;
   /** Medyan sapma (Σ|gerçekleşen − plan| / Σ gerçekleşen, %) */
   medianDeviationPct: { prev: number; cur: number };
+  /** Aynı ölçüler genel fiyat artışı düşülerek (fiyat oranı verildiyse) */
+  real?: { priceRatio: number; increasedPct: number; medianCostChangePct: number };
 }
 
 /**
  * Sektör karnesinin iki dönemi arasında aynı santrallerin değişimi ("sektörün hepsinde arttı, tahmin hatası sabit"
  * cümlesinin dayanağı). Santraller EPİAŞ kimliğiyle eşlenir; önceki dönemde maliyeti sıfır olanlar oran hesabına girmez.
  */
-export function sectorYearChange(prev: SectorBenchmark, cur: SectorBenchmark): Partial<Record<SectorTech, SectorTypeChange>> {
+export function sectorYearChange(prev: SectorBenchmark, cur: SectorBenchmark, priceRatio?: number | null): Partial<Record<SectorTech, SectorTypeChange>> {
   const before = new Map(prev.plants.map((p) => [p.epiasPlantId, p]));
   const out: Partial<Record<SectorTech, SectorTypeChange>> = {};
   for (const type of SECTOR_TECHS) {
@@ -350,6 +352,15 @@ export function sectorYearChange(prev: SectorBenchmark, cur: SectorBenchmark): P
       increasedPct: (pairs.filter(([a, b]) => b.unitImbalanceTl > a.unitImbalanceTl).length / pairs.length) * 100,
       medianCostChangePct: med(pairs.map(([a, b]) => (b.unitImbalanceTl / a.unitImbalanceTl - 1) * 100)),
       medianDeviationPct: { prev: med(pairs.map(([a]) => a.deviationPct)), cur: med(pairs.map(([, b]) => b.deviationPct)) },
+      ...(priceRatio && priceRatio > 0
+        ? {
+            real: {
+              priceRatio,
+              increasedPct: (pairs.filter(([a, b]) => b.unitImbalanceTl / priceRatio > a.unitImbalanceTl).length / pairs.length) * 100,
+              medianCostChangePct: med(pairs.map(([a, b]) => (b.unitImbalanceTl / priceRatio / a.unitImbalanceTl - 1) * 100)),
+            },
+          }
+        : {}),
     };
   }
   return out;

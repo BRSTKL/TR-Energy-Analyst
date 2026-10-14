@@ -3,6 +3,7 @@ import JSZip from "jszip";
 import { buildPlantReport } from "@/lib/report/plant-report";
 import { exportPlantReportPptx, yearLocative } from "@/lib/export/plant-report-pptx";
 import { decomposeCostChange, type CostChangePeriodInput } from "@/lib/analysis/cost-change";
+import { costChangeUnits } from "@/lib/services/cost-change";
 import { processHourlyRecord } from "@/lib/calculations/engine";
 import { DEFAULT_IMBALANCE_PROFILE, type SystemDirection } from "@/lib/calculations/types";
 
@@ -66,7 +67,7 @@ describe("Rapor: Ne değişti? slaytı", () => {
       ],
     });
     const result = decomposeCostChange(input(2025, 400), input(2026, 600))!;
-    const withSlide = await slideTexts(await exportPlantReportPptx(report, {}, { costChange: { previousProject: "Deneme 2025", result, sector: null } }));
+    const withSlide = await slideTexts(await exportPlantReportPptx(report, {}, { costChange: { previousProject: "Deneme 2025", result, units: null, sector: null } }));
     const without = await slideTexts(await exportPlantReportPptx(report));
     expect(withSlide.length).toBe(without.length + 1);
     const slide = withSlide.find((x) => x.includes("NE DEĞİŞTİ?"))!;
@@ -83,9 +84,21 @@ describe("Rapor: Ne değişti? slaytı", () => {
       curLabel: "2026 (Ocak–Ağustos)",
       byType: { RES: { plants: 294, increasedPct: 100, medianCostChangePct: 55, medianDeviationPct: { prev: 18, cur: 18.2 } } },
     };
-    const withSector = await slideTexts(await exportPlantReportPptx(report, {}, { costChange: { previousProject: "Deneme 2025", result, sector } }));
+    const withSector = await slideTexts(await exportPlantReportPptx(report, {}, { costChange: { previousProject: "Deneme 2025", result, units: null, sector } }));
     const sectorSlide = withSector.find((x) => x.includes("NE DEĞİŞTİ?"))!;
     expect(sectorSlide).toContain("SEKTÖR · 2025 → 2026 (Ocak–Ağustos)");
     expect(sectorSlide).toContain("Rüzgâr: 294 santral · maliyeti artan pay %100 · medyan +%55 · medyan sapma %18,0 → %18,2");
+
+    // Reel ve USD görünümü: şelale önceki yıl TÜFE ile taşınmış, başlıkta nominal değişim de yazılı
+    const units = costChangeUnits(input(2025, 400), input(2026, 600), result)!;
+    expect(units.real.b.unitCostTl).toBeCloseTo(result.b.unitCostTl, 8);
+    expect(units.real.a.unitCostTl).toBeGreaterThan(result.a.unitCostTl);
+    const realSector = { ...sector, byType: { RES: { ...sector.byType.RES, real: { priceRatio: 1.3, increasedPct: 80, medianCostChangePct: 19 } } } };
+    const withUnits = await slideTexts(await exportPlantReportPptx(report, {}, { costChange: { previousProject: "Deneme 2025", result, units, sector: realSector } }));
+    const unitSlide = withUnits.find((x) => x.includes("NE DEĞİŞTİ?"))!;
+    expect(unitSlide).toMatch(/MWh başına dengesizlik maliyeti enflasyon düşülünce %\d+ (arttı|azaldı) \(nominal %\d+\)/);
+    expect(unitSlide).toContain("2026 fiyatlarıyla");
+    expect(unitSlide).toContain("Maliyet, USD/MWh");
+    expect(unitSlide).toContain("Rüzgâr: 294 santral · reel maliyeti artan pay %80 · reel medyan +%19");
   });
 });

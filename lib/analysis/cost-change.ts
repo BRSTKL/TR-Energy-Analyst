@@ -17,6 +17,10 @@
  * diğer dönemin değeriyle değiştirilip yeniden fiyatlanır; etki, A'dan B'ye ve B'den A'ya geçişin ortalamasıdır
  * (sıradan bağımsız). Dört etkinin toplamı ile gerçek fark arasındaki kalan "etkileşim"dir (kalemlerin birlikte
  * değişmesinden doğan kısım). W çarpan olduğu için tahmin hatası etkileşim üretmez.
+ *
+ * Birim: varsayılan nominal TL. `priceScale` verilirse (reel TL, USD; lib/macro/price-units.ts) her saatin bedeli o
+ * saatin piyasasının çarpanıyla çevrilir; taban ve negatif fiyat kuralları nominal TL'de uygulanıp sonra çevrilir.
+ * Böylece "fiyat makası" kalemi enflasyon ve kurdan arınır; alan adlarındaki "Tl" bu durumda seçilen birimdir.
  * SAF: I/O yok.
  */
 
@@ -36,6 +40,10 @@ export interface CostChangePeriodInput {
   label: string;
   profile: ImbalancePricingProfile;
   plants: CostChangePlant[];
+  /** Saatin TL bedelini başka birime çeviren çarpan (yoksa nominal TL) */
+  priceScale?: (t: Date | string) => number;
+  /** Cümlelerdeki birim ("TL", "TL (Eyl 2026)", "USD"); varsayılan "TL" */
+  unit?: string;
 }
 
 export type CostFactor = "error" | "market" | "rule" | "profile";
@@ -142,6 +150,9 @@ function penalty(delta: number, m: Market, c: ImbalancePricingProfile): { spread
   return { spread: high - m.ptf, coef: prices.negative - high };
 }
 
+/** Saatin birim çarpanı: bedel, fiyatı kullanılan dönemin (Y) o saatteki çarpanıyla çevrilir */
+const scaleOf = (p: Prepared, k: string) => (p.input.priceScale ? p.input.priceScale(p.market.get(k)!.t) : 1);
+
 /** Sapma profili X'in, Y'nin piyasasıyla ve Z'nin katsayı kuralıyla bedeli (ortak saatlerde) */
 function price(x: Prepared, y: Prepared, z: Prepared, common: string[]) {
   let abs = 0;
@@ -153,9 +164,10 @@ function price(x: Prepared, y: Prepared, z: Prepared, common: string[]) {
       if (!d) continue;
       const rule = resolveImbalanceProfile(z.input.profile, z.market.get(k)!.t);
       const g = penalty(d, y.market.get(k)!, rule);
+      const w = Math.abs(d) * scaleOf(y, k);
       abs += Math.abs(d);
-      spread += Math.abs(d) * g.spread;
-      coef += Math.abs(d) * g.coef;
+      spread += w * g.spread;
+      coef += w * g.coef;
     }
   }
   return { abs, spread, coef, perMwh: abs > 0 ? (spread + coef) / abs : 0 };
@@ -164,7 +176,7 @@ function price(x: Prepared, y: Prepared, z: Prepared, common: string[]) {
 const sum = (m: Map<string, number>, keys: string[]) => keys.reduce((a, k) => a + (m.get(k) ?? 0), 0);
 const iso = (t: Date | string) => new Date(t).toISOString().slice(0, 10);
 const nf = (v: number, d = 0) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
-const signedTl = (v: number) => (Math.abs(v) < 0.05 ? "≈0 TL" : `${v > 0 ? "+" : "−"}${nf(Math.abs(v), 1)} TL`);
+const signedIn = (v: number, u: string) => (Math.abs(v) < 0.05 ? `≈0 ${u}` : `${v > 0 ? "+" : "−"}${nf(Math.abs(v), 1)} ${u}`);
 
 function summarize(p: Prepared, common: string[]): CostChangePeriod {
   const own = price(p, p, p, common);
@@ -189,7 +201,7 @@ function summarize(p: Prepared, common: string[]): CostChangePeriod {
     plantErrorPct: actualMwh > 0 ? (sum(p.plantAbs, common) / actualMwh) * 100 : 0,
     penaltyTlPerMwh: own.perMwh,
     sameDirectionPct: own.abs > 0 ? (same / own.abs) * 100 : 0,
-    meanSpreadTl: common.length ? common.reduce((a, k) => a + Math.abs(p.market.get(k)!.smf - p.market.get(k)!.ptf), 0) / common.length : 0,
+    meanSpreadTl: common.length ? common.reduce((a, k) => a + Math.abs(p.market.get(k)!.smf - p.market.get(k)!.ptf) * scaleOf(p, k), 0) / common.length : 0,
     composition: { spreadTl: own.spread, coefTl: own.coef },
   };
 }
@@ -251,14 +263,15 @@ export function decomposeCostChange(inputA: CostChangePeriodInput, inputB: CostC
     effects,
     interactionTlPerMwh: interaction,
     explainedPct,
-    sentences: explain(a, b, total, effects),
+    sentences: explain(a, b, total, effects, inputB.unit ?? "TL"),
   };
 }
 
-function explain(a: CostChangePeriod, b: CostChangePeriod, total: number, effects: CostChangeResult["effects"]): string[] {
+function explain(a: CostChangePeriod, b: CostChangePeriod, total: number, effects: CostChangeResult["effects"], u: string): string[] {
+  const signedTl = (v: number) => signedIn(v, u);
   const ch = a.unitCostTl > 0 ? (total / a.unitCostTl) * 100 : null;
   const out = [
-    `MWh başına dengesizlik maliyeti ${a.label} → ${b.label}: ${nf(a.unitCostTl, 1)} → ${nf(b.unitCostTl, 1)} TL` +
+    `MWh başına dengesizlik maliyeti ${a.label} → ${b.label}: ${nf(a.unitCostTl, 1)} → ${nf(b.unitCostTl, 1)} ${u}` +
       (ch === null ? "." : ` (${ch >= 0 ? "+" : "−"}%${nf(Math.abs(ch))}).`),
   ];
   const ranked = [...effects].sort((x, y) => Math.abs(y.tlPerMwh) - Math.abs(x.tlPerMwh));
@@ -278,7 +291,7 @@ function explain(a: CostChangePeriod, b: CostChangePeriod, total: number, effect
   out.push(
     `Tahmin hatası (netleşmiş sapma / üretim) %${nf(a.errorPct, 1)} → %${nf(b.errorPct, 1)}` +
       (Math.abs(errDiff) < 1 ? ": neredeyse değişmedi." : errDiff > 0 ? ": arttı." : ": azaldı.") +
-      ` Ortalama SMF–PTF makası ${nf(a.meanSpreadTl)} → ${nf(b.meanSpreadTl)} TL/MWh.`
+      ` Ortalama SMF–PTF makası ${nf(a.meanSpreadTl, u === "USD" ? 1 : 0)} → ${nf(b.meanSpreadTl, u === "USD" ? 1 : 0)} ${u}/MWh.`
   );
   return out;
 }

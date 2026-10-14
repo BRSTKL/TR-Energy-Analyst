@@ -29,6 +29,7 @@ const SECTIONS: Array<{ id: string; title: string }> = [
   { id: "risk-primi", title: "Risk primi ve PPA göstergesi" },
   { id: "ayristirma", title: "Maliyet neden değişti?" },
   { id: "piyasa", title: "Piyasa göstergeleri" },
+  { id: "birimler", title: "Fiyat birimleri: reel TL ve USD" },
   { id: "sektor", title: "Sektör karnesi" },
   { id: "toplayici-kiyas", title: "Toplayıcılar arası kıyas" },
   { id: "uretici-katki", title: "Üreticilerin portföye katkısı" },
@@ -373,6 +374,12 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
               arasındaki kalan &quot;etkileşim&quot; olarak gösterilir. &quot;Katsayı kuralı&quot; yalnızca k ve l&apos;dir; 2026&apos;nın 15 dakikalık
               SMF, taban ve negatif fiyat kuralları resmi fiyatın içinde olduğundan &quot;fiyat makası&quot; kalemine girer. <Tag kind="exact" />
             </p>
+            <p>
+              Yıllar arası ayrıştırma varsayılan olarak <b>aynı fiyat düzeyinde</b> gösterilir: önceki dönemin her saati kendi ayının TÜFE&apos;siyle
+              son dönemin ortalama fiyat düzeyine taşınır, son dönem olduğu gibi kalır. Nominal TL&apos;de &quot;fiyat makası&quot; kalemi genel fiyat
+              artışını da içerir; reel gösterimde bu kısım düşer. Nominal TL ve USD karşılıkları yanında verilir (bkz. Fiyat birimleri).{" "}
+              <Tag kind="exact" />
+            </p>
           </Section>
 
           <Section id="piyasa" n={next()} title="Piyasa göstergeleri">
@@ -388,6 +395,39 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
               ]}
             />
             <p>Yıllar arası karşılaştırmada her ay bir önceki yılın aynı ayıyla eşlenir. <Tag kind="exact" /></p>
+          </Section>
+
+          <Section id="birimler" n={next()} title="Fiyat birimleri: reel TL ve USD">
+            <p>
+              2024–2026 arasında birikmiş enflasyon yaklaşık %90&apos;dır; nominal TL rakamlar yıllar arasında doğrudan kıyaslanamaz. Piyasa
+              sayfası, karşılaştırma sayfası ve raporun &quot;Ne değişti?&quot; slaytı fiyatları üç birimde verir:
+            </p>
+            <Table
+              head={["Birim", "Dönüşüm", "Kaynak"]}
+              rows={[
+                ["Nominal TL", "Olduğu gibi", "EPİAŞ"],
+                [
+                  "Reel TL",
+                  "Değer × TÜFE[taban ay] / TÜFE[saatin ayı]. Piyasa sayfasında taban serideki son ay; ayrıştırmada son dönemin ortalama düzeyi",
+                  "TCMB Tüketici Fiyatları tablosu (TÜİK TÜFE aylık % değişimi), zincirlenmiş endeks",
+                ],
+                ["USD", "Değer / (TL/USD)[saatin ayı]", "EPİAŞ PTF TL / PTF USD oranı, aylık medyan"],
+                ["PTF'ye oran", "Ortalama makas / ortalama PTF; birimden bağımsız", "EPİAŞ"],
+              ]}
+            />
+            <p>
+              Zincirlenmiş TÜFE endeksi TCMB&apos;nin yayımladığı yıllık değişimlerle en fazla 0,02 puan farkla örtüşür (testle sabit). Seri{" "}
+              <code>lib/macro/macro-series.json</code> dosyasındadır, <code>scripts/macro-sync.mts</code> ile yenilenir; okuma ağ gerektirmez.
+              Sıfır ve düşük fiyat eşikleri (1 ve 1.000 TL/MWh) her birimde nominal TL&apos;dir. TÜFE&apos;si henüz açıklanmamış ay en yakın aya
+              bağlanır ve sayfada yazılır. Reel ve USD sonuçları farklı olabilir: TL dolara karşı enflasyondan az değer kaybettiğinde (reel
+              değerlenme) dolar bazındaki artış reel TL&apos;deki artıştan büyük görünür. <Tag kind="exact" />
+            </p>
+            <p>
+              Bulgu (2026 Ocak–Ağustos, aynı aylar, Eylül 2026 TL&apos;si): makas reel olarak 743 (2024) → 696 (2025) → 830 TL/MWh (2026), dolar
+              bazında 11,8 → 12,8 → 16,9 $/MWh. PTF reel olarak 4.196 → 3.616 → 2.047 TL/MWh&apos;ye indi; makas PTF&apos;nin %17,5&apos;inden
+              %40,8&apos;ine çıktı. Sektör karnesinde aynı santrallerin MWh başına maliyeti 2025 → 2026 (Ocak–Ağustos) nominal medyan rüzgâr +%61,
+              güneş +%91, hidro +%54; enflasyon düşülünce +%27, +%51, +%22 (genel fiyat ×1,26).
+            </p>
           </Section>
 
           <Section id="sektor" n={next()} title="Sektör karnesi">

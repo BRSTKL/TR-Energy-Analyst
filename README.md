@@ -24,7 +24,7 @@ Sektör karnesi (2026 Ocak–Ağustos, MWh başına dengesizlik medyanı): rüzg
 | Sayfa | İçerik |
 |---|---|
 | **Ana sayfa** `/` | Piyasa özeti (makas, PTF, sıfır fiyatlı saat, sistem yönü; geçen yılla kıyas), projeler, sektör medyanları |
-| **Piyasa** `/market` | PTF/SMF, SMF–PTF makası (ortalama, P90, saat profili), sistem yönü, düşük/sıfır fiyatlı saatler, GİP; yıl karşılaştırması ve otomatik "ne değişti" cümleleri |
+| **Piyasa** `/market` | PTF/SMF, SMF–PTF makası (ortalama, P90, saat profili, PTF'ye oranı), sistem yönü, düşük/sıfır fiyatlı saatler, GİP; nominal TL, reel TL ve USD; yıl karşılaştırması ve otomatik "ne değişti" cümleleri |
 | **Sonuçlar** `/projects/[id]/results` | Dengesizlik riski (santral bazında ve şirket/toplayıcı bazında netleşmiş), KÜPST, sapma yükü, risk primi (beklenen / P90 / en kötü ay), PPA göstergesi, capture price, tahmin doğruluğu (WAPE, sistematik pay), arıza/kısıntı tespiti, veri bütünlüğü uyarıları |
 | **Karşılaştır** `/compare` | Projeler yan yana; aynı santrallerin iki dönemi için **maliyet değişim ayrıştırması**: tahmin hatası, fiyat makası, katsayı kuralı, hacim/profil, etkileşim |
 | **DSG senaryoları** | Dengeden sorumlu grup kurma, netleşme faydası, üyelerin marjinal katkısı, Shapley / orantılı paylaştırma ve çekirdek kontrolü |
@@ -44,6 +44,7 @@ Sektör karnesi (2026 Ocak–Ağustos, MWh başına dengesizlik medyanı): rüzg
 - **Maliyet** = tahmin hatasız olunsaydı elde edilecek gelir − gerçekleşen gelir.
 - **KÜPST:** 2025 toleransları rüzgâr %17, güneş %10 (EPDK 13025); 2026'da %15 / %8, katsayı 0,05 (EPDK 14029). Son KGÜP'e göre hesaplanır (son planı olmayan saatte ilk plana göre; kapsam raporda yazılır, %90'ın altındaysa KÜPST "üst sınır"). Toplayıcı portföyünde topluluk bazında, kurulu güce ağırlıklı toleransla.
 - **Gün içi düzeltmeler:** ilk ve son KGÜP arasındaki dengesizlik farkı kesin hesap; plan değişikliğinin işlem maliyeti (ilk − son plan) × (GİP ağırlıklı ortalama fiyatı − PTF) olarak tahmin edilir ve gün içi kazancından düşülür.
+- **Fiyat birimleri:** yıllar arası kıyaslar nominal TL'nin yanında reel TL (TCMB TÜFE, TÜİK verisi; her saat kendi ayının endeksiyle) ve USD (EPİAŞ PTF TL / USD oranı) olarak da verilir. Seri `lib/macro/macro-series.json`, yenileme `scripts/macro-sync.mts`.
 - **Uzlaştırma birimi:** dengesizlik santral bazında değil, şirket ya da toplayıcı portföyü bazında netleşir. Ekranlar ikisini de gösterir.
 - Her rakam raporda **kesin hesap / tahmini / senaryo** diye etiketlenir.
 

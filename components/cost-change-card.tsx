@@ -1,16 +1,21 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { COST_FACTORS, type CostChangePeriod, type CostChangeResult } from "@/lib/analysis/cost-change";
+import type { CostChangeUnits } from "@/lib/services/cost-change";
 
 export interface CostChangeData {
   a: { id: string; name: string };
   b: { id: string; name: string };
   result: CostChangeResult;
+  /** Reel TL ve USD karşılıkları (kur ve TÜFE serisi varsa) */
+  units?: CostChangeUnits | null;
 }
+
+type Unit = "REAL" | "TL" | "USD";
 
 const nf = (v: number, d = 0) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
 const signed = (v: number, d = 1) => (Math.abs(v) < 0.05 ? "≈0" : `${v > 0 ? "+" : "−"}${nf(Math.abs(v), d)}`);
@@ -41,13 +46,14 @@ function WrappedTick({ x, y, payload }: { x?: number; y?: number; payload?: { va
   );
 }
 
-function waterfall(r: CostChangeResult): Step[] {
-  const steps: Step[] = [{ name: r.a.label, base: 0, bar: r.a.unitCostTl, fill: COLOR.total, display: nf(r.a.unitCostTl, 1), hint: "Başlangıç: MWh başına maliyet" }];
+function waterfall(r: CostChangeResult, d: number): Step[] {
+  const steps: Step[] = [{ name: r.a.label, base: 0, bar: r.a.unitCostTl, fill: COLOR.total, display: nf(r.a.unitCostTl, d), hint: "Başlangıç: MWh başına maliyet" }];
   let level = r.a.unitCostTl;
   const deltas = [
     ...COST_FACTORS.map((f) => ({ name: f.label, hint: f.hint, value: r.effects.find((e) => e.factor === f.id)!.tlPerMwh, interaction: false })),
     { name: "Etkileşim", hint: "Kalemlerin birlikte değişmesinden doğan kalan", value: r.interactionTlPerMwh, interaction: true },
   ];
+  const dd = d;
   for (const d of deltas) {
     const next = level + d.value;
     steps.push({
@@ -55,28 +61,34 @@ function waterfall(r: CostChangeResult): Step[] {
       base: Math.min(level, next),
       bar: Math.abs(d.value),
       fill: d.interaction ? COLOR.interaction : d.value >= 0 ? COLOR.up : COLOR.down,
-      display: signed(d.value),
+      display: signed(d.value, dd),
       hint: d.hint,
     });
     level = next;
   }
-  steps.push({ name: r.b.label, base: 0, bar: r.b.unitCostTl, fill: COLOR.total, display: nf(r.b.unitCostTl, 1), hint: "Bitiş: MWh başına maliyet" });
+  steps.push({ name: r.b.label, base: 0, bar: r.b.unitCostTl, fill: COLOR.total, display: nf(r.b.unitCostTl, dd), hint: "Bitiş: MWh başına maliyet" });
   return steps;
 }
 
-const ROWS: Array<{ label: string; value: (p: CostChangePeriod) => string; hint?: string }> = [
-  { label: "MWh başına maliyet", value: (p) => `${nf(p.unitCostTl, 1)} TL`, hint: "Uzlaştırma biriminde netleşmiş" },
+const rowsFor = (u: string, d: number): Array<{ label: string; value: (p: CostChangePeriod) => string; hint?: string }> => [
+  { label: "MWh başına maliyet", value: (p) => `${nf(p.unitCostTl, d)} ${u}`, hint: "Uzlaştırma biriminde netleşmiş" },
   { label: "Tahmin hatası (netleşmiş)", value: (p) => `%${nf(p.errorPct, 1)}`, hint: "Σ|net sapma| / Σ üretim" },
   { label: "Santral bazında sapma", value: (p) => `%${nf(p.plantErrorPct, 1)}`, hint: "Netleşmeden önce" },
-  { label: "Sapma MWh'ı başına bedel", value: (p) => `${nf(p.penaltyTlPerMwh)} TL` },
+  { label: "Sapma MWh'ı başına bedel", value: (p) => `${nf(p.penaltyTlPerMwh, d === 2 ? 1 : 0)} ${u}` },
   { label: "Sistemle aynı yönde sapma", value: (p) => `%${nf(p.sameDirectionPct)}`, hint: "Makas yalnızca bu sapmayı fiyatlar" },
-  { label: "Ortalama SMF–PTF makası", value: (p) => `${nf(p.meanSpreadTl)} TL/MWh` },
+  { label: "Ortalama SMF–PTF makası", value: (p) => `${nf(p.meanSpreadTl, d === 2 ? 1 : 0)} ${u}/MWh` },
   { label: "Maliyetin makastan gelen kısmı", value: (p) => (p.costTl > 0 ? `%${nf((p.composition.spreadTl / p.costTl) * 100)}` : "–"), hint: "Kalanı katsayı × fiyat" },
 ];
 
 export function CostChangeCard({ data }: { data: CostChangeData }) {
-  const r = data.result;
-  const steps = waterfall(r);
+  const units = data.units ?? null;
+  // Yıllar arası kıyasta varsayılan reel TL: nominal TL'de "fiyat makası" kalemi enflasyonu da içerir
+  const [unit, setUnit] = useState<Unit>(units ? "REAL" : "TL");
+  const r = unit === "REAL" && units ? units.real : unit === "USD" && units ? units.usd : data.result;
+  const u = unit === "REAL" && units ? units.realShort : unit === "USD" ? "USD" : "TL";
+  const d = unit === "USD" ? 2 : 1;
+  const steps = waterfall(r, d);
+  const ROWS = rowsFor(u, d);
   const cov = r.coverage;
 
   return (
@@ -91,6 +103,34 @@ export function CostChangeCard({ data }: { data: CostChangeData }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {units && (
+          <div className="flex flex-wrap items-center gap-3">
+            <div role="group" aria-label="Birim" className="flex h-8 overflow-hidden rounded-md border border-slate-200 bg-white text-sm">
+              {([
+                ["REAL", `Reel (${r.b.label} fiyatlarıyla)`],
+                ["TL", "Nominal TL"],
+                ["USD", "USD"],
+              ] as Array<[Unit, string]>).map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  aria-pressed={unit === k}
+                  onClick={() => setUnit(k)}
+                  className={`px-3 ${unit === k ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-slate-600">
+              {unit === "REAL"
+                ? `${data.result.a.label} fiyatları her saatin ayının TÜFE'siyle ${data.result.b.label} düzeyine taşındı (genel fiyat ×${nf(units.priceRatio ?? 1, 2)}). Nominal TL'de maliyet ${nf(data.result.a.unitCostTl, 1)} → ${nf(data.result.b.unitCostTl, 1)} TL.`
+                : unit === "USD"
+                  ? "Her saat kendi ayının TL/USD kuruyla (EPİAŞ PTF TL / USD oranı, aylık medyan) çevrildi."
+                  : "Nominal TL: dönemler arası fark genel fiyat artışını da içerir; fiyat makası kalemi bu yüzden şişkin görünür."}
+            </p>
+          </div>
+        )}
         <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
           <p className="font-semibold text-slate-900">{r.sentences[0]}</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-slate-700">
@@ -109,7 +149,7 @@ export function CostChangeCard({ data }: { data: CostChangeData }) {
                 <BarChart data={steps} margin={{ top: 24, right: 8, left: 0, bottom: 0 }} barCategoryGap="22%">
                   <CartesianGrid vertical={false} stroke={COLOR.grid} />
                   <XAxis dataKey="name" tick={<WrappedTick />} height={36} stroke={COLOR.axis} tickLine={false} interval={0} />
-                  <YAxis tick={{ fontSize: 11 }} stroke={COLOR.axis} tickLine={false} axisLine={false} width={44} tickFormatter={(v: number) => nf(v)} />
+                  <YAxis tick={{ fontSize: 11 }} stroke={COLOR.axis} tickLine={false} axisLine={false} width={44} tickFormatter={(v: number) => nf(v, unit === "USD" ? 1 : 0)} />
                   <Tooltip
                     cursor={{ fill: "#f1f5f9" }}
                     content={({ active, payload }) => {
@@ -117,7 +157,7 @@ export function CostChangeCard({ data }: { data: CostChangeData }) {
                       return s ? (
                         <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm">
                           <p className="font-semibold text-slate-900">
-                            {s.name}: {s.display} TL/MWh
+                            {s.name}: {s.display} {u}/MWh
                           </p>
                           <p className="text-slate-500">{s.hint}</p>
                         </div>
@@ -136,7 +176,7 @@ export function CostChangeCard({ data }: { data: CostChangeData }) {
             </div>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              TL/MWh · kırmızı: maliyeti artıran, mavi: azaltan kalem, gri: etkileşim. Dört kalemin açıkladığı pay: %{nf(r.explainedPct, 1)}.
+              {u}/MWh · kırmızı: maliyeti artıran, mavi: azaltan kalem, gri: etkileşim. Dört kalemin açıkladığı pay: %{nf(r.explainedPct, 1)}.
             </p>
           </div>
 

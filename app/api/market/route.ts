@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { compareMarkets, summarizeMarket, type MarketHour } from "@/lib/analysis/market-summary";
+import { compareMarkets, summarizeMarket, type MarketHour, type MarketUnitViews } from "@/lib/analysis/market-summary";
+import { converterFor, macroSeries } from "@/lib/macro/series";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +86,16 @@ export async function GET(request: Request) {
   const label = periodLabel(start, end);
   const prevLabel = periodLabel(prevStart, prevEnd);
 
+  // Aynı dönemler reel TL (son TÜFE ayı fiyatlarıyla) ve USD olarak: yıllar arası kıyas enflasyon ve kurdan arındırılır
+  const real = converterFor("REAL");
+  const usd = converterFor("USD");
+  const realView = { current: summarizeMarket(cur, real.factor)!, previous: previous ? summarizeMarket(prev, real.factor) : null };
+  const usdView = { current: summarizeMarket(cur, usd.factor)!, previous: previous ? summarizeMarket(prev, usd.factor) : null };
+  const unitViews: MarketUnitViews =
+    previous && realView.previous && usdView.previous
+      ? { real: { prev: realView.previous, cur: realView.current, label: real.label }, usd: { prev: usdView.previous, cur: usdView.current } }
+      : {};
+
   return NextResponse.json({
     success: true,
     available: { start: first, end: last.toISOString().slice(0, 10), lastFullMonthEnd },
@@ -93,7 +104,13 @@ export async function GET(request: Request) {
     current,
     previous,
     // Cümlede yalnızca yıl ("2025 → 2026"); dönem başlıkta yazılı
-    sentences: previous ? compareMarkets(previous, current, yearLabel(prevStart, prevEnd), yearLabel(start, end)) : [],
+    sentences: previous ? compareMarkets(previous, current, yearLabel(prevStart, prevEnd), yearLabel(start, end), unitViews) : [],
+    /** Aynı özetler reel TL ve USD olarak; filled: seride verisi olmadığı için en yakın aya bağlanan aylar */
+    units: {
+      real: { ...realView, label: real.label, short: real.short, baseMonth: real.baseMonth, filled: Array.from(real.filled).sort() },
+      usd: { ...usdView, label: usd.label, short: usd.short, filled: Array.from(usd.filled).sort() },
+      sources: macroSeries().sources,
+    },
     /** Dönemde dışarıda bırakılan doğrulanmamış (LEGACY) saatler */
     unverifiedHours: { current: curUnverified, previous: prevUnverified },
   });

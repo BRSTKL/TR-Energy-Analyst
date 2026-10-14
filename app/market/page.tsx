@@ -20,7 +20,22 @@ interface MarketResponse {
   previous: MarketSummary | null;
   sentences: string[];
   unverifiedHours: { current: number; previous: number };
+  units: {
+    real: UnitView & { baseMonth: string };
+    usd: UnitView;
+    sources: { usdTry: string; cpi: string };
+  };
 }
+
+interface UnitView {
+  current: MarketSummary;
+  previous: MarketSummary | null;
+  label: string;
+  short: string;
+  filled: string[];
+}
+
+type Unit = "TL" | "REAL" | "USD";
 
 const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
 const MONTHS_SHORT = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
@@ -70,12 +85,12 @@ const axis = {
 };
 /** Lejant yazısı metin renginde; seri rengini yanındaki işaret taşır */
 const legend = { wrapperStyle: { fontSize: 12 }, formatter: (v: string) => <span className="text-slate-600">{v}</span> };
-const tlTooltip = (unit: string) => (v: unknown) => `${nf(Number(v ?? 0))} ${unit}`;
-
-function downloadCsv(data: MarketResponse, names: { cur: string; prev: string }) {
+const tlTooltip = (unit: string, d = 0) => (v: unknown) => `${nf(Number(v ?? 0), d)} ${unit}`;
+function downloadCsv(data: MarketResponse, view: { current: MarketSummary; previous: MarketSummary | null }, priceUnit: string, names: { cur: string; prev: string }) {
   const num = (v: number | null | undefined, d = 1) => (v == null ? "" : v.toFixed(d).replace(".", ","));
-  const head = ["Ay", "Saat", "PTF ort.", "SMF ort.", "Makas ort.", "Makas P90", `Makas ${names.prev}`, "Açık %", "Fazla %", "Dengede %", "Sıfır fiyatlı saat", "1.000 TL altı saat", "GİP AOF", "GİP hacmi MWh"];
-  const lines = pairMonths(data.previous, data.current).map(({ key, cur, prev }) =>
+  const u = ` (${priceUnit})`;
+  const head = ["Ay", "Saat", `PTF ort.${u}`, `SMF ort.${u}`, `Makas ort.${u}`, `Makas P90${u}`, `Makas ${names.prev}${u}`, "Açık %", "Fazla %", "Dengede %", "Sıfır fiyatlı saat", "1.000 TL altı saat (nominal)", `GİP AOF${u}`, "GİP hacmi MWh"];
+  const lines = pairMonths(view.previous, view.current).map(({ key, cur, prev }) =>
     [key, String(cur.hours), num(cur.ptfMean), num(cur.smfMean), num(cur.spreadMean), num(cur.spreadP90), num(prev?.spreadMean), num(cur.deficitPct), num(cur.surplusPct), num(cur.balancedPct), String(cur.zeroHours), String(cur.lowHours), num(cur.gipWeightedPrice), num(cur.gipVolumeMwh, 0)]
       .map((c) => `"${c.replace(/"/g, '""')}"`)
       .join(";")
@@ -84,7 +99,7 @@ function downloadCsv(data: MarketResponse, names: { cur: string; prev: string })
   const blob = new Blob(["﻿" + [head.join(";"), ...lines].join("\r\n")], { type: "text/csv;charset=utf-8" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `piyasa_ozeti_${data.period.start}_${data.period.end}.csv`;
+  a.download = `piyasa_ozeti_${data.period.start}_${data.period.end}${priceUnit === "TL/MWh" ? "" : priceUnit.startsWith("$") ? "_usd" : "_reel"}.csv`;
   a.click();
   URL.revokeObjectURL(a.href);
 }
@@ -94,6 +109,7 @@ export default function MarketPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [range, setRange] = useState<{ start: string; end: string } | null>(null);
+  const [unit, setUnit] = useState<Unit>("TL");
 
   useEffect(() => {
     setLoading(true);
@@ -108,9 +124,14 @@ export default function MarketPage() {
       .finally(() => setLoading(false));
   }, [range]);
 
-  const pairs = useMemo(() => (data ? pairMonths(data.previous, data.current) : []), [data]);
+  // Fiyatlar seçilen birimde; sayımlar (saat, sıfır fiyatlı saat, yön) birimden bağımsız
+  const view = useMemo(
+    () => (!data ? null : unit === "TL" ? { current: data.current, previous: data.previous } : unit === "REAL" ? data.units.real : data.units.usd),
+    [data, unit]
+  );
+  const pairs = useMemo(() => (view ? pairMonths(view.previous, view.current) : []), [view]);
 
-  if (!data) {
+  if (!data || !view) {
     return error ? (
       <div className="mx-auto max-w-3xl space-y-3 p-8">
         <p className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{error}</p>
@@ -125,8 +146,19 @@ export default function MarketPage() {
     );
   }
 
-  const c = data.current;
-  const p = data.previous;
+  const c = view.current;
+  const p = view.previous;
+  /** Fiyat birimi ve basamak: USD küçük sayılar, bir ondalık */
+  const pu = unit === "TL" ? "TL/MWh" : unit === "REAL" ? `${data.units.real.short}/MWh` : "$/MWh";
+  const pd = unit === "USD" ? 1 : 0;
+  const money = (v: number) => nf(v, pd);
+  const unitNote =
+    unit === "REAL"
+      ? `Reel TL: her saat kendi ayının TÜFE'siyle ${data.units.real.label} fiyatlarına taşındı.`
+      : unit === "USD"
+        ? "USD: her saat kendi ayının TL/USD kuruyla (EPİAŞ PTF TL / USD oranı, aylık medyan) çevrildi."
+        : "Nominal TL: yıllar arası kıyasta enflasyon dahildir; reel TL ya da USD seçerek arındırabilirsiniz.";
+  const filled = unit === "REAL" ? data.units.real.filled : unit === "USD" ? data.units.usd.filled : [];
   const year = Number(data.period.start.slice(0, 4));
   const sameYear = data.period.end.startsWith(String(year));
   const names = sameYear ? { cur: String(year), prev: String(year - 1) } : { cur: "Seçilen dönem", prev: "Bir yıl önce" };
@@ -163,22 +195,24 @@ export default function MarketPage() {
   const peakSpreadHour = c.hourProfile.reduce((best, b, hr) => (b.spreadMean > c.hourProfile[best].spreadMean ? hr : best), 0);
   const peakZeroHour = c.hourProfile.reduce((best, b, hr) => (b.zeroHours > c.hourProfile[best].zeroHours ? hr : best), 0);
 
-  const vsPrev = (cur: number, prev: number | undefined, unit: "pct" | "pt" = "pct") => {
+  const vsPrev = (cur: number, prev: number | undefined, kind: "pct" | "pt" = "pct") => {
     if (prev === undefined) return null;
-    if (unit === "pt") return `${names.prev}: %${nf(prev)} · ${signed(cur - prev, 1)} puan`;
+    if (kind === "pt") return `${names.prev}: %${nf(prev)} · ${signed(cur - prev, 1)} puan`;
     const ch = pct(prev, cur);
-    return `${names.prev}: ${nf(prev)}${ch === null ? "" : ` · ${signedPct(ch)}`}`;
+    return `${names.prev}: ${unit === "USD" ? nf(prev, 1) : nf(prev)}${ch === null ? "" : ` · ${signedPct(ch)}`}`;
   };
   const tiles: Array<{ label: string; value: string; sub: string; delta: string | null; key?: boolean }> = [
     {
       label: "SMF–PTF makası",
-      value: `${nf(c.spread.mean)} TL/MWh`,
-      sub: `P90 ${nf(c.spread.p90)} · açıkta SMF ${signed(c.directionalSpread.deficit)}, fazlada ${signed(-c.directionalSpread.surplus)}`,
+      value: `${money(c.spread.mean)} ${pu}`,
+      sub:
+        (c.spreadPctOfPtf !== null ? `PTF'nin ${pctOf(c.spreadPctOfPtf)}${p?.spreadPctOfPtf != null ? ` (${names.prev}: %${nf(p.spreadPctOfPtf)})` : ""} · ` : "") +
+        `P90 ${money(c.spread.p90)} · açıkta SMF ${signed(c.directionalSpread.deficit, pd)}, fazlada ${signed(-c.directionalSpread.surplus, pd)}`,
       delta: vsPrev(c.spread.mean, p?.spread.mean),
       key: true,
     },
-    { label: "Ortalama PTF", value: `${nf(c.ptf.mean)} TL/MWh`, sub: `medyan ${nf(c.ptf.median)} · P10–P90 ${nf(c.ptf.p10)}–${nf(c.ptf.p90)}`, delta: vsPrev(c.ptf.mean, p?.ptf.mean) },
-    { label: "Ortalama SMF", value: `${nf(c.smf.mean)} TL/MWh`, sub: `medyan ${nf(c.smf.median)} · P10–P90 ${nf(c.smf.p10)}–${nf(c.smf.p90)}`, delta: vsPrev(c.smf.mean, p?.smf.mean) },
+    { label: "Ortalama PTF", value: `${money(c.ptf.mean)} ${pu}`, sub: `medyan ${money(c.ptf.median)} · P10–P90 ${money(c.ptf.p10)}–${money(c.ptf.p90)}`, delta: vsPrev(c.ptf.mean, p?.ptf.mean) },
+    { label: "Ortalama SMF", value: `${money(c.smf.mean)} ${pu}`, sub: `medyan ${money(c.smf.median)} · P10–P90 ${money(c.smf.p10)}–${money(c.smf.p90)}`, delta: vsPrev(c.smf.mean, p?.smf.mean) },
     {
       label: "Sistem açığındaki saat",
       value: `%${nf(c.direction.deficitPct)}`,
@@ -188,12 +222,12 @@ export default function MarketPage() {
     {
       label: "Sıfır fiyatlı saat",
       value: nf(c.zeroHours),
-      sub: `${nf(LOW_PRICE_MAX)} TL/MWh altı ${nf(c.lowHours)} saat (dönemin %${nf((c.lowHours / c.hours) * 100, 1)})`,
+      sub: `${nf(LOW_PRICE_MAX)} TL/MWh (nominal) altı ${nf(c.lowHours)} saat (dönemin %${nf((c.lowHours / c.hours) * 100, 1)})`,
       delta: vsPrev(c.zeroHours, p?.zeroHours),
     },
     {
       label: "GİP ağırlıklı ortalama fiyat",
-      value: c.gip.weightedPrice === null ? "–" : `${nf(c.gip.weightedPrice)} TL/MWh`,
+      value: c.gip.weightedPrice === null ? "–" : `${money(c.gip.weightedPrice)} ${pu}`,
       sub: c.gip.hours ? `saatte ort. ${nf(c.gip.avgHourlyVolumeMwh)} MWh · toplam ${nf(c.gip.totalVolumeMwh / 1000)} GWh` : "GİP verisi yok",
       delta: c.gip.weightedPrice !== null && p?.gip.weightedPrice != null ? vsPrev(c.gip.weightedPrice, p.gip.weightedPrice) : null,
     },
@@ -220,6 +254,23 @@ export default function MarketPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {loading && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+            <div role="group" aria-label="Fiyat birimi" className="flex h-9 overflow-hidden rounded-md border border-slate-200 bg-white text-sm">
+              {([
+                ["TL", "Nominal TL"],
+                ["REAL", "Reel TL"],
+                ["USD", "USD"],
+              ] as Array<[Unit, string]>).map(([u, label]) => (
+                <button
+                  key={u}
+                  type="button"
+                  aria-pressed={unit === u}
+                  onClick={() => setUnit(u)}
+                  className={`px-3 ${unit === u ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <select
               aria-label="Yıl"
               className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm"
@@ -302,6 +353,10 @@ export default function MarketPage() {
           </CardContent>
         </Card>
 
+        <p className="-mb-3 text-xs text-slate-600">
+          {unitNote}
+          {filled.length > 0 && ` ${filled.join(", ")} için seride veri yok; en yakın ayın değeri kullanıldı.`}
+        </p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {tiles.map((t) => (
             <div key={t.label} className={`rounded-lg border bg-white p-3 ${t.key ? "border-amber-300 ring-1 ring-amber-200" : "border-slate-200"}`}>
@@ -317,25 +372,25 @@ export default function MarketPage() {
           <ChartCard
             wide
             title="Aylık SMF–PTF makası"
-            description={`Saat başına ortalama |SMF − PTF| (TL/MWh)${p ? `, ${names.prev} aynı aylarıyla yan yana` : ""}.`}
+            description={`Saat başına ortalama |SMF − PTF| (${pu})${p ? `, ${names.prev} aynı aylarıyla yan yana` : ""}.`}
           >
             <BarChart data={monthly} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} barGap={2}>
               <CartesianGrid vertical={false} stroke={COLOR.grid} />
               <XAxis dataKey="month" {...axis.x} />
               <YAxis {...axis.y} />
-              <Tooltip formatter={tlTooltip("TL/MWh")} cursor={{ fill: "#f1f5f9" }} />
+              <Tooltip formatter={tlTooltip(pu, pd)} cursor={{ fill: "#f1f5f9" }} />
               <Legend {...legend} />
               {p && <Bar isAnimationActive={false} dataKey={`Makas ${names.prev}`} fill={COLOR.prev} radius={[4, 4, 0, 0]} />}
               <Bar isAnimationActive={false} dataKey={`Makas ${names.cur}`} fill={COLOR.cur} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ChartCard>
 
-          <ChartCard title="Aylık PTF ve SMF" description={`Aylık ortalama (TL/MWh)${p ? `; gri: ${names.prev} PTF` : ""}.`}>
+          <ChartCard title="Aylık PTF ve SMF" description={`Aylık ortalama (${pu})${p ? `; gri: ${names.prev} PTF` : ""}.`}>
             <LineChart data={monthly} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid vertical={false} stroke={COLOR.grid} />
               <XAxis dataKey="month" {...axis.x} />
               <YAxis {...axis.y} domain={["auto", "auto"]} />
-              <Tooltip formatter={tlTooltip("TL/MWh")} />
+              <Tooltip formatter={tlTooltip(pu, pd)} />
               <Legend {...legend} />
               {p && <Line isAnimationActive={false} type="monotone" dataKey={`PTF ${names.prev}`} stroke={COLOR.prev} strokeWidth={2} dot={false} />}
               <Line isAnimationActive={false} type="monotone" dataKey={`PTF ${names.cur}`} stroke={COLOR.cur} strokeWidth={2} dot={{ r: 3 }} />
@@ -359,13 +414,13 @@ export default function MarketPage() {
           <ChartCard
             wide
             title="Günün saatine göre makas"
-            description={`Türkiye saati; ortalama |SMF − PTF| (TL/MWh). En geniş: ${String(peakSpreadHour).padStart(2, "0")}:00, ${nf(c.hourProfile[peakSpreadHour].spreadMean)} TL.`}
+            description={`Türkiye saati; ortalama |SMF − PTF| (${pu}). En geniş: ${String(peakSpreadHour).padStart(2, "0")}:00, ${money(c.hourProfile[peakSpreadHour].spreadMean)} ${pu}.`}
           >
             <BarChart data={hourly} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} barGap={1}>
               <CartesianGrid vertical={false} stroke={COLOR.grid} />
               <XAxis dataKey="hour" {...axis.x} interval={2} />
               <YAxis {...axis.y} />
-              <Tooltip formatter={tlTooltip("TL/MWh")} labelFormatter={(h) => `${h}:00`} cursor={{ fill: "#f1f5f9" }} />
+              <Tooltip formatter={tlTooltip(pu, pd)} labelFormatter={(h) => `${h}:00`} cursor={{ fill: "#f1f5f9" }} />
               <Legend {...legend} />
               {p && <Bar isAnimationActive={false} dataKey={`Makas ${names.prev}`} fill={COLOR.prev} radius={[2, 2, 0, 0]} />}
               <Bar isAnimationActive={false} dataKey={`Makas ${names.cur}`} fill={COLOR.cur} radius={[2, 2, 0, 0]} />
@@ -406,9 +461,9 @@ export default function MarketPage() {
           <CardHeader className="gap-3 pb-3 md:flex-row md:items-center md:justify-between md:space-y-0">
             <div>
               <CardTitle className="text-base">Ay ay piyasa tablosu</CardTitle>
-              <CardDescription>Fiyatlar TL/MWh; makas sütununda {p ? `${names.prev} → ${names.cur}` : "seçilen dönem"}.</CardDescription>
+              <CardDescription>Fiyatlar {pu}; makas sütununda {p ? `${names.prev} → ${names.cur}` : "seçilen dönem"}.</CardDescription>
             </div>
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => downloadCsv(data, names)}>
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => downloadCsv(data, view, pu, names)}>
               <Download className="h-3.5 w-3.5" /> Excel (CSV)
             </Button>
           </CardHeader>
@@ -423,7 +478,7 @@ export default function MarketPage() {
                   <TableHead className="text-right">Makas P90</TableHead>
                   <TableHead className="text-right">Açık %</TableHead>
                   <TableHead className="text-right">Sıfır fiyatlı saat</TableHead>
-                  <TableHead className="text-right">{nf(LOW_PRICE_MAX)} TL altı saat</TableHead>
+                  <TableHead className="text-right">{nf(LOW_PRICE_MAX)} TL altı saat (nominal)</TableHead>
                   <TableHead className="text-right">GİP AOF</TableHead>
                   <TableHead className="text-right">GİP hacmi</TableHead>
                 </TableRow>
@@ -439,18 +494,18 @@ export default function MarketPage() {
                           <span className="ml-1 text-xs font-normal text-slate-500">({nf(cur.hours)} saat)</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{nf(cur.ptfMean)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{nf(cur.smfMean)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{money(cur.ptfMean)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{money(cur.smfMean)}</TableCell>
                       <TableCell className="whitespace-nowrap text-right tabular-nums">
-                        {prev && <span className="text-slate-500">{nf(prev.spreadMean)} → </span>}
-                        <span className="font-semibold text-slate-900">{nf(cur.spreadMean)}</span>
+                        {prev && <span className="text-slate-500">{money(prev.spreadMean)} → </span>}
+                        <span className="font-semibold text-slate-900">{money(cur.spreadMean)}</span>
                         {ch !== null && <span className="ml-1 text-xs text-slate-500">({signedPct(ch)})</span>}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{nf(cur.spreadP90)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{money(cur.spreadP90)}</TableCell>
                       <TableCell className="text-right tabular-nums">%{nf(cur.deficitPct)}</TableCell>
                       <TableCell className="text-right tabular-nums">{nf(cur.zeroHours)}</TableCell>
                       <TableCell className="text-right tabular-nums">{nf(cur.lowHours)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{cur.gipWeightedPrice === null ? "–" : nf(cur.gipWeightedPrice)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{cur.gipWeightedPrice === null ? "–" : money(cur.gipWeightedPrice)}</TableCell>
                       <TableCell className="whitespace-nowrap text-right tabular-nums">{nf(cur.gipVolumeMwh / 1000)} GWh</TableCell>
                     </TableRow>
                   );
@@ -465,7 +520,8 @@ export default function MarketPage() {
           çekilmiş ya da dosyadan yüklenmiş doğrulanmış kayıtlar.
           {data.unverifiedHours.current > 0 && ` Bu dönemde ${nf(data.unverifiedHours.current)} saat eski formatta (doğrulanmamış) olduğu için dışarıda.`} Makas
           |SMF − PTF|; açıkta SMF − PTF, fazlada PTF − SMF. Sıfır fiyatlı saat: PTF ≤ {nf(ZERO_PRICE_MAX)} TL/MWh. GİP AOF hacim
-          ağırlıklıdır. Karşılaştırma bir önceki yılın aynı günleriyle ve ancak o dönemin en az %90&apos;ı doluysa yapılır.
+          ağırlıklıdır. Karşılaştırma bir önceki yılın aynı günleriyle ve ancak o dönemin en az %90&apos;ı doluysa yapılır. Birimler: TL/USD{" "}
+          {data.units.sources.usdTry}; TÜFE {data.units.sources.cpi.split(" · ")[0]}.
         </p>
       </main>
     </div>
