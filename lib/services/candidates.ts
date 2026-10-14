@@ -7,6 +7,8 @@
  * zaten olan santraller aday sayılmaz. Saatlik sektör verisi scripts/sector-collect.mts ile toplanır.
  */
 
+import { isYekdemExiting, YEKDEM_EXIT_LABEL } from "@/lib/analysis/yekdem-exit";
+import { loadYekdemExitIndex } from "@/lib/services/yekdem-exit";
 import { classifyCandidate, groupCounts, type CandidateAccessKind } from "@/lib/analysis/candidate-access";
 import { loadAggregatorMembership } from "@/lib/services/aggregator-membership";
 import { loadOwnerEntries } from "@/lib/services/epias-plants";
@@ -17,8 +19,11 @@ import { sectorPeriodLabel, SECTOR_TECHS, type SectorTech } from "@/lib/sector/b
 import { listSectorHourlyIds, loadSectorBenchmark, loadSectorHourly } from "@/lib/services/sector";
 import { loadProjectHourly, type ProjectHourly } from "@/lib/services/project-hourly";
 
-/** YEKDEM süzgeci: hepsi, yalnız YEKDEM dışı (serbest piyasa) ya da yalnız YEKDEM santralleri */
-export type YekdemFilter = "all" | "exclude" | "only";
+/**
+ * YEKDEM süzgeci: hepsi, yalnız YEKDEM dışı (serbest piyasa), yalnız YEKDEM santralleri ya da YEKDEM'den bu yıl çıkan
+ * ve süresi bu yıl / yakında dolan santraller (exiting; toplayıcının en doğal hedefi)
+ */
+export type YekdemFilter = "all" | "exclude" | "only" | "exiting";
 /** Ulaşılabilirlik süzgeci: hepsi ya da tek bir sınıf ("independent" = hedef: toplayıcısız, bağımsız) */
 export type AccessFilter = "all" | CandidateAccessKind;
 
@@ -40,6 +45,8 @@ export interface ProjectCandidates {
   excluded: { inProject: number; inAggregatorPortfolio: number; byYekdem: number; byAccess: number };
   /** Sektör karnesinde olup saatlik serisi toplanmamış santral sayısı */
   withoutHourly: number;
+  /** YEKDEM çıkış sayımı (teknoloji süzgecinden geçen, projede ve toplayıcı portföyünde olmayan adaylarda); liste alınamadıysa null */
+  yekdemExits: { currentYear: number; exited: number; endsThisYear: number; endsSoon: number; mw: number } | null;
   result: ScreeningResult;
 }
 
@@ -95,8 +102,25 @@ export async function projectCandidates(
   const inProject = new Set(withData.map((p) => p.epiasPlantId).filter((id): id is number => id !== null));
   const inAggregator = new Set(data.aggregator?.portfolio?.plantIds ?? []);
   const open = bench.plants.filter((p) => types.includes(p.type) && !inProject.has(p.epiasPlantId) && !inAggregator.has(p.epiasPlantId));
+  // YEKDEM çıkışı: iki EPİAŞ YEKDEM listesinden (alınamazsa çıkış bilgisi olmadan devam)
+  const exitIndex = await loadYekdemExitIndex().catch((e) => {
+    console.error("YEKDEM exit index error:", e);
+    return null;
+  });
+  const exitOf = new Map(
+    open.map((p) => {
+      const x = exitIndex?.of(p);
+      return [p.epiasPlantId, x ? { status: x.status, label: YEKDEM_EXIT_LABEL[x.status], note: x.note, marketFrom: x.marketFrom, licensedMw: x.licensedMw } : null] as const;
+    })
+  );
   // YEKDEM bilgisi olmayan santral "YEKDEM dışı" süzgecinde kalır, "yalnız YEKDEM"de elenir
-  const byYekdem = open.filter((p) => (yekdem === "exclude" ? p.yekdem !== true : yekdem === "only" ? p.yekdem === true : true));
+  const byYekdem = open.filter((p) => {
+    if (yekdem === "exiting") {
+      const x = exitOf.get(p.epiasPlantId);
+      return !!x && isYekdemExiting(x.status);
+    }
+    return yekdem === "exclude" ? p.yekdem !== true : yekdem === "only" ? p.yekdem === true : true;
+  });
 
   // Ulaşılabilirlik: başka bir toplayıcıda mı (EPİAŞ toplayıcı listeleri), grupta mı (sahip dizini), bağımsız mı
   const [membership, ownerEntries] = await Promise.all([loadAggregatorMembership(), loadOwnerEntries(year)]);
@@ -137,6 +161,7 @@ export async function projectCandidates(
       yekdem: p.yekdem,
       hydroKind: p.hydroKind ?? null,
       access: accessOf.get(p.epiasPlantId) ?? null,
+      yekdemExit: exitOf.get(p.epiasPlantId) ?? null,
       rows: decodeHourly(series),
     });
   }
@@ -160,6 +185,18 @@ export async function projectCandidates(
       byAccess: byYekdem.length - pool.length,
     },
     withoutHourly,
+    yekdemExits: exitIndex
+      ? (() => {
+          const xs = open.map((p) => ({ x: exitOf.get(p.epiasPlantId), mw: p.peakMw })).filter((r) => r.x && isYekdemExiting(r.x.status));
+          return {
+            currentYear: exitIndex.currentYear,
+            exited: xs.filter((r) => r.x!.status === "EXITED").length,
+            endsThisYear: xs.filter((r) => r.x!.status === "ENDS_THIS_YEAR").length,
+            endsSoon: xs.filter((r) => r.x!.status === "ENDS_SOON").length,
+            mw: xs.reduce((a, r) => a + (r.x!.licensedMw ?? r.mw), 0),
+          };
+        })()
+      : null,
     result: screenCandidates(m.members, candidates, data.profile, { top, sortBy }),
   };
 }

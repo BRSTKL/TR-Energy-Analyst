@@ -240,3 +240,35 @@ function mostRecentSingle(cands: CapacityEntry[]): CapacityEntry | null {
   }
   return cands.slice().sort((a, b) => b.year - a.year)[0];
 }
+
+/** Katılımcı listesinin kısa ad + teknolojiye göre dizini (participantYears için; bir kez kurulur) */
+export type ParticipantYearIndex = Map<string, Array<{ year: number; org: string; brand: string | null; mw: number }>>;
+
+export function buildParticipantYearIndex(byYear: Record<number, YekdemParticipant[]>): ParticipantYearIndex {
+  const out: ParticipantYearIndex = new Map();
+  for (const [y, items] of Object.entries(byYear)) {
+    for (const it of items) {
+      const k = `${capacityKey(it.facilityName)}|${techOfFacilityType(it.facilityType)}`;
+      const list = out.get(k) ?? [];
+      list.push({ year: Number(y), org: normalizePlantName(it.orgName), brand: brandOf(it.orgName), mw: Number(it.installedPower) });
+      out.set(k, list);
+    }
+  }
+  return out;
+}
+
+/**
+ * Eşleşen tesisin YEKDEM katılımcı listesinde bulunduğu yıllar (YEKDEM çıkışı için ilk katılım yılı). Aynı kısa ad ve
+ * teknolojideki kayıtlar, şirket aynıysa ya da kurulu güç aynıysa (±%1; tesis el değiştirmiş olabilir) aynı tesis sayılır.
+ */
+export function participantYears(entry: CapacityEntry, index: ParticipantYearIndex): number[] {
+  const org = normalizePlantName(entry.orgName);
+  const brand = brandOf(entry.orgName);
+  const years = new Set<number>();
+  for (const r of index.get(`${capacityKey(entry.facilityName)}|${entry.tech}`) ?? []) {
+    const sameOrg = r.org === org || (!!brand && r.brand === brand);
+    const sameMw = Number.isFinite(r.mw) && Math.abs(r.mw - entry.mw) <= entry.mw * 0.01;
+    if (sameOrg || sameMw) years.add(r.year);
+  }
+  return Array.from(years).sort((a, b) => a - b);
+}

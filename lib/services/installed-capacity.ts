@@ -49,6 +49,14 @@ async function fetchYear(year: number): Promise<YekdemParticipant[]> {
   }));
 }
 
+/** Önbellekteki katılımcı listeleri (yıl → liste); EPİAŞ'a gitmez. Güncel tutmak için önce installedCapacityIndex. */
+export async function participantsByYear(): Promise<Record<number, YekdemParticipant[]>> {
+  const cache = await readCache();
+  const out: Record<number, YekdemParticipant[]> = {};
+  for (const [k, v] of Object.entries(cache.years)) if (v.length) out[Number(k)] = v;
+  return out;
+}
+
 let indexPromise: Promise<{ index: CapacityIndex; errors: string[] }> | null = null;
 let indexBuiltAt = 0;
 

@@ -23,6 +23,8 @@
  * SENARYO ayrımı her slaytta etiketlenir. Koordinatlar LAYOUT_WIDE (13,33 × 7,5 inç).
  */
 
+import { yearAblative, yearLocative } from "@/lib/format";
+export { yearLocative };
 import pptxgen from "pptxgenjs";
 import { deviationLoad, type PlantReportData } from "@/lib/report/plant-report";
 import { monthlyRange } from "@/lib/report/deviation-load";
@@ -116,18 +118,6 @@ const periodTag = (r: PlantReportData) => {
 };
 /** Veri tam bir yılı kapsıyor mu (değilse "yıllık" yerine "dönem" denir: ör. Ocak–Ağustos 2026) */
 const isFullYear = (r: PlantReportData) => r.monthly.length >= 12;
-/** Yılın bulunma eki: "2025'te", "2026'da", "2030'da" (yılın okunuşundaki son sözcüğe göre) */
-export function yearLocative(label: string): string {
-  if (!/^\d{4}$/.test(label)) return `${label} döneminde`;
-  const y = Number(label);
-  // bir, iki, üç, dört, beş, altı, yedi, sekiz, dokuz
-  const ones = ["", "de", "de", "te", "te", "te", "da", "de", "de", "da"];
-  // on, yirmi, otuz, kırk, elli, altmış, yetmiş, seksen, doksan
-  const tens = ["", "da", "de", "da", "ta", "de", "ta", "te", "de", "da"];
-  // yüz ve bin: "de"
-  const suffix = y % 10 ? ones[y % 10] : y % 100 ? tens[(y % 100) / 10] : "de";
-  return `${label}'${suffix}`;
-}
 /** İlk harfi büyük (Türkçe: "işlem" → "İşlem") */
 const capitalize = (t: string) => (t ? t.charAt(0).toLocaleUpperCase("tr-TR") + t.slice(1) : t);
 const hourRange = (h: number) => `${String(h).padStart(2, "0")}:00–${String((h + 1) % 24).padStart(2, "0")}:00`;
@@ -1926,16 +1916,23 @@ export async function exportPlantReportPptx(
         "Bağımsız: EPİAŞ'taki toplayıcıların santral listelerinde yok, sahibinin grubunun 3'ten az santrali var, görevli tedarik şirketinin ya da lisanssız santral değil. Bu bir tahmindir: dengeden sorumlu grup üyeliği santral bazında yayımlanmaz; görüşmeden önce doğrulayın. " +
         "Adil prim, adayın portföydeki Shapley payı + kendi KÜPST'üdür; toplayıcının adaya teklif edebileceği MWh başına dengesizlik bedelidir."
     );
-    // Pazar durumu kutusu
-    round(s, M, 1.9, CW, 0.62, C.panel);
+    // Pazar durumu kutusu; YEKDEM'den çıkan / çıkacak santraller (toplayıcının en doğal hedefi) ikinci satırda
+    const ye = growth.yekdemExits;
+    const exitLine =
+      ye && ye.exited + ye.endsThisYear + ye.endsSoon > 0
+        ? `\nYEKDEM çıkışı: ${nf(ye.exited)} aday ${yearLocative(String(ye.currentYear))} YEKDEM'den çıktı, ${nf(ye.endsThisYear)} adayın süresi ${ye.currentYear} içinde, ${nf(
+            ye.endsSoon
+          )} adayınki tahminen ${ye.currentYear}–${ye.currentYear + 2} arasında doluyor (≈ ${nf(ye.mw, 0)} MW): üretimlerini serbest piyasada satar, dengesizliği kendileri taşır.`
+        : "";
+    round(s, M, 1.9, CW, exitLine ? 0.8 : 0.62, C.panel);
     text(
       s,
-      growth.aggregatorList
+      (growth.aggregatorList
         ? `${growth.yekdem === "exclude" ? "YEKDEM dışı " : ""}${nf(pool)} aday santral: ${nf(inAgg)} başka bir toplayıcıda · ${nf(counts.group)} grup portföyünde · ${nf(
             counts.retail + counts.unknown
           )} lisanssız, görevli tedarik ya da sahibi bilinmiyor · ${nf(counts.independent)} bağımsız hedef (EPİAŞ, ${growth.aggregatorList.aggregators} toplayıcının listesi, ${growth.aggregatorList.asOf})`
-        : `${nf(counts.independent)} bağımsız aday (toplayıcı listeleri toplanmadığı için başka toplayıcıdaki santraller ayrılamadı)`,
-      { x: M + 0.2, y: 1.95, w: CW - 0.4, h: 0.52, fontSize: 11, color: C.ink, valign: "middle" }
+        : `${nf(counts.independent)} bağımsız aday (toplayıcı listeleri toplanmadığı için başka toplayıcıdaki santraller ayrılamadı)`) + exitLine,
+      { x: M + 0.2, y: 1.93, w: CW - 0.4, h: exitLine ? 0.74 : 0.52, fontSize: exitLine ? 10 : 11, color: C.ink, valign: "middle", fit: "shrink" }
     );
     const cell = (v: string, o: Record<string, unknown> = {}) => ({ text: v, options: { fontSize: 10.5, fontFace: FONT_BODY, color: C.ink, ...o } });
     const head = ["Santral (sahibi)", "Üretim", "Netleşme kazancı", "Tek başına", "Adil prim", "İndirim"].map((h, i) =>
@@ -1944,8 +1941,13 @@ export async function exportPlantReportPptx(
     const body = targets.map((c, i) => {
       const fill = i % 2 ? { fill: { color: C.panel } } : {};
       const owner = c.organizationName ? ` · ${c.organizationName.length > 42 ? `${c.organizationName.slice(0, 40)}…` : c.organizationName}` : "";
+      const x = c.yekdemExit;
+      const exitTag =
+        x && x.marketFrom && (x.status === "EXITED" || x.status === "ENDS_THIS_YEAR" || x.status === "ENDS_SOON")
+          ? ` · YEKDEM: ${x.status === "EXITED" ? `${yearAblative(x.marketFrom.earliest)} beri serbest` : `${x.marketFrom.earliest === x.marketFrom.latest ? yearAblative(x.marketFrom.earliest) : `${x.marketFrom.earliest}–${yearAblative(x.marketFrom.latest)}`} serbest${x.status === "ENDS_SOON" ? " (tahmini)" : ""}`}`
+          : "";
       return [
-        cell(`${c.name}${owner}`, fill),
+        cell(`${c.name}${owner}${exitTag}`, fill),
         cell(`${nf(c.actualMwh / 1000, 0)} GWh`, { ...fill, align: "right" }),
         cell(`${formatTlShort(c.gainTl)} · %${nf(c.gainPct, 0)}`, { ...fill, align: "right", bold: true }),
         cell(`${nf(c.fair!.standaloneUnitTl, 0)} TL/MWh`, { ...fill, align: "right", color: C.sub }),
@@ -1970,8 +1972,11 @@ export async function exportPlantReportPptx(
         growth.sectorLabel
       }; yüzde, adayın tek başına maliyetine göre. Kazançlar aday başınadır, toplanamaz. Tek başına ve adil prim KÜPST dahil. ` +
         "Bağımsız: toplayıcı listelerinde yok, grubu 3'ten az santralli, görevli tedarik ya da lisanssız değil; dengeden sorumlu grup üyeliği yayımlanmadığı için tahmindir, görüşmeden önce doğrulanmalı." +
+        (growth.yekdemExits
+          ? " YEKDEM süresi işletmeye girişten 10 yıldır; giriş tarihi açık veride olmadığı için santralin EPİAŞ YEKDEM listelerinde ilk görüldüğü yıldan tahmin edilir (±1 yıl)."
+          : "") +
         (r.candidateBacktest
-          ? ` Geçmişle sınama: ${r.candidateBacktest.fromYear}'te bağımsızken bir toplayıcıya katılan ${r.candidateBacktest.n} santralde ${r.candidateBacktest.fromYear} verisiyle tahmin edilen katkı sırası ${r.candidateBacktest.toYear}'te büyük ölçüde korundu (sıra korelasyonu ${nf(r.candidateBacktest.spearman, 2)}; tahminde en iyi çeyrektekilerin %${nf(r.candidateBacktest.topQuartileHitPct, 0)}'i gerçekte en iyi yarıda); tutar düşük kaldı (gerçek / tahmin medyanı ${nf(r.candidateBacktest.ratio.p50, 2)}). Sıra güvenilir, tutar alt sınırdır.`
+          ? ` Geçmişle sınama: ${yearLocative(String(r.candidateBacktest.fromYear))} bağımsızken bir toplayıcıya katılan ${r.candidateBacktest.n} santralde ${r.candidateBacktest.fromYear} verisiyle tahmin edilen katkı sırası ${yearLocative(String(r.candidateBacktest.toYear))} büyük ölçüde korundu (sıra korelasyonu ${nf(r.candidateBacktest.spearman, 2)}; tahminde en iyi çeyrektekilerin ${pctOf(r.candidateBacktest.topQuartileHitPct)} gerçekte en iyi yarıda); tutar düşük kaldı (gerçek / tahmin medyanı ${nf(r.candidateBacktest.ratio.p50, 2)}). Sıra güvenilir, tutar alt sınırdır.`
           : ""),
       { x: M, y: Math.min(ty + (targets.length + 1) * 0.38 + 0.25, 6.05), w: CW, h: 0.85, fontSize: 9.5, color: C.sub, valign: "top", fit: "shrink" }
     );

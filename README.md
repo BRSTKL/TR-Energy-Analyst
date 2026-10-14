@@ -28,7 +28,7 @@ Sektör karnesi (2026 Ocak–Ağustos, MWh başına dengesizlik medyanı): rüzg
 | **Sonuçlar** `/projects/[id]/results` | Dengesizlik riski (santral bazında ve şirket/toplayıcı bazında netleşmiş), KÜPST, sapma yükü, risk primi (beklenen / P90 / en kötü ay), PPA göstergesi, capture price, tahmin doğruluğu (WAPE, sistematik pay), arıza/kısıntı tespiti, veri bütünlüğü uyarıları |
 | **Karşılaştır** `/compare` | Projeler yan yana; aynı santrallerin iki dönemi için **maliyet değişim ayrıştırması**: tahmin hatası, fiyat makası, katsayı kuralı, hacim/profil, etkileşim |
 | **DSG senaryoları** | Dengeden sorumlu grup kurma, netleşme faydası, üyelerin marjinal katkısı, Shapley / orantılı paylaştırma ve çekirdek kontrolü |
-| **Aday santraller** | Portföye eklendiğinde en çok netleşme kazancı sağlayacak santraller, Shapley adil prim, ulaşılabilirlik (başka toplayıcıda / grup portföyü / bağımsız hedef) |
+| **Aday santraller** | Portföye eklendiğinde en çok netleşme kazancı sağlayacak santraller, Shapley adil prim, ulaşılabilirlik (başka toplayıcıda / grup portföyü / bağımsız hedef), YEKDEM'den çıkan / çıkacak santraller |
 | **Planlama ve GİP** | Planlama verimliliği, gün×saat ısı haritası, gün içi kapatma senaryosu (2 saat gecikmeli kalıcılık testi; kusursuz öngörü yalnız "üst sınır" olarak) |
 | **Geriye dönük test** | Teklif ayarı ve GİP kurallarının eğitim/test ayrımıyla sınanması (her ay yalnız önceki aylardan öğrenir) |
 | **Sektör karnesi** `/sector` | ~1.010 lisanslı RES/GES/HES santralinin MWh başına dengesizlik dağılımı, arıza saatleri hariç görünüm, hidro alt tipleri; **30 toplayıcının** netleşme kıyası ve ayrıntı sayfaları |

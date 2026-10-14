@@ -511,6 +511,30 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
               işlem yapıyorsa kazancın bir kısmı hâlihazırda alınıyordur. &quot;Kusursuz öngörü&quot; ile hesaplanan tavan ayrıca etiketlenir.{" "}
               <Tag kind="scenario" />
             </p>
+            <p>
+              <b>YEKDEM çıkışı.</b> YEKDEM fiyatları tesisin işletmeye giriş tarihinden itibaren 10 yıl uygulanır (5346 s. Kanun md. 6;
+              2013/5625 s. BKK; 2021 sonrası TL mekanizması da 10 yıl); kısmen işletmeye girmiş tesiste süre ilk katılımdan başlar. Katılım her
+              yıl ayrı başvuruyla olur. Süresi dolan ya da çıkmayı seçen santral üretimini serbest piyasada satar ve dengesizliğini kendisi taşır:
+              toplayıcının en doğal hedefidir. İşletmeye giriş tarihi açık veride olmadığı için santralin EPİAŞ YEKDEM listelerinde ilk
+              görüldüğü yıl kullanılır: giriş [ilk yıl − 1, ilk yıl], süre [ilk yıl + 9, ilk yıl + 10] içinde dolar. Kaynaklar: santral kimlikli
+              liste (2014&apos;ten bugüne; 2017&apos;den önce kapsamı dar) ve ad, şirket, kurulu güçlü katılımcı listesi (2016–2025; kurulu güç
+              kuralıyla aynı ad eşleşmesi). Listelerin başında görülen santral daha önce de YEKDEM&apos;de olabilir; bu yıl hâlâ listedeyse süresi
+              bu yıldan önce dolmuş olamaz, aralık buna göre daraltılır.
+            </p>
+            <Table
+              head={["Durum", "Tanım"]}
+              rows={[
+                ["Bu yıl çıktı", "Geçen yılın listesinde var, bu yılınkinde yok. Süre dolmuş ya da süresi sürerken kendi isteğiyle çıkmış (geri dönebilir)"],
+                ["Süresi bu yıl doluyor", "Bu yıl listede; ilk yılına göre süre en geç bu yıl doluyor: gelecek yıl serbest piyasada"],
+                ["Süresi yakında doluyor", "Bu yıl listede; süre en erken gelecek yıl doluyor (tahmini, ±1 yıl)"],
+              ]}
+            />
+            <p>
+              Sınır: kapasite artışı yapılmış santralde eklenen kısmın süresi kendi işletmeye girişinden işleyebilir; bu durumda santralin bir
+              kısmı YEKDEM&apos;de kalabilir. Görüşmeden önce santralle doğrulanmalı. 2026 sektör karnesinde (1.011 santral) 82 santral 2026&apos;da
+              çıktı (2.935 MW; 58&apos;inde süre dolmuş, 18&apos;i kendi isteğiyle), 4&apos;ünün süresi 2026&apos;da, 110&apos;unun tahminen 2026–2028&apos;de
+              doluyor. <Tag kind="estimate" />
+            </p>
           </Section>
 
           <Section id="gun-ici-etkinlik" n={next()} title="Gün içi etkinlik ve tahmin fırsatı">

@@ -13,6 +13,7 @@ import type { CandidateAccessKind } from "@/lib/analysis/candidate-access";
 import type { SectorTech } from "@/lib/sector/benchmark";
 
 import { MethodLink } from "@/components/method-link";
+import { yearAblative, yearLocative } from "@/lib/format";
 const nf = (v: number, d = 0) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
 const tl = (v: number) => (Math.abs(v) >= 1e6 ? `${nf(v / 1e6, 1)} M ₺` : `${nf(v / 1e3, 0)} bin ₺`);
 const TECH: Record<string, string> = { RES: "Rüzgâr", GES: "Güneş", HES: "Hidro" };
@@ -28,6 +29,7 @@ const YEKDEM_FILTERS: Array<{ id: YekdemFilter; label: string }> = [
   { id: "all", label: "Tümü" },
   { id: "exclude", label: "YEKDEM dışı" },
   { id: "only", label: "YEKDEM" },
+  { id: "exiting", label: "YEKDEM'den çıkan / çıkacak" },
 ];
 const ACCESS_FILTERS: Array<{ id: AccessFilter; label: string }> = [
   { id: "independent", label: "Hedef (bağımsız)" },
@@ -57,6 +59,22 @@ function AccessBadge({ c }: { c: CandidateResult }) {
   return <span className={`mt-1 inline-block rounded border px-1.5 py-0.5 text-[11px] ${b.cls}`}>{b.text + detail}</span>;
 }
 
+/** YEKDEM çıkışı rozeti: bu yıl çıkan ya da süresi bu yıl / yakında dolan */
+function YekdemExitBadge({ c }: { c: CandidateResult }) {
+  const x = c.yekdemExit;
+  if (!x || !["EXITED", "ENDS_THIS_YEAR", "ENDS_SOON"].includes(x.status)) return null;
+  const m = x.marketFrom;
+  const when = !m ? "" : x.status === "EXITED" ? `${yearAblative(m.earliest)} beri serbest piyasada` : `serbest piyasada ${m.earliest === m.latest ? yearAblative(m.earliest) : `${m.earliest}–${yearAblative(m.latest)}`} itibaren`;
+  const cls = x.status === "ENDS_SOON" ? "bg-sky-50 text-sky-800 border-sky-200" : "bg-violet-50 text-violet-800 border-violet-200";
+  return (
+    <span title={x.note} className={`ml-1 mt-1 inline-block rounded border px-1.5 py-0.5 text-[11px] ${cls}`}>
+      {x.label}
+      {when ? `: ${when}` : ""}
+      {x.status === "ENDS_SOON" ? " (tahmini)" : ""}
+    </span>
+  );
+}
+
 const SORTS: Array<{ id: CandidateSort; label: string }> = [
   { id: "total", label: "Toplam kazanç" },
   { id: "perMwh", label: "MWh başına kazanç" },
@@ -69,9 +87,9 @@ const sub = (c: CandidateResult) =>
 
 function downloadCsv(d: ProjectCandidates) {
   const num = (v: number | null | undefined, digits = 1) => (v == null ? "" : v.toFixed(digits).replace(".", ","));
-  const head = ["Sıra", "Santral", "EPİAŞ kimliği", "Şirket", "Teknoloji", "YEKDEM", "Ulaşılabilirlik", "Toplayıcı / grup", "Üretim MWh", "Tek başına dengesizlik TL", "Netleşme kazancı TL", "Kazanç TL/MWh", "Kazanç / tek başına %", "Zıt yönde saat %", "Adil prim TL/MWh", "Tek başına TL/MWh (KÜPST dahil)"];
+  const head = ["Sıra", "Santral", "EPİAŞ kimliği", "Şirket", "Teknoloji", "YEKDEM", "YEKDEM çıkışı", "Serbest piyasa (yıl)", "Ulaşılabilirlik", "Toplayıcı / grup", "Üretim MWh", "Tek başına dengesizlik TL", "Netleşme kazancı TL", "Kazanç TL/MWh", "Kazanç / tek başına %", "Zıt yönde saat %", "Adil prim TL/MWh", "Tek başına TL/MWh (KÜPST dahil)"];
   const lines = d.result.candidates.map((c, i) =>
-    [String(i + 1), c.name, String(c.epiasPlantId), c.organizationName ?? "", TECH[c.type] ?? c.type, c.yekdem ? "Evet" : c.yekdem === false ? "Hayır" : "", c.access ? ACCESS_BADGE[c.access.kind].text : "", c.access?.label ?? "", num(c.actualMwh, 0), num(c.standaloneCostTl, 0), num(c.gainTl, 0), num(c.gainPerMwhTl), num(c.gainPct), num(c.offsettingPct), num(c.fair?.fairUnitTl), num(c.fair?.standaloneUnitTl)]
+    [String(i + 1), c.name, String(c.epiasPlantId), c.organizationName ?? "", TECH[c.type] ?? c.type, c.yekdem ? "Evet" : c.yekdem === false ? "Hayır" : "", c.yekdemExit?.label ?? "", c.yekdemExit?.marketFrom ? (c.yekdemExit.marketFrom.earliest === c.yekdemExit.marketFrom.latest ? String(c.yekdemExit.marketFrom.earliest) : `${c.yekdemExit.marketFrom.earliest}-${c.yekdemExit.marketFrom.latest}`) : "", c.access ? ACCESS_BADGE[c.access.kind].text : "", c.access?.label ?? "", num(c.actualMwh, 0), num(c.standaloneCostTl, 0), num(c.gainTl, 0), num(c.gainPerMwhTl), num(c.gainPct), num(c.offsettingPct), num(c.fair?.fairUnitTl), num(c.fair?.standaloneUnitTl)]
       .map((x) => `"${x.replace(/"/g, '""')}"`)
       .join(";")
   );
@@ -208,6 +226,21 @@ export default function CandidatesPage() {
           </div>
         )}
 
+        {data?.yekdemExits && data.yekdemExits.exited + data.yekdemExits.endsThisYear + data.yekdemExits.endsSoon > 0 && (
+          <p className="rounded-md border border-violet-200 bg-violet-50/60 p-3 text-sm text-slate-800">
+            <span className="font-semibold">YEKDEM çıkışları:</span> projede ve toplayıcı portföyünde olmayan adaylardan{" "}
+            {nf(data.yekdemExits.exited)} santral {yearLocative(data.yekdemExits.currentYear)} YEKDEM&apos;den çıktı, {nf(data.yekdemExits.endsThisYear)}{" "}
+            santralin 10 yıllık süresi {data.yekdemExits.currentYear} içinde doluyor, {nf(data.yekdemExits.endsSoon)} santralinki tahminen{" "}
+            {data.yekdemExits.currentYear}–{data.yekdemExits.currentYear + 2} arasında (toplam ≈ {nf(data.yekdemExits.mw)} MW). Bu santraller
+            üretimini serbest piyasada satar ve dengesizliğini kendisi taşır.
+            {yekdem !== "exiting" && (
+              <button type="button" className="ml-1 font-medium text-violet-800 underline" onClick={() => setYekdem("exiting")}>
+                Yalnız bunları göster
+              </button>
+            )}
+          </p>
+        )}
+
         {data && pf && (
           <>
             <Card className="border-amber-200 bg-amber-50/50 shadow-sm">
@@ -270,6 +303,7 @@ export default function CandidatesPage() {
                           <p className="font-medium text-slate-900">{c.name}</p>
                           <p className="text-xs text-slate-500">{sub(c)}</p>
                           <AccessBadge c={c} />
+                          <YekdemExitBadge c={c} />
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-right tabular-nums">{nf(c.actualMwh / 1000)} GWh</TableCell>
                         <TableCell>
@@ -340,6 +374,7 @@ export default function CandidatesPage() {
                               <p className="text-slate-900">{c.name}</p>
                               <p className="text-xs text-slate-500">{sub(c)}</p>
                               <AccessBadge c={c} />
+                          <YekdemExitBadge c={c} />
                             </TableCell>
                             <TableCell className="whitespace-nowrap text-right tabular-nums">{nf(c.actualMwh / 1000)} GWh</TableCell>
                             <TableCell className="text-right tabular-nums">{tl(c.gainTl)}</TableCell>
@@ -361,14 +396,16 @@ export default function CandidatesPage() {
               aday sayılmadı.
               {data.excluded.byAccess > 0 && ` Ulaşılabilirlik süzgeci nedeniyle ${nf(data.excluded.byAccess)} santral listede yok.`}
               {data.excluded.byYekdem > 0 &&
-                ` Destek süzgeci nedeniyle ${nf(data.excluded.byYekdem)} santral (${data.yekdem === "exclude" ? "YEKDEM'li" : "YEKDEM dışı"}) listede yok.`}
+                ` Destek süzgeci nedeniyle ${nf(data.excluded.byYekdem)} santral (${data.yekdem === "exclude" ? "YEKDEM'li" : data.yekdem === "exiting" ? "YEKDEM'den çıkmayan" : "YEKDEM dışı"}) listede yok.`}
               {data.withoutHourly > 0 && ` Saatlik serisi toplanmamış ${nf(data.withoutHourly)} santral taranamadı.`}
               {data.result.skippedForCoverage > 0 && ` Portföy saatlerinin %90'ından azında verisi olan ${nf(data.result.skippedForCoverage)} santral elendi.`}{" "}
               Maliyet sonuç sayfasıyla aynı motordan; santraller tek dengede uzlaştırılmış varsayılır. Adil prim: Shapley payı + tahmini
               KÜPST, adayın üretimine bölünür
               {top[0]?.fair?.method === "two-player" ? " (üye sayısı fazla olduğundan portföy tek oyuncu sayıldı, kazanç ikiye bölündü)" : ""}. Zıt
               yönde saat: adayın ve portföyün sapmasının ters işaretli olduğu saatlerin payı. YEKDEM&apos;li santraller de dengesizliklerini
-              kendileri taşıdığından portföyde aynı şekilde netleşir; YEKDEM süzgeci yalnızca gelir yapısına göre ayırmak içindir.
+              kendileri taşıdığından portföyde aynı şekilde netleşir; YEKDEM süzgeci yalnızca gelir yapısına göre ayırmak içindir. YEKDEM
+              çıkışı: süre işletmeye girişten 10 yıldır; giriş tarihi açık veride olmadığı için santralin EPİAŞ YEKDEM listelerinde ilk görüldüğü
+              yıldan tahmin edilir (±1 yıl). &quot;Bu yıl çıktı&quot;: geçen yılın listesinde var, bu yılınkinde yok. Kapasite artışı yapılmış santralde eklenen kısmın süresi ayrı işleyebilir; görüşmeden önce doğrulayın.
             </p>
             <p className="text-xs text-slate-500">
               <b>Ulaşılabilirlik:</b> &quot;Başka toplayıcıda&quot;, EPİAŞ&apos;ta &quot;(TOPLAYICI)&quot; olarak kayıtlı katılımcıların santral

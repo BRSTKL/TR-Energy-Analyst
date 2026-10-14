@@ -17,6 +17,7 @@
  * SAF: I/O yok.
  */
 
+import type { YekdemExitStatus } from "@/lib/analysis/yekdem-exit";
 import { imbalanceCostOf, processHourlyRecord, pricedMarket } from "@/lib/calculations/engine";
 import { HourlyResult, ImbalancePricingProfile, resolveImbalanceProfile } from "@/lib/calculations/types";
 import { kupstTotal } from "@/lib/calculations/kupst";
@@ -24,6 +25,17 @@ import { MAX_EXACT_PLANTS } from "@/lib/analysis/dsg-scenarios";
 import type { CandidateAccess } from "@/lib/analysis/candidate-access";
 
 /** Portföy üyesi (toplayıcıda sahip, tek şirkette santral); saatlik serisi üyenin kendi içinde netleşmiş */
+/** Adayın YEKDEM çıkış özeti (sayfa ve rapor için) */
+export interface CandidateYekdemExit {
+  status: YekdemExitStatus;
+  label: string;
+  note: string;
+  /** Serbest piyasadaki ilk tam yıl (aralık) */
+  marketFrom: { earliest: number; latest: number } | null;
+  /** YEKDEM katılımcı listesindeki lisanslı kurulu güç */
+  licensedMw: number | null;
+}
+
 export interface ScreeningMember {
   key: string;
   name: string;
@@ -41,6 +53,8 @@ export interface ScreeningCandidate {
   hydroKind?: string | null;
   /** Ulaşılabilirlik (başka toplayıcıda, grupta, bağımsız …); taramayı etkilemez, sonuca aynen geçer */
   access?: CandidateAccess | null;
+  /** YEKDEM çıkış durumu (lib/analysis/yekdem-exit.ts); taramayı etkilemez, sonuca aynen geçer */
+  yekdemExit?: CandidateYekdemExit | null;
   /** Ham saatlik plan ve gerçekleşen (sektör karnesinin saatlik serisi); fiyatlar portföyün saatlerinden alınır */
   rows: Array<{ timestamp: Date | string; forecastMwh: number; actualMwh: number }>;
 }
@@ -54,6 +68,7 @@ export interface CandidateResult {
   yekdem: boolean | null;
   hydroKind: string | null;
   access: CandidateAccess | null;
+  yekdemExit: CandidateYekdemExit | null;
   /** Portföy saatlerinden adayın verisi olanlar */
   hours: number;
   actualMwh: number;
@@ -161,6 +176,7 @@ export function screenCandidates(
       yekdem: c.yekdem,
       hydroKind: c.hydroKind ?? null,
       access: c.access ?? null,
+      yekdemExit: c.yekdemExit ?? null,
       hours,
       actualMwh: actual,
       standaloneCostTl: standalone,
