@@ -31,6 +31,7 @@ import { monthlyRange } from "@/lib/report/deviation-load";
 import { describeGap, describeLateStart, describeLowFinalPlan, FINAL_PLAN_MIN_COVERAGE_PCT } from "@/lib/analysis/data-completeness";
 import { materialTradeCost } from "@/lib/analysis/intraday-trade";
 import { pctIn, pctOf } from "@/lib/format";
+import { layoutColumnBlocks } from "@/lib/export/text-layout";
 import { brandWord } from "@/lib/projects/aggregator";
 import { COST_FACTORS } from "@/lib/analysis/cost-change";
 import type { ReportCostChange } from "@/lib/services/cost-change";
@@ -76,6 +77,9 @@ type TagKind = "exact" | "scenario" | "assumption" | "estimate";
 
 const W = 13.333;
 const M = 0.6; // kenar boşluğu
+/** Ek B içeriği: tek satırlık başlığın altından başlar, dipnot satırının (7,05) üstünde biter (inç) */
+export const METHOD_TOP = 1.4;
+export const METHOD_BOTTOM = 6.92;
 const CW = W - 2 * M; // içerik genişliği
 const FONT_HEAD = "Arial";
 const FONT_BODY = "Calibri";
@@ -2397,35 +2401,21 @@ export async function exportPlantReportPptx(
         `KESİN HESAP: veriden doğrudan. TAHMİNİ: mevzuata dayanır ama açık veriyle tam yeniden üretilemez (KÜPST: arıza sayısına bağlı katsayı ve tolerans ayrıntıları; GİP işlem maliyeti: ortalama fiyat). VARSAYIMA BAĞLI: bir varsayıma dayanır (risk primi, adil prim paylaşımı). SENARYO: davranış varsayımı; taahhüt değildir.`,
       ],
     ];
-    // Satır yüksekliği metin uzunluğuna göre: aynı satırdaki iki bloğun uzun olanı belirler (sabit adım uzun metni
-    // bir alttaki başlığın üstüne taşırıyordu). Sığmazsa yazı küçülür.
+    // Yerleşim metin uzunluğuna göre (lib/export/text-layout.ts): bloklar okuma sırasıyla iki sütuna dengeli bölünür, sığan
+    // en büyük punto seçilir; her şey tek sayfada. Önceden sabit satırlar ve 8,5 punto alt sınırı vardı: içerik uzayınca son
+    // bloklar dipnot satırının üstüne ve sayfanın dışına taşıyordu. En küçük puntoda da sığmazsa kutular dipnot satırına
+    // iner ve denetim (slide-overflow) hata verir: metin kısaltılmalıdır.
     const colW = (CW - 0.5) / 2;
-    const top = 1.7;
-    const bottomLimit = 6.9;
-    const layout = (fontSize: number) => {
-      const charsPerLine = (colW * 72) / (fontSize * 0.46);
-      const lineH = (fontSize * 1.25) / 72;
-      const rows: number[] = [];
-      for (let i = 0; i < blocks.length; i += 2) {
-        const lines = Math.max(...blocks.slice(i, i + 2).map(([, b]) => Math.ceil(b.length / charsPerLine)));
-        rows.push(0.34 + lines * lineH + 0.22);
-      }
-      return rows;
-    };
-    let fontSize = 11;
-    let rowHs = layout(fontSize);
-    while (fontSize > 8.5 && top + rowHs.reduce((a, b) => a + b, 0) > bottomLimit) {
-      fontSize -= 0.5;
-      rowHs = layout(fontSize);
+    const placed = layoutColumnBlocks(
+      blocks.map(([, b]) => b),
+      { colW, top: METHOD_TOP, bottom: METHOD_BOTTOM, headH: 0.3, gap: 0.14, maxFont: 11, minFont: 8 }
+    );
+    for (const pb of placed.blocks) {
+      const [h, b] = blocks[pb.index];
+      const x = M + pb.col * (colW + 0.5);
+      text(s, h, { x, y: pb.y, w: colW, h: 0.26, fontSize: 12, bold: true, fontFace: FONT_HEAD, color: C.navy });
+      text(s, b, { x, y: pb.y + 0.28, w: colW, h: pb.bodyH, fontSize: placed.fontSize, color: C.sub, valign: "top" });
     }
-    blocks.forEach(([h, b], i) => {
-      const col = i % 2;
-      const row = Math.floor(i / 2);
-      const x = M + col * (colW + 0.5);
-      const y = top + rowHs.slice(0, row).reduce((a, v) => a + v, 0);
-      text(s, h, { x, y, w: colW, h: 0.3, fontSize: 13, bold: true, fontFace: FONT_HEAD, color: C.navy });
-      text(s, b, { x, y: y + 0.32, w: colW, h: rowHs[row] - 0.36, fontSize, color: C.sub, valign: "top" });
-    });
   }
 
   return (await pptx.write({ outputType: "nodebuffer" })) as Buffer;

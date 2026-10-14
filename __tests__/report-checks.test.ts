@@ -8,6 +8,7 @@ import {
   checkIntradayBridge,
   checkIntradayText,
   checkReportData,
+  checkSlideGeometry,
   checkSlideTables,
   checkSlideTexts,
   extractSlideTables,
@@ -57,6 +58,7 @@ describe("Rapor tutarlılık denetimi", () => {
     const tables = await extractSlideTables(buf);
     expect(tables.some((t) => t.rows.some((row) => /^Toplam\b/.test(row[0] ?? "")))).toBe(true); // Ek A denetlendi
     expect(checkSlideTables(tables)).toEqual([]);
+    expect(await checkSlideGeometry(buf)).toEqual([]);
   });
 
   it("köprüde gizlenen adımı yakalar (Gain: 73,6 − 41,2 ≠ 32,2)", () => {

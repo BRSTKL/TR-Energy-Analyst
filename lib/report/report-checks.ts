@@ -430,6 +430,39 @@ export async function extractSlideTexts(buffer: Buffer): Promise<Array<{ slide: 
   return out.sort((a, b) => a.slide - b.slide);
 }
 
+/** Slayt yüksekliği (LAYOUT_WIDE) ve dipnot satırının üstü, inç */
+const SLIDE_H_IN = 7.5;
+const FOOTER_TOP_IN = 7.0;
+const EMU = 914400;
+
+/**
+ * Slayt kutularının yeri: sayfanın dışına ya da dipnot satırına (kaynak / sayfa numarası, 7,05 inç) inen içerik kutusu hata.
+ * Ek B gibi metin uzunluğuyla büyüyen yerleşimler taşınca kutular aşağı kayar (önce 8,5 puntoda bile son bloklar sayfa dışındaydı).
+ */
+export async function checkSlideGeometry(buffer: Buffer): Promise<ReportIssue[]> {
+  const zip = await JSZip.loadAsync(buffer);
+  const issues: ReportIssue[] = [];
+  for (const f of Object.keys(zip.files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n))) {
+    const slide = Number(f.match(/(\d+)\.xml$/)![1]);
+    const xml = await zip.file(f)!.async("string");
+    const boxes = (xml.match(/<p:(?:sp|graphicFrame|pic)\b[\s\S]*?<\/p:(?:sp|graphicFrame|pic)>/g) ?? []).flatMap((sp) => {
+      const off = sp.match(/<a:off x="(-?\d+)" y="(-?\d+)"\s*\/>/);
+      const ext = sp.match(/<a:ext cx="(\d+)" cy="(\d+)"\s*\/>/);
+      if (!off || !ext) return [];
+      const top = Number(off[2]) / EMU;
+      const txt = Array.from(sp.matchAll(/<a:t>([^<]*)<\/a:t>/g), (m) => m[1]).join("").slice(0, 50);
+      return [{ top, bottom: top + Number(ext[2]) / EMU, txt }];
+    });
+    // Dipnot kuralı yalnız dipnot satırı olan slaytta (özet sürümünün tek slaytında dipnot yok, alt kutu sayfa sonuna iner)
+    const hasFooter = boxes.some((b) => b.top >= FOOTER_TOP_IN);
+    for (const { top, bottom, txt } of boxes) {
+      if (bottom > SLIDE_H_IN + 0.01 || (hasFooter && top < FOOTER_TOP_IN && bottom > FOOTER_TOP_IN + 0.02))
+        issues.push({ level: "error", rule: "slide-overflow", message: `Slayt ${slide}: kutu ${top.toFixed(2)}–${bottom.toFixed(2)} inçte, dipnot satırına ya da sayfa dışına taşıyor${txt ? ` ("${txt}…")` : ""}.` });
+    }
+  }
+  return issues.sort((a, b) => a.message.localeCompare(b.message));
+}
+
 export interface SlideTable {
   slide: number;
   /** Satırlar, her satırda hücre metinleri */
