@@ -35,6 +35,8 @@ const SECTIONS: Array<{ id: string; title: string }> = [
   { id: "aday", title: "Aday ve hedef santraller" },
   { id: "gip", title: "Gün içi piyasa senaryosu" },
   { id: "gun-ici-etkinlik", title: "Gün içi etkinlik ve tahmin fırsatı" },
+  { id: "sinama", title: "Geçmişle sınama" },
+  { id: "yon-tahmini", title: "Sistem yönü tahmini" },
   { id: "kalite", title: "Veri bütünlüğü ve arıza saatleri" },
   { id: "dogrulama", title: "Doğrulamalar" },
   { id: "etiketler", title: "Etiketler, varsayımlar ve sınırlar" },
@@ -533,6 +535,52 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
                 ],
               ]}
             />
+          </Section>
+
+          <Section id="yon-tahmini" n={next()} title="Sistem yönü tahmini">
+            <p>
+              Soru: sistemin bir saatte açık mı (YAT yönü, SMF ≥ PTF) fazla mı vereceği önceden kestirilebilir mi, kestirilebiliyorsa bu bilgi
+              plan kararında ne kadar değer taşır? Hesap iki adımdır; ikinci adım ancak birincisi geçerse yapılır.
+            </p>
+            <Table
+              head={["Adım", "Yöntem", "Sınır"]}
+              rows={[
+                [
+                  "Bilgi anı",
+                  "Gün öncesi: D günü için D-2 sonuna kadarki yön ve makas, D-1'in PTF'si. Gün içi: saatin 2 saat öncesine kadarki yön ve makas, günün PTF'si (gün içi kalıcılıktaki gecikmeyle aynı). Her satır dayandığı en geç saati taşır; test, karar anından sonraki veriye dayanmadığını doğrular.",
+                  "Tatil takvimi, yük ve YEK üretim tahmini yok. Piyasa geneli arızalı kapasite (EPİAŞ arıza bildirimleri, karar anında süren) Ekim 2026'da denendi: aynı saatlerde Brier'i iyileştirmedi (düzey: gün öncesi −%2,2, gün içi −%0,9; 28 güne göre sapma: −%1,1 / −%0,6), modele alınmadı.",
+                ],
+                [
+                  "Model",
+                  "Yön: L2 düzenlemeli lojistik regresyon (saat ve gün, son 7 ve 28 günde aynı saatin açık oranı, bilinen son yön ve makas, PTF düzeyi). Makas: log ölçeğinde ridge regresyon, tahmin eğitimde görülen aralıkla sınırlı. Düzenleme katsayısı sabittir, test verisine bakılarak ayarlanmaz.",
+                  "Basit model: açıklanabilir ama doğrusal.",
+                ],
+                [
+                  "Piyasa sınaması",
+                  "Her ay, model yalnız önceki (en çok 4) aydan öğrenir ve o ayı tahmin eder. Rakipler: saat bazında geçmiş açık oranı ve son bilinen yön (geçmiş isabetiyle kalibre). Ölçü Brier skoru; kapı: model toplamda iki rakipten de iyi VE test aylarının yarısından fazlasında ikisinden de iyi.",
+                  "Ekim 2026: 31 test ayı (Mart 2024 – Eylül 2026). Gün öncesi Brier 0,224 (rakipler 0,233 / 0,235; 20 ayda iyi), gün içi 0,173 (0,233 / 0,184; 27 ayda iyi); ikisi de kapıyı geçti. Makas büyüklüğü tahmini rakipleri yenmedi; kararda yalnız yön olasılığı kullanılır.",
+                ],
+                [
+                  "Plan ayarı",
+                  "Açık bekleniyorsa (olasılık ≥ eşik) plan k_düşük ≤ 1 ile, değilse k_yüksek ≥ 1 ile çarpılır. Eşik ve çarpanlar önceki aylarda dengesizlik + KÜPST farkı toplamını en aza indirecek biçimde seçilir. Gün içi kuralda plan değişikliği GİP'te işlem sayılır: Δ × (GİP AOF − PTF). Geriye dönük test sayfasında, projenin fiyat profiliyle, netleşmiş uzlaştırma biriminde.",
+                  "KÜPST santral bazında (toplayıcı topluluğunda da; temkinli). Gün içi işlem hacim sınırı ve fiyat kayması olmadan: iyimser. 2026 projelerinde yalnız 4 test ayı.",
+                ],
+                [
+                  "Kalıcılık + yön",
+                  "Gün içi kalıcılık kuralı (2 saat önce görülen hatanın α kadarı GİP'te kapatılır) ile yön tahmininin birleşimi: α, işlemin pahalı tarafı kapatıp kapatmadığına göre ayrı öğrenilir (açık bekleniyorsa eksik, fazla bekleniyorsa fazla pahalıdır); olasılığı olmayan saatte üçüncü bir α. Eşik ve paylar önceki aylardan; fiyat, hacim sınırı ve kayma düz kuralla aynı.",
+                  "KÜPST düz kuraldaki gibi dahil değil. Dört parametre öğrenir: örneklem içi kazanç örneklem dışından belirgin yüksek (kısmen ezber).",
+                ],
+              ]}
+            />
+            <p>
+              Bu bir <b>ölçümdür</b> (&quot;yön bilgisi bu kadar değer taşıyordu&quot;), işlem önerisi değildir: KGÜP&apos;ün santralin en iyi
+              tahmininden bilerek saptırılması mevzuat açısından hassastır <span className={STATUS_STYLE.check}>(teyit edilmeli)</span>.
+              Ekim 2026 ölçümünde örneklem dışı sonuç portföye göre değişti: gün içi kural dört portföyün dördünde kazandırdı (%1,8–7,0) ama
+              üçünde basit gün içi kalıcılık kuralının altında kaldı; gün öncesi kural iki portföyde kazandırdı (%3,8–5,5), ikisinde kaybettirdi.
+              Kalıcılık + yön birleşimi 14 portföyün 8&apos;inde düz kalıcılık kuralını geçti, 6&apos;sında gerisinde kaldı; toplam örneklem dışı
+              kazanç 156,8 M&apos;dan 160,9 M TL&apos;ye çıktı (+%2,6). En büyük kayıp bir portföyde 0,76 M TL.
+              Kod: lib/analysis/direction-*.ts; piyasa sınaması scripts/direction-backtest.mts. <Tag kind="scenario" />
+            </p>
           </Section>
 
           <Section id="kalite" n={next()} title="Veri bütünlüğü ve arıza saatleri">

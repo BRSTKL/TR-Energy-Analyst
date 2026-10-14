@@ -8,8 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { LOW_PRICE_MAX, ZERO_PRICE_MAX, pairMonths, type MarketSummary } from "@/lib/analysis/market-summary";
+import type { DirectionBacktest, Forecaster } from "@/lib/analysis/direction-backtest";
 
 import { MethodLink } from "@/components/method-link";
+import { pctOf } from "@/lib/format";
 interface MarketResponse {
   available: { start: string; end: string; lastFullMonthEnd: string };
   period: { start: string; end: string; label: string };
@@ -398,6 +400,8 @@ export default function MarketPage() {
           </ChartCard>
         </div>
 
+        <DirectionForecastCard />
+
         <Card className="shadow-sm">
           <CardHeader className="gap-3 pb-3 md:flex-row md:items-center md:justify-between md:space-y-0">
             <div>
@@ -465,5 +469,127 @@ export default function MarketPage() {
         </p>
       </main>
     </div>
+  );
+}
+
+type DirectionSummary = Omit<DirectionBacktest, "predictions">;
+
+const FORECASTER_LABEL: Record<Forecaster, string> = { model: "Model", climatology: "Saat bazında geçmiş oran", persistence: "Son bilinen yön" };
+const INFO_LABEL = { "D-1": "Gün öncesi (D-2 sonuna kadarki veri)", "H-2": "Gün içi (2 saat önceki veri)" } as const;
+
+/** Aşama 14.3: sistem yönü tahmininin geçmişle sınaması (kendi verisini ayrı çeker) */
+function DirectionForecastCard() {
+  const [results, setResults] = useState<DirectionSummary[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("/api/market/direction")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.success) throw new Error(d.error);
+        setResults(d.results);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "Yön tahmini yüklenemedi."));
+  }, []);
+
+  const calibration = useMemo(() => {
+    if (!results) return [];
+    return results[0].calibration.map((bin, i) => {
+      const row: Record<string, number | string | null> = { label: bin.label, "Kusursuz kalibrasyon": (i + 0.5) * 10 };
+      for (const r of results) {
+        const b = r.calibration[i];
+        row[INFO_LABEL[r.infoTime]] = b.n >= 30 ? Math.round(b.observedRate * 1000) / 10 : null;
+      }
+      return row;
+    });
+  }, [results]);
+
+  return (
+    <Card className="shadow-sm">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Sistem yönü tahmini: geçmişte ne kadar tuttu?</CardTitle>
+        <CardDescription>
+          Her ay, model yalnız önceki (en çok 4) aydan öğrenip o ayın her saati için sistemin açık verme olasılığını tahmin eder. İki basit rakiple
+          kıyaslanır. Brier skoru düşük olan daha iyi; 0,25 yazı-tura düzeyidir. Ayrıntı: Metodoloji.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {error && <p className="text-sm text-rose-700">{error}</p>}
+        {!results && !error && (
+          <p className="flex items-center gap-2 text-sm text-slate-500">
+            <Loader2 className="h-4 w-4 animate-spin" /> Sınama çalıştırılıyor…
+          </p>
+        )}
+        {results && (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {results.map((r) => {
+              const s = r.total.scores;
+              // Makas: en iyi rakibe göre fark %2'den küçükse "aynı düzeyde"
+              const bestRival = Math.min(s.climatology.spreadMae, s.persistence.spreadMae);
+              const spreadGain = bestRival > 0 ? (bestRival - s.model.spreadMae) / bestRival : 0;
+              const spreadNote =
+                spreadGain >= 0.02
+                  ? ` Makas tahmini de en iyi rakipten %${nf(spreadGain * 100)} iyi.`
+                  : spreadGain > -0.02
+                    ? " Makas büyüklüğü tahmininde model rakipleriyle aynı düzeyde; kararda yalnız yön olasılığı kullanılır."
+                    : " Makas büyüklüğü tahmininde model rakiplerini yenemiyor; kararda yalnız yön olasılığı kullanılır.";
+              return (
+                <div key={r.infoTime} className="space-y-2">
+                  <p className="text-sm font-semibold text-slate-900">{INFO_LABEL[r.infoTime]}</p>
+                  <p className={`text-sm ${r.gate.passed ? "text-emerald-800" : "text-amber-800"}`}>{r.gate.verdict}</p>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Tahminci</TableHead>
+                        <TableHead className="text-right">Brier</TableHead>
+                        <TableHead className="text-right">Yön isabeti</TableHead>
+                        <TableHead className="text-right">Makas hatası</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(["model", "climatology", "persistence"] as Forecaster[]).map((f) => (
+                        <TableRow key={f}>
+                          <TableCell className={f === "model" ? "font-medium" : "text-slate-600"}>{FORECASTER_LABEL[f]}</TableCell>
+                          <TableCell className="text-right tabular-nums">{nf(s[f].brier, 3)}</TableCell>
+                          <TableCell className="text-right tabular-nums">%{nf(s[f].accuracy * 100, 1)}</TableCell>
+                          <TableCell className="text-right tabular-nums">{nf(s[f].spreadMae)} TL</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  <p className="text-xs text-slate-500">
+                    {nf(r.months.length)} test ayı ({monthName(r.months[0]?.month ?? "2025-01")} {r.months[0]?.month.slice(0, 4)} –{" "}
+                    {monthName(r.months.at(-1)?.month ?? "2025-01")} {r.months.at(-1)?.month.slice(0, 4)}), {nf(r.total.scores.model.n)} saat.
+                    {spreadNote}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {results && (
+          <div>
+            <p className="mb-1 text-sm font-medium text-slate-800">Kalibrasyon: model &quot;%X açık&quot; dediğinde gerçekte ne oldu?</p>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={calibration} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid vertical={false} stroke={COLOR.grid} />
+                  <XAxis dataKey="label" {...axis.x} />
+                  <YAxis {...axis.y} domain={[0, 100]} tickFormatter={(v) => `%${v}`} />
+                  <Tooltip formatter={(v: unknown) => (v === null ? "–" : `%${nf(Number(v), 1)}`)} />
+                  <Legend {...legend} />
+                  <Line isAnimationActive={false} dataKey="Kusursuz kalibrasyon" stroke={COLOR.prev} strokeDasharray="4 4" dot={false} />
+                  <Line isAnimationActive={false} dataKey={INFO_LABEL["D-1"]} stroke={COLOR.smf} connectNulls />
+                  <Line isAnimationActive={false} dataKey={INFO_LABEL["H-2"]} stroke={COLOR.cur} connectNulls />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="text-xs text-slate-500">
+              Kesikli çizgiye yakınlık iyi kalibrasyon demektir. 30 saatten az örneği olan kutular gösterilmez. Tatil takvimi ve yük / YEK
+              tahmini gibi dış girdiler henüz modelde yok.
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

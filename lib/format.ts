@@ -45,3 +45,26 @@ function pctSuffix(v: number, ones: string[], tens: string[], zero: string, hund
 }
 export const pctOf = (v: number) => pctSuffix(v, PCT_OF_ONES, PCT_OF_TENS, "ı", "ü");
 export const pctIn = (v: number) => pctSuffix(v, PCT_IN_ONES, PCT_IN_TENS, "ında", "ünde");
+/** Sayıya bulunma eki, yüzde işaretsiz: countIn(20) → "20'sinde", countIn(31) → "31'inde" */
+export const countIn = (v: number) => pctIn(v).slice(1);
+
+/** Yılın okunuşundaki son sözcüğe göre bulunma eki: "da" | "de" | "ta" | "te" */
+function yearSuffix(y: number): string {
+  // bir, iki, üç, dört, beş, altı, yedi, sekiz, dokuz
+  const ones = ["", "de", "de", "te", "te", "te", "da", "de", "de", "da"];
+  // on, yirmi, otuz, kırk, elli, altmış, yetmiş, seksen, doksan
+  const tens = ["", "da", "de", "da", "ta", "de", "ta", "te", "de", "da"];
+  // yüz ve bin: "de"
+  return y % 10 ? ones[y % 10] : y % 100 ? tens[(y % 100) / 10] : "de";
+}
+/** Yılın bulunma eki: "2025'te", "2026'da", "2030'da"; yıl olmayan etikette "… döneminde" */
+export function yearLocative(label: string | number): string {
+  const s = String(label);
+  if (!/^\d{4}$/.test(s)) return `${s} döneminde`;
+  return `${s}'${yearSuffix(Number(s))}`;
+}
+/** Yılın ayrılma eki: "2025'ten", "2026'dan", "2027'den" */
+export function yearAblative(year: number): string {
+  return `${year}'${yearSuffix(year)}n`;
+}
+

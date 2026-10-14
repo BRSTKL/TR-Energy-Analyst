@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { PlantScopePicker } from "@/components/plant-scope-picker";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { BacktestResult, StrategyBacktest } from "@/lib/analysis/backtest";
+import type { DirectionGate } from "@/lib/analysis/direction-backtest";
 
 interface PlantBacktest {
   plantId: string;
@@ -27,6 +28,8 @@ interface BacktestResponse {
   error?: string;
   project: { id: string; name: string };
   trainMonths: number;
+  /** Aşama 14: yön tahminiyle plan ayarı (projenin fiyat profiliyle, KÜPST dahil) */
+  direction?: { gates: Record<"D-1" | "H-2", DirectionGate>; portfolio: BacktestResult | null; plants: PlantBacktest[] };
   scenarios: { project: Scenario; rules2026: Scenario };
 }
 
@@ -63,6 +66,7 @@ export default function BacktestPage() {
   const scenario = data?.scenarios[scenarioKey];
   const selectedPlant = scenario?.plants.find((p) => p.plantId === scope);
   const result = scope === "portfolio" ? scenario?.portfolio : selectedPlant?.result;
+  const directionResult = scope === "portfolio" ? data?.direction?.portfolio : data?.direction?.plants.find((p) => p.plantId === scope)?.result;
 
   const verdict = useMemo(() => {
     if (!result) return null;
@@ -256,6 +260,8 @@ export default function BacktestPage() {
                   </CardContent>
                 </Card>
 
+                {data.direction && <DirectionCard direction={data.direction} result={directionResult ?? null} showParams={scope !== "portfolio"} />}
+
                 <Card className="border-slate-200 bg-slate-50/60 shadow-none">
                   <CardContent className="space-y-1.5 p-4 text-xs leading-relaxed text-slate-600">
                     <p>
@@ -276,5 +282,98 @@ export default function BacktestPage() {
         )}
       </main>
     </div>
+  );
+}
+
+/** Aşama 14: sistem yönü tahmini ve plan ayarı. Ölçümdür, işlem önerisi değildir. */
+function DirectionCard({
+  direction,
+  result,
+  showParams,
+}: {
+  direction: NonNullable<BacktestResponse["direction"]>;
+  result: BacktestResult | null;
+  showParams: boolean;
+}) {
+  const gates = (["D-1", "H-2"] as const).map((k) => ({ key: k, label: k === "D-1" ? "Gün öncesi" : "Gün içi (2 saat önce)", gate: direction.gates[k] }));
+  return (
+    <Card className="shadow-sm">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Sistem yönü tahminiyle plan ayarı</CardTitle>
+        <CardDescription>
+          Önce piyasa: model, sistemin açık verme olasılığını iki basit rakipten (saat bazında geçmiş oran, son bilinen yön) daha iyi
+          tahmin ediyor mu? Geçerse proje: (1) açık bekleniyorsa plan aşağı, fazla bekleniyorsa yukarı (KÜPST dahil); (2) gün içi
+          kalıcılık kuralının kapatma payı, işlemin pahalı tarafı kapatıp kapatmadığına göre ayrı öğrenilir. Karşılaştırma için düz
+          kalıcılık kuralı da listede. Projenin fiyat profiliyle.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <ul className="space-y-1 text-sm">
+          {gates.map(({ key, label, gate }) => (
+            <li key={key} className={gate.passed ? "text-emerald-800" : "text-amber-800"}>
+              <strong>{label}:</strong> {gate.passed ? "piyasa sınamasını geçti. " : "piyasa sınamasını geçemedi; plan ayarı test edilmedi. "}
+              {gate.verdict}
+            </li>
+          ))}
+        </ul>
+        {result && result.strategies.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs uppercase tracking-wider text-slate-500">
+                  <th className="py-2 pr-3">Kural</th>
+                  <th className="py-2 pr-3 text-right">Geriye dönük test</th>
+                  <th className="py-2 pr-3 text-right">Aynı dönem (iyimser)</th>
+                  <th className="py-2 pr-3 text-right">Kazançlı ay</th>
+                  <th className="py-2 pr-3 text-right">En kötü ay</th>
+                  {showParams && <th className="py-2 text-right">Gelecek ay için</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {result.strategies.map((s) => (
+                  <tr key={s.id} className={`border-b align-top last:border-0 ${s.id.startsWith("persistence-") ? "bg-slate-50 text-slate-500" : ""}`}>
+                    <td className="py-3 pr-3">
+                      <div className="font-medium text-slate-900">
+                        {s.label}
+                        {s.id.startsWith("persistence-") && <span className="ml-1 text-xs font-normal text-slate-500">(karşılaştırma)</span>}
+                      </div>
+                      <div className="mt-0.5 max-w-md text-xs text-slate-500">{s.description}</div>
+                    </td>
+                    <td className={`py-3 pr-3 text-right font-semibold ${tone(s.outOfSampleSavingTl)}`}>
+                      {tl(s.outOfSampleSavingTl)}
+                      <div className="text-xs font-normal">{pct(s.outOfSampleSavingPercent)}</div>
+                    </td>
+                    <td className={`py-3 pr-3 text-right ${tone(s.inSampleSavingTl)}`}>
+                      {tl(s.inSampleSavingTl)}
+                      <div className="text-xs">{pct(s.inSampleSavingPercent)}</div>
+                    </td>
+                    <td className="py-3 pr-3 text-right text-slate-700">
+                      {s.positiveMonths} / {s.testMonths}
+                    </td>
+                    <td className={`py-3 pr-3 text-right ${tone(s.worstMonth?.savingTl ?? 0)}`}>
+                      {s.worstMonth ? (
+                        <>
+                          {tl(s.worstMonth.savingTl)}
+                          <div className="text-xs text-slate-500">{monthLabel(s.worstMonth.month)}</div>
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    {showParams && <td className="py-3 text-right font-mono text-xs text-slate-700">{s.nextMonthParams}</td>}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="text-xs leading-relaxed text-slate-500">
+          Bu bir ölçümdür (&quot;yön bilgisi bu kadar değer taşıyordu&quot;), işlem önerisi değildir: KGÜP&apos;ü bilerek saptırmak mevzuat
+          açısından hassastır. Plan ayarında KÜPST santral bazında eklenir (toplayıcı topluluğunda da santral bazında; temkinli); gün içi plan
+          ayarında işlem GİP ağırlıklı ortalama fiyatıyla, hacim sınırı olmadan varsayılır (iyimser). Kalıcılık kuralları (düz ve
+          birleşik) gerçekçi GİP fiyatı ve hacim sınırıyla, KÜPST&apos;süz hesaplanır; ikisi kendi aralarında kıyaslanabilir. Ayrıntı: Metodoloji.
+        </p>
+      </CardContent>
+    </Card>
   );
 }
