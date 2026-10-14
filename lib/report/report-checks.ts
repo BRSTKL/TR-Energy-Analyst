@@ -194,6 +194,17 @@ export function checkReportData(r: PlantReportData, bridge?: BridgeStep[]): Repo
     if (Math.abs(pct - r.outages.sharePct) > 0.2) err("outage-share", `Arıza payı %${r.outages.sharePct.toFixed(1)}, santral bazına oranla %${pct.toFixed(1)}.`);
   }
 
+  // Resmi bildirim karşılaştırması (Aşama 12.4): sayılar blok listesiyle tutarlı, doğrulanan toplamı aşmaz
+  const official = r.outages?.official;
+  if (official) {
+    const events = r.outages.plants.flatMap((o) => o.events);
+    const checked = events.filter((e) => e.official !== undefined).length;
+    const confirmed = events.filter((e) => e.official).length;
+    if (official.checkedBlocks !== checked || official.confirmedBlocks !== confirmed || official.checkedBlocks + official.uncheckedBlocks !== events.length)
+      err("outage-official", `Bildirim karşılaştırması ${official.confirmedBlocks}/${official.checkedBlocks} (+${official.uncheckedBlocks}), bloklardan ${confirmed}/${checked} (${events.length} blok).`);
+    if (official.confirmedCostTl > r.outages.costTl + 1) err("outage-official", `Doğrulanan blokların maliyeti toplam arıza maliyetini aşıyor.`);
+  }
+
   // Sektör kıyası: satırdaki santraller rapordaki santrallerden, portföy ortalaması santral değerlerinin arasında
   if (r.sector) {
     const names = new Set(r.plants.map((p) => p.name));

@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import type { PlantReportData } from "@/lib/report/plant-report";
 import { deviationLoad, monthlyRange } from "@/lib/report/deviation-load";
 import { HYDRO_KIND_LABEL } from "@/lib/sector/benchmark";
+import { officialOutageSentence } from "@/lib/analysis/outage-validation";
 
 /** Sonuç API'sinin `sapma` alanı: Dengesizlik Karnesi ile aynı motordan */
 export interface SapmaSummary {
@@ -161,8 +162,10 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh, plantScoped = false
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
             Olası arıza/kısıntı: {sapma.outages.plants.reduce((a, o) => a + o.events.length, 0)} blok (tahmin kurulu gücün ≥%30&apos;u,
             üretim ≤%2, ≥3 saat), santral bazında (netleşmemiş) dengesizlik riskinin %{sapma.outages.sharePct.toLocaleString("tr-TR", { maximumFractionDigits: 1 })} kadarı
-            {sapma.outages.plants.some((o) => o.events.some((e) => e.concurrent)) && "; bir kısmı birden çok santralde aynı anda (olası kısıntı)"}.
-            Tahmin hatası değil; arıza mı YAT talimatı mı teyit edilmeli.
+            {sapma.outages.plants.some((o) => o.events.some((e) => e.concurrent)) && "; bir kısmı birden çok santralde aynı anda"}.{" "}
+            {sapma.outages.official && sapma.outages.official.checkedBlocks > 0
+              ? `${officialOutageSentence(sapma.outages.official)} Bildirimsiz bloklar işletmeciyle teyit edilmeli.`
+              : "Tahmin hatası değil; arıza mı YAT talimatı mı teyit edilmeli."}
           </p>
         )}
 

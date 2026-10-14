@@ -10,6 +10,7 @@
  */
 
 import type { HourlyResult } from "@/lib/calculations/types";
+import type { NoticeCause } from "@/lib/analysis/outage-validation";
 
 export const OUTAGE_RULE = { minForecastShare: 0.3, maxActualShare: 0.02, minHours: 3 } as const;
 
@@ -22,10 +23,15 @@ export interface OutageEvent {
   lostMwh: number;
   costTl: number;
   /**
-   * Aynı saatlerde projedeki başka bir santralde de blok var: farklı santrallerin aynı anda durması arızadan çok
-   * sistem geneli kısıntıya (YAT) işaret eder. markConcurrent ile doldurulur.
+   * Aynı saatlerde projedeki başka bir santralde de blok var (markConcurrent). Neden hakkında bir şey söylemez: Aşama 12.4
+   * sınamasında resmi bildirimli (gerçek arıza) bloklar da aynı oranda eşzamanlıydı (yangın, şebeke kesintisi gibi ortak olaylar).
    */
   concurrent?: boolean;
+  /**
+   * EPİAŞ arıza / bakım bildirimiyle karşılaştırma (annotateOutages): nesne = aynı santralin örtüşen bildirimi var
+   * (en çok örtüşenin neden sınıfı); null = bildirim verisi bloğu kapsıyor ama bildirim yok; yok = karşılaştırılmadı.
+   */
+  official?: { cause: NoticeCause; noticeId: number } | null;
 }
 
 export interface PlantOutages {
@@ -76,7 +82,7 @@ export function detectOutages(plantName: string, hourly: HourlyResult[], capacit
   return { plantName, events, hours, costTl, costSharePct: totalCost > 0 ? (costTl / totalCost) * 100 : 0 };
 }
 
-/** Birden çok santralde aynı saatlere düşen blokları işaretler (olası kısıntı); diğerleri olası arızadır */
+/** Birden çok santralde aynı saatlere düşen blokları işaretler (yalnız sayım; neden hakkında yorum değil, bkz. concurrent) */
 export function markConcurrent(results: PlantOutages[]): PlantOutages[] {
   const hoursOf = (e: OutageEvent) => {
     const out: number[] = [];

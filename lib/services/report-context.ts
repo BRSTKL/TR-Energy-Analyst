@@ -11,6 +11,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { companyPlantIdsFromCache, listUevmPowerPlants } from "@/lib/services/epias-plants";
 import { loadSectorBenchmark } from "@/lib/services/sector";
+import { loadOutageNotices } from "@/lib/services/outage-notices";
 import { SECTOR_TECHS, distribution, sectorPeriodLabel, type HydroKind } from "@/lib/sector/benchmark";
 import type { ReportContext } from "@/lib/report/plant-report";
 
@@ -47,6 +48,8 @@ export async function buildReportContext(plants: ReportPlantMeta[], year: number
   context.sector = await loadSectorContext(year);
   context.aggregatorBenchmark = loadAggregatorBenchmark(year);
   context.sectorBacktest = loadSectorBacktest(year);
+  // Olası arıza bloklarını doğrulamak için EPİAŞ bildirimleri (havuz yoksa null; hata raporu durdurmaz)
+  context.outageNotices = await loadOutageNotices(plants.map((p) => p.epiasPlantId)).catch(() => null);
 
   const byOrg = await companyPlantIdsFromCache(year);
   if (!byOrg) return { context, check };

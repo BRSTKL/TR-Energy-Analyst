@@ -33,6 +33,7 @@ import { brandWord } from "@/lib/projects/aggregator";
 import { COST_FACTORS } from "@/lib/analysis/cost-change";
 import type { ReportCostChange } from "@/lib/services/cost-change";
 import type { ProjectCandidates } from "@/lib/services/candidates";
+import { officialOutageSentence } from "@/lib/analysis/outage-validation";
 
 /** "Önerilen sonraki adım" (görüşme · doğrulama · pilot) slaytı; tekrar açmak için true yapın. */
 const INCLUDE_NEXT_STEP_SLIDE = false;
@@ -1483,9 +1484,11 @@ export async function exportPlantReportPptx(
         s,
         `Olası arıza/kısıntı: ${ev.length} blok, ${nf(ev.reduce((a, e) => a + e.hours, 0), 0)} saat (tahmin kurulu gücün ≥%30'u, üretim ≤%2, ≥3 saat), ` +
           `santral bazında (netleşmemiş) dengesizlik riskinin %${nf(r.outages.sharePct, 1)} kadarı` +
-          (concurrent ? `; ${concurrent} blok birden çok santralde aynı anda (olası kısıntı).` : ".") +
-          " Tahmin hatası değil; arıza mı YAT talimatı mı teyit edilmeli.",
-        { x: M, y: 6.6, w: CW, h: 0.4, fontSize: 9, color: C.sub, valign: "top" }
+          (concurrent ? `; ${concurrent} blok birden çok santralde aynı anda.` : ".") +
+          (r.outages.official && r.outages.official.checkedBlocks > 0
+            ? ` ${officialOutageSentence(r.outages.official)} Bildirimsiz bloklar işletmeciyle teyit edilmeli.`
+            : " Tahmin hatası değil; arıza mı YAT talimatı mı teyit edilmeli."),
+        { x: M, y: 6.6, w: CW, h: 0.4, fontSize: 9, color: C.sub, valign: "top", fit: "shrink" }
       );
     }
   }

@@ -21,6 +21,7 @@ import { isUnlicensedName } from "@/lib/analysis/candidate-access";
 import { premiumRange, type CandidateBacktestStats, type PremiumBacktestStats, type SectorBacktest } from "@/lib/analysis/sector-backtest";
 import { describeAggregatorScope } from "@/lib/projects/aggregator";
 import { detectOutages, markConcurrent, type PlantOutages } from "@/lib/analysis/outage-detection";
+import { annotateOutages, summarizeOfficial, type OfficialOutageSummary, type OutageNoticeContext } from "@/lib/analysis/outage-validation";
 import { analyzeDsgScenario, MAX_EXACT_PLANTS } from "@/lib/analysis/dsg-scenarios";
 import { combineBacktests, MIN_FEASIBLE_LAG_HOURS, persistenceStrategy, runBacktest } from "@/lib/analysis/backtest";
 import { KUPST_REGIMES, kupstCommunityHours, kupstCommunityTotal, kupstForHour, kupstTotal } from "@/lib/calculations/kupst";
@@ -126,6 +127,8 @@ export interface ReportContext {
   };
   /** Geçmişle sınama (scripts/sector-backtest.mts; Aşama 12.2–12.3): toYear veri yılıyla eşleşirse kullanılır */
   sectorBacktest?: SectorBacktest;
+  /** EPİAŞ arıza / bakım bildirimleri (lib/services/outage-notices; Aşama 12.4): olası arıza bloklarını doğrulamak için */
+  outageNotices?: OutageNoticeContext | null;
   /** Toplayıcılar arası kıyas (scripts/aggregator-benchmark.mts; PLAN 8.7) */
   aggregatorBenchmark?: {
     year: number;
@@ -340,9 +343,15 @@ export interface PlantReportData {
   lateStarts: LateStart[];
   /**
    * Olası arıza / kısıntı: tahmin yüksekken üretimin ~0 olduğu ≥3 saatlik bloklar (yalnızca bloğu olan santraller).
-   * concurrent blok birden çok santralde aynı anda: olası kısıntı (YAT); diğerleri olası arıza. Maliyet santral bazında.
+   * concurrent blok birden çok santralde aynı anda (yalnız sayım, neden yorumu değil). Maliyet santral bazında.
    */
-  outages: { plants: PlantOutages[]; costTl: number; sharePct: number };
+  outages: {
+    plants: PlantOutages[];
+    costTl: number;
+    sharePct: number;
+    /** Resmi bildirimlerle karşılaştırma; bildirim verisi yoksa null */
+    official: OfficialOutageSummary | null;
+  };
   /**
    * Profil (şekil) göstergesi: baz PTF = dönemin saatlik PTF ortalaması; yakalanan fiyat = üretim ağırlıklı PTF.
    * captureRatePct < 100 ise santraller fiyatın düşük olduğu saatlerde daha çok üretir (profil maliyeti).
@@ -744,9 +753,23 @@ export function buildPlantReport(
   const marketProfile = { baseloadPtfTl: baseloadPtf, capturePriceTl: capturePrice, captureRatePct: pct(capturePrice, baseloadPtf) };
 
   // Olası arıza / kısıntı blokları (santral bazında)
-  const outagePlants = markConcurrent(withData.map((p) => detectOutages(p.plantName, p.hourly, p.capacityMw))).filter((o) => o.events.length > 0);
+  // Bildirim verisi varsa her blok aynı santralin EPİAŞ arıza / bakım bildirimleriyle karşılaştırılır (Aşama 12.4);
+  // UEVÇB'leri bilinmeyen santralin blokları karşılaştırılmaz
+  const notices = context.outageNotices ?? null;
+  const outagePlants = markConcurrent(withData.map((p) => detectOutages(p.plantName, p.hourly, p.capacityMw)))
+    .map((o, i) => {
+      const id = withData[i].epiasPlantId;
+      const list = notices && id !== null ? notices.byPlant.get(id) : undefined;
+      return list ? { ...o, events: annotateOutages(o.events, list, notices!.coveredFrom, notices!.coveredTo) } : o;
+    })
+    .filter((o) => o.events.length > 0);
   const outageCost = outagePlants.reduce((sum, o) => sum + o.costTl, 0);
-  const outages = { plants: outagePlants, costTl: outageCost, sharePct: pct(outageCost, plantLevelCost) };
+  const outages = {
+    plants: outagePlants,
+    costTl: outageCost,
+    sharePct: pct(outageCost, plantLevelCost),
+    official: notices ? summarizeOfficial(outagePlants.flatMap((o) => o.events), notices.coverage) : null,
+  };
 
   // Adil pay (Shapley): üyeler toplayıcıda sahipler, tek şirkette santraller, birden çok şirkette şirketler
   let fairShare: PlantReportData["fairShare"] = null;

@@ -530,8 +530,8 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
                 ],
                 [
                   "Arıza tespiti",
-                  "EPİAŞ piyasa mesaj sistemindeki arıza / bakım bildirimleri",
-                  "Sınanamadı: EPİAŞ bu servisin bütün API metotlarını kapattı (ERR-006, Ekim 2026). Arıza blokları yalnız uyarıdır, hesaptan çıkarılmaz.",
+                  "EPİAŞ arıza / bakım bildirimleriyle (66.302 bildirim, Ocak 2024 – Ekim 2026) aynı santralin aynı saatleri: 934 havuz santrali (RES / GES / HES), 13.275 işaretli blok (scripts/outage-validation.mts)",
+                  "Yakalama iyi: resmi tam duruşların %64'ünde santral planını önceden düşürmüş (dengesizlik yok, işaretlenmemesi doğru); planı düşürülmeyenlerin %67'si işaretlendi (GES %88, RES ve HES %66). İsabet düşük: işaretli blokların %6'sı (kayıp MWh'ın %11'i; RES %15) bir bildirimle örtüşüyor. Kalanı bildirimsiz: yük atma talimatı (santral bazında yayımlanmaz), bildirilmeyen arıza, fiyat kaynaklı duruş ya da veri sorunu olabilir; aynı saatte başka santrallerde de blok olması ayırt etmiyor (bildirimli bloklarda da %88). Bu yüzden bloklar 'olası arıza / kısıntı' olarak kalır, nedeni işletmeciyle teyit edilmelidir; hesaptan çıkarılmaz. Raporda ve sonuç sayfasında her bloğun bildirimle doğrulanıp doğrulanmadığı ve doğrulananların neden sınıfı yazılır (gerekçe metni yazılmaz).",
                 ],
               ]}
             />
@@ -590,8 +590,9 @@ Endeks = portföy tek denge / beklenen maliyet            (1'in altı daha iyi)`
             </p>
             <p>
               <b>Olası arıza / kısıntı:</b> plan kurulu gücün en az %30&apos;u, gerçekleşen en fazla %2&apos;si olan ve en az 3 saat süren
-              bloklar işaretlenir. Aynı saatlerde birden çok santralde görülen bloklar sistem geneli kısıntıya (yük atma talimatı, YAT)
-              işaret eder. Bu saatler tahmin hatası olmayabilir; nedeni işletmeciyle teyit edilmelidir. <Tag kind="estimate" />
+              bloklar işaretlenir. Aynı saatlerde birden çok santralde görülen bloklar sayılır, ama bu bir neden göstergesi değildir: resmi
+              bildirimli gerçek arızalar da aynı oranda eşzamanlı (yangın, şebeke kesintisi gibi ortak olaylar; bkz. Geçmişle sınama). Bu saatler
+              tahmin hatası olmayabilir; nedeni işletmeciyle teyit edilmelidir. <Tag kind="estimate" />
             </p>
             <p>
               <b>İşaret kuralı:</b> plan fazlası = (Σ plan − Σ gerçekleşen) / Σ gerçekleşen. Pozitifse plan fazla (santral eksik üretti).

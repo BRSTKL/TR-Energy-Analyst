@@ -27,7 +27,7 @@ describe("Olası arıza / kısıntı tespiti", () => {
     expect(detectOutages("X", [], 10).events).toHaveLength(0);
   });
 
-  it("iki santralde aynı saatlere düşen blok olası kısıntı, tek santraldeki olası arıza sayılır", () => {
+  it("iki santralde aynı saatlere düşen blok eşzamanlı işaretlenir, tek santraldeki işaretlenmez", () => {
     const a = detectOutages("A", [h(1, 9, 0), h(2, 9, 0), h(3, 9, 0)], 10);
     const b = detectOutages("B", [h(3, 9, 0), h(4, 9, 0), h(5, 9, 0)], 10);
     const c = detectOutages("C", [h(8, 9, 0), h(9, 9, 0), h(10, 9, 0)], 10);
