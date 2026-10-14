@@ -118,3 +118,12 @@ describe("Aday santral taraması", () => {
     for (let i = 1; i < bigOnes.length; i++) expect(bigOnes[i - 1].gainPerMwhTl).toBeGreaterThanOrEqual(bigOnes[i].gainPerMwhTl);
   });
 });
+
+describe("Adayın üretim ağırlıklı PTF'si (16.1)", () => {
+  it("portföy saatlerindeki PTF, adayın üretimiyle ağırlıklı", () => {
+    const r = screenCandidates([member("A", [3, -2, 4, -1, 2, -3])], [candidate("opp2", [-3, 2, -4, 1, -2, 3])], P);
+    // Üretim 7, 12, 6, 11, 8, 13 MWh; PTF 2000, 2050, 2100, 2150, 2200, 2000
+    const value = 7 * 2000 + 12 * 2050 + 6 * 2100 + 11 * 2150 + 8 * 2200 + 13 * 2000;
+    expect(r.candidates[0].capturePtfTl).toBeCloseTo(value / 57, 9);
+  });
+});

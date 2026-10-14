@@ -317,6 +317,44 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 - [ ] **Kabul.** Kullanıcı ekranları kontrol eder (/market kartı; Gain geriye dönük test kartı). Durum: 419 test, 56 rapor 0 hata, lint ve tsc temiz; iki ekran yerelde açıldı ve metinleri okundu.
 - **Sıradaki olası adımlar (karar bekliyor):** 14.0 dış girdileri (arıza bildirimi, yük tahmini); kalibrasyonun düzeltilmesi; birleşik kuralda parametre sayısını azaltmak (ör. yalnız uyumsuz işlemlerde α'yı kısmak) ve daha uzun test dönemi (2025 projeleri).
 
+### Aşama 16: Toplayıcı sözleşme fiyat aracı ▶ · karar 14.10.2026
+**Amaç:** Adil prim hesabını teklif fiyatına çevirmek. Aday santral için: "Dengesizlik hizmet bedeli olarak X TL/MWh ya da PTF'nin %Y'si teklif et; kötü senaryoda marj şu; santralin tek başına kalma alternatifi bu." Ticaret masasının her hafta yaptığı iş; görüşmede "bu santrale ne teklif edersin?" sorusunun cevabı.
+**Kural:** Yeni sayfa ve yeni veri kaynağı yok. Var olan aday taraması (4.2), adil prim (Shapley), risk primi aralığı (12.2) ve reel birimler kullanılır. Rapora yeni slayt eklenmez.
+
+**Fiyatın üç çizgisi (santral başına, TL/MWh):**
+- **Taban (toplayıcının maliyeti):** adil prim = (Shapley payı + KÜPST) / üretim. Bunun altında toplayıcı zarar eder.
+- **Tavan (santralin alternatifi):** tek başına maliyet = (kendi dengesizliği + KÜPST) / üretim. Santral bundan pahalı bir teklifi kabul etmez; bağımsız kalır.
+- **Öneri:** taban + marj, tavanı aşmayacak şekilde. Tavan − taban = pazarlık alanı (netleşmenin yarattığı değer). Marj varsayılanı karar noktası.
+
+**Adımlar:**
+- [x] **16.1 Saf hesap.** ✅ 14.10.2026. `lib/analysis/contract-pricing.ts` (`priceContract`): taban, tavan, pazarlık alanı, öneri (taban + %50 × alan), marj, PTF'ye oran; pazarlık alanı yoksa öneri yok ve nedeni; taban negatifse öneri 0'a çekilir ve işaretlenir. Aday taramasına adayın üretim ağırlıklı PTF'si eklendi (`capturePtfTl`). 6 test (elle hesaplanmış örnek, sınırlar). 451 test, 56 rapor 0 hata.
+  - Taslaktan sapma: kötü senaryo 12.2'deki gerçek / tahmin oranının **P90**'ı ile (p75 yerine; müdür değerlendirmesindeki "P90" ile aynı). "P90 ayı" çıkarıldı: adil prim ay ay hesaplanmıyor (Shapley tüm dönem için). Reel / USD karşılığı 16.3'te (birim dönüştürücü servis katmanında).
+- [x] **16.2 Sabit TL mi, PTF yüzdesi mi? Geçmişle sınama.** ✅ 14.10.2026. `contractFormBacktest` (`lib/analysis/contract-pricing.ts`, 2 test); `scripts/sector-backtest.mts` iki yılın üretim ağırlıklı PTF'sini de toplar, sonuç `.cache/epias/sector-backtest-2026.json` → `contractForms` (önceki alanlar birebir aynı; EPİAŞ'a gidilmedi, 13 sn). Bedel 2025 verisiyle (2026 kuralları) = tahmini maliyet × (1 + kâr payı); 2026'da sabit TL olarak ya da aynı PTF yüzdesi olarak uygulanır. Karşılama = bedel / 2026 gerçek maliyet. 858 santral (Oca–Ağu):
+
+  | | Karşılama medyanı (%50 aralık) | Zarar eden santral: kâr payı %0 / %50 / %100 |
+  |---|---|---|
+  | Sabit TL | 0,73 (0,59–0,90) | %82 / %36 / %15 |
+  | PTF yüzdesi | 0,55 (0,44–0,67) | %93 / %74 / %37 |
+
+  Teknolojiye göre sabit TL / PTF yüzdesi, kâr payı %50'de zarar eden: rüzgâr %24 / %75, hidro %41 / %71, güneş %63 / %100.
+  - **Neden:** maliyet arttı (×1,36, makas) ama santrallerin üretim ağırlıklı PTF'si nominal düştü (medyan ×0,75; güneş ×0,60). PTF'ye bağlı bedel, maliyet artarken azaldı. Sabit TL de tek başına yetmedi: 2025 maliyetine %50 eklenen bedel santrallerin üçte birinde zarar ettirdi.
+  - **Araca etkisi:** öneri sabit TL/MWh olarak verilir, PTF yüzdesi yalnız bilgi olarak gösterilir; kötü senaryo (P90 oranı, rüzgâr 1,63, hidro 2,94, güneş 2,14) teklif kutusunda ana uyarıdır.
+  - **Sınır:** tek yıl (2025 → 2026); PTF'nin yükseldiği bir yılda PTF yüzdesi koruyucu olabilirdi. Santral bazında (tek başına maliyet); portföyde netleşme maliyeti düşürür, biçimlerin göreli sırası değişmez.
+- [ ] **16.3 Ekran.** Aday sayfasında, adil primi hesaplanan ilk N aday için satır açılınca "Teklif" kutusu: üç çizgi, iki biçim, kötü senaryo marjı, marj ayarı, reel / USD karşılığı. API: mevcut `/api/projects/[id]/candidates` yanıtına alan eklenir.
+- [ ] **16.4 Metin ve denetim.** Metodoloji bölümü (tanımlar, varsayımlar, sınırlar); `report-checks` kuralı: taban ≤ öneri ≤ tavan, oran ve birim tutarlılığı. Rapor: büyüme slaytındaki ilk 5 hedef tablosuna "önerilen bedel" sütunu yalnız karar noktası 3 onaylanırsa.
+- [ ] **Kabul.** Gain 2026 ilk 10 aday: her biri için üç çizgi; bir aday bağımsız betikle elle yeniden hesaplanır (fark < 0,1 TL/MWh). `npm test`, `npm run check:reports` 0 hata.
+
+**Sınırlar (metodolojide açıkça yazılır):**
+- Rakiplerin teklif fiyatı açık veride yok. Gösterilebilen yalnız rakip toplayıcıların MWh başına netleşmiş **maliyeti** (9.1 kıyası); bu, rakip fiyatının alt sınırıdır, fiyatın kendisi değil.
+- Toplayıcının işletme gideri (personel, yazılım, teminat) ve GİP işlem kâr/zararı fiyata dahil değil; marjın içinde sayılır.
+- Santralin bağımsız kalma maliyetine kendi ticaret ekibinin gideri eklenmez; tavan bu yüzden ihtiyatlıdır (gerçek tavan daha yüksek).
+- Ölçümdür, işlem önerisi değil.
+
+**Kararlar (14.10.2026, kullanıcı onayı):**
+1. Marj varsayılanı: pazarlık alanının %50'si.
+2. KÜPST toplayıcıda (topluluk KÜPST'ü md. 4): taban ve tavan KÜPST dahil.
+3. Rapora sütun şimdilik yok.
+
 ---
 
 ## 3. Karar noktaları (sizin onayınız gerekiyor)

@@ -1,5 +1,5 @@
 /**
- * Geçmişle sınama (Aşama 12.2, 12.3): sektör karnesindeki santrallerin 2025 ve 2026 Ocak–Ağustos verisi.
+ * Geçmişle sınama (Aşama 12.2, 12.3, 16.2): sektör karnesindeki santrallerin 2025 ve 2026 Ocak–Ağustos verisi.
  *
  *   npx tsx --tsconfig tsconfig.json scripts/sector-backtest.mts [geçmiş=2025] [hedef=2026] [sonAy=08]
  *
@@ -16,6 +16,7 @@ import { prisma } from "@/lib/prisma";
 import { processHourlyRecord } from "@/lib/calculations/engine";
 import { DEFAULT_IMBALANCE_PROFILE, REGULATORY_IMBALANCE_REGIMES, type ImbalancePricingProfile, type MarketPriceRecord, type SystemDirection } from "@/lib/calculations/types";
 import { KUPST_REGIMES, kupstForHour } from "@/lib/calculations/kupst";
+import { CONTRACT_MARKUPS, contractFormBacktest, type ContractFormPlant } from "@/lib/analysis/contract-pricing";
 import { candidateBacktest, improvementBacktest, premiumBacktest, type PlantBacktestInput, type SectorBacktest } from "@/lib/analysis/sector-backtest";
 import { loadBenchmarkPlants, loadBenchmarkPrices } from "@/lib/services/aggregator-data";
 import type { BenchmarkHourPrice, BenchmarkPlant } from "@/lib/analysis/aggregator-benchmark";
@@ -63,6 +64,7 @@ function readHourly(y: number, id: number): { forecast: (number | null)[]; actua
 const [mFrom, mTo] = await Promise.all([market(fromYear), market(toYear)]);
 const toRows = new Map(readSector(toYear).plants.map((p) => [p.epiasPlantId, p]));
 const inputs: PlantBacktestInput[] = [];
+const contractPlants: ContractFormPlant[] = [];
 let skipped = 0;
 
 for (const p of readSector(fromYear).plants) {
@@ -80,6 +82,8 @@ for (const p of readSector(fromYear).plants) {
   let mwhB = 0;
   let absA = 0;
   let absB = 0;
+  let ptfA = 0;
+  let ptfB = 0;
   for (let i = 0; i < N; i++) {
     const fa = a.forecast[i];
     const aa = a.actual[i];
@@ -89,6 +93,7 @@ for (const p of readSector(fromYear).plants) {
       const h = processHourlyRecord({ timestamp: ma.timestamp, forecastMwh: fa, actualMwh: aa }, { ...ma, imbalancePosPrice: null, imbalanceNegPrice: null }, COEF_2026);
       predicted += h.imbalanceCost + kupstForHour(h, p.type, latestKupst);
       mwhA += aa;
+      ptfA += aa * ma.ptf;
       absA += Math.abs(aa - fa);
       // Fiyat etkisi: aynı sapma, hedef yılın aynı takvim saatinin fiyatıyla
       if (mb) {
@@ -102,6 +107,7 @@ for (const p of readSector(fromYear).plants) {
       const h = processHourlyRecord({ timestamp: mb.timestamp, forecastMwh: fb, actualMwh: ab }, mb, DEFAULT_IMBALANCE_PROFILE);
       actual += h.imbalanceCost + kupstForHour(h, p.type, latestKupst);
       mwhB += ab;
+      ptfB += ab * mb.ptf;
       absB += Math.abs(ab - fb);
     }
   }
@@ -118,6 +124,13 @@ for (const p of readSector(fromYear).plants) {
     wape2025: (absA / mwhA) * 100,
     wape2026: (absB / mwhB) * 100,
     unit2025TlPerMwh: p.unitImbalanceTl,
+  });
+  contractPlants.push({
+    type: p.type,
+    predictedTlPerMwh: predicted / mwhA,
+    actualTlPerMwh: actual / mwhB,
+    capturePtfFrom: ptfA / mwhA,
+    capturePtfTo: ptfB / mwhB,
   });
 }
 
@@ -174,13 +187,14 @@ async function candidates() {
 }
 
 const months = `Ocak–${["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"][lastMonth - 1]}`;
-const out: SectorBacktest & { generatedAt: string; plants: number; skipped: number } = {
+const out: SectorBacktest & { contractForms: ReturnType<typeof contractFormBacktest>; generatedAt: string; plants: number; skipped: number } = {
   fromYear,
   toYear,
   months,
   premium: premiumBacktest(inputs),
   improvement: improvementBacktest(inputs),
   candidates: await candidates(),
+  contractForms: contractFormBacktest(contractPlants),
   generatedAt: new Date().toISOString(),
   plants: inputs.length,
   skipped,
@@ -204,4 +218,12 @@ if (c)
   console.log(
     `\nAday taraması (santralin toplayıcıya katkısı, TL/MWh): ${c.n} santral, ${c.aggregators} toplayıcı · gerçek / tahmin medyanı ${f(c.ratio.p50)} (%50 aralık ${f(c.ratio.p25)}–${f(c.ratio.p75)}) · sıra korelasyonu ${f(c.spearman)} · tahminde en iyi çeyrekteki santrallerin %${f(c.topQuartileHitPct, 0)}'i gerçekte en iyi yarıda`
   );
+console.log("\nSözleşme biçimi (16.2): bedel 2025 verisiyle, 2026'da uygulanır; karşılama = bedel / gerçek maliyet (kâr payı 0)");
+for (const [t, s] of Object.entries(out.contractForms)) {
+  const line = (name: string, x: (typeof s.forms)["fixed"]) =>
+    `    ${name.padEnd(12)} karşılama medyan ${f(x.cover.p50)} (%50 aralık ${f(x.cover.p25)}–${f(x.cover.p75)}, P10 ${f(x.cover.p10)})  zarar eden: ${CONTRACT_MARKUPS.map((m) => `kâr payı %${m * 100} → %${f(x.lossSharePct[String(m)], 0)}`).join(", ")}`;
+  console.log(`  ${t.padEnd(4)} n=${String(s.n).padStart(4)}  PTF değişimi medyan ×${f(s.ptfChangeMedian)}`);
+  console.log(line("sabit TL", s.forms.fixed));
+  console.log(line("PTF yüzdesi", s.forms.ptfShare));
+}
 await prisma.$disconnect();

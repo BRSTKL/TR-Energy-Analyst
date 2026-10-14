@@ -80,6 +80,8 @@ export interface CandidateResult {
   gainPct: number;
   /** Kazanç, adayın üretilen MWh'ı başına */
   gainPerMwhTl: number;
+  /** Adayın üretim ağırlıklı PTF'si (portföy saatlerinde), TL/MWh; üretim yoksa null */
+  capturePtfTl: number | null;
   /** Adayın sapmasının portföyünkünün tersine olduğu saatlerin payı (ikisi de sıfırdan farklıyken, %) */
   offsettingPct: number;
   /** İlk N adayda: adil pay (Shapley) ve MWh başına adil prim; diğerlerinde null */
@@ -149,11 +151,13 @@ export function screenCandidates(
     let gain = 0;
     let both = 0;
     let offsetting = 0;
+    let ptfValue = 0;
     for (const r of c.rows) {
       const k = index.get(new Date(r.timestamp).getTime());
       if (k === undefined) continue;
       hours++;
       actual += r.actualMwh;
+      ptfValue += r.actualMwh * samples[k].ptf;
       const d = r.actualMwh - r.forecastMwh;
       const own = cost(d, k);
       standalone += own;
@@ -183,6 +187,7 @@ export function screenCandidates(
       gainTl: gain,
       gainPct: standalone > 0 ? (gain / standalone) * 100 : 0,
       gainPerMwhTl: actual > 0 ? gain / actual : 0,
+      capturePtfTl: actual > 0 ? ptfValue / actual : null,
       offsettingPct: both > 0 ? (offsetting / both) * 100 : 0,
       fair: null,
       _cand: c,
