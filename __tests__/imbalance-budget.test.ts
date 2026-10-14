@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hourCost, imbalanceBudget, realSpreadByYear, type BudgetHour, type BudgetScenario } from "@/lib/analysis/imbalance-budget";
+import { hourCost, imbalanceBudget, realSpreadByYear, runRateProduction, type BudgetHour, type BudgetScenario } from "@/lib/analysis/imbalance-budget";
 
 const FLAT_3 = { positiveSurplusCoef: 0.97, positiveOtherCoef: 0.97, negativeDeficitCoef: 1.03, negativeOtherCoef: 1.03, floors: false };
 const RULE_2026 = { positiveSurplusCoef: 0.94, positiveOtherCoef: 0.97, negativeDeficitCoef: 1.06, negativeOtherCoef: 1.03, floors: true };
@@ -85,5 +85,36 @@ describe("Bütçe: aylık benzetim (17.1)", () => {
   it("yıllara göre reel makas", () => {
     const r = realSpreadByYear([hour(Date.UTC(2025, 0, 1)), hour(Date.UTC(2025, 5, 1), { smf: 1400 }), hour(Date.UTC(2026, 0, 1), { smf: 900 })], () => 2);
     expect(r).toEqual({ "2025": 600, "2026": 200 });
+  });
+});
+
+describe("Bütçe: birim maliyet × üretim (17.5)", () => {
+  const monthly = () => Array.from({ length: 12 }, (_, m) => hour(Date.UTC(2025, m, 1, 12)));
+
+  it("üretim verilirse bütçe = birim maliyet × üretim; verilmeyen ay geçmiş günlerle", () => {
+    // Gün: 3880 TL, 100 MWh → 38,8 TL/MWh; Ocak üretimi 5.000 MWh → 194.000 TL; Şubat verilmedi → 28 × 3880
+    const r = imbalanceBudget(monthly(), scenario({ growth: 0.1 }), { year: 2027, priceScale: one, sims: 20, production: { "01": 5000 } });
+    const [jan, feb] = r.months;
+    expect(jan.unit.expected).toBeCloseTo(38.8, 9);
+    expect(jan.unit.p95).toBeCloseTo(38.8, 9);
+    expect(jan.mwh).toBeCloseTo(5500, 9);
+    expect(jan.expected).toBeCloseTo(38.8 * 5500, 6);
+    expect(jan.p90).toBeCloseTo(38.8 * 5500, 6);
+    expect(feb.expected).toBeCloseTo(28 * 3880 * 1.1, 6);
+    expect(feb.mwh).toBeCloseTo(28 * 100 * 1.1, 6);
+  });
+
+  it("yeni santral emsallerin mevsim profiliyle tam yıla tamamlanır", () => {
+    // Emsal GES: 10, 20, 30, 40. Yeni GES 3. aydan: –, –, 15, 20 → ölçek 35 / 70 = 0,5 → 5, 10 eklenir
+    const r = runRateProduction(
+      [
+        { key: "a", type: "GES", mwh: [10, 20, 30, 40] },
+        { key: "new", type: "GES", mwh: [null, 0, 15, 20] },
+        { key: "hes", type: "HES", mwh: [null, null, 5, 5] }, // emsali yok: doldurulmaz
+      ],
+      4
+    );
+    expect(r.total).toEqual([15, 30, 50, 65]);
+    expect(r.filled).toEqual([{ key: "new", addedMwh: 15 }]);
   });
 });

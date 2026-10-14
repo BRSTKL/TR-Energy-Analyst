@@ -16,7 +16,7 @@ import { DEFAULT_IMBALANCE_PROFILE, type HourlyResult, type MarketPriceRecord, t
 import { KUPST_REGIMES, kupstCommunityHours, kupstForHour } from "@/lib/calculations/kupst";
 import { AGGREGATOR_ORG_ID } from "@/lib/projects/aggregator";
 import { readPoolYearCached } from "@/lib/pool/pool-store";
-import type { BudgetHour } from "@/lib/analysis/imbalance-budget";
+import type { BudgetHour, PlantMonths } from "@/lib/analysis/imbalance-budget";
 import type { ProjectHourly } from "@/lib/services/project-hourly";
 
 const HOUR = 3_600_000;
@@ -120,4 +120,24 @@ export async function loadBudgetHours(
   used = usedIds.size;
   out.sort((a, b) => a.t - b.t);
   return { hours: out, plantsUsed: used, plantsSkipped: skipped, hoursByYear };
+}
+
+/** Santrallerin aylık üretimi (havuz UEVM; bütçe saatleriyle aynı: ilk planı olan saatler); runRateProduction girdisi */
+export async function plantMonths(plants: ProjectHourly["plants"], year: number, untilMonth = 12): Promise<PlantMonths[]> {
+  const out: PlantMonths[] = [];
+  for (const p of plants) {
+    const doc = p.epiasPlantId !== null ? await readPoolYearCached(p.epiasPlantId, year) : null;
+    if (!doc) continue;
+    const start = Date.parse(doc.start);
+    const mwh: Array<number | null> = new Array(untilMonth).fill(null);
+    for (let i = 0; i < doc.uevm.length; i++) {
+      const m = new Date(start + i * HOUR).getUTCMonth();
+      if (m >= untilMonth) break;
+      const u = doc.uevm[i];
+      if (u === null || doc.kgupFirst[i] === null) continue;
+      mwh[m] = (mwh[m] ?? 0) + u;
+    }
+    out.push({ key: p.plantId, type: p.plantType, mwh });
+  }
+  return out;
 }

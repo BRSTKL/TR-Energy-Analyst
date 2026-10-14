@@ -20,6 +20,9 @@
  * - KÜPST: saatin KÜPST miktarı (fazla sapma × oran, MWh) × max(PTF, SMF'); miktar mevzuat fonksiyonlarıyla dışarıda
  *   hesaplanır (santral ya da topluluk bazında).
  * - Büyüme: tutarlar (1 + g) ile çarpılır; birim maliyet değişmez.
+ * - Üretim (17.5): verilirse bütçe = MWh başına maliyet × üretim. Birim maliyet aynı benzetimden (çekilen günlerin
+ *   maliyeti / üretimi); üretim ayrıca tahmin edilir (yeni santral tam yıl, hidro senaryosu). Geçmişle sınamada
+ *   ıskalamaların çoğu üretimden geldi (2025 kurak: aynı hidro santraller 2026'da ×1,41), MWh başına maliyet kararlıydı.
  * SAF: I/O yok.
  */
 
@@ -61,11 +64,13 @@ export interface BudgetStat {
 export interface BudgetMonth extends BudgetStat {
   /** "MM" */
   month: string;
+  /** MWh başına maliyet (reel TL/MWh) dağılımı */
+  unit: BudgetStat;
   /** Hedef yılın bu ayındaki gün sayısı */
   days: number;
   /** Örneklenen günlerin kaynağı: yıl → gün sayısı */
   sourceDays: Record<string, number>;
-  /** Beklenen üretim (MWh) */
+  /** Bütçedeki üretim (MWh): verilen üretim ya da geçmiş günlerin ortalaması */
   mwh: number;
 }
 
@@ -86,6 +91,8 @@ export interface BudgetOptions {
   priceScale: (t: number) => number;
   sims?: number;
   seed?: number;
+  /** Ay ("MM") → üretim (MWh). Verilirse bütçe = birim maliyet × üretim; verilmeyen ay geçmiş günlerin üretimiyle */
+  production?: Record<string, number>;
 }
 
 const DAY = 86_400_000;
@@ -176,18 +183,36 @@ export function imbalanceBudget(hours: BudgetHour[], scenario: BudgetScenario, o
     }
     const meanCost = pool.reduce((a, d) => a + d.cost, 0) / pool.length;
     const meanMwh = pool.reduce((a, d) => a + d.mwh, 0) / pool.length;
+    const prod = opts.production?.[mm];
+    const mwh = (prod ?? meanMwh * n) * growth;
     const vals = new Array<number>(sims);
+    const units = new Array<number>(sims);
     for (let s = 0; s < sims; s++) {
       let c = 0;
-      for (let i = 0; i < n; i++) c += pool[Math.floor(rand() * pool.length)].cost;
-      vals[s] = c * growth;
+      let w = 0;
+      for (let i = 0; i < n; i++) {
+        const d = pool[Math.floor(rand() * pool.length)];
+        c += d.cost;
+        w += d.mwh;
+      }
+      units[s] = w > 0 ? c / w : 0;
+      vals[s] = prod === undefined ? c * growth : units[s] * mwh;
       yearSims[s] += vals[s];
     }
+    const meanUnit = meanMwh > 0 ? meanCost / meanMwh : 0;
     const st = stat(vals);
     const sourceDays: Record<string, number> = {};
     for (const d of pool) sourceDays[d.year] = (sourceDays[d.year] ?? 0) + 1;
-    months.push({ month: mm, days: n, sourceDays, mwh: meanMwh * n * growth, ...st, expected: meanCost * n * growth });
-    totalMwh += meanMwh * n * growth;
+    months.push({
+      month: mm,
+      days: n,
+      sourceDays,
+      mwh,
+      unit: { ...stat(units), expected: meanUnit },
+      ...st,
+      expected: prod === undefined ? meanCost * n * growth : meanUnit * mwh,
+    });
+    totalMwh += mwh;
   }
   const total = stat(Array.from(yearSims));
   return {
@@ -198,4 +223,52 @@ export function imbalanceBudget(hours: BudgetHour[], scenario: BudgetScenario, o
     spreadByYear: Object.fromEntries(Object.entries(realSpread).map(([y, v]) => [y, { realSpread: v, scale: scaleOf(y) }])),
     missingMonths,
   };
+}
+
+/** Santralin aylık üretimi (MWh); null: o ay verisi yok */
+export interface PlantMonths {
+  key: string;
+  type: string;
+  mwh: Array<number | null>;
+}
+
+/**
+ * Yeni santral tam yıl (17.5): santral ilk üretim ayından önce (ya da verisi olmayan ayda) eksik sayılır; eksik ay, aynı
+ * türdeki tam yıl santrallerinin o ayki üretimi × santralin ölçeği ile doldurulur. Ölçek: santralin var olan aylardaki
+ * üretimi / aynı aylarda emsallerin üretimi. Aynı türde tam yıl emsali yoksa ay doldurulmaz. İlk ay (kısmi olabilir)
+ * var sayılır: yeni santralin yıllığı biraz düşük kalabilir.
+ */
+export function runRateProduction(plants: PlantMonths[], months = 12): { total: number[]; filled: Array<{ key: string; addedMwh: number }> } {
+  const missing = (p: PlantMonths) => {
+    const start = p.mwh.slice(0, months).findIndex((v) => v !== null && v > 0);
+    return Array.from({ length: months }, (_, m) => start < 0 || m < start || p.mwh[m] === null);
+  };
+  const miss = new Map(plants.map((p) => [p.key, missing(p)]));
+  const total = new Array<number>(months).fill(0);
+  const filled: Array<{ key: string; addedMwh: number }> = [];
+  for (const p of plants) {
+    for (let m = 0; m < months; m++) total[m] += p.mwh[m] ?? 0;
+    const pm = miss.get(p.key)!;
+    if (!pm.some(Boolean) || pm.every(Boolean)) continue;
+    const peers = plants.filter((q) => q.type === p.type && q.key !== p.key && !miss.get(q.key)!.some(Boolean));
+    if (!peers.length) continue;
+    const peerAt = (m: number) => peers.reduce((a, q) => a + (q.mwh[m] ?? 0), 0);
+    let own = 0;
+    let base = 0;
+    for (let m = 0; m < months; m++)
+      if (!pm[m]) {
+        own += p.mwh[m] ?? 0;
+        base += peerAt(m);
+      }
+    if (base <= 0) continue;
+    let added = 0;
+    for (let m = 0; m < months; m++)
+      if (pm[m]) {
+        const v = (own / base) * peerAt(m) - (p.mwh[m] ?? 0);
+        total[m] += v;
+        added += v;
+      }
+    filled.push({ key: p.key, addedMwh: added });
+  }
+  return { total, filled };
 }
