@@ -15,6 +15,9 @@
  * `--sector`: hedef proje santralleri yerine sektör karnesinin (son yıl) lisanslı güneş santralleri (PLAN 20.4; OSM aşaması
  * karar 2 kapsamında; ilçe merkezi yalnız proje santralleri için onaylandı).
  *
+ * `--epdk` (kullanıcı, 15.10.2026): EPDK lisans dışa aktarımındaki il / ilçe (`.cache/epdk/solar-licenses.json`; EPDK
+ * kaydında koordinat yok) → o yerin OSM düğümü; hedef sektör + proje santralleri; aynı ölçüt; `DISTRICT_CENTER`.
+ *
  * `--district` (kullanıcı kararı 15.10.2026): yalnız ilçe merkezi aşaması. Adında il / ilçe adı geçen konumsuz santraller için
  * o yerin OSM düğümü (`.cache/osm/places-tr.json`, scripts/tools/osm-places-extract.py); aynı ölçüt (≥ 0,85, aynı adlı uzak
  * yer yakınsa belirsiz); `DISTRICT_CENTER` kaynağıyla (tahmin, "~"); korelasyon tutmayan boş kalır.
@@ -24,13 +27,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import { isUnlicensedName } from "@/lib/analysis/candidate-access";
-import { districtCandidates, osmCandidates, plantNumbers, tokenFrequency, type OsmPlace, type OsmPlant } from "@/lib/epias-plant/location-match";
+import { districtCandidates, districtPoint, foldName, nameTokens, osmCandidates, plantNumbers, tokenFrequency, type OsmPlace, type OsmPlant } from "@/lib/epias-plant/location-match";
 import { listPoolPlants, readPoolPlantInfo, readPoolYear } from "@/lib/pool/pool-store";
 import { setPlantLocation } from "@/lib/services/plant-location";
 import { emptySatelliteYear, fetchSatellite, mergeSatellite } from "@/lib/weather/satellite";
 
 const WRITE = process.argv.includes("--write");
 const DISTRICT = process.argv.includes("--district");
+const EPDK = process.argv.includes("--epdk");
 const MIN_R = 0.85;
 const AMBIGUOUS_KM = 10;
 const AMBIGUOUS_DR = 0.02;
@@ -50,13 +54,14 @@ for (const id of await listPoolPlants()) {
 
 const SECTOR = process.argv.includes("--sector");
 const targets = new Map<number, { name: string; org: string | null }>();
-if (SECTOR) {
+if (SECTOR || EPDK) {
   // Sektör karnesinin (son yıl) lisanslı güneş santralleri (PLAN 20.4)
   const cache = path.join(process.cwd(), ".cache", "epias");
   const year = Math.max(...fs.readdirSync(cache).map((f) => Number(/^sector-(\d{4})\.json$/.exec(f)?.[1] ?? 0)));
   const sector = JSON.parse(fs.readFileSync(path.join(cache, `sector-${year}.json`), "utf8")) as { plants: Array<{ epiasPlantId: number; name: string; type: string; organizationName?: string | null }> };
   for (const p of sector.plants) if (p.type === "GES" && !isUnlicensedName(p.name)) targets.set(p.epiasPlantId, { name: p.name, org: p.organizationName ?? null });
-} else {
+}
+if (!SECTOR) {
   const rows = await prisma.powerPlant.findMany({ where: { type: "GES", projectId: { not: null }, epiasPlantId: { not: null } }, select: { epiasPlantId: true, name: true, organizationName: true } });
   for (const r of rows) if (!isUnlicensedName(r.name)) targets.set(r.epiasPlantId!, { name: r.name, org: r.organizationName });
 }
@@ -124,7 +129,7 @@ async function correlationAt(id: number, lat: number, lon: number): Promise<numb
 
 const accepted: Array<{ id: number; name: string; c: OsmPlant; r: number; matched: string[] }> = [];
 const nf = (v: number, d = 3) => (Number.isFinite(v) ? v.toFixed(d).replace(".", ",") : "–");
-for (const [id, t] of DISTRICT ? [] : targets) {
+for (const [id, t] of DISTRICT || EPDK ? [] : targets) {
   const info = await readPoolPlantInfo(id);
   if (info?.location) continue;
   const cands = osmCandidates({ name: t.name, organizationName: t.org }, osmDoc.plants, "solar", freq).slice(0, 5);
@@ -221,8 +226,71 @@ if (DISTRICT) {
     }
 }
 
-if (!DISTRICT) console.log(`\nKabul: ${accepted.length}${WRITE ? " (yazılıyor)" : " (kuru çalışma; yazmak için --write)"}`);
-if (WRITE && !DISTRICT)
+// EPDK il / ilçe kipi (--epdk; kullanıcının EPDK lisans dışa aktarımı, .cache/epdk/solar-licenses.json): santral adı EPDK tesis
+// adıyla eşleşir (ad kelimelerinin hepsi, numara çelişkisi yok; yürürlükteki lisans önce), il / ilçenin yer düğümü
+// (`districtPoint`), aynı kabul ölçütü; `DISTRICT_CENTER` ("~")
+if (EPDK) {
+  const placesDoc = JSON.parse(fs.readFileSync(path.join(process.cwd(), ".cache", "osm", "places-tr.json"), "utf8")) as { extractedAt: string; places: OsmPlace[] };
+  const epdkDoc = JSON.parse(fs.readFileSync(path.join(process.cwd(), ".cache", "epdk", "solar-licenses.json"), "utf8")) as {
+    exportedAt: string;
+    licenses: Array<{ licenseNo: string; status: string; plant: string; il: string; ilce: string; mwe: string }>;
+  };
+  const found: Array<{ id: number; name: string; p: OsmPlace; r: number; lic: (typeof epdkDoc.licenses)[number] }> = [];
+  for (const [id, t] of targets) {
+    if ((await readPoolPlantInfo(id))?.location) continue;
+    const own = nameTokens(t.name);
+    const nums = plantNumbers(t.name);
+    const lics = epdkDoc.licenses
+      .filter((e) => {
+        const theirs = nameTokens(e.plant);
+        const common = [...own].filter((x) => theirs.has(x));
+        if (!common.length) return false;
+        const en = plantNumbers(e.plant);
+        if (nums.length && en.length && nums.join() !== en.join()) return false;
+        return common.length === own.size || foldName(e.plant).replace(/ ges$/, "") === foldName(t.name).replace(/ ges$/, "");
+      })
+      .sort((a, b) => (a.status === "Yürürlükte" ? -1 : 1) - (b.status === "Yürürlükte" ? -1 : 1));
+    if (!lics.length) {
+      console.log(`#${String(id).padEnd(8)} ${t.name.slice(0, 26).padEnd(26)} EPDK kaydı yok`);
+      continue;
+    }
+    // Farklı il / ilçeler (aynı santralin farklı lisansları aynı yerdeyse bir kez)
+    const seen = new Map<string, { lic: (typeof lics)[number]; p: OsmPlace | null }>();
+    for (const l of lics) {
+      const k = `${l.il}/${l.ilce}`;
+      if (!seen.has(k)) seen.set(k, { lic: l, p: districtPoint(l.il, l.ilce, placesDoc.places) });
+    }
+    const scored = [];
+    for (const { lic, p } of seen.values()) scored.push({ lic, p, r: p ? await correlationAt(id, p.lat, p.lon) : NaN });
+    const ok = scored.filter((x) => x.p && Number.isFinite(x.r)).sort((x, y) => y.r - x.r);
+    const best = ok[0];
+    let verdict = !scored.some((x) => x.p) ? "ilçe yer listesinde yok" : !best ? "değerlendirilemedi (üretim verisi yetersiz)" : "boş bırakıldı (korelasyon < 0,85)";
+    if (best && best.r >= MIN_R) {
+      const rival = ok.find((x) => x !== best && x.r >= best.r - AMBIGUOUS_DR && km(x.p!, best.p!) > AMBIGUOUS_KM);
+      if (rival) verdict = `belirsiz (${rival.lic.il}/${rival.lic.ilce} ${nf(rival.r)})`;
+      else {
+        verdict = "KABUL (~ EPDK ilçesi)";
+        found.push({ id, name: t.name, p: best.p!, r: best.r, lic: best.lic });
+      }
+    }
+    console.log(`#${String(id).padEnd(8)} ${t.name.slice(0, 26).padEnd(26)} ${verdict}`);
+    for (const x of scored) console.log(`     EPDK ${x.lic.plant} [${x.lic.il}/${x.lic.ilce}, ${x.lic.status}] → ${x.p ? `${x.p.name} ${x.p.lat}, ${x.p.lon}` : "yer yok"}  r ${nf(x.r)}`);
+  }
+  console.log(`\nEPDK ilçesiyle kabul: ${found.length}${WRITE ? " (yazılıyor)" : " (kuru çalışma; yazmak için --write)"}`);
+  if (WRITE)
+    for (const f of found) {
+      const r = await setPlantLocation(f.id, {
+        latitude: f.p.lat,
+        longitude: f.p.lon,
+        locationSource: "DISTRICT_CENTER",
+        locationRef: `Tahmin: EPDK lisans kaydında ${f.lic.il} / ${f.lic.ilce} (${f.lic.plant}, lisans ${f.lic.licenseNo}; EPDK dışa aktarımı ${epdkDoc.exportedAt}); nokta ${f.p.name} ${f.p.place === "city" ? "il" : "ilçe"} merkezi (OSM ${f.p.osm}); uydu GHI–UEVM korelasyonu ${nf(f.r)} ≥ ${MIN_R}; santralin kendi konumu değil; © OpenStreetMap katkıcıları, ODbL; ${new Date().toISOString().slice(0, 10)}`,
+      });
+      console.log(`  #${f.id} ${f.name}: havuz ${r.pool ? "yazıldı" : "korundu"}, proje santrali ${r.projectPlants}`);
+    }
+}
+
+if (!DISTRICT && !EPDK) console.log(`\nKabul: ${accepted.length}${WRITE ? " (yazılıyor)" : " (kuru çalışma; yazmak için --write)"}`);
+if (WRITE && !DISTRICT && !EPDK)
   for (const a of accepted) {
     const r = await setPlantLocation(a.id, {
       latitude: Math.round(a.c.lat * 1e5) / 1e5,

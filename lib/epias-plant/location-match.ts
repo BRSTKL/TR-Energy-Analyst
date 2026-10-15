@@ -140,3 +140,18 @@ export function districtCandidates(plantName: string, places: OsmPlace[]): OsmPl
   const own = nameTokens(plantName);
   return places.filter((p) => own.has(foldName(p.name)));
 }
+
+/**
+ * EPDK lisans kaydındaki il / ilçe için yer düğümü (PLAN 20.2): ilçe "MERKEZ" ise il merkezi; aynı adlı birden çok yer
+ * varsa il merkezine en yakın olan. İl merkezi bulunamazsa ve ilçe adı tek yerse o yer. Bulunamazsa null.
+ */
+export function districtPoint(il: string, ilce: string, places: OsmPlace[]): OsmPlace | null {
+  const f = (s: string) => foldName(s).replace(/\s+/g, " ").trim();
+  const ilCenter = places.filter((p) => f(p.name) === f(il)).sort((a, b) => (a.place === "city" ? -1 : 1) - (b.place === "city" ? -1 : 1))[0] ?? null;
+  if (!ilce || f(ilce) === "merkez") return ilCenter;
+  const same = places.filter((p) => f(p.name) === f(ilce));
+  if (!same.length) return null;
+  if (same.length === 1 || !ilCenter) return same.length === 1 ? same[0] : null;
+  const d = (p: OsmPlace) => (p.lat - ilCenter.lat) ** 2 + ((p.lon - ilCenter.lon) * Math.cos((ilCenter.lat * Math.PI) / 180)) ** 2;
+  return [...same].sort((a, b) => d(a) - d(b))[0];
+}

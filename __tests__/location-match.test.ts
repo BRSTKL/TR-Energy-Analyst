@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { districtCandidates, foldName, nameTokens, numberConflict, osmCandidates, plantNumbers, type OsmPlace, type OsmPlant } from "@/lib/epias-plant/location-match";
+import { districtCandidates, districtPoint, foldName, nameTokens, numberConflict, osmCandidates, plantNumbers, type OsmPlace, type OsmPlant } from "@/lib/epias-plant/location-match";
 
 const o = (osm: string, name: string, operator = "", source = "solar"): OsmPlant => ({ osm, source, name, operator, mw: "", lat: 38, lon: 35, km2: 0.1 });
 
@@ -57,5 +57,13 @@ describe("OSM konum adayı (20.2)", () => {
     expect(districtCandidates("OMİCRON ERCİŞ GES", places).map((p) => p.osm)).toEqual(["n3"]);
     expect(districtCandidates("G4-BOR-1 GES", places).map((p) => p.osm)).toEqual(["n4", "n5"]); // Borçka değil
     expect(districtCandidates("YAYSUN GES", places)).toEqual([]);
+  });
+
+  it("EPDK il / ilçe → yer: MERKEZ il merkezi, aynı adlı ilçelerde ile en yakın", () => {
+    const pl = (osm: string, name: string, lat: number, lon: number, place: "city" | "town" = "town"): OsmPlace => ({ osm, name, place, lat, lon });
+    const places = [pl("c1", "Van", 38.5, 43.4, "city"), pl("t1", "Edremit", 38.42, 43.26), pl("t2", "Edremit", 39.59, 27.02), pl("c2", "Muğla", 37.2, 28.36, "city")];
+    expect(districtPoint("VAN", "EDREMİT", places)?.osm).toBe("t1"); // Balıkesir Edremit değil
+    expect(districtPoint("MUĞLA", "MERKEZ", places)?.osm).toBe("c2");
+    expect(districtPoint("KARS", "KAĞIZMAN", places)).toBeNull();
   });
 });
