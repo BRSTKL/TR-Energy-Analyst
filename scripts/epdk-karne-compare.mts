@@ -9,7 +9,8 @@
  * işletmede ama karnede yok (devreye giriş tarihiyle; kalite süzgeci ya da karne tarihi), karnede olup EPDK'da adı
  * bulunmayan lisanslı santral. Lisanssız toplamlar (K3_, LÜM_, LÜY) EPDK üretim lisansı değildir, ayrı sayılır.
  * Eşleştirme adla: ayırt edici kelimeler ve numara (lib/epias-plant/location-match.ts), boşluk / tire atılmış ad ya da
- * yazım farkı (sıkıştırılmış adlarda benzerlik ≥ %85; "Çiğiltepe" / "Çiğlitepe") ya da baş eşleşmesi ("Tepe" / "Teperes").
+ * yazım farkı (sıkıştırılmış adlarda benzerlik ≥ %85; "Çiğiltepe" / "Çiğlitepe"), baş eşleşmesi ("Tepe" / "Teperes") ya da
+ * önüne yer adı eklenmiş ad ("Taşova- Yenidereköy"); Roma rakamı, kısaltma ve bitişik yazım normalleştirilir.
  *
  * Karnede olmayan işletmedeki santral için NEDEN (sektör taramasının santral dosyaları `.cache/epias/sector-<yıl>/`):
  * taranmış ama kalite süzgecine takılmış (lib/sector/benchmark.ts `passesQuality`: veri < %90, üretim yok, plan / gerçekleşen
@@ -45,24 +46,45 @@ function similarity(a: string, b: string): number {
   return 1 - d[a.length][b.length] / Math.max(a.length, b.length);
 }
 
-const SUFFIX = /\b(ges|dges|res|hes|depolamali|santrali|santral|regulatoru|reg|ruzgar|elektrik|hidroelektrik|baraji|brj|ve|gunes|enerji)\b/g;
-const compact = (s: string) => foldName(s).replace(SUFFIX, "").replace(/[^a-z0-9]/g, "");
+/**
+ * Ad normalleştirme: Roma rakamı → sayı (I, II, III, IV, V; yalnız tek başına kelime), kısaltma ve bitişik yazım
+ * ("PRJ" / "PROJESİ", "REGÜLATÖRLERİ" / "REG.", "VEHES" = "ve HES"), genel kelimeler atılır.
+ */
+const ROMAN: Record<string, string> = { i: "1", ii: "2", iii: "3", iv: "4", v: "5" };
+const normalize = (s: string) =>
+  foldName(s)
+    .split(" ")
+    .map((t) => ROMAN[t] ?? t)
+    .join(" ");
+const SUFFIX =
+  /\b(ges|dges|res|hes|vehes|depolamali|santrali|santral|regulatoru|regulatorleri|regulatorler|reg|rg|regleri|leri|ruzgar|elektrik|hidroelektrik|baraji|brj|ve|gunes|enerji|prj|proje|projesi|projeleri)\b/g;
+const compact = (s: string) => normalize(s).replace(SUFFIX, "").replace(/[^a-z0-9]/g, "");
 function same(a: string, b: string): boolean {
   const ca = compact(a);
   const cb = compact(b);
   if (ca && ca === cb) return true;
-  const sameNums = plantNumbers(a).join() === plantNumbers(b).join();
+  // Numaralar aynı ya da biri ötekinin içinde (birleşik santral: "Telli I-II" ⊇ "Telli-I"; "Viranşehir 5-7-8" ⊇ 7)
+  const na = plantNumbers(normalize(a));
+  const nb = plantNumbers(normalize(b));
+  // Bir tarafta numara yoksa engel değil (önceki kural); ikisinde de varsa aynı ya da biri ötekinin içinde
+  const sameNums = !na.length || !nb.length || na.join() === nb.join() || na.every((n) => nb.includes(n)) || nb.every((n) => na.includes(n));
   if (ca.length >= 6 && cb.length >= 6 && similarity(ca, cb) >= 0.85 && sameNums) return true;
   // Biri ötekinin başı ("tepe" / "teperes"): kısa ad en az 4 harf, numaralar aynı
   const [short, long] = ca.length <= cb.length ? [ca, cb] : [cb, ca];
   if (short.length >= 4 && long.startsWith(short) && long.length - short.length <= 4 && sameNums) return true;
+  // Kelime kümesi: kısa adın (en az 2 ayırt edici kelime) bütün kelimeleri uzun adda ("Araklı Karadere Prj Erikli-Akocak
+  // Rg ve Akocak HES" / "Araklı Karadere Projesi Erikli-Akocak Reg.leri ve HES")
+  const words = (x: string) => new Set(normalize(x).replace(SUFFIX, " ").split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !/^\d+$/.test(w)));
+  const [wa, wb] = [words(a), words(b)];
+  const [ws, wl] = wa.size <= wb.size ? [wa, wb] : [wb, wa];
+  if (ws.size >= 2 && [...ws].every((w) => wl.has(w)) && sameNums) return true;
+  // Önüne yer adı eklenmiş ("Taşova- Yenidereköy" / "Yenidereköy"): kısa ad en az 8 harf, ek en çok 8 harf
+  if (short.length >= 8 && long.endsWith(short) && long.length - short.length <= 8 && sameNums) return true;
   const ta = nameTokens(a);
   const tb = nameTokens(b);
   const common = [...ta].filter((x) => tb.has(x));
   if (!common.length) return false;
-  const na = plantNumbers(a);
-  const nb = plantNumbers(b);
-  if (na.length && nb.length && na.join() !== nb.join()) return false;
+  if (!sameNums) return false;
   return common.length === Math.min(ta.size, tb.size);
 }
 

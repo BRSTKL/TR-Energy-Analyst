@@ -607,14 +607,16 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 
     | | EPDK lisans | geçersiz | işletmede değil | işletmede | karnede | **eksik** | veri < %90 | sapma > %60 | taranmamış | diğer |
     |---|---|---|---|---|---|---|---|---|---|---|
-    | GES | 196 | 46 | 83 | 67 | 58 | **9** (395 MW) | 8 (300 MW) | – | 1 (95 MW: Iğdır DGES) | – |
-    | RES | 637 | 285 | 45 | 307 | 293 | **14** (550 MW) | 8 (403 MW) | 5 (146 MW) | 1 (1 MW: Greif) | – |
-    | HES | 1.631 | 852 | 39 | 740 | 649 | **91** (4.248 MW) | 14 (175 MW) | 31 (1.239 MW) | 43 (2.821 MW) | 3 |
+    | GES | 196 | 46 | 83 | 67 | 58 | **9** (396 MW) | 8 (300 MW) | – | 1 (95 MW: Iğdır DGES) | – |
+    | RES | 637 | 285 | 45 | 307 | 292 | **15** (606 MW) | 8 (403 MW) | 5 (146 MW) | 2 (57 MW: Mazı I, Greif) | – |
+    | HES | 1.631 | 852 | 39 | 740 | 650 | **90** (4.256 MW) | 17 (240 MW) | 32 (1.281 MW) | 38 (2.722 MW) | 3 |
+
+    (Tablo 1. adımdan sonra; ilk sürüm GES 9, RES 14, HES 91 diyordu.)
 
     ("Karnede" EPDK lisansı sayısıdır; birden çok lisanslı santraller nedeniyle karnedeki santral sayısından büyük olabilir: RES karne 291, HES 635.) Karnede olup EPDK'da adı bulunmayan: GES 0, RES 0, HES 1 (Yeşilırmak 1: EPDK'da "Yeşilırmak I", ad farkı).
   - **Eksiklerin türü:** (1) **veri < %90** (30 santral, ≈ 880 MW): yıl içinde devreye giren yeni santraller (ör. Iğdır, Kütahya, Gaia, Elmacık, Ihlamur, Gelgit); karne tam yıl verisi istiyor. (2) **sapma > %60** (36, ≈ 1.385 MW; çoğu barajlı HES ve birkaç RES): bilinçli eleme (YAL / YAT talimatı ya da plan girilmemiş; Aşama 9 kuralı), kıyasta pahalı görünürler. (3) **taranmamış** (45, ≈ 2.917 MW): HES'te büyük barajlar (Oymapınar 540, Hasan Uğurlu 500, Borçka 301, Gökçekaya 278, Arkun 245, Gezende, Kadıncık 1-2, Suat Uğurlu, Derbent, Kapulukaya, Kovada; çoğu EÜAŞ) EPİAŞ santral taramasında yok; ≈ 5'i yalnız ad farkı (Araklı Karadere, Okkayası Şehitlik, Yeşilırmak I, Taşova-Yenidereköy, Hemşin I: tarama adıyla benzerlik 0,71–0,95). (4) diğer 3 (üretim yok 2, plan oranı 1).
   - **Ekleme planı (öneri, karar kullanıcıda):**
-    1. **Ad eşleştirme düzeltmesi** (VPN gerekmez): kalan ad farklarını (HES ≈ 5) betikte çöz; gerçek eksik listesi netleşir.
+    1. ✅ **Ad eşleştirme düzeltmesi** (15.10.2026): Roma rakamı → sayı ("Yeşilırmak I" = 1), kısaltma ve bitişik yazım ("PRJ" / "PROJESİ", "RG" / "REG.LERİ", "VEHES"), önüne yer adı eklenmiş ad ("Taşova- Yenidereköy"), kelime kümesi (kısa adın bütün kelimeleri uzun adda), numara alt kümesi (birleşik santral "Telli I-II" ⊇ "Telli-I"). Sonuç: 6 ad farkı çözüldü (Hemşin I, Araklı Karadere, Yeşilırmak I, Okkayası Şehitlik, General, Soğukpınar; Taşova-Yenidereköy taranmış ama elenmiş çıktı); **6 eski yanlış eşleşme düzeldi** (Roma rakamı numara sayılmıyordu): Mazı I RES (56 MW, karnede yalnız Mazı-3), Bağıştaş II, Ege I, Feke I, Uzundere I, Çayhan 1 aslında karnede yok. Karnede olup EPDK'da adı bulunmayan: 0 (üç türde).
     2. **Taranmamışları EPİAŞ'ta doğrula** (VPN): `injection-quantity-powerplant-list`te bu santraller var mı, hangi adla? EÜAŞ barajları santral bazında yayımlanıyorsa sektör taramasının hedef listesine eklenir (`scripts/sector-collect.mts`; tür addan tahmin edildiği için "BARAJI", "KUVVET TÜNELİ", "ENERJİ GRUBU" gibi adlar için tür eşlemesi), yayımlanmıyorsa "açık veride santral bazında yok" diye not edilir.
     3. **Yeni santraller (veri < %90):** karne kuralı tam yıl istiyor; öneri: kıyasta "işletmeye giriş sonrası saatlerin ≥ %90'ı" ölçütü ve "yeni santral" işareti (kalite süzgeci `passesQuality` değişir → karne, aday taraması, capture rate ve kayıp analizleri yeniden üretilir; Aşama 9 kuralı değiştiği için kullanıcı onayı).
     4. **Sapma > %60:** eleme kuralı kalır (Aşama 9 gerekçesi); ama sektör sayfasında "kıyas dışı santraller" listesi ve nedeni gösterilsin (şu an yalnız sayı).
