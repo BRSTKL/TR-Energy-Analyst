@@ -7,10 +7,13 @@
  * Adaylar: `.cache/osm/renewable-plants-tr.json` (Geofabrik çıkarımı; scripts/tools/osm-renewable-extract.py) içinde
  * santral adı / şirket kelimesi eşleşen güneş kayıtları (lib/epias-plant/location-match.ts; kardeş santral koruması).
  * Sınama: adayın koordinatında 2025 uydu GHI'si (SARAH3) ile santralin saatlik UEVM'si (2025 yoksa 2026) arasındaki
- * korelasyon (gündüz saatleri). Kabul: aday ayırt edici kelimeyle eşleşmiş (yer adı değil) ve ≥ 0,85; 10 km'den uzaktaki
- * herhangi bir aday (yer adıyla eşleşenler dahil) daha iyi ya da 0,02 yakınındaysa belirsiz (santral orada olmayabilir).
+ * korelasyon (gündüz saatleri). Kabul: aday ayırt edici kelimeyle eşleşmiş (yer adı değil) ve ≥ 0,85; 10 km'den uzakta
+ * ayırt edici bir aday 0,02 yakınındaysa ya da yalnız yer adıyla eşleşen bir aday daha iyiyse belirsiz.
  * Başka santralin konumu olarak kayıtlı alan (aynı OSM nesnesi) yalnız OSM adı bu santralin numarasını içeriyorsa.
  * `--write` olmadan hiçbir şey yazılmaz (kuru çalışma).
+ *
+ * `--sector`: hedef proje santralleri yerine sektör karnesinin (son yıl) lisanslı güneş santralleri (PLAN 20.4; OSM aşaması
+ * karar 2 kapsamında; ilçe merkezi yalnız proje santralleri için onaylandı).
  *
  * `--district` (kullanıcı kararı 15.10.2026): yalnız ilçe merkezi aşaması. Adında il / ilçe adı geçen konumsuz santraller için
  * o yerin OSM düğümü (`.cache/osm/places-tr.json`, scripts/tools/osm-places-extract.py); aynı ölçüt (≥ 0,85, aynı adlı uzak
@@ -45,9 +48,18 @@ for (const id of await listPoolPlants()) {
   if (m) usedBy.set(m[1], [...(usedBy.get(m[1]) ?? []), id]);
 }
 
-const rows = await prisma.powerPlant.findMany({ where: { type: "GES", projectId: { not: null }, epiasPlantId: { not: null } }, select: { epiasPlantId: true, name: true, organizationName: true } });
+const SECTOR = process.argv.includes("--sector");
 const targets = new Map<number, { name: string; org: string | null }>();
-for (const r of rows) if (!isUnlicensedName(r.name)) targets.set(r.epiasPlantId!, { name: r.name, org: r.organizationName });
+if (SECTOR) {
+  // Sektör karnesinin (son yıl) lisanslı güneş santralleri (PLAN 20.4)
+  const cache = path.join(process.cwd(), ".cache", "epias");
+  const year = Math.max(...fs.readdirSync(cache).map((f) => Number(/^sector-(\d{4})\.json$/.exec(f)?.[1] ?? 0)));
+  const sector = JSON.parse(fs.readFileSync(path.join(cache, `sector-${year}.json`), "utf8")) as { plants: Array<{ epiasPlantId: number; name: string; type: string; organizationName?: string | null }> };
+  for (const p of sector.plants) if (p.type === "GES" && !isUnlicensedName(p.name)) targets.set(p.epiasPlantId, { name: p.name, org: p.organizationName ?? null });
+} else {
+  const rows = await prisma.powerPlant.findMany({ where: { type: "GES", projectId: { not: null }, epiasPlantId: { not: null } }, select: { epiasPlantId: true, name: true, organizationName: true } });
+  for (const r of rows) if (!isUnlicensedName(r.name)) targets.set(r.epiasPlantId!, { name: r.name, org: r.organizationName });
+}
 
 const km = (a: { lat: number; lon: number }, b: { lat: number; lon: number }) => {
   const dy = (a.lat - b.lat) * 110.54;
@@ -154,7 +166,10 @@ for (const [id, t] of DISTRICT ? [] : targets) {
   const best = ok.find((s) => s.c.distinctive);
   let verdict = !ok.length ? "değerlendirilemedi (veri yetersiz ya da aday başka santralin)" : !best ? "reddedildi (yalnız yer adıyla eşleşen aday)" : "reddedildi (korelasyon < 0,85)";
   if (best && best.r >= MIN_R) {
-    const rival = ok.find((s) => s !== best && s.r >= best.r - AMBIGUOUS_DR && km(s.c, best.c) > AMBIGUOUS_KM);
+    // Rakip: 10 km'den uzak; ayırt edici rakip 0,02 yakınındaysa, yalnız yer adıyla eşleşen rakip ancak daha iyiyse engeller
+    // (yakın bölgede hava benzer: uzak bir yer adı eşleşmesi biraz düşük kalınca santral orada sayılmaz; ReNOE / Fina:
+    // 0,920 > 0,895 belirsiz; Gaziantep YEKA / belediye santrali: 0,896 < 0,902 kabul)
+    const rival = ok.find((s) => s !== best && km(s.c, best.c) > AMBIGUOUS_KM && (s.c.distinctive ? s.r >= best.r - AMBIGUOUS_DR : s.r > best.r));
     if (rival) verdict = `belirsiz (${rival.c.osm} ${nf(rival.r)}, ${km(rival.c, best.c).toFixed(0)} km uzakta${rival.c.distinctive ? "" : ", yer adı eşleşmesi"})`;
     else {
       verdict = "KABUL";

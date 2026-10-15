@@ -9,8 +9,11 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { detectLostHours, monthlyLoss, type LossKind, type MonthlyLoss } from "@/lib/forecast/curtailment";
-import { loadSolarHours } from "@/lib/services/production-data";
+import { detectLostHours, monthlyLoss, type LossInput, type LossKind, type MonthlyLoss } from "@/lib/forecast/curtailment";
+import type { SolarSite } from "@/lib/forecast/production-model";
+import { prisma } from "@/lib/prisma";
+import { readPoolPlantInfo, readPoolYear } from "@/lib/pool/pool-store";
+import { readSatelliteYear } from "@/lib/weather/weather-store";
 import type { WeatherDay } from "@/lib/services/weather-preview";
 
 const HOUR = 3_600_000;
@@ -38,11 +41,39 @@ interface Cached {
 
 const cache = new Map<number, Cached>();
 
+/**
+ * Kayıp hesabının girdisi (hava tahmini gerekmez): havuzdaki UEVM ve ilk KGÜP, uydu ışınımı, PTF; [from, to) duvar
+ * saati. Konum ya da uydu verisi yoksa null. `ptf` verilirse veritabanına gidilmez (sektör taramasında tek okuma).
+ */
+export async function lossInputs(epiasPlantId: number, from: number, to: number, ptf?: Map<number, number>): Promise<{ site: SolarSite; hours: LossInput[] } | null> {
+  const loc = (await readPoolPlantInfo(epiasPlantId))?.location;
+  if (!loc) return null;
+  const prices =
+    ptf ??
+    new Map((await prisma.marketData.findMany({ where: { timestamp: { gte: new Date(from), lt: new Date(to) } }, select: { timestamp: true, ptf: true } })).map((r) => [r.timestamp.getTime(), r.ptf]));
+  const hours: LossInput[] = [];
+  let anySat = false;
+  for (let y = new Date(from).getUTCFullYear(); y <= new Date(to - 1).getUTCFullYear(); y++) {
+    const [p, sat] = await Promise.all([readPoolYear(epiasPlantId, y), readSatelliteYear(epiasPlantId, y)]);
+    if (!p || !sat) continue;
+    anySat = true;
+    const start = Date.parse(p.start);
+    const s0 = Date.parse(sat.start);
+    for (let i = 0; i < p.uevm.length; i++) {
+      const t = start + i * HOUR;
+      if (t < from || t >= to) continue;
+      const k = (t - s0) / HOUR;
+      hours.push({ t, uevm: p.uevm[i], kgupFirst: p.kgupFirst[i], ptf: prices.get(t) ?? null, satGhi: sat.ghi[k] ?? null, satDirect: sat.direct[k] ?? null, satDiffuse: sat.diffuse[k] ?? null });
+    }
+  }
+  return anySat ? { site: { latitude: loc.latitude, longitude: loc.longitude }, hours } : null;
+}
+
 async function compute(epiasPlantId: number): Promise<Cached | null> {
   const now = new Date();
-  const data = await loadSolarHours(epiasPlantId, Date.UTC(2024, 2, 8), Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  const data = await lossInputs(epiasPlantId, Date.UTC(2024, 2, 8), Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
   if (!data) return null;
-  const inputs = data.hours.map((h) => ({ t: h.t, uevm: h.uevm, kgupFirst: h.kgupFirst, ptf: h.ptf, satGhi: h.satGhi ?? null, satDirect: h.satDirect ?? null, satDiffuse: h.satDiffuse ?? null }));
+  const inputs = data.hours;
   if (!inputs.some((h) => h.satGhi !== null)) return null;
   const r = detectLostHours(inputs, data.site, { commissioning: true });
   const months = monthlyLoss(inputs, r);

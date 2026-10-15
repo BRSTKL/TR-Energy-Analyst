@@ -11,6 +11,7 @@ import type { SectorPlant } from "@/lib/services/sector";
 
 import { MethodLink } from "@/components/method-link";
 import { AggregatorBenchmarkTab } from "@/components/aggregator-benchmark-tab";
+import { SectorLossCard } from "@/components/sector-loss-card";
 type Tech = SectorTech;
 type HydroFilter = "all" | HydroKind | "unknown";
 
@@ -421,6 +422,8 @@ export default function SectorPage() {
             ))}
           </div>
         )}
+
+        {tech === "GES" && <SectorLossCard />}
 
         <Card>
           <CardHeader className="gap-3 pb-3 md:flex-row md:items-center md:justify-between md:space-y-0">
