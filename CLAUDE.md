@@ -30,6 +30,25 @@ Santralin kurulu gücü resmî kayıttan alınır. Tahmin ancak kayıt bulunamaz
   - `npm run check:reports` iki şeyi hata sayar: `capacity-peak` (kayıtlı kurulu güç üretimin altında kalıyor) ve `capacity-estimate`.
 - **Yasak:** Kurulu gücü yeni bir yerde üretimden türetmek (ör. `suggestCapacityMw`) ya da kaynağını göstermeden rapora koymak.
 
+## Santral konumu
+
+Konum koordinatlı bir kayıttan alınır. Tahmin ancak kayıt bulunamazsa kullanılır, ve tahmin olduğu her yerde söylenir.
+
+- **Kaynak:** EPİAŞ'ta konum yok, EPDK lisans kaydında yalnız il / ilçe / mevki var. Koordinatlı kaynaklar: Global Energy Monitor Global Solar / Wind Power Tracker (CC-BY 4.0, formla indirilir) ve OpenStreetMap.
+- **Kodun yeri:**
+  - Kural (kaynaklar, doğrulama, üzerine yazma): `lib/epias-plant/location.ts`.
+  - Kaydetme: `lib/services/plant-location.ts`. Havuzdaki santral tanımına (`data/pool/<id>/plant.json`, projede olmayan santraller dahil) ve aynı kimlikteki `PowerPlant` kayıtlarına yazar.
+  - Elle giriş, pilot listesi ve projelere kopyalama: `scripts/plant-location.mts` (`set`, `pilot`, `sync`).
+- **Santral kaydı:** `PowerPlant.locationSource` şu değerlerden birini alır:
+  - `USER`: elle doğrulandı. Bu değere hiçbir otomatik işlem dokunmaz.
+  - `GEM_TRACKER` ya da `OSM`: koordinatlı kayıt.
+  - `DISTRICT_CENTER`: ilçe merkezi, tahmin. Koordinatlı bir kaydın yerini alamaz.
+
+  `latitude` / `longitude` WGS84 derece; `locationRef` okunur kaynak notunu tutar (boş olamaz). Türkiye dışındaki ya da enlem / boylamı yer değiştirmiş konum reddedilir.
+- **Lisanssız toplamlar** (`K3_`, `LÜM_`, `LÜY`: bir dağıtım bölgesindeki binlerce küçük tesis) tek koordinatla temsil edilmez.
+- **Raporda ve ekranda:** tahmini konum `~` ile işaretlenir (`formatLocation`); hava verisine dayanan her sonuç konum kaynağını yazar.
+- **Yasak:** Konumu kaynağı olmadan yazmak, santral adından tahmin edip kayıt gibi göstermek.
+
 ## Raporlar
 
 Rapor, hesaplama ya da veri koduna dokunduktan sonra `npm run check:reports` (0 hata) ve `npm test` çalıştırılır.

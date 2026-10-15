@@ -10,6 +10,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { gunzipSync, gzipSync } from "node:zlib";
 import type { PoolYear } from "./pool-codec";
+import type { PlantLocation } from "@/lib/epias-plant/location";
 
 export function poolDir(): string {
   return process.env.POOL_DIR || path.join(process.cwd(), "data", "pool");
@@ -58,6 +59,8 @@ export interface PoolPlantInfo {
   uevcbs?: Array<{ id: number; name: string; eic?: string | null }>;
   /** Uzlaştırma birimlerinin EPİAŞ'tan alındığı an (ISO) */
   uevcbsAt?: string;
+  /** Santral konumu ve kaynağı (PLAN 15.1; kural lib/epias-plant/location.ts) */
+  location?: PlantLocation;
 }
 
 const infoFile = (epiasPlantId: number) => path.join(poolDir(), String(epiasPlantId), "plant.json");

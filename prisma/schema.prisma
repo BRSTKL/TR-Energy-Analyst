@@ -46,6 +46,14 @@ model PowerPlant {
   capacityRef      String?
   /// Eski yöntemin tahmini (en yüksek saatlik üretim, MW): hatayı ölçmek için saklanır
   capacityPeakMw   Float?
+  /// Konum (WGS84, derece). Kaynak: "USER" (elle doğrulandı), "GEM_TRACKER" (Global Energy Monitor Global Solar / Wind
+  /// Power Tracker, CC-BY 4.0), "OSM" (OpenStreetMap) ya da "DISTRICT_CENTER" (ilçe merkezi: tahmin, raporda "~").
+  /// USER'a otomatik işlem dokunmaz. Kural: lib/epias-plant/location.ts
+  latitude         Float?
+  longitude        Float?
+  locationSource   String?
+  /// Okunur kaynak notu (ör. "GEM GSPT 2025-02, Konya Karapınar"; elle doğrulamada nasıl doğrulandığı)
+  locationRef      String?
   /// EPİAŞ santral kimliği (UEVM santral listesi); EPİAŞ'tan eklenen santrallerde dolu
   epiasPlantId     Int?
   /// EPİAŞ'tan eklenen santralin veri kaynağı: KGÜP versiyonu ("FIRST" | "FINAL") ve uzlaştırma birimleri (virgülle)
