@@ -454,7 +454,19 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 
 **Adımlar:**
 - [x] **19.1 Saf hesap.** ✅ 15.10.2026. `lib/analysis/capture-rate.ts`: `captureStat` (capture fiyatı, baz PTF: verisi olan saatlerin ortalaması, her saat bir kez; raporun PPA kutusuyla aynı tanım; profil kaybı; sıfır ve düşük fiyatlı üretim payı, eşikler piyasa özetiyle aynı), `monthlyCapture`, `groupCapture` (grup toplamı üretim ağırlıklı, santraller arası dağılım ağırlıksız, küçük santraller dağılım dışı), `percentileOf`. 4 test (düz üretim %100; ucuz saatlerde üretim %12,5 ve kayıp elle; aynı saatin iki santralden gelmesi; ay ve grup).
-- [ ] **19.2 Sektör verisi.** `scripts/sector-capture.mts`: sektör karnesindeki santraller (kalite süzgeçli, 2025 ve 2026 Ocak–Ağustos), saatlik üretim havuzdan (UEVM), PTF MarketData'dan → `.cache/epias/sector-capture-<yıl>.json`. EPİAŞ'a gidilmez.
+- [x] **19.2 Sektör verisi.** ✅ 15.10.2026. `scripts/sector-capture.mts` → `.cache/epias/sector-capture.json` (23 sn; EPİAŞ'a gidilmez). Sektör karnesi: 2025 890, 2026 1.011 santral; kıyas iki yılda da Ocak–Ağustos (2025 tam yıl ayrıca). Capture rate (üretim ağırlıklı) / sıfır fiyatlı saatteki üretim payı / santraller arası P10–P50–P90:
+
+  | | 2025 Oca–Ağu | 2026 Oca–Ağu |
+  |---|---|---|
+  | Güneş | %84,8 / %1,0 / 80–82–87 | **%66,2 / %16,2** / 63–67–87 |
+  | Rüzgâr | %99,2 / %0,4 / 96–99–103 | %105,6 / %4,0 / 97–105–119 |
+  | Hidro barajlı | %106,5 / %0,3 / 94–101–116 | %101,3 / %5,3 / 79–103–125 |
+  | Hidro nehir tipi | %100,8 / %0,3 / 93–98–106 | %95,1 / %5,7 / 70–94–122 |
+
+  - **Güneş fiyatını kendi düşürüyor:** 2026 Nisan %27, Mayıs %17, Haziran %38 (2025'te aynı aylar %75–80); güneş üretiminin %16'sı sıfır fiyatlı saatlerde. Profil indirimi güneşte ≈ %34.
+  - **Rüzgâr kazanıyor:** öğle fiyatı güneşle düşünce rüzgârın ağırlıklı ürettiği akşam ve gece saatleri görece pahalı; capture rate %99 → %106.
+  - **Barajlı hidro esnekliği:** Nisan–Mayıs 2026'da hidro toplamı %122–129 (üretimi pahalı saatlere kaydırabiliyor); santraller arası fark açıldı (P10 %79, P90 %125).
+  - Tutarlılık: Gain raporunun PPA kutusu %94,8 (portföy çoğunlukla nehir tipi hidro); sektörde nehir tipi %95,1.
 - [ ] **19.3 Ekran.** Piyasa sayfasında "Capture rate, teknolojiye göre" kartı: aylık capture rate (2025 ve 2026 yan yana), teknoloji başına dağılım ve tek cümle ("Güneşin capture rate'i 2026'da %X'e indi; sıfır fiyatlı saatlerin payı …"). Sonuç sayfasındaki düşük fiyat kartına santralin ve portföyün sektördeki yeri (yüzdelik).
 - [ ] **19.4 Rapor (karar 2) ve metin.** Raporun PPA kutusuna tek satır sektör kıyası ("sektörde güneş medyanı %Y; portföy …"); metodoloji bölümü; denetim kuralı (kutudaki oran veriyle aynı).
 - [ ] **Kabul.** Bir santral-ay bağımsız betikle elle yeniden hesaplanır; Gain ve Inavitas'ın portföy capture rate'i proje kartıyla birebir. `npm test`, `npm run check:reports` 0 hata.
