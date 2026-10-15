@@ -32,7 +32,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import {
+import { ClipboardCheck,
   Activity,
   AlertCircle,
   ArrowDownRight,
@@ -544,6 +544,12 @@ export default function ProjectResultsPage() {
               <Link href={`/projects/${projectId}/backtest`}>
                 <FlaskConical className="h-3.5 w-3.5" />
                 Geriye Dönük Test
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="gap-1.5" title="Şirketten veri istemeden: açık veriyle hesaplanan ayın uzlaştırma tutarları ve tek soru">
+              <Link href={`/projects/${projectId}/validation`}>
+                <ClipboardCheck className="h-3.5 w-3.5" />
+                Doğrulama paketi
               </Link>
             </Button>
             <Button asChild variant="outline" size="sm" className="gap-1.5">
