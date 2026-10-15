@@ -9,15 +9,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { WeatherDayChart } from "@/components/weather-day-chart";
 import type { ProjectWeatherPlant, WeatherDay } from "@/lib/services/weather-preview";
+import type { HourLossState, PlantLoss, ReferenceRow } from "@/lib/services/production-loss";
+import { ProductionLossCard } from "@/components/production-loss-card";
+import { ForecastReferenceCard } from "@/components/forecast-reference-card";
 
 interface ForecastResponse {
   project: { id: string; name: string };
   plants: ProjectWeatherPlant[];
   day: WeatherDay | null;
   dayError: string | null;
+  loss: PlantLoss | null;
+  calendar: Array<{ date: string; hours: HourLossState[] }>;
+  reference: { period: { from: string; to: string }; generatedAt: string; rows: ReferenceRow[] } | null;
 }
 
-/** PLAN 15: projenin güneş santralleri için hava verisi ve (15.4 sonrası) üretim tahmini */
+/** PLAN 15 / 20.3: projenin güneş santralleri için hava verisi, uyduyla kayıp üretim ve açık tahmin referansı */
 export default function ForecastPage() {
   const { id } = useParams<{ id: string }>();
   const [data, setData] = useState<ForecastResponse | null>(null);
@@ -53,8 +59,8 @@ export default function ForecastPage() {
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Üretim tahmini{data ? ` · ${data.project.name}` : ""}</h1>
         <p className="text-sm text-slate-600">
-          Açık hava verisiyle güneş üretim tahmini (Aşama 15). Şimdilik veri aşaması: santralin konumu, o konum için ECMWF ışınım tahmini ve gerçek üretimle
-          örtüşmesi. Tahmin modeli ve şirketin ilk KGÜP&apos;üyle maliyet kıyası sonraki adımda.
+          Güneş santralleri için açık veriyle iki çıktı: santralin uyduyla ölçülen kayıp üretimi (planlı kısıntı ve plansız kayıp) ve ücretsiz hava
+          tahminiyle kurulan modelin şirketin ilk KGÜP&apos;üyle maliyet kıyası (açık referans). Santral seçip gün ya da takvimden gün seçin.
         </p>
       </div>
 
@@ -134,11 +140,15 @@ export default function ForecastPage() {
         </Card>
       )}
 
+      {data?.loss && data.day && (
+        <ProductionLossCard name={data.day.plant.name} loss={data.loss} calendar={data.calendar} selectedDate={data.day.date} onDate={setDate} />
+      )}
+
       {data?.day && (
         <Card className="shadow-sm">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">{data.day.plant.name}: tahmin edilen ışınım ve gerçek üretim</CardTitle>
-            <CardDescription>Model değildir; hava verisinin üretimle ne kadar örtüştüğünü gösterir.</CardDescription>
+            <CardTitle className="text-base">{data.day.plant.name}: günün üretimi, beklenen üretim ve ışınım</CardTitle>
+            <CardDescription>Uyduya göre beklenen üretim ölçüm içindir; ışınım tahmini modelin girdisidir.</CardDescription>
           </CardHeader>
           <CardContent>
             <WeatherDayChart day={data.day} loading={loading} onDate={setDate} />
@@ -146,6 +156,8 @@ export default function ForecastPage() {
         </Card>
       )}
       {data?.dayError && <p className="text-sm text-amber-800">{data.dayError}</p>}
+
+      {data?.reference && data.reference.rows.length > 0 && <ForecastReferenceCard period={data.reference.period} rows={data.reference.rows} />}
     </div>
   );
 }

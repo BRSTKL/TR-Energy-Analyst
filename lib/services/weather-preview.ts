@@ -43,6 +43,10 @@ export interface WeatherHour {
   ghiD1: number | null;
   tempD2: number | null;
   cloudD2: number | null;
+  /** Gerçekleşen uydu ışınımı (W/m²), uyduya göre beklenen üretim (MWh) ve kayıp durumu: production-loss.ts `withLoss` */
+  satGhi?: number | null;
+  expectedMwh?: number | null;
+  lossState?: "planned" | "unplanned" | "normal" | "none";
 }
 
 export interface WeatherDay {
