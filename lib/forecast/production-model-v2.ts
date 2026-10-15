@@ -11,7 +11,8 @@
  *   3. Kısıntı süzgeci (yalnız eğitim): PTF ≤ 1 TL; şirketin gündüz ilk KGÜP'ü ≈ 0 (eğitim tepesinin %2'si altı, POA >
  *      200 W/m²: planlı kısıntı); ilk kurulumdan sonra üretimi modelin beklediğinin %60'ının altında kalan saatler
  *      (arıza / talimat) çıkarılır ve model bir kez yeniden kurulur. Devreye alma (`steadyFrom`) sürüm 1'deki gibi.
- * Bilgi zamanı: bütün hava girdileri `d2` (info-time.ts; her saat `assertAvailable`). λ sabit.
+ * Bilgi zamanı: bütün hava girdileri `d2` (info-time.ts; her saat `assertAvailable`); 1 / 0 gün önceki girdiler yalnız
+ * açık `leakUpperBound` bayrağıyla (sızıntı üst sınırı ölçümü). λ sabit.
  *
  * DONMUŞ AYAR (15.10.2026, `scripts/forecast-design-2024.mts`, yalnız 2024 Temmuz–Aralık, 10 santral × 6 ay):
  * ortalama mutlak hata ÷ ortalama üretim — sürüm 1 %22,5, sürüm 2 %21,4, sürüm 2 süzgeçsiz %20,5, sürüm 2 sabit 20°
@@ -20,7 +21,7 @@
  */
 
 import { fitRidge, predictRidge, type RidgeModel } from "@/lib/analysis/direction-model";
-import { assertAvailable, calendarFeature, productionFeature, weatherFeature, TR_UTC_OFFSET_MS, type FeatureInfo } from "./info-time";
+import { assertAvailable, calendarFeature, productionFeature, weatherFeature, TR_UTC_OFFSET_MS, type FeatureInfo, type WeatherLeadDays } from "./info-time";
 import { clearSkyGhiHour, cosZenith, planeOfArray, type PanelMount } from "./solar-geometry";
 import { DEFAULT_PRODUCTION_LAMBDA, steadyFrom, TRAIN_ZERO_PRICE_MAX, type SolarHour, type SolarSite } from "./production-model";
 
@@ -45,6 +46,8 @@ export const CURTAIL_RESIDUAL_SHARE = 0.6;
 export interface SolarHourV2 extends SolarHour {
   directLag48: number | null;
   diffuseLag48: number | null;
+  /** Hava girdilerinin sürümü (gün önce); yoksa 2. 1 ve 0 kesimden sonradır: model yalnız `leakUpperBound` ile kabul eder */
+  weatherLead?: WeatherLeadDays;
 }
 
 function features(h: SolarHourV2, site: SolarSite, mount: PanelMount): { x: number[]; info: FeatureInfo[]; poa: number; clearSky: number } | null {
@@ -60,15 +63,16 @@ function features(h: SolarHourV2, site: SolarSite, mount: PanelMount): { x: numb
   const ratio = poaLag !== null && poaLag > 20 ? Math.min(3, Math.max(0, poa / poaLag)) : poa > 20 ? 1 : 0;
   const p = poa / 1000;
   const x = [p, p * h.temp, p * kt, p * cz, (h.lag48 ?? 0) * ratio, h.lag48 === null ? 0 : 1];
+  const L = h.weatherLead ?? 2;
   const info: FeatureInfo[] = [
-    weatherFeature("ghi_d2", h.t, "mean", 2),
-    weatherFeature("direct_d2", h.t, "mean", 2),
-    weatherFeature("diffuse_d2", h.t, "mean", 2),
-    weatherFeature("temp_d2", h.t, "instant", 2),
-    weatherFeature("cloud_d2", h.t, "instant", 2),
+    weatherFeature(`ghi_d${L}`, h.t, "mean", L),
+    weatherFeature(`direct_d${L}`, h.t, "mean", L),
+    weatherFeature(`diffuse_d${L}`, h.t, "mean", L),
+    weatherFeature(`temp_d${L}`, h.t, "instant", L),
+    weatherFeature(`cloud_d${L}`, h.t, "instant", L),
     calendarFeature("clear_sky_geometry"),
     productionFeature("uevm_lag48", h.t - 2 * DAY),
-    weatherFeature("radiation_lag48_d2", h.t - 2 * DAY, "mean", 2),
+    weatherFeature(`radiation_lag48_d${L}`, h.t - 2 * DAY, "mean", L),
   ];
   return { x, info, poa, clearSky: cs };
 }
@@ -87,7 +91,7 @@ interface Row {
   poa: number;
 }
 
-function fitMount(train: SolarHourV2[], site: SolarSite, mount: PanelMount, lambda: number, curtail: boolean) {
+function fitMount(train: SolarHourV2[], site: SolarSite, mount: PanelMount, lambda: number, curtail: boolean, leak: boolean) {
   const steady = steadyFrom(train);
   const ex = { missing: 0, night: 0, zeroPrice: 0, plannedCurtail: 0, residual: 0, commissioning: 0 };
   const rows: Row[] = [];
@@ -99,7 +103,7 @@ function fitMount(train: SolarHourV2[], site: SolarSite, mount: PanelMount, lamb
       ex.missing++;
       continue;
     }
-    assertAvailable(f.info, h.t);
+    if (!leak) assertAvailable(f.info, h.t);
     if (f.clearSky < 1 && f.poa < 1) {
       ex.night++;
       continue;
@@ -141,12 +145,21 @@ function fitMount(train: SolarHourV2[], site: SolarSite, mount: PanelMount, lamb
   return { ridge, trainMax, mae, ex, n: kept.length };
 }
 
-/** Varsayılan donmuş ayardır (`V2_FROZEN`); `curtail: true` ve `mounts` yalnız tasarım karşılaştırması içindir */
-export function fitSolarModelV2(train: SolarHourV2[], site: SolarSite, opts: { lambda?: number; curtail?: boolean; mounts?: string[] } = {}): SolarModelV2 {
+/**
+ * Varsayılan donmuş ayardır (`V2_FROZEN`); `curtail: true` ve `mounts` yalnız tasarım karşılaştırması içindir.
+ * `leakUpperBound: true`: bilgi zamanı denetimi atlanır (1 / 0 gün önceki hava; yalnız sızıntı üst sınırı ölçümü, ana
+ * sonuçta kullanılmaz). Bayrak yokken kesim sonrası girdi `LeakageError` verir.
+ */
+export function fitSolarModelV2(
+  train: SolarHourV2[],
+  site: SolarSite,
+  opts: { lambda?: number; curtail?: boolean; mounts?: string[]; leakUpperBound?: boolean } = {}
+): SolarModelV2 {
   const lambda = opts.lambda ?? DEFAULT_PRODUCTION_LAMBDA;
+  const leak = opts.leakUpperBound === true;
   let best: { id: string; mount: PanelMount; fit: NonNullable<ReturnType<typeof fitMount>> } | null = null;
   for (const m of PANEL_MOUNTS.filter((x) => !opts.mounts || opts.mounts.includes(x.id))) {
-    const fit = fitMount(train, site, m.mount, lambda, opts.curtail ?? V2_FROZEN.curtail);
+    const fit = fitMount(train, site, m.mount, lambda, opts.curtail ?? V2_FROZEN.curtail, leak);
     if (fit && (!best || fit.mae < best.fit.mae)) best = { id: m.id, mount: m.mount, fit };
   }
   if (!best) throw new Error("Eğitim için yeterli saat yok");
@@ -156,7 +169,7 @@ export function fitSolarModelV2(train: SolarHourV2[], site: SolarSite, opts: { l
     predict: (h) => {
       const f = features(h, site, mount);
       if (!f) return null;
-      assertAvailable(f.info, h.t);
+      if (!leak) assertAvailable(f.info, h.t);
       if (f.clearSky < 1 && f.poa < 1) return 0;
       return Math.min(trainMax, Math.max(0, predictRidge(ridge as RidgeModel, f.x)));
     },
