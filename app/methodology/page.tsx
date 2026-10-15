@@ -15,7 +15,7 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.20";
+const VERSION = "1.21";
 const VERSION_DATE = "15 Ekim 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
@@ -624,6 +624,37 @@ Gün: portföyün 24 saati, sapma ve fiyat aynı günden (sapma ile sistem yön�
               işlem yapıyorsa kazancın bir kısmı hâlihazırda alınıyordur. &quot;Kusursuz öngörü&quot; ile hesaplanan tavan ayrıca etiketlenir.{" "}
               <Tag kind="scenario" />
             </p>
+            <p>
+              <b>GİP likiditesi ve işlem sınırı.</b> Bir saatte yapılan işlem, o saatin GİP eşleşme hacminin en fazla <b>%10</b>&apos;u kadardır.
+              Sınır portföy bazındadır (netleşmiş uzlaştırma biriminde) ve bütün gün içi kurallara aynı biçimde uygulanır: sabit pay kapatma,
+              kalıcılık, yön tahminiyle gün içi plan ayarı (sınır bağlarsa çarpan 1&apos;e doğru kısılır) ve birleşik kural. Gün öncesi plan ayarı
+              GÖP&apos;te olduğu için sınır dışıdır.
+            </p>
+            <F>
+              {`Katılım (saat) = |Σ (ilk KGÜP − son KGÜP)| / GİP eşleşme hacmi     portföy içinde netleşmiş, son planı olan santral-saatler
+İşlem (saat) = işaret(istenen) × min(|istenen|, %10 × GİP hacmi)`}
+            </F>
+            <Table
+              head={["2026 Ocak–Ağustos", "Ort. üretim", "Katılım P90", "P99", "En çok", "%10 sınırının bağladığı saat"]}
+              rows={[
+                ["Aksa", "692 MWh/saat", "%8,0", "%12,5", "%19", "%4,2"],
+                ["Pure", "485 MWh/saat", "%7,4", "%13,7", "%28,5", "%3,8"],
+                ["Inavitas", "609 MWh/saat", "%3,8", "%8,1", "%15", "%0,4"],
+                ["Gain", "137 MWh/saat", "%0,7", "%1,5", "%3", "%0"],
+              ]}
+            />
+            <p>
+              Dayanak: en büyük toplayıcıların gözlenen üst katılımı (P99 ≈ %12–14). %10 bunun ihtiyatlı altıdır; büyük toplayıcıların tipik
+              katılımı (P90 medyanı ≈ %2) sınır olarak alınmadı, çünkü toplayıcıların genelde ne yaptığını gösterir, piyasanın ne kadarını
+              kaldırdığını değil. Etkisi (geriye dönük test, örneklem dışı, sınırsız / %13 / %10): 13 portföyün 10&apos;unda sınır bağlamıyor; Doğuş&apos;ta
+              kalıcılık 115,3 / 86,0 / 83,3 milyon TL (strateji piyasanın kaldırabileceğinden fazla işlem istiyordu). Saatlik hacim 2026&apos;da medyan
+              1.981 MWh (gece ≈ 1.230, öğleden sonra ≈ 2.380); en düşük–en yüksek eşleşme fiyatı aralığı hacimden bağımsız ≈ %25–27.{" "}
+              <Tag kind="estimate" />
+            </p>
+            <p>
+              Sınırlar: plan değişikliğinin hepsi GİP işlemi olmayabilir (ikili anlaşma, talimat), katılım üst sınırdır; hacim saatlik kontratın
+              eşleşmesidir; emir defteri açık veride yok, fiyat etkisi yalnız en düşük–en yüksek eşleşme aralığıyla kabaca izlenir.
+            </p>
           </Section>
 
           <Section id="gun-ici-etkinlik" n={next()} title="Gün içi etkinlik ve tahmin fırsatı">
@@ -896,6 +927,11 @@ Gün: portföyün 24 saati, sapma ve fiyat aynı günden (sapma ile sistem yön�
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.21",
+                  "15 Ekim 2026",
+                  "GİP likiditesi ve işlem sınırı (Aşama 18): toplayıcıların gerçekleşen katılımı ölçüldü (Aksa / Pure P99 %12,5 / %13,7); %10 sınırı bunun ihtiyatlı altı olarak korundu ve portföy bazında bütün gün içi kurallara uygulandı (yön tahminiyle gün içi plan ayarında önceden sınır yoktu). Piyasa sayfasında GİP likiditesi kartı, geriye dönük testte sınırın portföydeki etkisi. Rapor rakamları değişmedi.",
+                ],
                 [
                   "1.20",
                   "15 Ekim 2026",
