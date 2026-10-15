@@ -1046,82 +1046,6 @@ export async function exportPlantReportPptx(
     text(s, panelBody, { x: px + 0.15, y: 5.12, w: pw - 0.3, h: 1.1, fontSize: 10.5, color: C.ink, valign: "top" });
   }
 
-  // Gelecek yılın dengesizlik bütçesi (PLAN 17.4): aylık medyan ve P90, düşük / yüksek üretim yılı ve kural senaryoları
-  const budget = options.budget;
-  if (budget && budget.months.length === 12 && budget.alternatives) {
-    const b = budget;
-    const alt = b.alternatives!;
-    const title =
-      `${b.year} dengesizlik bütçesi normal yılda ${formatTlShort(b.total.p50)}, kötü yılda (P90) ${formatTlShort(b.total.p90)}; ` +
-      `düşük ve yüksek üretim yılında ${formatTlShort(alt.low.p50)}–${formatTlShort(alt.high.p50)}`;
-    const s = contentSlide("Bütçe", title, "scenario");
-    s.addNotes(
-      `Bütçe = MWh başına maliyet × üretim. MWh başına maliyet portföyün ${b.sourceLabel} günlerinden (sapma ve fiyat aynı günden, 7 günlük bloklar), üretim senaryodan. ` +
-        `Birim ${b.unit.label}; nominal için yıllık enflasyon varsayımı ay ay uygulanır (uygulamada). ` +
-        `Düşük üretim yılı: ${b.levelDetail.low}; yüksek üretim yılı: ${b.levelDetail.high} (teknoloji bazında iki yılın düşük / yüksek olanı). ` +
-        "Gelebilecek soru: 'Kötü yıl neden bu kadar yakın?' Cevap: aralık yalnız iki yılın günlerinden; geçmişle sınamada dar çıktı, alt sınır olarak okunmalı. Asıl belirsizlik üretim (yağış) ve tahmin kalitesi."
-    );
-    text(
-      s,
-      `${b.unit.label}, dengesizlik + KÜPST · ${b.labels.level.toLocaleLowerCase("tr-TR")} · ${b.labels.spread.toLocaleLowerCase("tr-TR")} · ${b.labels.rule}` +
-        (b.options.intraday && b.intraday ? ` · gün içi düzeltme ${b.year - 1}'daki gibi (×${nf(b.intraday.ratio, 2)})` : " · gün içi düzeltme yok (ilk plan)"),
-      { x: M, y: 1.8, w: CW, h: 0.3, fontSize: 10.5, color: C.sub }
-    );
-
-    // Aylık çubuklar (medyan) ve P90 işaretleri
-    const plotW = 7.7;
-    const top = 2.65;
-    const bottom = 5.95;
-    const maxV = Math.max(...b.months.map((m) => m.p90), 1e-9);
-    const yOf = (v: number) => bottom - (v / maxV) * (bottom - top);
-    const slot = plotW / 12;
-    const barW = slot * 0.62;
-    b.months.forEach((m, i) => {
-      const cx = M + slot * i + slot / 2;
-      rect(s, cx - barW / 2, yOf(m.p50), barW, Math.max(bottom - yOf(m.p50), 0.02), C.navy);
-      s.addShape(pptx.ShapeType.line, { x: cx - barW / 2, y: yOf(m.p90), w: barW, h: 0, line: { color: C.risk, width: 2 } });
-      text(s, nf(m.p50 / 1e6, 1), { x: cx - slot / 2, y: yOf(m.p90) - 0.3, w: slot, h: 0.26, fontSize: 9.5, bold: true, align: "center", color: C.ink });
-      text(s, MONTHS_TR[i].slice(0, 3), { x: cx - slot / 2, y: bottom + 0.08, w: slot, h: 0.25, fontSize: 10, align: "center", color: C.sub });
-    });
-    s.addShape(pptx.ShapeType.line, { x: M, y: bottom, w: plotW, h: 0, line: { color: C.line, width: 1 } });
-    text(s, [
-      { text: "■ ", options: { color: C.navy } },
-      { text: "aylık bütçe (medyan, milyon)   ", options: { color: C.sub } },
-      { text: "▬ ", options: { color: C.risk } },
-      { text: "kötü ay (P90)", options: { color: C.sub } },
-    ], { x: M, y: 2.25, w: plotW, h: 0.28, fontSize: 10 });
-
-    // Sağ panel: senaryolar
-    const px = M + plotW + 0.45;
-    const pw = W - M - px;
-    const rows: Array<[string, string]> = [
-      ["Normal yıl (bütçe)", formatTlShort(b.total.p50)],
-      ["Kötü yıl (P90)", formatTlShort(b.total.p90)],
-      ["Düşük üretim yılı", formatTlShort(alt.low.p50)],
-      ["Yüksek üretim yılı", formatTlShort(alt.high.p50)],
-      ["Kural sertleşirse (aynı yönde %9)", formatTlShort(alt.strict.p50)],
-      ["2025 kuralı (düz %3)", formatTlShort(alt.r2025.p50)],
-      ["MWh başına (normal yıl)", `${nf(b.total.expected / b.total.mwh, 1)} TL`],
-      ["Üretim (normal yıl)", formatEnergy(b.total.mwh)],
-    ];
-    const rowH = 0.36;
-    text(s, `${b.year} senaryoları`, { x: px, y: 2.2, w: pw, h: 0.3, fontSize: 12, bold: true, fontFace: FONT_HEAD, color: C.navy });
-    rows.forEach(([label, value], i) => {
-      const y = 2.58 + i * rowH;
-      text(s, label, { x: px, y, w: pw * 0.6, h: rowH - 0.05, fontSize: 10.5, color: C.sub, valign: "middle" });
-      text(s, value, { x: px + pw * 0.6, y, w: pw * 0.4, h: rowH - 0.05, fontSize: 11, bold: true, align: "right", valign: "middle" });
-      s.addShape(pptx.ShapeType.line, { x: px, y: y + rowH - 0.03, w: pw, h: 0, line: { color: C.line, width: 0.75 } });
-    });
-    round(s, px, 5.55, pw, 1.3, C.panel);
-    text(s, "NE KADAR GÜVENİLİR", { x: px + 0.15, y: 5.62, w: pw - 0.3, h: 0.25, fontSize: 9, bold: true, charSpacing: 1, color: C.gain });
-    text(
-      s,
-      b.backtest
-        ? `Aynı yöntem 2025 verisiyle 2026'yı ${b.backtest.projects} portföyde tahmin etti: ortalama tuttu (gerçek / bütçe ${nf(b.backtest.asIs.ratioMedian, 2)}), ama P90'ın altında kalan ay payı yalnız %${nf(b.backtest.asIs.monthsWithinP90Pct, 0)} (beklenen %90). P90'ı alt sınır okuyun; asıl belirsizlik yağış ve tahmin kalitesi.`
-        : "Geçmişle sınama dosyası yok. P90 iki yılın günlerinden; alt sınır olarak okuyun.",
-      { x: px + 0.15, y: 5.88, w: pw - 0.3, h: 0.92, fontSize: 9.5, color: C.ink, valign: "top" }
-    );
-  }
 
   // ---------------------------------------------------------------------------------------------
   // 4. SANTRAL KARNESİ
@@ -2347,6 +2271,86 @@ export async function exportPlantReportPptx(
       });
       if (it.effort !== "—") text(s, `Zorluk: ${it.effort}`, { x: rx, y: y + 1.0, w: W - M - rx - 0.25, h: 0.3, fontSize: 10, color: C.sub });
     });
+  }
+
+  // Gelecek yılın dengesizlik bütçesi (PLAN 17.4): aylık medyan ve P90, düşük / yüksek üretim yılı ve kural senaryoları.
+  // Fırsatlar'dan sonra: deste geçmiş → iyileşme alanı → gelecek yıl sırasıyla akar
+  const budget = options.budget;
+  if (budget && budget.months.length === 12 && budget.alternatives) {
+    const b = budget;
+    const alt = b.alternatives!;
+    // Başlık iki satıra sığsın (üç satır alt başlığa biniyordu): tutarlar milyon olarak, birim bir kez
+    const mn = (v: number) => nf(v / 1e6, 1);
+    const title = `${b.year} bütçesi ${formatTlShort(b.total.p50)}: kötü yılda (P90) ${mn(b.total.p90)}, üretime göre ${mn(alt.low.p50)}–${mn(alt.high.p50)} milyon TL`;
+    const s = contentSlide("Bütçe", title, "scenario");
+    s.addNotes(
+      `Bütçe = MWh başına maliyet × üretim. MWh başına maliyet portföyün ${b.sourceLabel} günlerinden (sapma ve fiyat aynı günden, 7 günlük bloklar), üretim senaryodan. ` +
+        `Birim ${b.unit.label}; nominal için yıllık enflasyon varsayımı ay ay uygulanır (uygulamada). ` +
+        `Düşük üretim yılı: ${b.levelDetail.low}; yüksek üretim yılı: ${b.levelDetail.high} (teknoloji bazında iki yılın düşük / yüksek olanı). ` +
+        "Gelebilecek soru: 'Kötü yıl neden bu kadar yakın?' Cevap: aralık yalnız iki yılın günlerinden; geçmişle sınamada dar çıktı, alt sınır olarak okunmalı. Asıl belirsizlik üretim (yağış) ve tahmin kalitesi."
+    );
+    text(
+      s,
+      `${b.unit.label}, dengesizlik + KÜPST · ${b.labels.level.toLocaleLowerCase("tr-TR")} · ${b.labels.spread.toLocaleLowerCase("tr-TR")} · ${b.labels.rule}` +
+        (b.options.intraday && b.intraday ? ` · gün içi düzeltme ${b.year - 1}'daki gibi (×${nf(b.intraday.ratio, 2)})` : " · gün içi düzeltme yok (ilk plan)"),
+      { x: M, y: 1.8, w: CW, h: 0.3, fontSize: 10.5, color: C.sub }
+    );
+
+    // Aylık çubuklar (medyan) ve P90 işaretleri
+    const plotW = 7.7;
+    // Üst boşluk: açıklama satırı (2,25) en yüksek ayın P90 çizgisiyle çakışmasın
+    const top = 2.85;
+    const bottom = 5.95;
+    const maxV = Math.max(...b.months.map((m) => m.p90), 1e-9);
+    const yOf = (v: number) => bottom - (v / maxV) * (bottom - top);
+    const slot = plotW / 12;
+    const barW = slot * 0.62;
+    b.months.forEach((m, i) => {
+      const cx = M + slot * i + slot / 2;
+      rect(s, cx - barW / 2, yOf(m.p50), barW, Math.max(bottom - yOf(m.p50), 0.02), C.navy);
+      s.addShape(pptx.ShapeType.line, { x: cx - barW / 2, y: yOf(m.p90), w: barW, h: 0, line: { color: C.risk, width: 2 } });
+      // Medyan değeri çubuğun içinde (üstte durunca P90 çizgisinin değeri gibi okunuyordu)
+      text(s, nf(m.p50 / 1e6, 1), { x: cx - barW / 2, y: yOf(m.p50) + 0.05, w: barW, h: 0.24, fontSize: 9.5, bold: true, align: "center", color: C.white });
+      text(s, MONTHS_TR[i].slice(0, 3), { x: cx - slot / 2, y: bottom + 0.08, w: slot, h: 0.25, fontSize: 10, align: "center", color: C.sub });
+    });
+    s.addShape(pptx.ShapeType.line, { x: M, y: bottom, w: plotW, h: 0, line: { color: C.line, width: 1 } });
+    text(s, [
+      { text: "■ ", options: { color: C.navy } },
+      { text: "aylık bütçe (medyan, milyon)   ", options: { color: C.sub } },
+      { text: "▬ ", options: { color: C.risk } },
+      { text: "kötü ay (P90)", options: { color: C.sub } },
+    ], { x: M, y: 2.25, w: plotW, h: 0.28, fontSize: 10 });
+
+    // Sağ panel: senaryolar
+    const px = M + plotW + 0.45;
+    const pw = W - M - px;
+    const rows: Array<[string, string]> = [
+      ["Normal yıl (bütçe)", formatTlShort(b.total.p50)],
+      ["Kötü yıl (P90)", formatTlShort(b.total.p90)],
+      ["Düşük üretim yılı", formatTlShort(alt.low.p50)],
+      ["Yüksek üretim yılı", formatTlShort(alt.high.p50)],
+      ["Kural sertleşirse (aynı yönde %9)", formatTlShort(alt.strict.p50)],
+      ["2025 kuralı (düz %3)", formatTlShort(alt.r2025.p50)],
+      ["MWh başına (normal yıl)", `${nf(b.total.expected / b.total.mwh, 1)} TL`],
+      ["Üretim (normal yıl)", formatEnergy(b.total.mwh)],
+    ];
+    const rowH = 0.36;
+    text(s, `${b.year} senaryoları`, { x: px, y: 2.2, w: pw, h: 0.3, fontSize: 12, bold: true, fontFace: FONT_HEAD, color: C.navy });
+    rows.forEach(([label, value], i) => {
+      const y = 2.58 + i * rowH;
+      text(s, label, { x: px, y, w: pw * 0.6, h: rowH - 0.05, fontSize: 10.5, color: C.sub, valign: "middle" });
+      text(s, value, { x: px + pw * 0.6, y, w: pw * 0.4, h: rowH - 0.05, fontSize: 11, bold: true, align: "right", valign: "middle" });
+      s.addShape(pptx.ShapeType.line, { x: px, y: y + rowH - 0.03, w: pw, h: 0, line: { color: C.line, width: 0.75 } });
+    });
+    round(s, px, 5.55, pw, 1.3, C.panel);
+    text(s, "NE KADAR GÜVENİLİR", { x: px + 0.15, y: 5.62, w: pw - 0.3, h: 0.25, fontSize: 9, bold: true, charSpacing: 1, color: C.gain });
+    text(
+      s,
+      b.backtest
+        ? `Aynı yöntem 2025 verisiyle 2026'yı ${b.backtest.projects} portföyde tahmin etti: ortalama tuttu (gerçek / bütçe ${nf(b.backtest.asIs.ratioMedian, 2)}), ama P90'ın altında kalan ay payı yalnız %${nf(b.backtest.asIs.monthsWithinP90Pct, 0)} (beklenen %90). P90'ı alt sınır okuyun; asıl belirsizlik yağış ve tahmin kalitesi.`
+        : "Geçmişle sınama dosyası yok. P90 iki yılın günlerinden; alt sınır olarak okuyun.",
+      { x: px + 0.15, y: 5.88, w: pw - 0.3, h: 0.92, fontSize: 9.5, color: C.ink, valign: "top" }
+    );
   }
 
   // ---------------------------------------------------------------------------------------------
