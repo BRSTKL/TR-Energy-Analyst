@@ -8,7 +8,8 @@
  * İki karar anı (direction-features.ts):
  * - "D-1": KGÜP gün öncesinde k ile çarpılır (GÖP'te satılan miktar değişir).
  * - "H-2": plan gün içinde (GİP'te) k ile değiştirilir; işlem maliyeti Δ × (GİP − PTF), Δ = (1 − k) × plan
- *   (intraday-trade.ts ile aynı tanım). GİP fiyatı olmayan saatte işlem yapılmaz (k = 1). GİP hacim sınırı uygulanmaz.
+ *   (intraday-trade.ts ile aynı tanım). GİP fiyatı olmayan saatte işlem yapılmaz (k = 1). Δ saatlik GİP hacminin %10'uyla
+ *   sınırlıdır (capTradeMwh, PLAN 18.2; netleşmiş birim serisinde portföy bazında): sınır bağlarsa k 1'e doğru kısılır.
  *
  * Maliyete KÜPST farkı eklenir: plan kaydırmak sapmayı tolerans dışına itebilir. KÜPST santral bazındadır; netleşmiş
  * birim serisinde bile santrallerin kendi saatlerinden toplanır (`kupstDelta`). Toplayıcı topluluğunun portföy bazında
@@ -24,7 +25,7 @@
  */
 
 import { costWithMultiplier, MIN_FEASIBLE_LAG_HOURS, type PricedHour, type Strategy } from "@/lib/analysis/backtest";
-import { persistenceTradeGain } from "@/lib/analysis/intraday-arbitrage";
+import { capTradeMwh, persistenceTradeGain } from "@/lib/analysis/intraday-arbitrage";
 import { kupstForHour } from "@/lib/calculations/kupst";
 import type { HourlyResult } from "@/lib/calculations/types";
 import type { InfoTime } from "@/lib/analysis/direction-features";
@@ -74,6 +75,11 @@ const tradeCost = (h: PricedHour, k: number) => {
 /** Saatin k ile maliyeti: dengesizlik + KÜPST farkı (+ H-2'de GİP işlem maliyeti) */
 export function directionHourCost(h: PricedHour, k: number, infoTime: InfoTime, kupstDelta: KupstDelta): number {
   if (infoTime === "H-2" && (h.source.gipPrice === null || h.source.gipPrice === undefined)) k = 1;
+  // GİP hacim sınırı (18.2): Δ = (1 − k) × plan saatlik hacmin %10'unu aşamaz
+  if (infoTime === "H-2" && k !== 1 && h.source.forecastMwh > 0) {
+    const delta = capTradeMwh((1 - k) * h.source.forecastMwh, h.source.gipVolumeMwh);
+    k = 1 - delta / h.source.forecastMwh;
+  }
   const t = new Date(h.source.timestamp).getTime();
   return costWithMultiplier(h, k) + kupstDelta(t, k) + (infoTime === "H-2" ? tradeCost(h, k) : 0);
 }
@@ -92,7 +98,7 @@ export function directionBiasStrategy(probabilities: Map<number, number>, infoTi
     description:
       infoTime === "D-1"
         ? "Ertesi günün her saati için sistemin açık verme olasılığı tahmin edilir (yalnız D-2 sonuna kadarki veriyle). Açık bekleniyorsa KGÜP aşağı, fazla bekleniyorsa yukarı çarpılır; eşik ve çarpanlar önceki aylardan, KÜPST dahil maliyetle öğrenilir. Ölçümdür, işlem önerisi değildir."
-        : "Her saat için sistem yönü 2 saat önceki bilgiyle tahmin edilir ve plan GİP'te ayarlanır (işlem maliyeti GİP ağırlıklı ortalama fiyatıyla, hacim sınırı yok). Eşik ve çarpanlar önceki aylardan, KÜPST dahil maliyetle öğrenilir. Ölçümdür, işlem önerisi değildir.",
+        : "Her saat için sistem yönü 2 saat önceki bilgiyle tahmin edilir ve plan GİP'te ayarlanır (işlem maliyeti GİP ağırlıklı ortalama fiyatıyla, saatlik GİP hacminin en fazla %10 payı). Eşik ve çarpanlar önceki aylardan, KÜPST dahil maliyetle öğrenilir. Ölçümdür, işlem önerisi değildir.",
     fit: (train) => {
       const pOf = (h: PricedHour) => probabilities.get(new Date(h.source.timestamp).getTime());
       const rows = train.filter((h) => pOf(h) !== undefined);

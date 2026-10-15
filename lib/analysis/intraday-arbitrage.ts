@@ -585,6 +585,18 @@ export const DEFAULT_INTRADAY_REALISM: IntradayRealism = {
   stressHaircutPercent: 50,
 };
 
+/**
+ * Bir saatte GİP'te yapılabilecek işlem (PLAN 18.2): istenen miktar, o saatin GİP eşleşme hacminin `capPercent` payıyla
+ * sınırlanır (işaret korunur). Varsayılan %10: en büyük toplayıcı portföylerinin 2026'da gözlenen üst katılımının
+ * (P99 ≈ %12–14; scripts/gip-participation.mts) ihtiyatlı altı. Hacim bilinmiyorsa sınır yok. Netleşmiş seride (uzlaştırma
+ * birimi, toplayıcıda portföy) çağrıldığında sınır portföy bazındadır.
+ */
+export function capTradeMwh(desiredMwh: number, gipVolumeMwh: number | null | undefined, capPercent = DEFAULT_INTRADAY_REALISM.volumeCapPercent): number {
+  if (gipVolumeMwh === null || gipVolumeMwh === undefined || !Number.isFinite(gipVolumeMwh)) return desiredMwh;
+  const cap = (Math.max(0, capPercent) / 100) * Math.max(0, gipVolumeMwh);
+  return Math.sign(desiredMwh) * Math.min(Math.abs(desiredMwh), cap);
+}
+
 export type ClosingSide = "sell" | "buy";
 
 /**
@@ -791,11 +803,7 @@ export function persistenceTradeGain(
   if (!prev || alpha <= 0 || !hasGip(h)) return { gainTl: 0, tradeMwh: 0 };
   let s = alpha * (prev.actualMwh - prev.forecastMwh);
   if (s === 0) return { gainTl: 0, tradeMwh: 0 };
-  const vol = h.gipVolumeMwh;
-  if (vol !== null && vol !== undefined && Number.isFinite(vol)) {
-    const cap = (Math.max(0, realism.volumeCapPercent) / 100) * vol;
-    s = Math.sign(s) * Math.min(Math.abs(s), cap);
-  }
+  s = capTradeMwh(s, h.gipVolumeMwh, realism.volumeCapPercent);
   const { price } = realisticTradePrice(h, s > 0 ? "sell" : "buy", realism.stressHaircutPercent);
   // Dengesizlik fiyatları plana bağlı değildir: bir kez bulunur (motoru her çağrıda çalıştırmak backtest'i yavaşlatıyordu).
   // Gelir(f) = f·PTF + tutar(gerçekleşen − f) olduğundan gelir farkı + s·(fiyat − PTF) = tutar farkı + s·fiyat
