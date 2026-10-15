@@ -2,12 +2,19 @@
  * EPDK lisans listesi ile sektör karnesini karşılaştırır (Bekleyen işler: EPDK ↔ karne; güneş 15.10.2026).
  * Dosya scripts/tools/epdk-licenses-extract.py ile hazırlanır (kullanıcının EPDK dışa aktarımı).
  *
- *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/epdk-karne-compare.mts <GES|RES|HES> [epdk.json] [karne yılı=2026]
+ *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/epdk-karne-compare.mts <GES|RES|HES> [epdk.json] [karne yılı=2026] [--json]
+ * `--json`: eksik santraller ve nedenleri .cache/epdk/<tür>-karne-gaps.json
  *
  * Gruplar: geçersiz lisans (sonlandırılmış / iptal), yürürlükte ama işletmede değil (proje / inşaat), işletmede ve karnede,
  * işletmede ama karnede yok (devreye giriş tarihiyle; kalite süzgeci ya da karne tarihi), karnede olup EPDK'da adı
  * bulunmayan lisanslı santral. Lisanssız toplamlar (K3_, LÜM_, LÜY) EPDK üretim lisansı değildir, ayrı sayılır.
- * Eşleştirme adla: ayırt edici kelimeler ve numara (lib/epias-plant/location-match.ts) ya da boşluk / tire atılmış ad.
+ * Eşleştirme adla: ayırt edici kelimeler ve numara (lib/epias-plant/location-match.ts), boşluk / tire atılmış ad ya da
+ * yazım farkı (sıkıştırılmış adlarda benzerlik ≥ %85; "Çiğiltepe" / "Çiğlitepe") ya da baş eşleşmesi ("Tepe" / "Teperes").
+ *
+ * Karnede olmayan işletmedeki santral için NEDEN (sektör taramasının santral dosyaları `.cache/epias/sector-<yıl>/`):
+ * taranmış ama kalite süzgecine takılmış (lib/sector/benchmark.ts `passesQuality`: veri < %90, üretim yok, plan / gerçekleşen
+ * oranı 0,5–2 dışında, sapma > %60) ya da hiç taranmamış (EPİAŞ santral listesinde yok, adı çok farklı ya da türü
+ * addan başka tahmin edilmiş).
  */
 
 import fs from "node:fs";
@@ -15,9 +22,10 @@ import path from "node:path";
 import { isUnlicensedName } from "@/lib/analysis/candidate-access";
 import { foldName, nameTokens, plantNumbers } from "@/lib/epias-plant/location-match";
 
-const tech = (process.argv[2] ?? "GES").toUpperCase();
-const file = process.argv[3] ?? path.join(".cache", "epdk", tech === "GES" ? "solar-licenses.json" : `${tech.toLowerCase()}-licenses.json`);
-const year = Number(process.argv[4] ?? 2026);
+const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+const tech = (args[0] ?? "GES").toUpperCase();
+const file = args[1] ?? path.join(".cache", "epdk", tech === "GES" ? "solar-licenses.json" : `${tech.toLowerCase()}-licenses.json`);
+const year = Number(args[2] ?? 2026);
 
 type Lic = { licenseNo: string; plant: string; status: string; opMwe: string; mwe: string; il: string; start: string };
 const epdk = JSON.parse(fs.readFileSync(file, "utf8")) as { exportedAt: string; licenses: Lic[] };
@@ -25,10 +33,29 @@ const karne = (JSON.parse(fs.readFileSync(path.join(".cache", "epias", `sector-$
   (p) => p.type === tech
 );
 
-const SUFFIX = /\b(ges|dges|res|hes|depolamali|santrali|regulatoru|reg)\b/g;
+import { DEVIATION_MAX_PCT, PLAN_RATIO_RANGE } from "@/lib/sector/benchmark";
+
+/** Levenshtein benzerliği (0–1) */
+function similarity(a: string, b: string): number {
+  if (!a || !b) return 0;
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return 1 - d[a.length][b.length] / Math.max(a.length, b.length);
+}
+
+const SUFFIX = /\b(ges|dges|res|hes|depolamali|santrali|santral|regulatoru|reg|ruzgar|elektrik|hidroelektrik|baraji|brj|ve|gunes|enerji)\b/g;
 const compact = (s: string) => foldName(s).replace(SUFFIX, "").replace(/[^a-z0-9]/g, "");
 function same(a: string, b: string): boolean {
-  if (compact(a) && compact(a) === compact(b)) return true;
+  const ca = compact(a);
+  const cb = compact(b);
+  if (ca && ca === cb) return true;
+  const sameNums = plantNumbers(a).join() === plantNumbers(b).join();
+  if (ca.length >= 6 && cb.length >= 6 && similarity(ca, cb) >= 0.85 && sameNums) return true;
+  // Biri ötekinin başı ("tepe" / "teperes"): kısa ad en az 4 harf, numaralar aynı
+  const [short, long] = ca.length <= cb.length ? [ca, cb] : [cb, ca];
+  if (short.length >= 4 && long.startsWith(short) && long.length - short.length <= 4 && sameNums) return true;
   const ta = nameTokens(a);
   const tb = nameTokens(b);
   const common = [...ta].filter((x) => tb.has(x));
@@ -57,11 +84,40 @@ console.log(`  yürürlükte, işletmede değil (proje / inşaat): ${notOperatin
 console.log(`  yürürlükte ve işletmede: ${operating.length} → karnede ${inKarne.length}, karnede yok ${notInKarne.length}`);
 console.log(`Karne ${year} ${tech}: ${karne.length} = lisanslı ${licensedKarne.length} + lisanssız toplam ${unlicensedKarne.length}`);
 console.log(`  karnedeki lisanslıdan EPDK listesinde adı bulunmayan: ${karneNoEpdk.length}`);
-if (notInKarne.length) {
-  console.log(`\nİşletmede ama karnede yok (lisans başlangıcına göre):`);
-  for (const l of [...notInKarne].sort((a, b) => a.start.split(".").reverse().join().localeCompare(b.start.split(".").reverse().join())))
-    console.log(`  ${l.plant} [${l.il}, işletmede ${l.opMwe} MWe, lisans ${l.start}]`);
+// Neden: taranmış santral dosyaları (bütün türler; tür addan tahmin edildiği için)
+type Metrics = { epiasPlantId: number; name: string; type: string; hours: number; actualMwh: number; biasPct: number; deviationPct: number };
+const dir = path.join(".cache", "epias", `sector-${year}`);
+const scanned: Metrics[] = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith(".json")).map((f) => JSON.parse(fs.readFileSync(path.join(dir, f), "utf8"))) : [];
+const expectedHours = Math.max(0, ...scanned.map((m) => m.hours));
+function reason(m: Metrics): string {
+  const out: string[] = [];
+  if (m.hours < expectedHours * 0.9) out.push(`veri %${Math.round((m.hours / expectedHours) * 100)} (< %90)`);
+  if (m.actualMwh <= 0) out.push("üretim yok");
+  const ratio = 1 + m.biasPct / 100;
+  if (ratio < PLAN_RATIO_RANGE.min || ratio > PLAN_RATIO_RANGE.max) out.push(`plan / gerçekleşen ${ratio.toFixed(2)}`);
+  if (m.deviationPct > DEVIATION_MAX_PCT) out.push(`sapma %${Math.round(m.deviationPct)} (> %${DEVIATION_MAX_PCT})`);
+  return out.join(", ") || "süzgeç nedeni bulunamadı";
 }
+const classified = notInKarne.map((l) => {
+  // Yalnız aynı teknolojiyle (tür addan tahmin edildiği için farklı türdeki ad benzerliği başka santraldir)
+  const m = scanned.find((x) => x.type === tech && same(l.plant, x.name));
+  return { l, m, why: m ? `taranmış, elenmiş: ${reason(m)}` : "taranmamış (EPİAŞ santral taramasında aynı türde adı bulunamadı)" };
+});
+const groups = new Map<string, number>();
+for (const c of classified) {
+  const k = !c.m ? "taranmamış" : c.why.includes("veri %") ? "veri < %90" : c.why.includes("sapma") ? "sapma > %60" : c.why.includes("plan /") ? "plan oranı" : c.why.includes("üretim yok") ? "üretim yok" : "diğer";
+  groups.set(k, (groups.get(k) ?? 0) + 1);
+}
+if (classified.length) {
+  console.log(`\nKarnede olmayan ${classified.length} işletmedeki santralin nedeni: ${[...groups].map(([k, v]) => `${k} ${v}`).join(", ")}`);
+  for (const c of classified) console.log(`  ${c.l.plant} [${c.l.il}, ${c.l.opMwe} MWe] → ${c.why}${c.m ? ` (#${c.m.epiasPlantId} ${c.m.name})` : ""}`);
+}
+if (process.argv.includes("--json")) {
+  const out = path.join(".cache", "epdk", `${tech.toLowerCase()}-karne-gaps.json`);
+  fs.writeFileSync(out, JSON.stringify({ tech, year, exportedAt: epdk.exportedAt, operating: operating.length, inKarne: inKarne.length, missing: classified.map((c) => ({ plant: c.l.plant, il: c.l.il, opMwe: c.l.opMwe, licenseNo: c.l.licenseNo, epiasPlantId: c.m?.epiasPlantId ?? null, why: c.why })) }, null, 1));
+  console.log(`\n→ ${out}`);
+}
+
 if (karneNoEpdk.length) {
   console.log(`\nKarnede olup EPDK listesinde adı bulunmayan lisanslı santraller:`);
   for (const p of karneNoEpdk) console.log(`  #${p.epiasPlantId} ${p.name}`);
