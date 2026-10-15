@@ -501,6 +501,28 @@ export function checkBudgetText(budget: ProjectBudget | null | undefined, slides
   return issues;
 }
 
+/**
+ * PPA kutusunun sektör kıyası (PLAN 19.4): beklenen capture rate karışımla tutarlı (teknoloji oranlarının ağırlıklı
+ * ortalaması en düşük ile en yüksek oranın arasında), fark = portföy − beklenen; slaytta beklenen oran yazıyor.
+ */
+export function checkCaptureSectorText(r: PlantReportData, slides: Array<{ slide: number; text: string }>): ReportIssue[] {
+  const sc = r.marketProfile.sector;
+  if (!sc) return [];
+  const issues: ReportIssue[] = [];
+  const rates = Object.values(sc.byType);
+  if (rates.length && (sc.expectedPct < Math.min(...rates) - 1e-9 || sc.expectedPct > Math.max(...rates) + 1e-9))
+    issues.push({ level: "error", rule: "capture-sector", message: `Beklenen capture rate %${sc.expectedPct.toFixed(2)} teknoloji oranlarının dışında.` });
+  if (Math.abs(r.marketProfile.captureRatePct - sc.expectedPct - sc.gapPts) > 1e-6)
+    issues.push({ level: "error", rule: "capture-sector", message: "Capture rate farkı portföy − beklenen ile tutmuyor." });
+  if (slides.length > 1) {
+    const slide = slides.find((x) => x.text.includes("PPA göstergesi"));
+    const expected = `beklenen %${sc.expectedPct.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`;
+    if (slide && !slide.text.includes(expected))
+      issues.push({ level: "error", rule: "capture-sector", message: `PPA kutusunda (slayt ${slide.slide}) sektör kıyası ("${expected}") yazmıyor.` });
+  }
+  return issues;
+}
+
 /** Slayt metninde bozuk değer: biçimlendirilmemiş sayı, boş alan, eksi işaretli yüzde */
 const BROKEN_TEXT: Array<{ re: RegExp; what: string }> = [
   { re: /\bNaN\b/, what: "NaN" },

@@ -1886,7 +1886,13 @@ export async function exportPlantReportPptx(
       text(
         s,
         `Baz PTF ${nf(mp.baseloadPtfTl, 0)} TL · yakalanan fiyat ${nf(mp.capturePriceTl, 0)} TL (%${nf(mp.captureRatePct, 1)}) → ${profileDisc >= 0 ? `profil indirimi %${nf(profileDisc, 1)}` : `profil primi %${nf(-profileDisc, 1)} (üretim pahalı saatlerde)`}; ` +
-          `beklenen dengesizlik primi ${nf(pf.expectedTlPerMwh, 0)} TL → %${nf(premiumPct, 1)}. Fiyat riski ve marj hariç; veri yılının fiyatlarıyla.`,
+          `beklenen dengesizlik primi ${nf(pf.expectedTlPerMwh, 0)} TL → %${nf(premiumPct, 1)}. Fiyat riski ve marj hariç; veri yılının fiyatlarıyla.` +
+          (mp.sector
+            ? ` Sektör (${mp.sector.label}): ${(["HES", "RES", "GES"] as const)
+                .filter((t) => mp.sector!.byType[t] !== undefined)
+                .map((t) => `${({ HES: "hidro", RES: "rüzgâr", GES: "güneş" } as const)[t]} %${nf(mp.sector!.byType[t], 1)}`)
+                .join(", ")} → karışıma göre beklenen %${nf(mp.sector.expectedPct, 1)}; portföy ${nf(Math.abs(mp.sector.gapPts), 1)} puan ${mp.sector.gapPts < 0 ? "altında" : "üstünde"}.`
+            : ""),
         { x: tx + 0.2, y: py + 0.45, w: tw - 0.4, h: 0.7, fontSize: 9.5, color: C.sub, valign: "top" }
       );
     }

@@ -131,6 +131,11 @@ export interface ReportContext {
   aggregatorMembership?: { asOf: string; byPlant: Map<number, string[]> };
   /** EPİAŞ arıza / bakım bildirimleri (lib/services/outage-notices; Aşama 12.4): olası arıza bloklarını doğrulamak için */
   outageNotices?: OutageNoticeContext | null;
+  /**
+   * Sektör capture rate (scripts/sector-capture.mts; PLAN 19.4): veri yılının teknoloji başına üretim ağırlıklı capture
+   * rate'i (%), iki yılda aynı aylar. Yıl eşleşmezse yok.
+   */
+  sectorCapture?: { year: number; label: string; byType: Record<string, number> } | null;
   /** Toplayıcılar arası kıyas (scripts/aggregator-benchmark.mts; PLAN 8.7) */
   aggregatorBenchmark?: {
     year: number;
@@ -392,7 +397,16 @@ export interface PlantReportData {
    * Profil (şekil) göstergesi: baz PTF = dönemin saatlik PTF ortalaması; yakalanan fiyat = üretim ağırlıklı PTF.
    * captureRatePct < 100 ise santraller fiyatın düşük olduğu saatlerde daha çok üretir (profil maliyeti).
    */
-  marketProfile: { baseloadPtfTl: number; capturePriceTl: number; captureRatePct: number };
+  marketProfile: {
+    baseloadPtfTl: number;
+    capturePriceTl: number;
+    captureRatePct: number;
+    /**
+     * Sektör kıyası (PLAN 19.4): portföyün teknoloji karışımına göre sektörden beklenen capture rate (teknolojinin sektör
+     * oranları üretim payıyla ağırlıklı) ve fark. coveragePct: sektör oranı olan teknolojilerin üretimdeki payı.
+     */
+    sector?: { year: number; label: string; byType: Record<string, number>; expectedPct: number; gapPts: number; coveragePct: number } | null;
+  };
   /**
    * Adil pay (Shapley): netleşen dengesizlik maliyetinin üyeler arasında, her üyenin gruba kattığı ortalama marjinal
    * maliyete göre paylaştırılması. Üyeler toplayıcı portföyünde lisans sahipleri, tek şirkette santraller, birden çok
@@ -855,7 +869,29 @@ export function buildPlantReport(
   }
   const baseloadPtf = ptfByHour.size ? Array.from(ptfByHour.values()).reduce((a, b) => a + b, 0) / ptfByHour.size : 0;
   const capturePrice = mwhAll > 0 ? ptfWeighted / mwhAll : 0;
-  const marketProfile = { baseloadPtfTl: baseloadPtf, capturePriceTl: capturePrice, captureRatePct: pct(capturePrice, baseloadPtf) };
+  const captureRatePct = pct(capturePrice, baseloadPtf);
+  // Sektör kıyası: teknoloji karışımına göre beklenen capture rate (veri yılı sektör yılıyla eşleşirse)
+  const sectorCaptureRow = (() => {
+    const sc = context.sectorCapture;
+    const year = all.length ? new Date(all[0].timestamp).getUTCFullYear() : null;
+    if (!sc || sc.year !== year || mwhAll <= 0) return null;
+    const mix = new Map<string, number>();
+    for (const p of data.plants) for (const h of p.hourly) mix.set(p.plantType, (mix.get(p.plantType) ?? 0) + h.actualMwh);
+    let w = 0;
+    let x = 0;
+    for (const [type, m] of Array.from(mix.entries())) {
+      const rate = sc.byType[type];
+      if (rate === undefined || m <= 0) continue;
+      w += m;
+      x += m * rate;
+    }
+    if (w <= 0) return null;
+    const expectedPct = x / w;
+    // Yalnız portföyde bulunan teknolojiler (Gain'de güneş yokken satırda güneş yazıyordu)
+    const byType = Object.fromEntries(Object.entries(sc.byType).filter(([type]) => (mix.get(type) ?? 0) > 0));
+    return { year: sc.year, label: sc.label, byType, expectedPct, gapPts: captureRatePct - expectedPct, coveragePct: (w / mwhAll) * 100 };
+  })();
+  const marketProfile = { baseloadPtfTl: baseloadPtf, capturePriceTl: capturePrice, captureRatePct, sector: sectorCaptureRow };
 
   // Olası arıza / kısıntı blokları (santral bazında)
   // Bildirim verisi varsa her blok aynı santralin EPİAŞ arıza / bakım bildirimleriyle karşılaştırılır (Aşama 12.4);

@@ -12,7 +12,7 @@ import { buildBridgeSteps, exportPlantReportPptx, type ReportAuthor } from "@/li
 import { reportCostChange } from "@/lib/services/cost-change";
 import { projectCandidates } from "@/lib/services/candidates";
 import { projectBudget } from "@/lib/services/imbalance-budget";
-import { checkAggregatorText, checkCostChangeText, checkSlideGeometry, checkGrowthYekdemText, checkBudgetText, checkFinalPlanText, checkIntradayText, checkDsgText, checkCapacityText, checkReportData, checkSlideTables, checkSlideTexts, extractSlideTables, extractSlideTexts, type ReportIssue } from "@/lib/report/report-checks";
+import { checkAggregatorText, checkCostChangeText, checkSlideGeometry, checkGrowthYekdemText, checkBudgetText, checkCaptureSectorText, checkFinalPlanText, checkIntradayText, checkDsgText, checkCapacityText, checkReportData, checkSlideTables, checkSlideTexts, extractSlideTables, extractSlideTexts, type ReportIssue } from "@/lib/report/report-checks";
 
 export interface ReportVariant {
   /** Anonim örnek: santral, üretici ve toplayıcı adları takma adla */
@@ -82,6 +82,7 @@ export async function buildReportExport(projectId: string, variant: ReportVarian
     ...checkCostChangeText(anon ? null : costChange, slides),
     ...checkGrowthYekdemText(growthOut, slides),
     ...checkBudgetText(budget, slides),
+    ...checkCaptureSectorText(report, slides),
     ...checkSlideTables(await extractSlideTables(buffer)),
     ...(await checkSlideGeometry(buffer)),
   ];

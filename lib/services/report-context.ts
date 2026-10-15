@@ -13,6 +13,7 @@ import { loadAggregatorMembership } from "@/lib/services/aggregator-membership";
 import { companyPlantIdsFromCache, listUevmPowerPlants } from "@/lib/services/epias-plants";
 import { loadSectorBenchmark } from "@/lib/services/sector";
 import { loadOutageNotices } from "@/lib/services/outage-notices";
+import { loadSectorCapture } from "@/lib/services/sector-capture";
 import { SECTOR_TECHS, distribution, sectorPeriodLabel, type HydroKind } from "@/lib/sector/benchmark";
 import type { ReportContext } from "@/lib/report/plant-report";
 
@@ -55,6 +56,13 @@ export async function buildReportContext(plants: ReportPlantMeta[], year: number
       byPlant: new Map(Array.from(membership.byPlant, ([id, list]) => [id, list.map((a) => a.name)])),
     };
   context.sectorBacktest = loadSectorBacktest(year);
+  // Sektör capture rate (PLAN 19.4): veri yılının teknoloji oranları
+  context.sectorCapture = (() => {
+    const y = loadSectorCapture()?.years.find((x) => x.year === year);
+    if (!y) return null;
+    const byType = Object.fromEntries(y.groups.filter((g) => ["GES", "RES", "HES"].includes(g.key) && g.pooled.ratePct !== null).map((g) => [g.key, g.pooled.ratePct!]));
+    return { year, label: `${year} Ocak–${["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"][y.months - 1]}`, byType };
+  })();
   // Olası arıza bloklarını doğrulamak için EPİAŞ bildirimleri (havuz yoksa null; hata raporu durdurmaz)
   context.outageNotices = await loadOutageNotices(plants.map((p) => p.epiasPlantId)).catch(() => null);
 

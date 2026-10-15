@@ -15,7 +15,7 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.21";
+const VERSION = "1.22";
 const VERSION_DATE = "15 Ekim 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
@@ -36,6 +36,7 @@ const SECTIONS: Array<{ id: string; title: string }> = [
   { id: "aday", title: "Aday ve hedef santraller" },
   { id: "sozlesme", title: "Sözleşme fiyatı" },
   { id: "butce", title: "Gelecek yıl bütçesi" },
+  { id: "capture", title: "Capture rate ve profil indirimi" },
   { id: "gip", title: "Gün içi piyasa senaryosu" },
   { id: "gun-ici-etkinlik", title: "Gün içi etkinlik ve tahmin fırsatı" },
   { id: "sinama", title: "Geçmişle sınama" },
@@ -612,6 +613,40 @@ Gün: portföyün 24 saati, sapma ve fiyat aynı günden (sapma ile sistem yön�
             </p>
           </Section>
 
+          <Section id="capture" n={next()} title="Capture rate ve profil indirimi">
+            <p>
+              Bir santralin ürettiği saatlerde aldığı ortalama fiyatın piyasanın ortalamasına oranı. %100&apos;ün altı, üretimin fiyatın düşük olduğu
+              saatlerde yoğunlaştığını gösterir; PPA fiyatlamasında profil indirimi buradan çıkar.
+            </p>
+            <F>
+              {`Capture fiyatı = Σ (üretim × PTF) / Σ üretim
+Baz PTF = verisi olan saatlerin PTF ortalaması (her saat bir kez)
+Capture rate = capture fiyatı / baz PTF;   profil indirimi = 100 − capture rate
+Beklenen (portföy) = Σ teknolojinin üretim payı × teknolojinin sektör capture rate'i`}
+            </F>
+            <p>
+              Sektör: sektör karnesinin santralleri (kalite süzgeçli), iki yılda da Ocak–Ağustos, üretim EPİAŞ UEVM, fiyat PTF. Teknoloji oranı
+              üretim ağırlıklıdır (santraller birleştirilir); santraller arası dağılım her santrali bir nokta sayar (1 GWh altı hariç). Sonuç
+              sayfasındaki &quot;sektördeki yer&quot;, santralin kendi teknolojisinin (hidroda barajlı / nehir tipi) santralleri arasındaki
+              yüzdeliğidir; raporun PPA kutusu portföyün oranını karışıma göre beklenenle kıyaslar. <Tag kind="exact" />
+            </p>
+            <Table
+              head={["Ocak–Ağustos", "2025", "2026", "Sıfır fiyatlı üretim (2026)"]}
+              rows={[
+                ["Güneş", "%84,8", "%66,2 (Mayıs %17)", "%16,2"],
+                ["Rüzgâr", "%99,2", "%105,6", "%4,0"],
+                ["Hidro · barajlı", "%106,5", "%101,3", "%5,3"],
+                ["Hidro · nehir tipi", "%100,8", "%95,1", "%5,7"],
+              ]}
+            />
+            <p>
+              Güneş fiyatını kendisi düşürüyor (öğle saatlerinde sıfır fiyat); öğle fiyatı düşünce rüzgârın akşam ve gece üretimi görece değerleniyor;
+              barajlı hidro üretimi pahalı saatlere kaydırabildiği için Nisan–Mayıs 2026&apos;da hidro toplamı %122–129&apos;a çıktı. Sınırlar: geçmiş
+              fiyatlarla (fiyat tahmini değil); talimatla (YAT) kısılan üretim sayılmadığından kısıntının yoğun olduğu saatlerde oran olduğundan
+              yüksek görünebilir; santral konumu veride yok, bölge ayrımı yapılmaz.
+            </p>
+          </Section>
+
           <Section id="gip" n={next()} title="Gün içi piyasa senaryosu">
             <p>
               Tahmin hatasının bir kısmı teslimattan önce görülüp gün içi piyasasında kapatılsaydı riskin ne kadar azalacağı test edilir. GİP
@@ -927,6 +962,11 @@ Gün: portföyün 24 saati, sapma ve fiyat aynı günden (sapma ile sistem yön�
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.22",
+                  "15 Ekim 2026",
+                  "Capture rate ve profil indirimi (Aşama 19): sektör karnesinin santralleri için teknoloji ve ay bazında capture rate (güneş %84,8 → %66,2, rüzgâr %99,2 → %105,6); Piyasa sayfasında kart, sonuç sayfasında santralin sektördeki yeri, raporun PPA kutusunda karışıma göre beklenen oranla kıyas. Diğer hesaplar değişmedi.",
+                ],
                 [
                   "1.21",
                   "15 Ekim 2026",
