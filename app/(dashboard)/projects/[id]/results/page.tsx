@@ -32,7 +32,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { ClipboardCheck,
+import { ClipboardCheck, SunMedium,
   Activity,
   AlertCircle,
   ArrowDownRight,
@@ -550,6 +550,12 @@ export default function ProjectResultsPage() {
               <Link href={`/projects/${projectId}/validation`}>
                 <ClipboardCheck className="h-3.5 w-3.5" />
                 Doğrulama paketi
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="gap-1.5" title="Açık hava verisiyle güneş üretim tahmini (Aşama 15)">
+              <Link href={`/projects/${projectId}/forecast`}>
+                <SunMedium className="h-3.5 w-3.5" />
+                Üretim tahmini
               </Link>
             </Button>
             <Button asChild variant="outline" size="sm" className="gap-1.5">
