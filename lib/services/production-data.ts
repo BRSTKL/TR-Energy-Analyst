@@ -9,7 +9,8 @@
 import { prisma } from "@/lib/prisma";
 import { readPoolPlantInfo, readPoolYear } from "@/lib/pool/pool-store";
 import { readWeatherYear } from "@/lib/weather/weather-store";
-import type { SolarHour, SolarSite } from "@/lib/forecast/production-model";
+import type { SolarSite } from "@/lib/forecast/production-model";
+import type { SolarHourV2 } from "@/lib/forecast/production-model-v2";
 
 const HOUR = 3_600_000;
 
@@ -17,11 +18,14 @@ export interface SolarPlantData {
   epiasPlantId: number;
   name: string;
   site: SolarSite;
-  hours: SolarHour[];
+  /** Sürüm 1 bu alanların alt kümesini kullanır (SolarHourV2, SolarHour'u genişletir) */
+  hours: SolarHourV2[];
 }
 
-/** [from, to) aralığı (duvar saati ms; ay başları önerilir). Konum ya da hava verisi yoksa null */
-export async function loadSolarHours(epiasPlantId: number, from: number, to: number): Promise<SolarPlantData | null> {
+/** [from, to) aralığı (duvar saati ms; ay başları önerilir). Konum ya da hava verisi yoksa null. `notAfter` verilirse
+ * bu andan sonraki saat istenince hata (tasarım verisini kilitlemek için) */
+export async function loadSolarHours(epiasPlantId: number, from: number, to: number, opts: { notAfter?: number } = {}): Promise<SolarPlantData | null> {
+  if (opts.notAfter !== undefined && to > opts.notAfter) throw new Error(`Kilitli dönem: ${new Date(opts.notAfter).toISOString().slice(0, 10)} sonrası istenemez`);
   const info = await readPoolPlantInfo(epiasPlantId);
   if (!info?.location) return null;
   const firstYear = new Date(from).getUTCFullYear();
@@ -31,7 +35,7 @@ export async function loadSolarHours(epiasPlantId: number, from: number, to: num
 
   // Üretim saat → değer (48 saat önceki için bir önceki yıl da gerekebilir)
   const uevm = new Map<number, number | null>();
-  const hours: SolarHour[] = [];
+  const hours: SolarHourV2[] = [];
   let anyWeather = false;
   for (let y = firstYear - 1; y <= lastYear; y++) {
     const p = await readPoolYear(epiasPlantId, y);
@@ -40,12 +44,13 @@ export async function loadSolarHours(epiasPlantId: number, from: number, to: num
     p.uevm.forEach((v, i) => uevm.set(start + i * HOUR, v));
   }
   // Yıl başındaki ilk 48 saat için önceki yılın son GHI değerleri
-  const prevGhi = new Map<number, number | null>();
+  const prev = new Map<number, [number | null, number | null, number | null]>();
   const prevW = await readWeatherYear(epiasPlantId, firstYear - 1);
   if (prevW) {
     const s0 = Date.parse(prevW.start);
-    const g = prevW.series.d2.shortwave_radiation;
-    for (let i = Math.max(0, g.length - 48); i < g.length; i++) prevGhi.set(s0 + i * HOUR, g[i]);
+    const d = prevW.series.d2;
+    for (let i = Math.max(0, d.shortwave_radiation.length - 48); i < d.shortwave_radiation.length; i++)
+      prev.set(s0 + i * HOUR, [d.shortwave_radiation[i], d.direct_radiation[i], d.diffuse_radiation[i]]);
   }
   for (let y = firstYear; y <= lastYear; y++) {
     const [p, w] = await Promise.all([readPoolYear(epiasPlantId, y), readWeatherYear(epiasPlantId, y)]);
@@ -69,7 +74,9 @@ export async function loadSolarHours(epiasPlantId: number, from: number, to: num
         temp: d2.temperature_2m[i],
         cloud: d2.cloud_cover[i],
         lag48: uevm.get(t - 48 * HOUR) ?? null,
-        ghiLag48: i >= 48 ? d2.shortwave_radiation[i - 48] : (prevGhi.get(t - 48 * HOUR) ?? null),
+        ghiLag48: i >= 48 ? d2.shortwave_radiation[i - 48] : (prev.get(t - 48 * HOUR)?.[0] ?? null),
+        directLag48: i >= 48 ? d2.direct_radiation[i - 48] : (prev.get(t - 48 * HOUR)?.[1] ?? null),
+        diffuseLag48: i >= 48 ? d2.diffuse_radiation[i - 48] : (prev.get(t - 48 * HOUR)?.[2] ?? null),
       });
     }
   }
