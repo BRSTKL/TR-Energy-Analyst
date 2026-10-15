@@ -234,7 +234,7 @@ const ALPHA_GRID = [0, 0.25, 0.5, 0.75, 1];
  */
 export const MIN_FEASIBLE_LAG_HOURS = 2;
 
-export function persistenceStrategy(lagHours: number): Strategy {
+export function persistenceStrategy(lagHours: number, capPercent = DEFAULT_INTRADAY_REALISM.volumeCapPercent): Strategy {
   const theoretical = lagHours < MIN_FEASIBLE_LAG_HOURS;
   return {
     id: `persistence-${lagHours}h`,
@@ -246,7 +246,8 @@ export function persistenceStrategy(lagHours: number): Strategy {
         ? ` Uygulanamaz: GİP teslimattan 60 dk önce kapandığından işlem anında ${lagHours} saat önceki hata henüz bilinmez; yalnızca üst sınırdır.`
         : ""),
     fit: (train, profile) => {
-      const gain = (h: PricedHour, alpha: number) => persistenceTradeGain(h.source, h.prev(lagHours), alpha, profile).gainTl;
+      const realism = { ...DEFAULT_INTRADAY_REALISM, volumeCapPercent: capPercent };
+      const gain = (h: PricedHour, alpha: number) => persistenceTradeGain(h.source, h.prev(lagHours), alpha, profile, realism).gainTl;
       let bestAlpha = 0;
       let bestGain = 0;
       for (const alpha of ALPHA_GRID) {

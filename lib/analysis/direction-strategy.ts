@@ -25,7 +25,7 @@
  */
 
 import { costWithMultiplier, MIN_FEASIBLE_LAG_HOURS, type PricedHour, type Strategy } from "@/lib/analysis/backtest";
-import { capTradeMwh, persistenceTradeGain } from "@/lib/analysis/intraday-arbitrage";
+import { capTradeMwh, DEFAULT_INTRADAY_REALISM, persistenceTradeGain } from "@/lib/analysis/intraday-arbitrage";
 import { kupstForHour } from "@/lib/calculations/kupst";
 import type { HourlyResult } from "@/lib/calculations/types";
 import type { InfoTime } from "@/lib/analysis/direction-features";
@@ -73,11 +73,17 @@ const tradeCost = (h: PricedHour, k: number) => {
 };
 
 /** Saatin k ile maliyeti: dengesizlik + KÜPST farkı (+ H-2'de GİP işlem maliyeti) */
-export function directionHourCost(h: PricedHour, k: number, infoTime: InfoTime, kupstDelta: KupstDelta): number {
+export function directionHourCost(
+  h: PricedHour,
+  k: number,
+  infoTime: InfoTime,
+  kupstDelta: KupstDelta,
+  capPercent = DEFAULT_INTRADAY_REALISM.volumeCapPercent
+): number {
   if (infoTime === "H-2" && (h.source.gipPrice === null || h.source.gipPrice === undefined)) k = 1;
   // GİP hacim sınırı (18.2): Δ = (1 − k) × plan saatlik hacmin %10'unu aşamaz
   if (infoTime === "H-2" && k !== 1 && h.source.forecastMwh > 0) {
-    const delta = capTradeMwh((1 - k) * h.source.forecastMwh, h.source.gipVolumeMwh);
+    const delta = capTradeMwh((1 - k) * h.source.forecastMwh, h.source.gipVolumeMwh, capPercent);
     k = 1 - delta / h.source.forecastMwh;
   }
   const t = new Date(h.source.timestamp).getTime();
@@ -90,7 +96,12 @@ const fmt = (v: number) => v.toLocaleString("tr-TR", { minimumFractionDigits: 2,
  * Yön tahminiyle plan ayarı stratejisi. `probabilities`: saat başı (ms) → P(açık), walk-forward tahmin.
  * Olasılığı olmayan saatte plan değişmez.
  */
-export function directionBiasStrategy(probabilities: Map<number, number>, infoTime: InfoTime, kupstDelta: KupstDelta): Strategy {
+export function directionBiasStrategy(
+  probabilities: Map<number, number>,
+  infoTime: InfoTime,
+  kupstDelta: KupstDelta,
+  capPercent = DEFAULT_INTRADAY_REALISM.volumeCapPercent
+): Strategy {
   const when = infoTime === "D-1" ? "gün öncesi" : "gün içi (GİP)";
   return {
     id: `direction-bias-${infoTime}`,
@@ -102,8 +113,8 @@ export function directionBiasStrategy(probabilities: Map<number, number>, infoTi
     fit: (train) => {
       const pOf = (h: PricedHour) => probabilities.get(new Date(h.source.timestamp).getTime());
       const rows = train.filter((h) => pOf(h) !== undefined);
-      const lowCost = rows.map((h) => LOW_K.map((k) => directionHourCost(h, k, infoTime, kupstDelta)));
-      const highCost = rows.map((h) => HIGH_K.map((k) => directionHourCost(h, k, infoTime, kupstDelta)));
+      const lowCost = rows.map((h) => LOW_K.map((k) => directionHourCost(h, k, infoTime, kupstDelta, capPercent)));
+      const highCost = rows.map((h) => HIGH_K.map((k) => directionHourCost(h, k, infoTime, kupstDelta, capPercent)));
       const base = rows.reduce((s, h) => s + h.baselineCost, 0);
 
       let best = { theta: 0.5, kLow: 1, kHigh: 1, cost: base };
@@ -124,7 +135,7 @@ export function directionBiasStrategy(probabilities: Map<number, number>, infoTi
         cost: (h) => {
           const p = pOf(h);
           if (p === undefined) return h.baselineCost;
-          return directionHourCost(h, p >= theta ? kLow : kHigh, infoTime, kupstDelta);
+          return directionHourCost(h, p >= theta ? kLow : kHigh, infoTime, kupstDelta, capPercent);
         },
         summary:
           kLow === 1 && kHigh === 1
@@ -162,7 +173,12 @@ export function persistenceClass(lastError: number, p: number | undefined, theta
  * İşlem fiyatı, hacim sınırı ve kayma persistenceTradeGain ile aynıdır; KÜPST, karşılaştırılan kalıcılık kuralındaki
  * gibi hesaba katılmaz. Yön olasılıkları gün içi (H-2) tahminidir: kalıcılıkla aynı bilgi anı.
  */
-export function directionPersistenceStrategy(probabilities: Map<number, number>, lagHours = MIN_FEASIBLE_LAG_HOURS): Strategy {
+export function directionPersistenceStrategy(
+  probabilities: Map<number, number>,
+  lagHours = MIN_FEASIBLE_LAG_HOURS,
+  capPercent = DEFAULT_INTRADAY_REALISM.volumeCapPercent
+): Strategy {
+  const realism = { ...DEFAULT_INTRADAY_REALISM, volumeCapPercent: capPercent };
   return {
     id: `direction-persistence-${lagHours}h`,
     label: `Gün içi kalıcılık + yön tahmini (${lagHours} saat önce)`,
@@ -176,7 +192,7 @@ export function directionPersistenceStrategy(probabilities: Map<number, number>,
         const prev = h.prev(lagHours);
         return prev ? prev.actualMwh - prev.forecastMwh : 0;
       };
-      const gains = train.map((h) => ALPHA_GRID.map((a) => persistenceTradeGain(h.source, h.prev(lagHours), a, profile).gainTl));
+      const gains = train.map((h) => ALPHA_GRID.map((a) => persistenceTradeGain(h.source, h.prev(lagHours), a, profile, realism).gainTl));
       const bestAlpha = (sums: number[]) => {
         let j = 0;
         for (let i = 1; i < sums.length; i++) if (sums[i] > sums[j] + 1e-6) j = i;
@@ -201,7 +217,7 @@ export function directionPersistenceStrategy(probabilities: Map<number, number>,
       return {
         cost: (h) => {
           const alpha = alphaFor[persistenceClass(lastError(h), pOf(h), best.theta)];
-          return h.baselineCost - persistenceTradeGain(h.source, h.prev(lagHours), alpha, profile).gainTl;
+          return h.baselineCost - persistenceTradeGain(h.source, h.prev(lagHours), alpha, profile, realism).gainTl;
         },
         summary:
           best.aligned === 0 && best.opposed === 0
