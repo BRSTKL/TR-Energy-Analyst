@@ -29,6 +29,8 @@ export interface LossInput {
   satGhi: number | null;
   satDirect: number | null;
   satDiffuse: number | null;
+  /** PTF (TL/MWh): yalnız parasal karşılık için (`monthlyLoss`) */
+  ptf?: number | null;
 }
 
 export type LossKind = "planned" | "unplanned";
@@ -41,6 +43,8 @@ export interface LossResult {
   expected: Map<number, number>;
   /** Kayıp üretim tahmini (MWh): beklenen − gerçekleşen, kayıp saatlerde */
   lostMwh: { planned: number; unplanned: number };
+  /** Devreye alma bitişi (`commissioning` seçeneğiyle; öncesi kayıp sayılmaz), yoksa null */
+  steadyFrom: number | null;
 }
 
 const monthKey = (t: number) => {
@@ -70,8 +74,43 @@ function correlation(a: number[], b: number[]): number {
   return sa > 0 && sb > 0 ? s / Math.sqrt(sa * sb) : -1;
 }
 
-export function detectLostHours(hours: LossInput[], site: SolarSite): LossResult {
-  const valid = hours.filter((h) => h.uevm !== null && h.satGhi !== null && h.satDirect !== null && h.satDiffuse !== null);
+/**
+ * `commissioning: true` (Aşama 20, ürün çıktısı): devreye alma dönemi kayıp sayılmaz. Bitişi VERİMLE bulunur (mevsimden
+ * bağımsız): günün en yüksek verim oranı (üretim ÷ uydu POA, POA ≥ 300) ilk kez dönemin P90 oranının %80'ine ulaştığı
+ * gün (ham üretim tepesi kışın yaz tepesinin altında kaldığı için kullanılmaz). Varsayılan kapalı: Aşama 15 geriye
+ * dönük testi ve eğitim temizliği aynı kalır. Bütün dönemle çağrılmalıdır (yıl yıl değil).
+ */
+export function detectLostHours(hours: LossInput[], site: SolarSite, opts: { commissioning?: boolean } = {}): LossResult {
+  const all = hours.filter((h) => h.uevm !== null && h.satGhi !== null && h.satDirect !== null && h.satDiffuse !== null);
+  if (!opts.commissioning) return detectOn(all, site, null);
+  // İlk geçiş: kurulum ve verim oranları bütün dönemle; devreye alma bitişi oranla
+  const first = detectOn(all, site, null);
+  const steady = commissioningEnd(all, first.poa);
+  return detectOn(steady === null ? all : all.filter((h) => h.t >= steady), site, steady);
+}
+
+const DAY = 86_400_000;
+export const COMMISSIONING_SHARE = 0.8;
+
+function commissioningEnd(hours: LossInput[], poa: Map<number, number>): number | null {
+  const ratios: number[] = [];
+  const dayMax = new Map<number, number>();
+  for (const h of hours) {
+    const p = poa.get(h.t);
+    if (p === undefined || p < REF_POA_MIN) continue;
+    const r = h.uevm! / p;
+    ratios.push(r);
+    const d = Math.floor(h.t / DAY) * DAY;
+    dayMax.set(d, Math.max(dayMax.get(d) ?? 0, r));
+  }
+  const ref = quantile(ratios, REF_QUANTILE);
+  if (!ref) return null;
+  const days = Array.from(dayMax.keys()).sort((a, b) => a - b);
+  return days.find((d) => dayMax.get(d)! >= COMMISSIONING_SHARE * ref) ?? null;
+}
+
+function detectOn(hoursIn: LossInput[], site: SolarSite, steady: number | null): LossResult & { poa: Map<number, number> } {
+  const valid = hoursIn;
   // Kurulum: üretimle korelasyonu en yüksek POA
   let best: { id: string; mount: PanelMount; poa: Map<number, number>; r: number } | null = null;
   for (const m of PANEL_MOUNTS) {
@@ -87,7 +126,7 @@ export function detectLostHours(hours: LossInput[], site: SolarSite): LossResult
   const lost = new Map<number, LossKind>();
   const expected = new Map<number, number>();
   const lostMwh = { planned: 0, unplanned: 0 };
-  if (!best) return { mount: "-", lost, expected, lostMwh };
+  if (!best) return { mount: "-", lost, expected, lostMwh, steadyFrom: steady, poa: new Map() };
 
   // Ay başına verim oranları
   const ratios = new Map<number, number[]>();
@@ -114,7 +153,7 @@ export function detectLostHours(hours: LossInput[], site: SolarSite): LossResult
       lostMwh[kind] += exp - h.uevm!;
     }
   }
-  return { mount: best.id, lost, expected, lostMwh };
+  return { mount: best.id, lost, expected, lostMwh, steadyFrom: steady, poa: best.poa };
 }
 
 /**
@@ -135,4 +174,57 @@ export function trainingLossFilter(
     lostHours: r.lost.size,
     unlabeled: train.length - labeled.length,
   };
+}
+
+export interface MonthlyLoss {
+  /** "YYYY-MM" */
+  month: string;
+  /** Ayın gerçekleşen üretimi (MWh) */
+  actualMwh: number;
+  plannedLossMwh: number;
+  unplannedLossMwh: number;
+  /** Kayıp ÷ (gerçekleşen + kayıp), % */
+  lossPct: number;
+  plannedHours: number;
+  unplannedHours: number;
+  /** Kayıp × max(PTF, 0) (TL): planlı kısıntı çoğunlukla sıfır fiyatlı saatte, plansız kayıp gelir kaybıdır */
+  plannedValueTl: number;
+  unplannedValueTl: number;
+  /** Ayın tamamı ya da bir kısmı devreye alma döneminde (kayıp sayılmadı) */
+  commissioning: boolean;
+}
+
+/** Santral × ay kayıp özeti (Aşama 20.1): `detectLostHours` sonucundan */
+export function monthlyLoss(hours: LossInput[], r: LossResult): MonthlyLoss[] {
+  const byMonth = new Map<string, MonthlyLoss>();
+  for (const h of hours) {
+    if (h.uevm === null) continue;
+    const month = new Date(h.t).toISOString().slice(0, 7);
+    let m = byMonth.get(month);
+    if (!m) {
+      m = { month, actualMwh: 0, plannedLossMwh: 0, unplannedLossMwh: 0, lossPct: 0, plannedHours: 0, unplannedHours: 0, plannedValueTl: 0, unplannedValueTl: 0, commissioning: false };
+      byMonth.set(month, m);
+    }
+    m.actualMwh += h.uevm;
+    if (r.steadyFrom !== null && h.t < r.steadyFrom) m.commissioning = true;
+    const kind = r.lost.get(h.t);
+    if (!kind) continue;
+    const lost = r.expected.get(h.t)! - h.uevm;
+    const value = lost * Math.max(0, h.ptf ?? 0);
+    if (kind === "planned") {
+      m.plannedLossMwh += lost;
+      m.plannedHours++;
+      m.plannedValueTl += value;
+    } else {
+      m.unplannedLossMwh += lost;
+      m.unplannedHours++;
+      m.unplannedValueTl += value;
+    }
+  }
+  const out = Array.from(byMonth.values()).sort((a, b) => a.month.localeCompare(b.month));
+  for (const m of out) {
+    const lost = m.plannedLossMwh + m.unplannedLossMwh;
+    m.lossPct = m.actualMwh + lost > 0 ? (lost / (m.actualMwh + lost)) * 100 : 0;
+  }
+  return out;
 }

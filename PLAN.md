@@ -547,7 +547,7 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 2. Rapor: PPA kutusuna tek satır sektör kıyası.
 3. Ekran: Piyasa sayfasında kart + sonuç sayfasındaki düşük fiyat kartına sektördeki yer.
 
-### Aşama 20: Uyduyla kısıntı ve arıza kaybı (ürün çıktısı) · TASLAK, onay bekliyor (15.10.2026)
+### Aşama 20: Uyduyla kısıntı ve arıza kaybı (ürün çıktısı) ▶ · karar 15.10.2026
 **Amaç:** Aşama 15'in ürüne dönüşebilen bulgusunu kullanılır hâle getirmek: güneş santralinin **üretebileceği** ile **ürettiği** arasındaki farkı, santral sahibinden veri istemeden, uydu ışınımıyla saat saat ölçmek ve nedenine göre ayırmak (planlı kısıntı / plansız kayıp). Toplayıcı için iki soruya cevap: "portföyümde kısıntı ve arıza bana ne kaybettiriyor?" ve "sektörde kim, ne zaman, ne kadar kısıyor?". İş görüşmesi anlatısı: "kısıntıyı açık uydu verisiyle ölçtüm; YEKA santralleri 2026'da potansiyellerinin üçte birini kaybediyor".
 
 **Mevcut durum (Aşama 15'ten):** `lib/weather/satellite.ts` + `scripts/satellite-sync.mts` (SARAH3), `lib/forecast/curtailment.ts` (`detectLostHours`, `trainingLossFilter`, 1 test), `scripts/curtailment-scan.mts` (komut satırı). Konumlu 15 güneş santrali (8 pilot, 7 proje: GİTAŞ-1, Alages, Edikli, Hamal, Yaysun, Solentegre, İota). Bulgular: eski santraller potansiyelin %1–8'i (çoğu plansız), YEKA 2026 %29–39 (çoğu planlı). Ekranda ve raporda yok. Ayrıca sonuç sayfasında üretim deseninden "arıza blokları" var (Aşama 12.4; resmi bildirimle isabet %6): uydu güneşte bunu doğrudan doğrulayabilir.
@@ -558,7 +558,9 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 - Kayıp MWh = beklenen − gerçekleşen (kayıp saatlerde). **Parasal karşılık (öneri):** kayıp MWh × PTF; planlı kısıntıda PTF çoğunlukla ≈ 0 (kayıp küçük, karar ekonomik), plansızda gelir kaybı. Eşikler Aşama 15'te önceden kondu; ayarlanmaz.
 
 **Adımlar (öneri):**
-- [ ] **20.1 Hesabı sağlamlaştırma.** Devreye alma süzgeci (`steadyFrom`; Erzin 2024 ve Viranşehir 2025 başı şu an kayıp sayılıyor), `monthlyLoss` (santral × ay: beklenen, gerçekleşen, planlı / plansız kayıp MWh ve %, kayıp saat, kayıp × PTF), kırpma notu (inverter sınırı kayıp sayılmaz: oran %70–90). Testler: devreye alma, ay özeti, PTF değeri elle.
+- [x] **20.1 Hesabı sağlamlaştırma.** ✅ 15.10.2026. `detectLostHours(..., { commissioning: true })`: devreye alma dönemi kayıp sayılmaz; bitişi **verim oranıyla** (günün en yüksek üretim ÷ uydu POA oranı ilk kez dönemin P90 oranının %80'i) bulunur: ilk denemede ham üretim tepesi kullanıldı ve her yılın Ocak–Şubat'ını devreye alma saydı (kış tepesi yaz tepesinin altında), düzeltildi. Varsayılan kapalı (Aşama 15 sonuçları aynı kalır); bütün dönemle çağrılır. `monthlyLoss`: santral × ay gerçekleşen, planlı / plansız kayıp MWh ve saat, kayıp payı, kayıp × max(PTF, 0) TL. 3 test (devreye alma açık / kapalı, ay özeti ve TL elle). `scripts/curtailment-scan.mts` yıl özeti ve TL'yle.
+  - **Tarama (2024-03 – 2026-08; kayıp payı / planlı payı / TL):** eski santraller %1–9 (Alages 2026 %19), çoğu plansız, yılda 0,5–7 M TL. YEKA 2026: Erzin-1 %39 (planlı %86) 14,9 M TL, Erzin-2 %29 (%88), Viranşehir 5 / 7 / 8 %36–37 (%89) 8,2–8,7 M TL. **TL'nin çoğu plansız kayıptan** (Viranşehir-7 2026: 8,73 M'nin 6,62'si): planlı kısıntı sıfır fiyatlı saatte, ekonomik karar; arıza gelir kaybı. Devreye alma: Erzin-1 2024-09-22, Erzin-2 2024-12-26, Viranşehir-8 2025-02-26, -7 2025-06-22, -5 2025-09-24'e kadar hariç.
+  - **Dikkat (20.6'da sınanacak):** Karapınar plansız kayıp %4,4–5,7 (yılda 116–389 M TL); bir kısmı model eksikliği olabilir (takip sistemi yaklaşımı, inverter kırpması, konum). Plansız kayıp = arıza + talimat + model hatası.
 - [ ] **20.2 Konum kapsamı (darboğaz).** Proje güneş santrallerinin 33'ünden 26'sı konumsuz. Öneri: **uydu korelasyonuyla otomatik doğrulama**: aday konum (OSM adıyla, Geofabrik dosyası) uydu GHI ↔ UEVM korelasyonu ≥ 0,85 ve ilçe merkezinden iyiyse `OSM` kaynağıyla kabul (kullanıcı onayıyla USER'a çıkar); adsız alanlar da (Ağrı, Viranşehir 1–4 / 6 / 9 / 10, Bor 1–2) korelasyonla sınanabilir. Konum kuralı (CLAUDE.md) değişmez: kaynak notu ve tahmin işareti.
 - [ ] **20.3 Proje ekranı.** Üretim tahmini sayfasına "Kayıp üretim" kartı: santral bazında aylık planlı / plansız kayıp (MWh, %, TL), gün × saat kayıp takvimi; seçili gün grafiğine uydu ışınımı ve beklenen üretim çizgisi, kayıp saatler işaretli. İsteğe bağlı: açık referans sıralaması (santral başına sürüm 3 ile ilk KGÜP maliyeti, "iyileştirme iddiası değildir" notuyla). Sayfa adı "Üretim ve kayıp" olabilir.
 - [ ] **20.4 Sektör analizi.** `scripts/sector-curtailment.mts` → `.cache/epias/sector-curtailment.json`: sektör karnesinin konumu doğrulanmış güneş santralleri (karne 2026: 85 lisanslı GES; 20.2 kapsamına bağlı), santral ve ay bazında kayıp. Sektör sayfasında kart: aylık kayıp payı (planlı / plansız), YEKA ile diğerleri, en çok kaybedenler, 2025 → 2026 değişimi; capture rate kartıyla bağ (kısıntı sıfır fiyatlı saatlerde mi?).
@@ -573,6 +575,13 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 3. **Parasal karşılık:** kayıp × PTF yeterli mi (öneri), yoksa YEKDEM santrallerinde YEKDEM fiyatıyla mı?
 4. **Açık referans sıralaması** proje sayfasında gösterilsin mi (20.3, isteğe bağlı)?
 5. **Rapor (20.5):** toplayıcı raporuna şimdi mi, sektör analizi bittikten sonra mı?
+
+**Kararlar (15.10.2026, kullanıcı onayı: "devam et", önerilenlerle):**
+1. Sıra 20.1 → 20.3 → 20.2 → 20.4 → 20.5 → 20.6.
+2. Uydu korelasyonu ≥ 0,85 olan OSM adayı `OSM` kaynağıyla otomatik kabul (USER'a kullanıcı onayıyla çıkar).
+3. Parasal karşılık: kayıp MWh × PTF.
+4. Açık referans sıralaması proje sayfasında gösterilir ("iyileştirme iddiası değildir" notuyla).
+5. Rapor sektör analizinden (20.4) sonra.
 
 ---
 
