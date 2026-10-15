@@ -4,8 +4,8 @@
  * Kaynak Open-Meteo Previous Runs API (ECMWF IFS 0,25°; çoğu modelde arşiv 2024-03-06'dan). Her değişken üç sürümde
  * saklanır: geçerlilik saatinden N gün önce yapılmış tahmin (`d1`, `d2`) ve en yeni tahmin (`d0`, analize yakın; yalnız
  * sızıntı tavanı kıyası için). Teyit (15.10.2026, tek çalışma API'siyle birebir karşılaştırma): UTC geçerlilik saati H
- * için `previous_dayN` değeri N gün önceki, H'yi 6 saate aşağı yuvarlayan çalışmadan gelir (ilerleme süresi
- * N × 24 … N × 24 + 5 saat). Bilgi anı (GÖP D-1 12:30 TR = 09:30 UTC): `d2`'nin en geç çalışması D-2 18Z
+ * için `previous_dayN` değeri N gün önceki, H+1'i 6 saate aşağı yuvarlayan çalışmadan gelir (ilerleme süresi
+ * N × 24 − 1 … N × 24 + 4 saat; lib/forecast/info-time.ts). Bilgi anı (GÖP D-1 12:30 TR = 09:30 UTC): `d2`'nin en geç çalışması D-2 18Z
  * (≈ D-1 02:00 UTC yayımlanır) → temiz, ana sonuç. `d1` çoğu saatte D-1 06Z / 12Z / 18Z çalışmasından → sızıntılı,
  * yalnız iyimser üst sınır. Kural sizinti-denetcisi ve PLAN 15.0 / 15.2'de.
  *
