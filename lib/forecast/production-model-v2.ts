@@ -48,6 +48,10 @@ export interface SolarHourV2 extends SolarHour {
   diffuseLag48: number | null;
   /** Hava girdilerinin sürümü (gün önce); yoksa 2. 1 ve 0 kesimden sonradır: model yalnız `leakUpperBound` ile kabul eder */
   weatherLead?: WeatherLeadDays;
+  /** Gerçekleşen uydu ışınımı (satellite.ts): YALNIZ ETİKET (kısıntı tespiti); özelliklerde kullanılmaz */
+  satGhi?: number | null;
+  satDirect?: number | null;
+  satDiffuse?: number | null;
 }
 
 function features(h: SolarHourV2, site: SolarSite, mount: PanelMount): { x: number[]; info: FeatureInfo[]; poa: number; clearSky: number } | null {
@@ -82,7 +86,7 @@ export interface SolarModelV2 {
   mount: string;
   trainHours: number;
   trainMaxMwh: number;
-  excluded: { missing: number; night: number; zeroPrice: number; plannedCurtail: number; residual: number; commissioning: number };
+  excluded: { missing: number; night: number; zeroPrice: number; plannedCurtail: number; residual: number; commissioning: number; labeled: number };
 }
 
 interface Row {
@@ -91,9 +95,9 @@ interface Row {
   poa: number;
 }
 
-function fitMount(train: SolarHourV2[], site: SolarSite, mount: PanelMount, lambda: number, curtail: boolean, leak: boolean) {
+function fitMount(train: SolarHourV2[], site: SolarSite, mount: PanelMount, lambda: number, curtail: boolean, leak: boolean, exclude?: (h: SolarHourV2) => boolean) {
   const steady = steadyFrom(train);
-  const ex = { missing: 0, night: 0, zeroPrice: 0, plannedCurtail: 0, residual: 0, commissioning: 0 };
+  const ex = { missing: 0, night: 0, zeroPrice: 0, plannedCurtail: 0, residual: 0, commissioning: 0, labeled: 0 };
   const rows: Row[] = [];
   let peak = 0;
   for (const h of train) if (h.uevm !== null) peak = Math.max(peak, h.uevm);
@@ -118,6 +122,10 @@ function fitMount(train: SolarHourV2[], site: SolarSite, mount: PanelMount, lamb
     }
     if (steady !== null && h.t < steady) {
       ex.commissioning++;
+      continue;
+    }
+    if (exclude?.(h)) {
+      ex.labeled++;
       continue;
     }
     rows.push({ h, x: f.x, poa: f.poa });
@@ -147,19 +155,20 @@ function fitMount(train: SolarHourV2[], site: SolarSite, mount: PanelMount, lamb
 
 /**
  * Varsayılan donmuş ayardır (`V2_FROZEN`); `curtail: true` ve `mounts` yalnız tasarım karşılaştırması içindir.
+ * `exclude`: eğitimden çıkarılacak saatler (ör. uydu etiketli kayıp saatler; sürüm 3 = sürüm 2 + bu temizlik).
  * `leakUpperBound: true`: bilgi zamanı denetimi atlanır (1 / 0 gün önceki hava; yalnız sızıntı üst sınırı ölçümü, ana
  * sonuçta kullanılmaz). Bayrak yokken kesim sonrası girdi `LeakageError` verir.
  */
 export function fitSolarModelV2(
   train: SolarHourV2[],
   site: SolarSite,
-  opts: { lambda?: number; curtail?: boolean; mounts?: string[]; leakUpperBound?: boolean } = {}
+  opts: { lambda?: number; curtail?: boolean; mounts?: string[]; leakUpperBound?: boolean; exclude?: (h: SolarHourV2) => boolean } = {}
 ): SolarModelV2 {
   const lambda = opts.lambda ?? DEFAULT_PRODUCTION_LAMBDA;
   const leak = opts.leakUpperBound === true;
   let best: { id: string; mount: PanelMount; fit: NonNullable<ReturnType<typeof fitMount>> } | null = null;
   for (const m of PANEL_MOUNTS.filter((x) => !opts.mounts || opts.mounts.includes(x.id))) {
-    const fit = fitMount(train, site, m.mount, lambda, opts.curtail ?? V2_FROZEN.curtail, leak);
+    const fit = fitMount(train, site, m.mount, lambda, opts.curtail ?? V2_FROZEN.curtail, leak, opts.exclude);
     if (fit && (!best || fit.mae < best.fit.mae)) best = { id: m.id, mount: m.mount, fit };
   }
   if (!best) throw new Error("Eğitim için yeterli saat yok");

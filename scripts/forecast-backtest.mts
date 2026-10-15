@@ -2,7 +2,10 @@
  * Güneş üretim tahmini geriye dönük testi (PLAN 15.5): konumu ve hava verisi olan santraller, Ocak 2025 – son tam ay.
  * Her test ayı önceki 4 ayla eğitilir (walk-forward; sürüm 1 ve donmuş sürüm 2). Adaylar: sürüm 1, sürüm 2, ilk KGÜP
  * (şirket, ana rakip), D-2 kalıcılık; son KGÜP ayrıca referans (yalnız son planı olan saatler, sürüm 2 ile aynı saatlerde).
- * Maliyet: lib/forecast/production-backtest.ts (dönemin kuralı + KÜPST). Hem "tüm saatler" hem "sıfır fiyat hariç".
+ * Maliyet: lib/forecast/production-backtest.ts (dönemin kuralı + KÜPST). Saat kümeleri: tüm saatler, sıfır fiyat hariç ve
+ * ADİL: uyduyla işaretlenen kayıp saatler (curtailment.ts) bütün adaylardan çıkarılır — "planlı hariç" (şirketin kendini
+ * gerçekleştiren kısıntı planı) ve "bütün kayıplar hariç" (arıza / talimat da). Sürüm 3 = sürüm 2 + uydu etiketli eğitim
+ * temizliği (etiket yalnız eğitim saatleriyle, uydu gecikmesinden önce elde olanlarla).
  *
  *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/forecast-backtest.mts [sonAy=2026-08]
  * Çıktı: .cache/forecast/solar-backtest.json (gün bazında maliyetler: 15.6 bootstrap)
@@ -17,6 +20,8 @@ import { fitSolarModelV2, type SolarHourV2 } from "@/lib/forecast/production-mod
 import { evaluateForecasts, type CandidateResult } from "@/lib/forecast/production-backtest";
 import { listPoolPlants, readPoolPlantInfo } from "@/lib/pool/pool-store";
 import { loadSolarHours } from "@/lib/services/production-data";
+import { detectLostHours, trainingLossFilter, type LossKind } from "@/lib/forecast/curtailment";
+import { SATELLITE_DELAY_DAYS } from "@/lib/weather/satellite";
 
 const [ly, lm] = (process.argv[2] ?? "2026-08").split("-").map(Number);
 const FIRST = { y: 2025, m: 1 };
@@ -32,8 +37,9 @@ const market = new Map<number, MarketPriceRecord>(
   ])
 );
 
-type Hour = SolarHourV2 & { v1: number | null; v2: number | null };
-const results: Array<{ id: number; name: string; latitude: number; longitude: number; months: number; mounts: Record<string, number>; all: Record<string, CandidateResult>; exZero: Record<string, CandidateResult>; final: Record<string, CandidateResult> }> = [];
+type Hour = SolarHourV2 & { v1: number | null; v2: number | null; v3: number | null };
+type Sets = Record<string, Record<string, CandidateResult>>;
+const results: Array<{ id: number; name: string; latitude: number; longitude: number; months: number; mounts: Record<string, number>; sets: Sets; lost: { planned: number; unplanned: number; hours: number }; final: Record<string, CandidateResult> }> = [];
 const nf = (v: number, d = 1) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
 
 for (const id of await listPoolPlants()) {
@@ -51,43 +57,62 @@ for (const id of await listPoolPlants()) {
     const test = data.hours.filter((h) => h.t >= from && h.t < to);
     let v1: ReturnType<typeof fitSolarModel>;
     let v2: ReturnType<typeof fitSolarModelV2>;
+    let v3: ReturnType<typeof fitSolarModelV2>;
     try {
       v1 = fitSolarModel(train, data.site);
       v2 = fitSolarModelV2(train, data.site);
+      const clean = trainingLossFilter(
+        train.map((h) => ({ t: h.t, uevm: h.uevm, kgupFirst: h.kgupFirst, satGhi: h.satGhi ?? null, satDirect: h.satDirect ?? null, satDiffuse: h.satDiffuse ?? null })),
+        data.site,
+        from,
+        SATELLITE_DELAY_DAYS
+      );
+      v3 = fitSolarModelV2(train, data.site, { exclude: clean.exclude });
     } catch {
       continue; // eğitim verisi yetersiz (devreye alma öncesi)
     }
     used++;
     mounts[v2.mount] = (mounts[v2.mount] ?? 0) + 1;
-    for (const h of test) tested.push({ ...h, v1: v1.predict(h), v2: v2.predict(h) });
+    for (const h of test) tested.push({ ...h, v1: v1.predict(h), v2: v2.predict(h), v3: v3.predict(h) });
   }
   if (!tested.length) continue;
-  const candidates = { "sürüm 1": (h: Hour) => h.v1, "sürüm 2": (h: Hour) => h.v2, "ilk KGÜP": (h: Hour) => h.kgupFirst, "D-2": (h: Hour) => h.lag48 };
-  const all = evaluateForecasts(tested, candidates, market, "GES");
-  const exZero = evaluateForecasts(tested, candidates, market, "GES", (h) => h.ptf === null || h.ptf > 1);
-  const final = evaluateForecasts(tested, { "sürüm 2": (h: Hour) => h.v2, "son KGÜP": (h: Hour) => h.kgupFinal }, market, "GES");
-  results.push({ id, name: data.name, latitude: data.site.latitude, longitude: data.site.longitude, months: used, mounts, all, exZero, final });
-  const a = all;
+  // Ölçüm aracı (değerlendirme maskesi): uyduyla kayıp saatler, test döneminin tamamıyla; bütün adaylara aynı uygulanır
+  const loss = detectLostHours(
+    tested.map((h) => ({ t: h.t, uevm: h.uevm, kgupFirst: h.kgupFirst, satGhi: h.satGhi ?? null, satDirect: h.satDirect ?? null, satDiffuse: h.satDiffuse ?? null })),
+    data.site
+  );
+  const kind = (h: Hour): LossKind | undefined => loss.lost.get(h.t);
+  const candidates = { "sürüm 1": (h: Hour) => h.v1, "sürüm 2": (h: Hour) => h.v2, "sürüm 3": (h: Hour) => h.v3, "ilk KGÜP": (h: Hour) => h.kgupFirst, "D-2": (h: Hour) => h.lag48 };
+  const sets: Sets = {
+    all: evaluateForecasts(tested, candidates, market, "GES"),
+    exZero: evaluateForecasts(tested, candidates, market, "GES", (h) => h.ptf === null || h.ptf > 1),
+    exPlanned: evaluateForecasts(tested, candidates, market, "GES", (h) => kind(h) !== "planned"),
+    exLoss: evaluateForecasts(tested, candidates, market, "GES", (h) => kind(h) === undefined),
+  };
+  const final = evaluateForecasts(tested, { "sürüm 3": (h: Hour) => h.v3, "son KGÜP": (h: Hour) => h.kgupFinal }, market, "GES");
+  results.push({ id, name: data.name, latitude: data.site.latitude, longitude: data.site.longitude, months: used, mounts, sets, lost: { ...loss.lostMwh, hours: loss.lost.size }, final });
+  const a = sets.exLoss;
   const tl = (n: string) => a[n].totalTl / Math.max(1, a[n].uevmMwh);
   console.log(
-    `${data.name.slice(0, 24).padEnd(24)} ${String(used).padStart(2)} ay  hata %: v1 ${nf(a["sürüm 1"].maePct)} v2 ${nf(a["sürüm 2"].maePct)} KGÜP ${nf(a["ilk KGÜP"].maePct)} D-2 ${nf(a["D-2"].maePct)}  ` +
-      `maliyet TL/MWh: v1 ${nf(tl("sürüm 1"))} v2 ${nf(tl("sürüm 2"))} KGÜP ${nf(tl("ilk KGÜP"))} D-2 ${nf(tl("D-2"))}  ${a["sürüm 2"].totalTl < a["ilk KGÜP"].totalTl ? "v2 ✓" : ""}`
+    `${data.name.slice(0, 24).padEnd(24)} kayıp hariç · hata %: v2 ${nf(a["sürüm 2"].maePct)} v3 ${nf(a["sürüm 3"].maePct)} KGÜP ${nf(a["ilk KGÜP"].maePct)}  ` +
+      `TL/MWh: v2 ${nf(tl("sürüm 2"))} v3 ${nf(tl("sürüm 3"))} KGÜP ${nf(tl("ilk KGÜP"))}  ${a["sürüm 3"].totalTl < a["ilk KGÜP"].totalTl ? "v3 ✓" : ""}  (kayıp saat ${loss.lost.size})`
   );
 }
 
 fs.mkdirSync(path.join(process.cwd(), ".cache", "forecast"), { recursive: true });
 fs.writeFileSync(path.join(process.cwd(), ".cache", "forecast", "solar-backtest.json"), JSON.stringify({ generatedAt: new Date().toISOString(), period: { from: "2025-01", to: `${ly}-${String(lm).padStart(2, "0")}` }, plants: results }));
 
-const sum = (k: "all" | "exZero", n: string, f: "totalTl" | "uevmMwh") => results.reduce((s, r) => s + r[k][n][f], 0);
-for (const k of ["all", "exZero"] as const) {
-  console.log(`\n${k === "all" ? "Tüm saatler" : "Sıfır fiyat hariç"}: toplam maliyet (TL/MWh) ve ilk KGÜP'ü yenen santral`);
-  for (const n of ["sürüm 1", "sürüm 2", "ilk KGÜP", "D-2"]) {
-    const wins = n === "ilk KGÜP" ? "" : `  yendiği santral ${results.filter((r) => r[k][n].totalTl < r[k]["ilk KGÜP"].totalTl).length} / ${results.length}`;
+const SET_LABEL: Record<string, string> = { all: "Tüm saatler", exZero: "Sıfır fiyat hariç", exPlanned: "Planlı kısıntı hariç (uydu)", exLoss: "Bütün kayıp saatler hariç (uydu)" };
+const sum = (k: string, n: string, f: "totalTl" | "uevmMwh" | "hours") => results.reduce((s, r) => s + r.sets[k][n][f], 0);
+for (const k of Object.keys(SET_LABEL)) {
+  console.log(`\n${SET_LABEL[k]} (${sum(k, "ilk KGÜP", "hours")} saat): toplam maliyet ve ilk KGÜP'ü yenen santral`);
+  for (const n of ["sürüm 1", "sürüm 2", "sürüm 3", "ilk KGÜP", "D-2"]) {
+    const wins = n === "ilk KGÜP" ? "" : `  yendiği santral ${results.filter((r) => r.sets[k][n].totalTl < r.sets[k]["ilk KGÜP"].totalTl).length} / ${results.length}`;
     console.log(`  ${n.padEnd(9)} ${nf(sum(k, n, "totalTl") / 1e6, 2)} M TL  (${nf(sum(k, n, "totalTl") / sum(k, n, "uevmMwh"))} TL/MWh)${wins}`);
   }
 }
 const fin = results.filter((r) => r.final["son KGÜP"].hours > 0);
 console.log(
-  `\nReferans (son planı olan saatler, ${fin.length} santral): sürüm 2 ${nf(fin.reduce((s, r) => s + r.final["sürüm 2"].totalTl, 0) / 1e6, 2)} M TL, son KGÜP ${nf(fin.reduce((s, r) => s + r.final["son KGÜP"].totalTl, 0) / 1e6, 2)} M TL`
+  `\nReferans (son planı olan saatler, ${fin.length} santral): sürüm 3 ${nf(fin.reduce((s, r) => s + r.final["sürüm 3"].totalTl, 0) / 1e6, 2)} M TL, son KGÜP ${nf(fin.reduce((s, r) => s + r.final["son KGÜP"].totalTl, 0) / 1e6, 2)} M TL`
 );
 await prisma.$disconnect();

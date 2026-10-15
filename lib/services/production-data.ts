@@ -9,7 +9,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { readPoolPlantInfo, readPoolYear } from "@/lib/pool/pool-store";
-import { readWeatherYear } from "@/lib/weather/weather-store";
+import { readSatelliteYear, readWeatherYear } from "@/lib/weather/weather-store";
 import type { WeatherLead } from "@/lib/weather/weather-codec";
 import type { WeatherLeadDays } from "@/lib/forecast/info-time";
 import type { SolarSite } from "@/lib/forecast/production-model";
@@ -63,7 +63,8 @@ export async function loadSolarHours(
       prev.set(s0 + i * HOUR, [d.shortwave_radiation[i], d.direct_radiation[i], d.diffuse_radiation[i]]);
   }
   for (let y = firstYear; y <= lastYear; y++) {
-    const [p, w] = await Promise.all([readPoolYear(epiasPlantId, y), readWeatherYear(epiasPlantId, y)]);
+    const [p, w, sat] = await Promise.all([readPoolYear(epiasPlantId, y), readWeatherYear(epiasPlantId, y), readSatelliteYear(epiasPlantId, y)]);
+    const si = (t: number) => (sat ? (t - Date.parse(sat.start)) / HOUR : -1);
     if (!w) continue;
     anyWeather = true;
     const start = Date.parse(w.start);
@@ -88,6 +89,9 @@ export async function loadSolarHours(
         ghiLag48: i >= 48 ? d2.shortwave_radiation[i - 48] : (prev.get(t - 48 * HOUR)?.[0] ?? null),
         directLag48: i >= 48 ? d2.direct_radiation[i - 48] : (prev.get(t - 48 * HOUR)?.[1] ?? null),
         diffuseLag48: i >= 48 ? d2.diffuse_radiation[i - 48] : (prev.get(t - 48 * HOUR)?.[2] ?? null),
+        satGhi: sat ? sat.ghi[si(t)] ?? null : null,
+        satDirect: sat ? sat.direct[si(t)] ?? null : null,
+        satDiffuse: sat ? sat.diffuse[si(t)] ?? null : null,
       });
     }
   }

@@ -1,7 +1,8 @@
 /**
  * Üretim tahmini sürüm 2 tasarımı (PLAN 15.5 öncesi): YALNIZ 2024 verisi. Yükleyici 2025-01-01 sonrasını reddeder.
  * Test ayları Temmuz–Aralık 2024, her biri önceki 4 ayla eğitilir (hava arşivi 2024-03-08'den). Ölçü: eşleştirilmiş
- * gündüz saatlerinde ortalama mutlak hata ÷ ortalama üretim; santral-ay ortalaması.
+ * gündüz saatlerinde ortalama mutlak hata ÷ ortalama üretim; santral-ay ortalaması. Sürüm 3 (15.5 ek): donmuş sürüm 2 +
+ * uyduyla işaretlenen kayıp saatlerin eğitimden çıkarılması (curtailment.ts `trainingLossFilter`).
  *
  *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/forecast-design-2024.mts
  */
@@ -10,6 +11,8 @@ import { prisma } from "@/lib/prisma";
 import { fitSolarModel } from "@/lib/forecast/production-model";
 import { fitSolarModelV2, type SolarHourV2 } from "@/lib/forecast/production-model-v2";
 import { loadSolarHours } from "@/lib/services/production-data";
+import { trainingLossFilter } from "@/lib/forecast/curtailment";
+import { SATELLITE_DELAY_DAYS } from "@/lib/weather/satellite";
 
 const LOCK = Date.UTC(2025, 0, 1);
 // 2024'ü tam yıl üreten konumlu santraller
@@ -17,7 +20,7 @@ const PLANTS = [15303, 15764, 5000620, 16645, 16223, 15003, 12305, 12348, 10590,
 const MONTHS = [7, 8, 9, 10, 11, 12];
 
 type Pred = (h: SolarHourV2) => number | null;
-const variants = ["v1", "v2", "v2 süzgeçsiz", "v2 sabit-20", "ilk KGÜP", "D-2"] as const;
+const variants = ["v1", "v2", "v2 süzgeçsiz", "v2 sabit-20", "v3 uydu temizliği", "ilk KGÜP", "D-2"] as const;
 const sums: Record<string, number[]> = Object.fromEntries(variants.map((v) => [v, []]));
 const mounts: Record<string, number> = {};
 const nf = (v: number, d = 1) => v.toFixed(d).replace(".", ",");
@@ -35,12 +38,20 @@ for (const id of PLANTS) {
     const v2 = fitSolarModelV2(train, data.site, { curtail: true });
     const v2n = fitSolarModelV2(train, data.site, { curtail: false });
     const v2f = fitSolarModelV2(train, data.site, { curtail: true, mounts: ["sabit-20"] });
+    const clean = trainingLossFilter(
+      train.map((h) => ({ t: h.t, uevm: h.uevm, kgupFirst: h.kgupFirst, satGhi: h.satGhi ?? null, satDirect: h.satDirect ?? null, satDiffuse: h.satDiffuse ?? null })),
+      data.site,
+      from,
+      SATELLITE_DELAY_DAYS
+    );
+    const v3 = fitSolarModelV2(train, data.site, { exclude: clean.exclude });
     mounts[v2.mount] = (mounts[v2.mount] ?? 0) + 1;
     const preds: Record<(typeof variants)[number], Pred> = {
       v1: (h) => v1.predict(h),
       v2: (h) => v2.predict(h),
       "v2 süzgeçsiz": (h) => v2n.predict(h),
       "v2 sabit-20": (h) => v2f.predict(h),
+      "v3 uydu temizliği": (h) => v3.predict(h),
       "ilk KGÜP": (h) => h.kgupFirst,
       "D-2": (h) => h.lag48,
     };
