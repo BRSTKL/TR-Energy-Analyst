@@ -199,8 +199,8 @@ export default function SectorPage() {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: "unitTl", asc: true });
   const [selected, setSelected] = useState<string[]>([]);
-  /** Santraller (karne) ya da Toplayıcılar (toplayıcılar arası kıyas; PLAN 9.1) */
-  const [tab, setTab] = useState<"plants" | "aggregators">("plants");
+  /** Santraller (karne), Toplayıcılar (toplayıcılar arası kıyas; PLAN 9.1) ya da Kayıp üretim (uyduyla; PLAN 20.4) */
+  const [tab, setTab] = useState<"plants" | "aggregators" | "loss">("plants");
 
   useEffect(() => {
     setError(null);
@@ -313,6 +313,7 @@ export default function SectorPage() {
             [
               ["plants", "Santraller"],
               ["aggregators", "Toplayıcılar"],
+              ["loss", "Kayıp üretim"],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -327,6 +328,8 @@ export default function SectorPage() {
         </div>
         {tab === "aggregators" ? (
           <AggregatorBenchmarkTab year={data.year} />
+        ) : tab === "loss" ? (
+          <SectorLossCard />
         ) : (
         <>
         <div className="flex flex-wrap items-center gap-2">
@@ -422,8 +425,6 @@ export default function SectorPage() {
             ))}
           </div>
         )}
-
-        {tech === "GES" && <SectorLossCard />}
 
         <Card>
           <CardHeader className="gap-3 pb-3 md:flex-row md:items-center md:justify-between md:space-y-0">

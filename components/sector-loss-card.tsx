@@ -41,10 +41,14 @@ export function SectorLossCard() {
     for (const y of data.years) row[String(y.year)] = y.monthly.all.find((m) => m.month.endsWith(`-${mm}`))?.lossPct ?? null;
     return row;
   });
-  const top = data.plants
-    .filter((p) => p.years[cur.year])
-    .sort((a, b) => b.years[cur.year].lossPct - a.years[cur.year].lossPct)
-    .slice(0, 10);
+  // Bütün santraller: son yılın kaybına göre (son yıl verisi olmayanlar sonda, önceki yıla göre)
+  const rows = [...data.plants].sort((a, b) => {
+    const x = a.years[cur.year]?.lossPct ?? -1;
+    const y = b.years[cur.year]?.lossPct ?? -1;
+    return y - x || (b.years[prev?.year ?? 0]?.lossPct ?? -1) - (a.years[prev?.year ?? 0]?.lossPct ?? -1);
+  });
+  const pct = (v: number | undefined, d = 1) => (v === undefined ? "–" : `%${nf(v, d)}`);
+  const mtl = (v: number | undefined) => (v === undefined ? "–" : v >= 1e6 ? `${nf(v / 1e6, 1)} M` : `${nf(v / 1e3, 0)} bin`);
   const all = g(cur, "all")!;
   const allPrev = g(prev, "all");
   const window = `Ocak–${MONTHS_SHORT[data.lastMonth - 1]}`;
@@ -125,32 +129,45 @@ export function SectorLossCard() {
         </div>
 
         <div className="overflow-x-auto">
-          <p className="mb-1 text-xs font-medium text-slate-500">{cur.year}&apos;da en çok kaybeden santraller</p>
+          <p className="mb-1 text-xs font-medium text-slate-500">
+            Santraller ({rows.length}), {cur.year} kaybına göre · {window}
+          </p>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Santral</TableHead>
                 <TableHead className="text-right">Kayıp {cur.year}</TableHead>
                 <TableHead className="text-right">Planlı payı</TableHead>
-                <TableHead className="text-right">Kayıp {prev?.year}</TableHead>
+                <TableHead className="text-right">TL karşılığı {cur.year}</TableHead>
+                {prev && <TableHead className="text-right">Kayıp {prev.year}</TableHead>}
+                {prev && <TableHead className="text-right">Planlı payı</TableHead>}
                 <TableHead>Konum</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {top.map((p) => (
-                <TableRow key={p.epiasPlantId}>
-                  <TableCell className="font-medium">
-                    {p.name}
-                    {p.yeka && <span className="ml-1.5 rounded bg-slate-100 px-1 text-[10px] text-slate-500">YEKA</span>}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">%{nf(p.years[cur.year].lossPct)}</TableCell>
-                  <TableCell className="text-right tabular-nums">%{nf(p.years[cur.year].plannedSharePct, 0)}</TableCell>
-                  <TableCell className="text-right tabular-nums text-slate-500">{prev && p.years[prev.year] ? `%${nf(p.years[prev.year].lossPct)}` : "–"}</TableCell>
-                  <TableCell className="text-xs text-slate-500">{SOURCE[p.locationSource] ?? p.locationSource}</TableCell>
-                </TableRow>
-              ))}
+              {rows.map((p) => {
+                const c = p.years[cur.year];
+                const o = prev ? p.years[prev.year] : undefined;
+                return (
+                  <TableRow key={p.epiasPlantId}>
+                    <TableCell className="font-medium">
+                      {p.name}
+                      {p.yeka && <span className="ml-1.5 rounded bg-slate-100 px-1 text-[10px] text-slate-500">YEKA</span>}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{pct(c?.lossPct)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{pct(c?.plannedSharePct, 0)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{mtl(c ? c.plannedValueTl + c.unplannedValueTl : undefined)}</TableCell>
+                    {prev && <TableCell className="text-right tabular-nums text-slate-500">{pct(o?.lossPct)}</TableCell>}
+                    {prev && <TableCell className="text-right tabular-nums text-slate-500">{pct(o?.plannedSharePct, 0)}</TableCell>}
+                    <TableCell className="text-xs text-slate-500">{SOURCE[p.locationSource] ?? p.locationSource}</TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
+          <p className="mt-1 text-xs text-slate-500">
+            &quot;–&quot;: o yılın {window} döneminde üretim yok ya da santral devreye alma dönemindeydi (kayıp sayılmadı). TL karşılığı kayıp MWh × PTF.
+          </p>
         </div>
 
         <p className="text-xs leading-relaxed text-slate-500">
