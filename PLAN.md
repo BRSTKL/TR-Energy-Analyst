@@ -411,6 +411,36 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 4. Rapor: tek slayt "2027 dengesizlik bütçesi".
 5. (17.2 sonucu, bekliyor) Risk bandı: geçmişle sınamadan ayarlı bant (medyan × 1,98 / × 3,43) ana bant, tek yılın benzetimi "aynı yıl tekrarlanırsa" olarak ikincil (önerim) ya da yalnız benzetim bandı + uyarı.
 
+### Aşama 18: GİP likiditesi ve işlem sınırı ▶ · karar 15.10.2026
+**Amaç:** "Bir portföy GİP'te saatte gerçekçi olarak kaç MWh kapatabilir?" sorusunu ölçüye dayandırmak ve gün içi stratejilerinin hepsine aynı, portföy bazında sınırı uygulamak. Ticaret müdürü değerlendirmesinin 6. maddesi.
+
+**Mevcut durum (15.10.2026 kod incelemesi):**
+- Gerçekçi kapatma senaryosu (`evaluateRealisticClosing`) ve kalıcılık kuralı (`persistenceTradeGain`) saatlik işlemi o saatin GİP eşleşme hacminin **%10**'uyla sınırlıyor (`DEFAULT_INTRADAY_REALISM.volumeCapPercent`); zor saatte fiyat en kötü eşleşmeye doğru %50 kayıyor. **%10 dayanaksız bir varsayım.**
+- Kalıcılık kuralında sınır **santral başına**: 61 santrallik portföy aynı saatte piyasanın %610'u kadar işlem yapabilir. Portföy sınırı yalnız gerçekçi kapatma senaryosunda var.
+- Yön tahminiyle plan ayarında (14.4, 14.6) **hiç sınır yok**.
+- Veri: MarketData'da 2024–2026 her saat GİP hacmi (saatlik kontrat, ortalama ≈ 1.700–2.000 MWh/saat; en az 322, en çok 5.515), en düşük ve en yüksek eşleşme fiyatı. Havuzda 2026 için toplayıcı santrallerinin ilk ve son KGÜP'ü (son plan kapsamı %100).
+
+**Adımlar:**
+- [x] **18.1 Ölçüm: gerçekleşen katılım.** ✅ 15.10.2026. `lib/analysis/gip-liquidity.ts` (`portfolioTradeHours`, `participationStats`, `capImpact`, `liquidityProfile`; 4 test), `scripts/gip-participation.mts` → `.cache/epias/gip-participation-2026.json` (2 sn, EPİAŞ'a gidilmez). 2026 Ocak–Ağustos, 30 toplayıcı, kıyasta 23 (kapsam %100, üretim ≥ 100 GWh).
+  - Katılım (saatlik net |ilk − son KGÜP| / GİP hacmi) portföy büyüklüğüyle artıyor: Aksa (ort. 692 MWh/saat) P90 %8,0, P99 %12,5, en çok %19; Pure P90 %7,4, P99 %13,7, en çok %28; Inavitas P90 %3,8, P99 %8,1; Gain P90 %0,7. Büyük 12 toplayıcının P90 medyanı %2,0, P99 medyanı %4,3.
+  - Bugünkü %10 sınırı gerçekte nadiren bağlıyor: Aksa'da saatlerin %4,2'sinde, işlemin %1,4'ü; Pure %3,8 / %2,8; diğerlerinde ≈ 0.
+  - GİP hacmi: aylık medyan 1.345–2.235 MWh/saat (2024–2026, hafif artış); günün saatine göre gece ≈ 1.250, öğleden sonra ≈ 2.400. En düşük–en yüksek eşleşme fiyatı aralığı hacimden bağımsız ≈ %25–27 (hacme bağlı kayma açık veride görülmüyor).
+  - **Karar 1 gözden geçirilmeli:** "büyük toplayıcıların P90'ı" (≈ %2) toplayıcıların genelde ne yaptığını gösterir, piyasanın ne kadarını kaldırdığını değil; sınır olursa stratejileri gereksiz kısar. Öneri: dayanak en büyük portföylerin gözlenen üst katılımı (P99 ≈ %12–14); %10 bunun ihtiyatlı altı, korunur ve artık veriyle desteklidir. Asıl düzeltme portföy bazında sınır ve yön tahminiyle plan ayarına uygulanması (18.2).
+- [ ] **18.2 Sınır kuralı.** Varsayılan sınır %10 yerine 18.1'den (karar 1). Sınır **portföy bazında** (saatte tüm santrallerin toplam işlemi); kalıcılık kuralı ve yön tahminiyle plan ayarı da aynı fonksiyonu kullanır. Birim test: 61 santrallik portföyde toplam işlem sınırı aşamaz.
+- [ ] **18.3 Etki.** Geriye dönük test (kalıcılık, 14.4, 14.6) ve gerçekçi kapatma senaryosu yeni sınırla yeniden çalıştırılır; değişen kazançlar portföy başına tabloya. Raporun gün içi slaytı ve fırsat metni sınırdan etkileniyorsa denetim kuralları (`intraday-*`) güncellenir.
+- [ ] **18.4 Ekran.** Piyasa sayfasında "GİP likiditesi" kartı (saatlik hacim, gün içi profil, aylık eğilim) ve tek cümle: "Bu portföy için saatte gerçekçi en fazla ≈ X MWh (saatlik hacmin %Y'si)". Geriye dönük test sayfasında sınır ve kaç saatte devreye girdiği görünür.
+- [ ] **18.5 Metin ve kabul.** Metodoloji bölümü; Gain ve Inavitas için sınırın etkisi; `npm test`, `npm run check:reports` 0 hata.
+
+**Sınırlar (metodolojide):**
+- GİP hacmi saatlik kontratın eşleşmesidir; 15 dakikalık ve blok ürünler ayrıysa toplam likidite daha yüksektir (18.1'de veri tanımı teyit edilir).
+- Plan değişikliğinin hepsi GİP işlemi olmayabilir (ikili anlaşma, talimat); katılım bu yüzden üst sınırdır.
+- Emir defteri açık veride yok: fiyat etkisi yalnız en düşük–en yüksek eşleşme aralığıyla kabaca tahmin edilir.
+
+**Kararlar (15.10.2026, kullanıcı onayı):**
+1. Sınırın dayanağı (18.1 sonrası değiştirildi, kullanıcı onayı 15.10.2026): en büyük portföylerin gözlenen üst katılımı (P99 ≈ %12–14, Aksa / Pure). Sınır **%10** korunur: bunun ihtiyatlı altı, artık veriyle destekli. Sebep: P90 medyanı (≈ %2) toplayıcıların genelde ne yaptığını gösterir, piyasanın ne kadarını kaldırdığını değil; ölçülen katılım zaten üst sınır (plan değişikliğinin hepsi GİP işlemi olmayabilir); %10 ile %13 farkı küçük (sınır en büyük portföyde saatlerin %4'ünde bağlıyor). 18.3'te etki %10 ve %13 ile birlikte gösterilir.
+2. Sınır portföy bazında (saatte tüm santrallerin toplam işlemi).
+3. Ekran: Piyasa sayfasında "GİP likiditesi" kartı + geriye dönük test sayfasında not.
+
 ---
 
 ## 3. Karar noktaları (sizin onayınız gerekiyor)
