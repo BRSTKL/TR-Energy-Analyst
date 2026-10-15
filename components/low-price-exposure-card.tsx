@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { LOW_PRICE_MAX, ZERO_PRICE_MAX } from "@/lib/analysis/market-summary";
 import type { ComparisonRow, PlantComparisonResult } from "@/lib/analysis/plant-comparison";
+import type { CapturePosition } from "@/lib/services/sector-capture";
 
 const num = (v: number, digits = 0) => v.toLocaleString("tr-TR", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 const share = (part: number, whole: number, digits = 1) => (whole > 0 ? `%${num((part / whole) * 100, digits)}` : "–");
@@ -20,7 +21,7 @@ const tl = (v: number) =>
 const rateImpact = (lossTl: number, mwh: number, baseloadPtf: number) =>
   mwh > 0 && baseloadPtf > 0 ? `${lossTl > 0 ? "−" : "+"}${num((Math.abs(lossTl) / (mwh * baseloadPtf)) * 100, 1)} puan` : "–";
 
-function Row({ row, yekdem, baseloadPtf }: { row: ComparisonRow; yekdem: boolean; baseloadPtf: number }) {
+function Row({ row, yekdem, baseloadPtf, position, showPosition }: { row: ComparisonRow; yekdem: boolean; baseloadPtf: number; position?: CapturePosition; showPosition: boolean }) {
   const lp = row.lowPrice;
   const isGroup = row.level !== "plant";
   return (
@@ -42,6 +43,20 @@ function Row({ row, yekdem, baseloadPtf }: { row: ComparisonRow; yekdem: boolean
       <TableCell className="text-right font-mono">{row.totalActualMwh > 0 ? num(lp.lowLossTl / row.totalActualMwh, 1) : "–"}</TableCell>
       <TableCell className="text-right font-mono">{rateImpact(lp.lowLossTl, row.totalActualMwh, baseloadPtf)}</TableCell>
       <TableCell className="text-right font-mono">%{num(row.captureRate * 100, 1)}</TableCell>
+      {showPosition && (
+        <TableCell className="text-right text-xs" title={position ? `${position.groupLabel}: ${position.sectorPlants} santral, medyan %${num(position.sectorMedianPct, 1)}` : undefined}>
+          {position ? (
+            <>
+              <span className="font-mono">{num(position.percentile)}. yüzdelik</span>
+              <span className="block text-2xs text-slate-500">
+                {position.groupLabel} medyanı %{num(position.sectorMedianPct, 1)}
+              </span>
+            </>
+          ) : (
+            "–"
+          )}
+        </TableCell>
+      )}
     </TableRow>
   );
 }
@@ -53,7 +68,17 @@ function Row({ row, yekdem, baseloadPtf }: { row: ComparisonRow; yekdem: boolean
  *
  * @param yekdemPlants YEKDEM santrallerinin geliri YEKDEM fiyatındandır; bu satırlardaki kayıp piyasa değeridir
  */
-export function LowPriceExposureCard({ comparison, yekdemPlants = [] }: { comparison: PlantComparisonResult; yekdemPlants?: string[] }) {
+export function LowPriceExposureCard({
+  comparison,
+  yekdemPlants = [],
+  sectorCapture = null,
+}: {
+  comparison: PlantComparisonResult;
+  yekdemPlants?: string[];
+  /** PLAN 19.3: capture rate'in sektördeki yeri (satır anahtarı → yüzdelik); yoksa sütun gösterilmez */
+  sectorCapture?: Record<string, CapturePosition> | null;
+}) {
+  const showPosition = !!sectorCapture && Object.keys(sectorCapture).length > 0;
   const pf = comparison.portfolio;
   if (!pf) return null;
   const lp = pf.lowPrice;
@@ -120,13 +145,21 @@ export function LowPriceExposureCard({ comparison, yekdemPlants = [] }: { compar
                 <TableHead className="text-right">₺/MWh (tüm üretim)</TableHead>
                 <TableHead className="text-right">Brüt etki (puan)</TableHead>
                 <TableHead className="text-right">Net capture rate</TableHead>
+                {showPosition && <TableHead className="text-right">Sektördeki yer</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map((row) => (
-                <Row key={row.key} row={row} yekdem={row.level === "plant" && yekdemPlants.includes(row.label)} baseloadPtf={comparison.baseloadPtf} />
+                <Row
+                  key={row.key}
+                  row={row}
+                  yekdem={row.level === "plant" && yekdemPlants.includes(row.label)}
+                  baseloadPtf={comparison.baseloadPtf}
+                  position={sectorCapture?.[row.key]}
+                  showPosition={showPosition}
+                />
               ))}
-              <Row row={pf} yekdem={false} baseloadPtf={comparison.baseloadPtf} />
+              <Row row={pf} yekdem={false} baseloadPtf={comparison.baseloadPtf} showPosition={showPosition} />
             </TableBody>
           </Table>
         </div>
@@ -134,6 +167,8 @@ export function LowPriceExposureCard({ comparison, yekdemPlants = [] }: { compar
           Değer kaybı = Σ üretim × (baz PTF − PTF), yalnızca {num(LOW_PRICE_MAX)} ₺ altındaki saatler. Brüt etki = değer kaybı /
           (üretim × baz PTF): bu saatler baz PTF&apos;den satılsaydı capture rate&apos;in kaç puan yükseleceği. Net capture rate =
           üretim ağırlıklı PTF / baz PTF (tüm saatler).
+          {showPosition &&
+            " Sektördeki yer: aynı teknolojinin (hidroda barajlı / nehir tipi) sektör karnesindeki santralleri arasında capture rate yüzdeliği; yüksek = ucuz saatlere daha az maruz. Teknoloji toplamı teknolojinin santralleriyle kıyaslanır."}
           {yekdemPlants.length > 0 && " YEKDEM santrallerinin geliri YEKDEM fiyatından oluşur; bu satırlardaki kayıp üretimin piyasa değeridir, santralin fiili gelir kaybı değildir."}{" "}
           Dönemin fiyat seyri için{" "}
           <Link href="/market" className="text-sky-700 underline">

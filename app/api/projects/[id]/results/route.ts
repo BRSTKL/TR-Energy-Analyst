@@ -18,6 +18,7 @@ import {
   toPricingProfile,
 } from "@/lib/calculations/types";
 import { comparePlants } from "@/lib/analysis/plant-comparison";
+import { capturePositions } from "@/lib/services/sector-capture";
 import { analyzePortfolioNetting } from "@/lib/analysis/portfolio-netting";
 import { buildPlantReport, settleByCompany } from "@/lib/report/plant-report";
 import { buildReportContext } from "@/lib/services/report-context";
@@ -167,6 +168,7 @@ async function handleGET(_request: Request, { params }: { params: { id: string }
       hourly: p.hourly,
     }));
 
+    const comparison = comparePlants(plantInputs);
     return NextResponse.json({
       success: true,
       project: {
@@ -199,7 +201,13 @@ async function handleGET(_request: Request, { params }: { params: { id: string }
         // Uzlaştırma biriminde netleşmiş saatlerin profili (santral profillerinin toplamı brüt olurdu)
         hourProfile: hourProfile(portfolioHourly),
       },
-      comparison: comparePlants(plantInputs),
+      comparison,
+      // PLAN 19.3: santrallerin ve teknoloji toplamlarının capture rate'inin sektördeki yeri (sector-capture.json; yoksa null)
+      sectorCapture: capturePositions(
+        [...comparison.plants, ...comparison.technologies],
+        project.plants.map((p) => ({ plantId: p.id, epiasPlantId: p.epiasPlantId })),
+        new Date(plantInputs.find((p) => p.hourly.length)?.hourly[0].timestamp ?? Date.now()).getUTCFullYear()
+      ),
       netting: analyzePortfolioNetting(plantInputs, projectProfile),
       sapma,
     });

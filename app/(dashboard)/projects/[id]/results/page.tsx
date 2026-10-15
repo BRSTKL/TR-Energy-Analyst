@@ -71,6 +71,7 @@ import { PlantComparisonCard } from "@/components/plant-comparison-card";
 import { LowPriceExposureCard } from "@/components/low-price-exposure-card";
 import { ForecastAccuracyCard } from "@/components/forecast-accuracy-card";
 import type { PlantComparisonResult } from "@/lib/analysis/plant-comparison";
+import type { CapturePosition } from "@/lib/services/sector-capture";
 import { NettingCard } from "@/components/netting-card";
 import { SapmaYukuCard, type SapmaSummary } from "@/components/sapma-yuku-card";
 import type { NettingResult } from "@/lib/analysis/portfolio-netting";
@@ -103,6 +104,8 @@ interface ApiResponse {
     hourProfile?: HourBucket[];
   };
   comparison?: PlantComparisonResult;
+  /** PLAN 19.3: capture rate'in sektördeki yeri */
+  sectorCapture?: Record<string, CapturePosition> | null;
   netting?: NettingResult;
   /** Başlık altındaki sade özet */
   summary?: { plantCount: number; capacityMw: number; companies: string[]; source: string };
@@ -922,7 +925,7 @@ export default function ProjectResultsPage() {
 
         {/* Düşük ve sıfır fiyatlı saat maruziyeti */}
         {data.comparison && (
-          <LowPriceExposureCard comparison={data.comparison} yekdemPlants={data.sapma?.yekdem?.plantNames ?? []} />
+          <LowPriceExposureCard comparison={data.comparison} yekdemPlants={data.sapma?.yekdem?.plantNames ?? []} sectorCapture={data.sectorCapture ?? null} />
         )}
 
         {/* DSG Netleştirme Analizi */}

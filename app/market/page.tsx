@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { LOW_PRICE_MAX, ZERO_PRICE_MAX, pairMonths, type MarketSummary } from "@/lib/analysis/market-summary";
 import type { DirectionBacktest, Forecaster } from "@/lib/analysis/direction-backtest";
 import type { GipLiquidity } from "@/lib/services/gip-liquidity";
+import type { SectorCaptureYear } from "@/lib/services/sector-capture";
 
 import { MethodLink } from "@/components/method-link";
 import { pctOf, yearLocative } from "@/lib/format";
@@ -460,6 +461,8 @@ export default function MarketPage() {
 
         <GipLiquidityCard />
 
+        <CaptureRateCard />
+
         <Card className="shadow-sm">
           <CardHeader className="gap-3 pb-3 md:flex-row md:items-center md:justify-between md:space-y-0">
             <div>
@@ -771,6 +774,133 @@ function GipLiquidityCard() {
           {data.membershipAsOf}). Hacim saatlik kontratın eşleşmesidir. Emir defteri açık veride yok: en düşük ile en yüksek eşleşme fiyatı
           arasındaki fark hacimden bağımsız{range.length ? ` (≈ %${nf(Math.min(...range.map((q) => q.rangePct)))}–${nf(Math.max(...range.map((q) => q.rangePct)))} ortalamanın)` : ""}; hacme
           bağlı fiyat kayması açık veriyle görülmüyor.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+const CAPTURE_TECHS: Array<{ id: string; label: string }> = [
+  { id: "GES", label: "Güneş" },
+  { id: "RES", label: "Rüzgâr" },
+  { id: "HES", label: "Hidro" },
+];
+
+/** PLAN 19.3: sektör capture rate, teknolojiye ve aya göre (kendi verisini ayrı çeker) */
+function CaptureRateCard() {
+  const [data, setData] = useState<{ years: Array<Omit<SectorCaptureYear, "plantRates">>; lastMonth: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tech, setTech] = useState("GES");
+  useEffect(() => {
+    fetch("/api/market/capture")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.success) throw new Error(d.error);
+        setData(d);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "Capture rate yüklenemedi."));
+  }, []);
+  if (error)
+    return (
+      <Card className="shadow-sm">
+        <CardContent className="p-4 text-sm text-amber-800">{error}</CardContent>
+      </Card>
+    );
+  if (!data || data.years.length === 0) return null;
+  const years = data.years;
+  const [prev, cur] = [years[years.length - 2], years[years.length - 1]];
+  const g = (y: (typeof years)[number] | undefined, key: string) => y?.groups.find((x) => x.key === key);
+  const curSolar = g(cur, "GES");
+  const prevSolar = g(prev, "GES");
+  const worstSolar = curSolar?.monthly.reduce((a, m) => ((m.ratePct ?? 999) < (a.ratePct ?? 999) ? m : a), curSolar.monthly[0]);
+  const months = Array.from({ length: data.lastMonth }, (_, i) => String(i + 1).padStart(2, "0"));
+  const chart = months.map((mm) => {
+    const row: Record<string, string | number | null> = { ay: MONTHS_SHORT[Number(mm) - 1] };
+    for (const y of years) row[String(y.year)] = g(y, tech)?.monthly.find((m) => m.month.endsWith(`-${mm}`))?.ratePct ?? null;
+    return row;
+  });
+  const rows = ["GES", "RES", "HES:RESERVOIR", "HES:RUN_OF_RIVER"];
+  const label: Record<string, string> = { GES: "Güneş", RES: "Rüzgâr", "HES:RESERVOIR": "Hidro · barajlı", "HES:RUN_OF_RIVER": "Hidro · nehir tipi" };
+  const pctTxt = (v: number | null | undefined, d = 1) => (v === null || v === undefined ? "–" : `%${nf(v, d)}`);
+
+  return (
+    <Card className="shadow-sm">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Capture rate: santraller ürettikleri saatlerde ne fiyat alıyor?</CardTitle>
+        <CardDescription>
+          Capture rate = üretim ağırlıklı PTF ÷ dönemin saatlik ortalama PTF&apos;si. %100&apos;ün altı: üretim fiyatın düşük olduğu saatlerde yoğun
+          (profil indirimi). Sektör karnesinin santralleri, iki yılda da Ocak–{MONTHS_SHORT[data.lastMonth - 1]}. Ayrıntı: Metodoloji.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {prev && curSolar && prevSolar && (
+          <p className="text-sm text-slate-800">
+            Güneşin capture rate&apos;i {prev.year} {pctTxt(prevSolar.pooled.ratePct)} → {cur.year} <b>{pctTxt(curSolar.pooled.ratePct)}</b>
+            {worstSolar && <> ({MONTHS_SHORT[Number(worstSolar.month.slice(5, 7)) - 1]} {cur.year}: {pctTxt(worstSolar.ratePct, 0)})</>}; güneş üretiminin{" "}
+            {pctTxt(curSolar.pooled.zeroSharePct)} kadarı sıfır fiyatlı saatlerde. Rüzgâr {pctTxt(g(prev, "RES")?.pooled.ratePct)} →{" "}
+            {pctTxt(g(cur, "RES")?.pooled.ratePct)}: öğle fiyatı güneşle düşünce rüzgârın akşam ve gece üretimi görece değerlendi.
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {CAPTURE_TECHS.map((t) => (
+            <Button key={t.id} size="sm" variant={tech === t.id ? "default" : "outline"} onClick={() => setTech(t.id)}>
+              {t.label}
+            </Button>
+          ))}
+        </div>
+        <div className="h-60">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chart} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <CartesianGrid vertical={false} stroke={COLOR.grid} />
+              <XAxis dataKey="ay" {...axis.x} />
+              <YAxis {...axis.y} tickFormatter={(v) => `%${v}`} domain={[0, "auto"]} />
+              <Tooltip formatter={(v: unknown) => (v === null ? "–" : `%${nf(Number(v), 1)}`)} />
+              <Legend {...legend} />
+              {years.map((y, i) => (
+                <Line key={y.year} isAnimationActive={false} dataKey={String(y.year)} stroke={i === years.length - 1 ? COLOR.cur : COLOR.prev} strokeWidth={2} connectNulls />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Grup</TableHead>
+                {years.map((y) => (
+                  <TableHead key={y.year} className="text-right">
+                    {y.year}
+                  </TableHead>
+                ))}
+                <TableHead className="text-right">Sıfır fiyatlı üretim ({cur.year})</TableHead>
+                <TableHead className="text-right">Santraller arası P10–P50–P90 ({cur.year})</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((key) => {
+                const c = g(cur, key);
+                return (
+                  <TableRow key={key}>
+                    <TableCell>{label[key]}</TableCell>
+                    {years.map((y) => (
+                      <TableCell key={y.year} className="text-right tabular-nums">
+                        {pctTxt(g(y, key)?.pooled.ratePct)}
+                      </TableCell>
+                    ))}
+                    <TableCell className="text-right tabular-nums">{pctTxt(c?.pooled.zeroSharePct)}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {c?.distribution ? `%${nf(c.distribution.p10, 0)}–${nf(c.distribution.p50, 0)}–${nf(c.distribution.p90, 0)} (${c.distribution.n})` : "–"}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+        <p className="text-xs leading-relaxed text-slate-500">
+          Grup oranı üretim ağırlıklıdır (santraller birleştirilmiş); dağılım her santrali bir nokta sayar (1 GWh altı santraller hariç). Talimatla
+          (YAT) kısılan üretim sayılmadığı için kısıntının yoğun olduğu saatlerde capture rate olduğundan yüksek görünebilir. Bölge ayrımı yok
+          (santral konumu veride yok). Fiyat tahmini değildir.
         </p>
       </CardContent>
     </Card>
