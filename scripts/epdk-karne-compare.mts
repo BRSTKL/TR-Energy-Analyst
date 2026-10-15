@@ -4,6 +4,8 @@
  *
  *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/epdk-karne-compare.mts <GES|RES|HES> [epdk.json] [karne yılı=2026] [--json]
  * `--json`: eksik santraller ve nedenleri .cache/epdk/<tür>-karne-gaps.json
+ * `--epias` (VPN): taranmamış santraller EPİAŞ'ın UEVM santral listesinde (`injection-quantity-powerplant-list`) ve gerçek
+ * zamanlı üretim santral listesinde (`powerplant-list`) aranır; listeler .cache/epias/plant-lists.json'a yazılır.
  *
  * Gruplar: geçersiz lisans (sonlandırılmış / iptal), yürürlükte ama işletmede değil (proje / inşaat), işletmede ve karnede,
  * işletmede ama karnede yok (devreye giriş tarihiyle; kalite süzgeci ya da karne tarihi), karnede olup EPDK'da adı
@@ -21,7 +23,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { isUnlicensedName } from "@/lib/analysis/candidate-access";
-import { foldName, nameTokens, plantNumbers } from "@/lib/epias-plant/location-match";
+import { compactPlantName as compact, samePlantName as same } from "@/lib/epias-plant/plant-name-match";
+import { DEVIATION_MAX_PCT, PLAN_RATIO_RANGE } from "@/lib/sector/benchmark";
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));
 const tech = (args[0] ?? "GES").toUpperCase();
@@ -34,59 +37,6 @@ const karne = (JSON.parse(fs.readFileSync(path.join(".cache", "epias", `sector-$
   (p) => p.type === tech
 );
 
-import { DEVIATION_MAX_PCT, PLAN_RATIO_RANGE } from "@/lib/sector/benchmark";
-
-/** Levenshtein benzerliği (0–1) */
-function similarity(a: string, b: string): number {
-  if (!a || !b) return 0;
-  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
-  for (let j = 1; j <= b.length; j++) d[0][j] = j;
-  for (let i = 1; i <= a.length; i++)
-    for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-  return 1 - d[a.length][b.length] / Math.max(a.length, b.length);
-}
-
-/**
- * Ad normalleştirme: Roma rakamı → sayı (I, II, III, IV, V; yalnız tek başına kelime), kısaltma ve bitişik yazım
- * ("PRJ" / "PROJESİ", "REGÜLATÖRLERİ" / "REG.", "VEHES" = "ve HES"), genel kelimeler atılır.
- */
-const ROMAN: Record<string, string> = { i: "1", ii: "2", iii: "3", iv: "4", v: "5" };
-const normalize = (s: string) =>
-  foldName(s)
-    .split(" ")
-    .map((t) => ROMAN[t] ?? t)
-    .join(" ");
-const SUFFIX =
-  /\b(ges|dges|res|hes|vehes|depolamali|santrali|santral|regulatoru|regulatorleri|regulatorler|reg|rg|regleri|leri|ruzgar|elektrik|hidroelektrik|baraji|brj|ve|gunes|enerji|prj|proje|projesi|projeleri)\b/g;
-const compact = (s: string) => normalize(s).replace(SUFFIX, "").replace(/[^a-z0-9]/g, "");
-function same(a: string, b: string): boolean {
-  const ca = compact(a);
-  const cb = compact(b);
-  if (ca && ca === cb) return true;
-  // Numaralar aynı ya da biri ötekinin içinde (birleşik santral: "Telli I-II" ⊇ "Telli-I"; "Viranşehir 5-7-8" ⊇ 7)
-  const na = plantNumbers(normalize(a));
-  const nb = plantNumbers(normalize(b));
-  // Bir tarafta numara yoksa engel değil (önceki kural); ikisinde de varsa aynı ya da biri ötekinin içinde
-  const sameNums = !na.length || !nb.length || na.join() === nb.join() || na.every((n) => nb.includes(n)) || nb.every((n) => na.includes(n));
-  if (ca.length >= 6 && cb.length >= 6 && similarity(ca, cb) >= 0.85 && sameNums) return true;
-  // Biri ötekinin başı ("tepe" / "teperes"): kısa ad en az 4 harf, numaralar aynı
-  const [short, long] = ca.length <= cb.length ? [ca, cb] : [cb, ca];
-  if (short.length >= 4 && long.startsWith(short) && long.length - short.length <= 4 && sameNums) return true;
-  // Kelime kümesi: kısa adın (en az 2 ayırt edici kelime) bütün kelimeleri uzun adda ("Araklı Karadere Prj Erikli-Akocak
-  // Rg ve Akocak HES" / "Araklı Karadere Projesi Erikli-Akocak Reg.leri ve HES")
-  const words = (x: string) => new Set(normalize(x).replace(SUFFIX, " ").split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !/^\d+$/.test(w)));
-  const [wa, wb] = [words(a), words(b)];
-  const [ws, wl] = wa.size <= wb.size ? [wa, wb] : [wb, wa];
-  if (ws.size >= 2 && [...ws].every((w) => wl.has(w)) && sameNums) return true;
-  // Önüne yer adı eklenmiş ("Taşova- Yenidereköy" / "Yenidereköy"): kısa ad en az 8 harf, ek en çok 8 harf
-  if (short.length >= 8 && long.endsWith(short) && long.length - short.length <= 8 && sameNums) return true;
-  const ta = nameTokens(a);
-  const tb = nameTokens(b);
-  const common = [...ta].filter((x) => tb.has(x));
-  if (!common.length) return false;
-  if (!sameNums) return false;
-  return common.length === Math.min(ta.size, tb.size);
-}
 
 const num = (v: string) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const invalid = epdk.licenses.filter((l) => l.status !== "Yürürlükte");
@@ -134,9 +84,37 @@ if (classified.length) {
   console.log(`\nKarnede olmayan ${classified.length} işletmedeki santralin nedeni: ${[...groups].map(([k, v]) => `${k} ${v}`).join(", ")}`);
   for (const c of classified) console.log(`  ${c.l.plant} [${c.l.il}, ${c.l.opMwe} MWe] → ${c.why}${c.m ? ` (#${c.m.epiasPlantId} ${c.m.name})` : ""}`);
 }
+if (process.argv.includes("--epias")) {
+  const cacheFile = path.join(".cache", "epias", "plant-lists.json");
+  const { listUevmPowerPlants } = await import("@/lib/services/epias-plants");
+  const { epiasRequest } = await import("@/lib/services/epias-service");
+  const uevm = await listUevmPowerPlants(true);
+  const rt = ((await epiasRequest<{ items?: Array<{ id: number; name: string; eic?: string }> }>("/generation/data/powerplant-list")).items ?? []).map((p) => ({
+    id: Number(p.id),
+    name: String(p.name).trim(),
+    eic: p.eic ?? null,
+  }));
+  fs.writeFileSync(cacheFile, JSON.stringify({ fetchedAt: new Date().toISOString(), uevm, realtime: rt }));
+  const unscanned = classified.filter((c) => !c.m);
+  console.log(`\nEPİAŞ listeleri: UEVM ${uevm.length} santral, gerçek zamanlı ${rt.length}. Taranmamış ${unscanned.length} santral:`);
+  for (const c of unscanned) {
+    // Her iki listede de adın sonunda EIC eki var ("OYMAPINAR-40W0000000003394"): atılır. Aynı ad başka türde olabilir
+    // (Iğdır DGES / Iğdır Biyokütle): adında başka teknoloji eki olan santral alınmaz.
+    const bare = (n: string) => n.replace(/\s*-?\s*40W[0-9A-Z]{12,13}\s*$/, "").trim();
+    const OTHER: Record<string, RegExp> = { GES: /\b(RES|HES|BİYOKÜTLE|BIYOKUTLE|JES|TES|DGKÇS|BİYOGAZ)\b/i, RES: /\b(GES|HES|BİYOKÜTLE|JES|TES)\b/i, HES: /\b(GES|RES|BİYOKÜTLE|JES|TES)\b/i };
+    const fits = (n: string) => !OTHER[tech]?.test(n);
+    const u = uevm.filter((p) => fits(bare(p.name)) && same(c.l.plant, bare(p.name)));
+    const r = rt.filter((p) => fits(bare(p.name)) && same(c.l.plant, bare(p.name)));
+    (c as any).epias = { uevm: u.map((p) => ({ id: p.id, name: p.name })), realtime: r.map((p) => ({ id: p.id, name: p.name })) };
+    const inScan = u.filter((p) => scanned.some((x) => x.epiasPlantId === p.id));
+    (c as any).verdict = u.length ? (inScan.length ? "taranmış (farklı türde ya da adla)" : "EPİAŞ UEVM listesinde var, taranmamış (tür addan çıkarılamadı)") : r.length ? "yalnız gerçek zamanlı listede" : "EPİAŞ listelerinde yok";
+    console.log(`  ${c.l.plant} [${c.l.il}, ${c.l.opMwe} MWe] → ${(c as any).verdict}: ${u.length ? u.map((p) => `#${p.id} ${bare(p.name)}`).join(" | ") : r.map((p) => bare(p.name)).join(" | ") || "–"}`);
+  }
+}
+
 if (process.argv.includes("--json")) {
   const out = path.join(".cache", "epdk", `${tech.toLowerCase()}-karne-gaps.json`);
-  fs.writeFileSync(out, JSON.stringify({ tech, year, exportedAt: epdk.exportedAt, operating: operating.length, inKarne: inKarne.length, missing: classified.map((c) => ({ plant: c.l.plant, il: c.l.il, opMwe: c.l.opMwe, licenseNo: c.l.licenseNo, epiasPlantId: c.m?.epiasPlantId ?? null, why: c.why })) }, null, 1));
+  fs.writeFileSync(out, JSON.stringify({ tech, year, exportedAt: epdk.exportedAt, operating: operating.length, inKarne: inKarne.length, missing: classified.map((c) => ({ plant: c.l.plant, il: c.l.il, opMwe: c.l.opMwe, licenseNo: c.l.licenseNo, epiasPlantId: c.m?.epiasPlantId ?? null, why: c.why, epias: (c as any).epias ?? null, verdict: (c as any).verdict ?? null })) }, null, 1));
   console.log(`\n→ ${out}`);
 }
 
