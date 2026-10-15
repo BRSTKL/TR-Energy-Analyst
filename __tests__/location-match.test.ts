@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { foldName, nameTokens, numberConflict, osmCandidates, plantNumbers, type OsmPlant } from "@/lib/epias-plant/location-match";
+import { districtCandidates, foldName, nameTokens, numberConflict, osmCandidates, plantNumbers, type OsmPlace, type OsmPlant } from "@/lib/epias-plant/location-match";
 
 const o = (osm: string, name: string, operator = "", source = "solar"): OsmPlant => ({ osm, source, name, operator, mw: "", lat: 38, lon: 35, km2: 0.1 });
 
@@ -48,5 +48,14 @@ describe("OSM konum adayı (20.2)", () => {
     const c = osmCandidates({ name: "RENOE ACIPAYAM GES" }, osm);
     const by = Object.fromEntries(c.map((x) => [x.osm, x.distinctive]));
     expect(by).toEqual({ w1: false, w2: false, w3: false, w4: true });
+  });
+
+  it("ilçe merkezi adayı: santral adındaki kelime yer adıyla birebir; aynı adlı yerlerin hepsi", () => {
+    const pl = (osm: string, name: string, lat = 38): OsmPlace => ({ osm, name, place: "town", lat, lon: 35 });
+    const places = [pl("n1", "Viranşehir"), pl("n2", "Acıpayam"), pl("n3", "Erciş"), pl("n4", "Bor", 37.9), pl("n5", "Bor", 40.1), pl("n6", "Borçka")];
+    expect(districtCandidates("G4-VİRANŞEHİR-1 GES", places).map((p) => p.osm)).toEqual(["n1"]);
+    expect(districtCandidates("OMİCRON ERCİŞ GES", places).map((p) => p.osm)).toEqual(["n3"]);
+    expect(districtCandidates("G4-BOR-1 GES", places).map((p) => p.osm)).toEqual(["n4", "n5"]); // Borçka değil
+    expect(districtCandidates("YAYSUN GES", places)).toEqual([]);
   });
 });

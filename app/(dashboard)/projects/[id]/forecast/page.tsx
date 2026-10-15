@@ -141,7 +141,7 @@ export default function ForecastPage() {
       )}
 
       {data?.loss && data.day && (
-        <ProductionLossCard name={data.day.plant.name} loss={data.loss} calendar={data.calendar} selectedDate={data.day.date} onDate={setDate} />
+        <ProductionLossCard name={data.day.plant.name} loss={data.loss} calendar={data.calendar} selectedDate={data.day.date} onDate={setDate} estimatedLocation={data.day.location.text.startsWith("~")} />
       )}
 
       {data?.day && (

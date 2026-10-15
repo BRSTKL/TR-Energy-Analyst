@@ -11,18 +11,23 @@
  * herhangi bir aday (yer adıyla eşleşenler dahil) daha iyi ya da 0,02 yakınındaysa belirsiz (santral orada olmayabilir).
  * Başka santralin konumu olarak kayıtlı alan (aynı OSM nesnesi) yalnız OSM adı bu santralin numarasını içeriyorsa.
  * `--write` olmadan hiçbir şey yazılmaz (kuru çalışma).
+ *
+ * `--district` (kullanıcı kararı 15.10.2026): yalnız ilçe merkezi aşaması. Adında il / ilçe adı geçen konumsuz santraller için
+ * o yerin OSM düğümü (`.cache/osm/places-tr.json`, scripts/tools/osm-places-extract.py); aynı ölçüt (≥ 0,85, aynı adlı uzak
+ * yer yakınsa belirsiz); `DISTRICT_CENTER` kaynağıyla (tahmin, "~"); korelasyon tutmayan boş kalır.
  */
 
 import fs from "node:fs";
 import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import { isUnlicensedName } from "@/lib/analysis/candidate-access";
-import { osmCandidates, plantNumbers, tokenFrequency, type OsmPlant } from "@/lib/epias-plant/location-match";
+import { districtCandidates, osmCandidates, plantNumbers, tokenFrequency, type OsmPlace, type OsmPlant } from "@/lib/epias-plant/location-match";
 import { listPoolPlants, readPoolPlantInfo, readPoolYear } from "@/lib/pool/pool-store";
 import { setPlantLocation } from "@/lib/services/plant-location";
 import { emptySatelliteYear, fetchSatellite, mergeSatellite } from "@/lib/weather/satellite";
 
 const WRITE = process.argv.includes("--write");
+const DISTRICT = process.argv.includes("--district");
 const MIN_R = 0.85;
 const AMBIGUOUS_KM = 10;
 const AMBIGUOUS_DR = 0.02;
@@ -68,15 +73,46 @@ const satCache = new Map<string, Array<number | null>>();
 async function satGhi(lat: number, lon: number, year: number) {
   const key = `${lat.toFixed(3)},${lon.toFixed(3)},${year}`;
   if (!satCache.has(key)) {
-    const doc = mergeSatellite(emptySatelliteYear(0, year, lat, lon), await fetchSatellite(lat, lon, `${year}-01-01`, `${year + 1}-01-01`), [], "x");
+    // Arşivin son günü ≈ bugün − 3 gün (SARAH3 gecikmesi): yıl sonu sınırı
+    const last = new Date(Date.now() - 3 * 86_400_000).toISOString().slice(0, 10);
+    const end = `${year + 1}-01-01` < last ? `${year + 1}-01-01` : last;
+    const doc = mergeSatellite(emptySatelliteYear(0, year, lat, lon), await fetchSatellite(lat, lon, `${year}-01-01`, end), [], "x");
     satCache.set(key, doc.ghi);
   }
   return satCache.get(key)!;
 }
 
+/** Santralin en çok üretim saati olan yılı (2025 ya da 2026; 2026'da devreye girenlerde 2025 boştur) */
+async function productionYear(id: number) {
+  let best: { year: number; doc: NonNullable<Awaited<ReturnType<typeof readPoolYear>>>; n: number } | null = null;
+  for (const year of [2025, 2026]) {
+    const doc = await readPoolYear(id, year);
+    const n = doc ? doc.uevm.filter((u) => u !== null && u > 0).length : 0;
+    if (doc && (!best || n > best.n)) best = { year, doc, n };
+  }
+  return best;
+}
+
+/** Koordinatta uydu GHI ile santralin saatlik UEVM korelasyonu (gündüz saatleri; en çok veri olan yıl) */
+async function correlationAt(id: number, lat: number, lon: number): Promise<number> {
+  const py = await productionYear(id);
+  if (!py) return NaN;
+  const { year, doc: prod } = py;
+  const g = await satGhi(lat, lon, year);
+  const a: number[] = [];
+  const b: number[] = [];
+  for (let i = 0; i < Math.min(g.length, prod.uevm.length); i++) {
+    const u = prod.uevm[i];
+    if (u === null || g[i] === null || (g[i]! <= 0 && u <= 0)) continue;
+    a.push(u);
+    b.push(g[i]!);
+  }
+  return corr(a, b);
+}
+
 const accepted: Array<{ id: number; name: string; c: OsmPlant; r: number; matched: string[] }> = [];
 const nf = (v: number, d = 3) => (Number.isFinite(v) ? v.toFixed(d).replace(".", ",") : "–");
-for (const [id, t] of targets) {
+for (const [id, t] of DISTRICT ? [] : targets) {
   const info = await readPoolPlantInfo(id);
   if (info?.location) continue;
   const cands = osmCandidates({ name: t.name, organizationName: t.org }, osmDoc.plants, "solar", freq).slice(0, 5);
@@ -84,8 +120,9 @@ for (const [id, t] of targets) {
     console.log(`#${String(id).padEnd(8)} ${t.name.slice(0, 26).padEnd(26)} aday yok`);
     continue;
   }
-  const year = (await readPoolYear(id, 2025)) ? 2025 : 2026;
-  const prod = await readPoolYear(id, year);
+  const py = await productionYear(id);
+  const year = py?.year ?? 2025;
+  const prod = py?.doc ?? null;
   if (!prod) {
     console.log(`#${String(id).padEnd(8)} ${t.name.slice(0, 26).padEnd(26)} üretim verisi yok`);
     continue;
@@ -129,8 +166,48 @@ for (const [id, t] of targets) {
     console.log(`     ${s.c.osm.padEnd(12)} r ${nf(s.r)}  ${(s.c.name || s.c.name_tr || "-").slice(0, 40).padEnd(40)} op=${(s.c.operator || "-").slice(0, 24)} ${s.c.mw || ""} ${s.c.km2} km² [${s.c.matched.join(",")}${s.c.distinctive ? "" : "; yer adı"}] ${s.note}`);
 }
 
-console.log(`\nKabul: ${accepted.length}${WRITE ? " (yazılıyor)" : " (kuru çalışma; yazmak için --write)"}`);
-if (WRITE)
+// İlçe merkezi kipi (--district; PLAN 20.2 kullanıcı kararı): adında il / ilçe geçen konumsuz santraller, `DISTRICT_CENTER`
+const districts: Array<{ id: number; name: string; p: OsmPlace; r: number }> = [];
+if (DISTRICT) {
+  const placesDoc = JSON.parse(fs.readFileSync(path.join(process.cwd(), ".cache", "osm", "places-tr.json"), "utf8")) as { extractedAt: string; places: OsmPlace[] };
+  for (const [id, t] of targets) {
+    if ((await readPoolPlantInfo(id))?.location) continue;
+    const cands = districtCandidates(t.name, placesDoc.places);
+    if (!cands.length) {
+      console.log(`#${String(id).padEnd(8)} ${t.name.slice(0, 26).padEnd(26)} adında il / ilçe yok`);
+      continue;
+    }
+    const scored = [];
+    for (const p of cands) scored.push({ p, r: await correlationAt(id, p.lat, p.lon) });
+    const ok = scored.filter((x) => Number.isFinite(x.r)).sort((x, y) => y.r - x.r);
+    const best = ok[0];
+    let verdict = !best ? "değerlendirilemedi (üretim verisi yetersiz)" : "boş bırakıldı (korelasyon < 0,85)";
+    if (best && best.r >= MIN_R) {
+      const rival = ok.find((x) => x !== best && x.r >= best.r - AMBIGUOUS_DR && km(x.p, best.p) > AMBIGUOUS_KM);
+      if (rival) verdict = `belirsiz (aynı adlı başka yer ${nf(rival.r)}, ${km(rival.p, best.p).toFixed(0)} km uzakta)`;
+      else {
+        verdict = "KABUL (~ ilçe merkezi)";
+        districts.push({ id, name: t.name, p: best.p, r: best.r });
+      }
+    }
+    console.log(`#${String(id).padEnd(8)} ${t.name.slice(0, 26).padEnd(26)} ${verdict}`);
+    for (const x of scored) console.log(`     ${x.p.osm.padEnd(12)} r ${nf(x.r)}  ${x.p.name} (${x.p.place === "city" ? "il merkezi" : "ilçe merkezi"}) ${x.p.lat}, ${x.p.lon}`);
+  }
+  console.log(`\nİlçe merkezi kabul: ${districts.length}${WRITE ? " (yazılıyor)" : " (kuru çalışma; yazmak için --write)"}`);
+  if (WRITE)
+    for (const d of districts) {
+      const r = await setPlantLocation(d.id, {
+        latitude: d.p.lat,
+        longitude: d.p.lon,
+        locationSource: "DISTRICT_CENTER",
+        locationRef: `Tahmin: ${d.p.name} ${d.p.place === "city" ? "il" : "ilçe"} merkezi (santral adında geçiyor; OSM ${d.p.osm} place=${d.p.place}); uydu GHI–UEVM korelasyonu ${nf(d.r)} ≥ ${MIN_R}; santralin kendi konumu değil (birkaç km – onlarca km sapabilir); © OpenStreetMap katkıcıları, ODbL; Geofabrik ${placesDoc.extractedAt}; ${new Date().toISOString().slice(0, 10)}`,
+      });
+      console.log(`  #${d.id} ${d.name}: havuz ${r.pool ? "yazıldı" : "korundu"}, proje santrali ${r.projectPlants}`);
+    }
+}
+
+if (!DISTRICT) console.log(`\nKabul: ${accepted.length}${WRITE ? " (yazılıyor)" : " (kuru çalışma; yazmak için --write)"}`);
+if (WRITE && !DISTRICT)
   for (const a of accepted) {
     const r = await setPlantLocation(a.id, {
       latitude: Math.round(a.c.lat * 1e5) / 1e5,

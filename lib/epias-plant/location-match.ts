@@ -122,3 +122,21 @@ export function osmCandidates(
   }
   return out.sort((x, y) => y.score - x.score || y.km2 - x.km2);
 }
+
+export interface OsmPlace {
+  osm: string;
+  name: string;
+  place: "city" | "town";
+  lat: number;
+  lon: number;
+}
+
+/**
+ * İlçe merkezi adayları (PLAN 20.2, `DISTRICT_CENTER`): santral adında il ya da ilçe adı geçiyorsa o yerin OSM
+ * düğümü (place=city / town). Aynı adlı birden çok yer hepsi döner (uydu korelasyonu seçer). Santral adındaki kelimeyle
+ * sadeleştirilmiş yer adı birebir eşleşmelidir. Tahmindir: raporda ve ekranda "~".
+ */
+export function districtCandidates(plantName: string, places: OsmPlace[]): OsmPlace[] {
+  const own = nameTokens(plantName);
+  return places.filter((p) => own.has(foldName(p.name)));
+}

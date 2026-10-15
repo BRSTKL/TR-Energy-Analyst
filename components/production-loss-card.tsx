@@ -22,7 +22,9 @@ export function ProductionLossCard({
   calendar,
   selectedDate,
   onDate,
+  estimatedLocation,
 }: {
+  estimatedLocation?: boolean;
   name: string;
   loss: PlantLoss;
   calendar: Array<{ date: string; hours: HourLossState[] }>;
@@ -54,6 +56,12 @@ export function ProductionLossCard({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
+        {estimatedLocation && (
+          <p className="rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-900">
+            Konum tahmini (~ ilçe merkezi): uydu ışınımı santralin kendi noktası yerine ilçe merkezinden alınıyor; bulutlu günlerde beklenen üretim
+            sapabilir, kayıp rakamları kaba tahmindir.
+          </p>
+        )}
         {s ? (
           <p className="text-sm text-slate-800">
             Son 12 ay ({monthLabel(s.from)} – {monthLabel(s.to)}): potansiyel üretimin <b>%{nf(s.lossPct, 1)}</b> kaybı ={" "}
