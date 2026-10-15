@@ -445,6 +445,31 @@ Son analiz: 2026'da bütün rüzgâr santrallerinin maliyeti arttı (medyan +%55
 2. Sınır portföy bazında (saatte tüm santrallerin toplam işlemi).
 3. Ekran: Piyasa sayfasında "GİP likiditesi" kartı + geriye dönük test sayfasında not.
 
+### Aşama 19: Sektör capture rate eğilimi ▶ · karar 15.10.2026
+**Amaç:** "Santraller ürettikleri saatlerde piyasanın ortalamasına göre ne kadar düşük fiyat alıyor, bu nasıl değişiyor?" sorusunu sektör düzeyinde, teknoloji ve ay bazında cevaplamak. Sıfır fiyatlı saat bulgusunun (2025'te 48 → 2026 Ocak–Ağustos 394 saat) ticari karşılığı; PPA fiyatlamasında profil indiriminin kaynağı. Ticaret müdürü değerlendirmesinin 4. maddesi.
+
+**Tanım:** capture fiyatı = Σ (üretim × PTF) / Σ üretim; baz PTF = dönemin saatlik PTF ortalaması (her saat eşit); capture rate = capture fiyatı / baz PTF. %100'ün altı: santral fiyatın düşük olduğu saatlerde daha çok üretiyor (güneşte öğle, rüzgârda gece). Profil indirimi = 100 − capture rate.
+
+**Mevcut durum:** Proje düzeyinde var (sonuç sayfasında düşük ve sıfır fiyatlı saat kartı, santral karşılaştırması; raporda PPA kutusu "baz PTF'nin %92,6'sı"). Sektör düzeyinde yok: bir santralin profil indiriminin iyi mi kötü mü olduğu, teknolojinin eğilimi bilinmiyor.
+
+**Adımlar:**
+- [x] **19.1 Saf hesap.** ✅ 15.10.2026. `lib/analysis/capture-rate.ts`: `captureStat` (capture fiyatı, baz PTF: verisi olan saatlerin ortalaması, her saat bir kez; raporun PPA kutusuyla aynı tanım; profil kaybı; sıfır ve düşük fiyatlı üretim payı, eşikler piyasa özetiyle aynı), `monthlyCapture`, `groupCapture` (grup toplamı üretim ağırlıklı, santraller arası dağılım ağırlıksız, küçük santraller dağılım dışı), `percentileOf`. 4 test (düz üretim %100; ucuz saatlerde üretim %12,5 ve kayıp elle; aynı saatin iki santralden gelmesi; ay ve grup).
+- [ ] **19.2 Sektör verisi.** `scripts/sector-capture.mts`: sektör karnesindeki santraller (kalite süzgeçli, 2025 ve 2026 Ocak–Ağustos), saatlik üretim havuzdan (UEVM), PTF MarketData'dan → `.cache/epias/sector-capture-<yıl>.json`. EPİAŞ'a gidilmez.
+- [ ] **19.3 Ekran.** Piyasa sayfasında "Capture rate, teknolojiye göre" kartı: aylık capture rate (2025 ve 2026 yan yana), teknoloji başına dağılım ve tek cümle ("Güneşin capture rate'i 2026'da %X'e indi; sıfır fiyatlı saatlerin payı …"). Sonuç sayfasındaki düşük fiyat kartına santralin ve portföyün sektördeki yeri (yüzdelik).
+- [ ] **19.4 Rapor (karar 2) ve metin.** Raporun PPA kutusuna tek satır sektör kıyası ("sektörde güneş medyanı %Y; portföy …"); metodoloji bölümü; denetim kuralı (kutudaki oran veriyle aynı).
+- [ ] **Kabul.** Bir santral-ay bağımsız betikle elle yeniden hesaplanır; Gain ve Inavitas'ın portföy capture rate'i proje kartıyla birebir. `npm test`, `npm run check:reports` 0 hata.
+
+**Sınırlar (metodolojide):**
+- Capture rate geçmiş fiyatlarla; fiyat tahmini değildir (2027 profil indirimi ölçülmez).
+- Kısıntı (YAT) ile düşük fiyat birlikte görülür: talimatla kısılan üretim capture rate'i yükseltir (düşük fiyatlı saatte üretilmeyen MWh sayılmaz). Kısıntı tahmini ayrı iş (madde 5, ertelendi).
+- Karne santralleri kalite süzgeçlidir (sapması aşırı ya da verisi eksik santraller dışarıda).
+- Bölge yok: santral koordinatı veride yok, güneyde / kuzeyde güneş ayrımı yapılamaz.
+
+**Kararlar (15.10.2026, kullanıcı onayı):**
+1. Kapsam: sektör karnesinin santralleri (kalite süzgeçli; sektör kıyaslarıyla aynı küme).
+2. Rapor: PPA kutusuna tek satır sektör kıyası.
+3. Ekran: Piyasa sayfasında kart + sonuç sayfasındaki düşük fiyat kartına sektördeki yer.
+
 ---
 
 ## 3. Karar noktaları (sizin onayınız gerekiyor)
