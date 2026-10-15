@@ -49,7 +49,7 @@ for (const pr of await prisma.project.findMany({ select: { id: true, name: true 
     result[cap.key] = Object.fromEntries((combined?.strategies ?? []).map((s) => [s.id, s.outOfSampleSavingTl]));
     result[cap.key].baseline = combined?.baselineCostTl ?? null;
   }
-  rows.push({ project: pr.name, result });
+  rows.push({ id: pr.id, project: pr.name, result });
   const m = (v: number | null | undefined) => (v === null || v === undefined ? "    –" : `${(v / 1e6).toFixed(2).padStart(6)}`);
   const line = (id: string) => `${LABEL[id]}: ${m(result.none[id])} / ${m(result["13"][id])} / ${m(result["10"][id])}`;
   console.log(`${pr.name.slice(0, 34).padEnd(34)} ${["persistence", "bias", "combo"].filter((id) => result.none[id] !== undefined).map(line).join("  |  ")}`);

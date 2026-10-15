@@ -4,6 +4,7 @@ import { ImbalancePricingProfile, REGULATORY_IMBALANCE_REGIMES } from "@/lib/cal
 import { BacktestResult, combineBacktests, MIN_FEASIBLE_LAG_HOURS, persistenceStrategy, runBacktest } from "@/lib/analysis/backtest";
 import { loadProjectHourly } from "@/lib/services/project-hourly";
 import { settleByCompanyGroups } from "@/lib/report/plant-report";
+import { loadGipCapImpact } from "@/lib/services/gip-liquidity";
 import { INFO_TIMES } from "@/lib/analysis/direction-features";
 import { directionBiasStrategy, directionPersistenceStrategy, kupstDeltaFor } from "@/lib/analysis/direction-strategy";
 import { loadDirectionForecasts } from "@/lib/services/direction-forecast";
@@ -81,6 +82,8 @@ async function handleGET(_request: Request, { params }: { params: { id: string }
       project: data.project,
       trainMonths: TRAIN_MONTHS,
       direction,
+      // PLAN 18.4: GİP işlem sınırının bu portföydeki etkisi (scripts/gip-cap-impact.mts; yoksa null)
+      gipCap: loadGipCapImpact(params.id),
       scenarios: {
         project: { label: "Projenin fiyat profili", ...run(data.profile) },
         rules2026: { label: "Tüm veri 2026 kurallarıyla (%3 / %6)", ...run(rules2026) },

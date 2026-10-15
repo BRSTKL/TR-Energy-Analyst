@@ -9,9 +9,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { LOW_PRICE_MAX, ZERO_PRICE_MAX, pairMonths, type MarketSummary } from "@/lib/analysis/market-summary";
 import type { DirectionBacktest, Forecaster } from "@/lib/analysis/direction-backtest";
+import type { GipLiquidity } from "@/lib/services/gip-liquidity";
 
 import { MethodLink } from "@/components/method-link";
-import { pctOf } from "@/lib/format";
+import { pctOf, yearLocative } from "@/lib/format";
 interface MarketResponse {
   available: { start: string; end: string; lastFullMonthEnd: string };
   period: { start: string; end: string; label: string };
@@ -457,6 +458,8 @@ export default function MarketPage() {
 
         <DirectionForecastCard />
 
+        <GipLiquidityCard />
+
         <Card className="shadow-sm">
           <CardHeader className="gap-3 pb-3 md:flex-row md:items-center md:justify-between md:space-y-0">
             <div>
@@ -645,6 +648,130 @@ function DirectionForecastCard() {
             </p>
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** PLAN 18.4: GİP likiditesi ve toplayıcıların gerçekleşen katılımı (kendi verisini ayrı çeker) */
+function GipLiquidityCard() {
+  const [data, setData] = useState<GipLiquidity | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("/api/market/gip")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.success) throw new Error(d.error);
+        setData(d);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "GİP likiditesi yüklenemedi."));
+  }, []);
+
+  if (error)
+    return (
+      <Card className="shadow-sm">
+        <CardContent className="p-4 text-sm text-amber-800">{error}</CardContent>
+      </Card>
+    );
+  if (!data) return null;
+  const cap = data.capPercent / 100;
+  const hours = data.profile.byHour;
+  const low = hours.reduce((a, h) => (h.median < a.median ? h : a), hours[0]);
+  const high = hours.reduce((a, h) => (h.median > a.median ? h : a), hours[0]);
+  const months = data.profile.byMonth;
+  const lastYear = months.filter((m) => m.month.startsWith(String(data.year)));
+  const medianOfYear = lastYear.length ? [...lastYear].map((m) => m.median).sort((a, b) => a - b)[Math.floor(lastYear.length / 2)] : 0;
+  const top = data.rows.filter((r) => r.included).slice(0, 8);
+  const biggest = top.slice(0, 3);
+  const p99 = biggest.map((r) => r.share.p99 * 100);
+  const monthly = months.map((m) => ({ ay: `${monthName(m.month)} ${m.month.slice(2, 4)}`, "Medyan": Math.round(m.median), "En düşük %10": Math.round(m.p10) }));
+  const byHour = hours.map((h) => ({ saat: String(h.hour).padStart(2, "0"), "Medyan": Math.round(h.median) }));
+  const range = data.profile.rangeByVolume;
+
+  return (
+    <Card className="shadow-sm">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">GİP likiditesi: bir portföy saatte ne kadar kapatabilir?</CardTitle>
+        <CardDescription>
+          Saatlik GİP eşleşme hacmi ve toplayıcıların gün içi plan düzeltmelerinin bu hacme oranı ({data.period}). Gün içi kurallar bu sınırla
+          hesaplanır. Ayrıntı: Metodoloji.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-slate-800">
+          {yearLocative(data.year)} saatlik GİP hacminin medyanı <b>{nf(medianOfYear)} MWh</b>; gece {String(low.hour).padStart(2, "0")}:00 civarı ≈ {nf(low.median)}, öğleden
+          sonra {String(high.hour).padStart(2, "0")}:00 civarı ≈ {nf(high.median)} MWh. Uygulama bir portföyün saatlik işlemini hacmin <b>%{nf(data.capPercent)}</b>{" "}
+          kadarıyla sınırlar: saatte ≈ {nf(low.median * cap)}–{nf(high.median * cap)} MWh.
+          {p99.length >= 2 &&
+            ` En büyük ${p99.length} toplayıcı en yoğun saatlerinde (P99) hacmin %${nf(Math.min(...p99), 1)}–${nf(Math.max(...p99), 1)} kadarına çıktı; sınır bunun ihtiyatlı tarafında.`}
+        </p>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div>
+            <p className="mb-1 text-sm font-medium text-slate-800">Saatlik hacim, aylara göre (MWh)</p>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={monthly} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid vertical={false} stroke={COLOR.grid} />
+                  <XAxis dataKey="ay" {...axis.x} interval={3} />
+                  <YAxis {...axis.y} tickFormatter={(v) => nf(Number(v))} />
+                  <Tooltip formatter={(v: unknown) => `${nf(Number(v))} MWh`} />
+                  <Legend {...legend} />
+                  <Line isAnimationActive={false} dataKey="Medyan" stroke={COLOR.cur} dot={false} />
+                  <Line isAnimationActive={false} dataKey="En düşük %10" stroke={COLOR.prev} strokeDasharray="4 4" dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div>
+            <p className="mb-1 text-sm font-medium text-slate-800">Günün saatine göre (medyan, MWh)</p>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={byHour} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid vertical={false} stroke={COLOR.grid} />
+                  <XAxis dataKey="saat" {...axis.x} interval={2} />
+                  <YAxis {...axis.y} tickFormatter={(v) => nf(Number(v))} />
+                  <Tooltip formatter={(v: unknown) => `${nf(Number(v))} MWh`} />
+                  <Bar isAnimationActive={false} dataKey="Medyan" fill={COLOR.cur} radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <p className="mb-1 text-sm font-medium text-slate-800">Toplayıcıların gerçekleşen katılımı (saatlik net plan düzeltmesi ÷ GİP hacmi)</p>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Toplayıcı</TableHead>
+                <TableHead className="text-right">Ort. üretim</TableHead>
+                <TableHead className="text-right">Medyan</TableHead>
+                <TableHead className="text-right">P90</TableHead>
+                <TableHead className="text-right">P99</TableHead>
+                <TableHead className="text-right">%{nf(data.capPercent)} sınırının bağladığı saat</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {top.map((r) => (
+                <TableRow key={r.id}>
+                  <TableCell>{r.name}</TableCell>
+                  <TableCell className="text-right tabular-nums">{nf(r.meanGenerationMwh)} MWh/saat</TableCell>
+                  <TableCell className="text-right tabular-nums">%{nf(r.share.p50 * 100, 1)}</TableCell>
+                  <TableCell className="text-right tabular-nums">%{nf(r.share.p90 * 100, 1)}</TableCell>
+                  <TableCell className="text-right tabular-nums">%{nf(r.share.p99 * 100, 1)}</TableCell>
+                  <TableCell className="text-right tabular-nums">%{nf(r.caps[String(cap)]?.bindingPct ?? 0, 1)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+        <p className="text-xs leading-relaxed text-slate-500">
+          Katılım: toplayıcı portföyünün saatlik net plan düzeltmesi (ilk KGÜP − son KGÜP, portföy içinde netleşmiş) ÷ o saatin GİP eşleşme hacmi;
+          son planı olan santral-saatlerde. Plan değişikliğinin hepsi GİP işlemi olmayabilir (ikili anlaşma, talimat): katılım üst sınırdır. Tabloda
+          son plan kapsamı %90 ve üretimi 100 GWh&apos;ı aşan {data.summary.included} toplayıcıdan en büyük {top.length} tanesi (EPİAŞ toplayıcı listesi,{" "}
+          {data.membershipAsOf}). Hacim saatlik kontratın eşleşmesidir. Emir defteri açık veride yok: en düşük ile en yüksek eşleşme fiyatı
+          arasındaki fark hacimden bağımsız{range.length ? ` (≈ %${nf(Math.min(...range.map((q) => q.rangePct)))}–${nf(Math.max(...range.map((q) => q.rangePct)))} ortalamanın)` : ""}; hacme
+          bağlı fiyat kayması açık veriyle görülmüyor.
+        </p>
       </CardContent>
     </Card>
   );

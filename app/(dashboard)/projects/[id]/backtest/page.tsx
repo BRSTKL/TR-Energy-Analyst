@@ -9,6 +9,7 @@ import { PlantScopePicker } from "@/components/plant-scope-picker";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { BacktestResult, StrategyBacktest } from "@/lib/analysis/backtest";
 import type { DirectionGate } from "@/lib/analysis/direction-backtest";
+import type { GipCapImpact } from "@/lib/services/gip-liquidity";
 
 interface PlantBacktest {
   plantId: string;
@@ -30,6 +31,8 @@ interface BacktestResponse {
   trainMonths: number;
   /** Aşama 14: yön tahminiyle plan ayarı (projenin fiyat profiliyle, KÜPST dahil) */
   direction?: { gates: Record<"D-1" | "H-2", DirectionGate>; portfolio: BacktestResult | null; plants: PlantBacktest[] };
+  /** PLAN 18.4: GİP işlem sınırının bu portföydeki etkisi (örneklem dışı tasarruf, TL) */
+  gipCap?: GipCapImpact | null;
   scenarios: { project: Scenario; rules2026: Scenario };
 }
 
@@ -274,6 +277,16 @@ export default function BacktestPage() {
                       maliyetini artırabilir ve bu tabloda yer almaz. GİP kuralında öğrenilen parametre yoktur;
                       kapatılan payın gün içinde öngörülebildiği varsayılır.
                     </p>
+                    <p>
+                      <strong>GİP işlem sınırı.</strong> Gün içi kurallarda bir saatte yapılan işlem, o saatin GİP eşleşme hacminin en fazla
+                      %10&apos;u kadardır (portföy bazında). 2026&apos;da en büyük toplayıcılar en yoğun saatlerinde hacmin %12–14&apos;üne çıktı;
+                      %10 bunun ihtiyatlı altıdır (Piyasa sayfası, GİP likiditesi).
+                      {data.gipCap?.persistence &&
+                        ` Bu portföyde gün içi kalıcılığın örneklem dışı tasarrufu: sınırsız ${tl(data.gipCap.persistence.none)}, %13 sınırla ${tl(data.gipCap.persistence.c13)}, %10 sınırla ${tl(data.gipCap.persistence.c10)}` +
+                          (Math.abs(data.gipCap.persistence.none - data.gipCap.persistence.c10) < 0.005 * Math.max(1, Math.abs(data.gipCap.persistence.none))
+                            ? " (sınır bu portföyde bağlamıyor)."
+                            : ".")}
+                    </p>
                   </CardContent>
                 </Card>
               </>
@@ -370,8 +383,8 @@ function DirectionCard({
         <p className="text-xs leading-relaxed text-slate-500">
           Bu bir ölçümdür (&quot;yön bilgisi bu kadar değer taşıyordu&quot;), işlem önerisi değildir: KGÜP&apos;ü bilerek saptırmak mevzuat
           açısından hassastır. Plan ayarında KÜPST santral bazında eklenir (toplayıcı topluluğunda da santral bazında; temkinli); gün içi plan
-          ayarında işlem GİP ağırlıklı ortalama fiyatıyla, hacim sınırı olmadan varsayılır (iyimser). Kalıcılık kuralları (düz ve
-          birleşik) gerçekçi GİP fiyatı ve hacim sınırıyla, KÜPST&apos;süz hesaplanır; ikisi kendi aralarında kıyaslanabilir. Ayrıntı: Metodoloji.
+          ayarında işlem GİP ağırlıklı ortalama fiyatıyla, saatlik GİP hacminin en fazla %10&apos;u kadar varsayılır. Kalıcılık kuralları (düz ve
+          birleşik) gerçekçi GİP fiyatı ve aynı hacim sınırıyla, KÜPST&apos;süz hesaplanır; ikisi kendi aralarında kıyaslanabilir. Ayrıntı: Metodoloji.
         </p>
       </CardContent>
     </Card>
