@@ -481,6 +481,18 @@ export default function ProjectResultsPage() {
                 <span>{data.summary.capacityMw.toLocaleString("tr-TR", { maximumFractionDigits: 0 })} MW</span>
                 <span>·</span>
                 <span>Veri: {data.summary.source}</span>
+                {data.summary.source.includes("ilk") && (
+                  <>
+                    <span>·</span>
+                    <span title="Bu sayfa dengesizliği şirketin gün öncesi ilk planına (ilk KGÜP) göre hesaplar: tahmin kalitesini gün içi düzeltmelerden ayrı ölçmek için. Gerçek uzlaştırma (fatura) son plana göre yapılır; gün içinde düzeltme yapan şirkette fatura tutarı genellikle daha düşüktür.">
+                      Dengesizlik ilk plana göre; faturayla kıyas (son plan){" "}
+                      <Link href={`/projects/${projectId}/validation`} className="underline">
+                        Doğrulama paketi
+                      </Link>
+                      &apos;nde
+                    </span>
+                  </>
+                )}
               </p>
             )}
           </div>

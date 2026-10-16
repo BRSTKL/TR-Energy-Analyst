@@ -80,8 +80,9 @@ function ProjectKpiBlock({ k }: { k: ProjectKpis | null | undefined }) {
         "Sektördeki yer",
         k.sector.length ? (
           k.sector.map((x) => (
-            <span key={x.type} className={`block ${x.rankPct <= 50 ? "text-emerald-700" : "text-rose-700"}`}>
-              {TECH_TR[x.type] ?? x.type}: {x.rankPct <= 50 ? `en iyi %${nfTr(Math.max(1, x.rankPct))}` : `en kötü %${nfTr(Math.max(1, 100 - x.rankPct))}`}
+            <span key={`${x.type}-${x.kind ?? ""}`} className={`block ${x.rankPct <= 50 ? "text-emerald-700" : "text-rose-700"}`}>
+              {TECH_TR[x.type] ?? x.type}
+              {x.kind === "RESERVOIR" ? " (barajlı)" : x.kind === "RUN_OF_RIVER" ? " (nehir tipi)" : ""}: {x.rankPct <= 50 ? `en iyi %${nfTr(Math.max(1, x.rankPct))}` : `en kötü %${nfTr(Math.max(1, 100 - x.rankPct))}`}
             </span>
           ))
         ) : (

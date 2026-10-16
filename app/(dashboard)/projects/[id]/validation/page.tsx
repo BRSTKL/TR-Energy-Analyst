@@ -120,6 +120,11 @@ export default function ValidationPage() {
   return (
     <div className="min-h-screen bg-slate-50/60 pb-16 print:bg-white print:pb-0">
       <div className="mx-auto max-w-3xl space-y-4 px-4 pt-6 print:max-w-none print:px-0 print:pt-0">
+        <p className="text-xs leading-relaxed text-slate-500 print:hidden">
+          Not (yalnız ekranda, çıktıya girmez): bu paket faturayla kıyas için şirketin <b>son planını</b> (gün içi düzeltmeler sonrası KGÜP) kullanır. Sonuç
+          sayfası ve rapor ise tahmin kalitesini ölçmek için <b>ilk plana</b> göre hesaplar; aynı ayın dengesizlik tutarı bu yüzden farklıdır (gün içinde
+          düzeltme yapan şirkette burada genellikle daha düşük).
+        </p>
         <div className="flex flex-wrap items-center gap-2 print:hidden">
           <Link href={`/projects/${id}/results`} className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900">
             <ArrowLeft className="h-3 w-3" /> Sonuçlar

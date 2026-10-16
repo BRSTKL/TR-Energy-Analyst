@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { AlertCircle, AlertTriangle, ArrowLeft, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PlantScopePicker } from "@/components/plant-scope-picker";
+import { SlowLoading } from "@/components/slow-loading";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { BacktestResult, StrategyBacktest } from "@/lib/analysis/backtest";
 import type { DirectionGate } from "@/lib/analysis/direction-backtest";
@@ -110,7 +111,7 @@ export default function BacktestPage() {
             <AlertCircle className="h-4 w-4" /> {error}
           </div>
         )}
-        {!data && !error && <p className="text-sm text-slate-500">Test çalıştırılıyor...</p>}
+        {!data && !error && <SlowLoading label="Test çalıştırılıyor: her kural her ay için önceki 4 ayla yeniden kuruluyor…" />}
 
         {data && scenario && (
           <>

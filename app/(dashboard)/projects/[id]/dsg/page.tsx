@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import type { DsgScenarioResult } from "@/lib/analysis/dsg-scenarios";
 
 import { MethodLink } from "@/components/method-link";
+import { SlowLoading } from "@/components/slow-loading";
 interface PlantOption {
   plantId: string;
   plantName: string;
@@ -126,7 +127,7 @@ export default function DsgScenarioPage() {
             <AlertCircle className="h-4 w-4" /> {error}
           </div>
         )}
-        {!data && loading && <p className="text-sm text-slate-500">Hesaplanıyor...</p>}
+        {!data && loading && <SlowLoading label="DSG senaryoları hesaplanıyor: şirketlerin saatlik dengesizlikleri netleştiriliyor…" />}
 
         {data && (
           <>
