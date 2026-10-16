@@ -1,7 +1,7 @@
 /**
  * Geçmişle sınama (Aşama 12.2, 12.3, 16.2): sektör karnesindeki santrallerin 2025 ve 2026 Ocak–Ağustos verisi.
  *
- *   npx tsx --tsconfig tsconfig.json scripts/sector-backtest.mts [geçmiş=2025] [hedef=2026] [sonAy=08]
+ *   npx tsx --tsconfig tsconfig.json scripts/sector-backtest.mts [geçmiş=2025] [hedef=2026] [sonAy=karnedeki son tam ay]
  *
  * Çıktı: .cache/epias/sector-backtest-<hedef>.json (rapor okur). Girdi: sektör karnesi (sector-<yıl>.json; kalite
  * süzgecinden geçmiş santraller), saatlik seriler (sector-<yıl>-hourly), MarketData. EPİAŞ'a gidilmez.
@@ -20,10 +20,12 @@ import { CONTRACT_MARKUPS, contractFormBacktest, type ContractFormPlant } from "
 import { candidateBacktest, improvementBacktest, premiumBacktest, type PlantBacktestInput, type SectorBacktest } from "@/lib/analysis/sector-backtest";
 import { loadBenchmarkPlants, loadBenchmarkPrices } from "@/lib/services/aggregator-data";
 import type { BenchmarkHourPrice, BenchmarkPlant } from "@/lib/analysis/aggregator-benchmark";
+import { karnePeriodEnd, lastFullMonth } from "@/lib/sector/period";
 
 const fromYear = Number(process.argv[2] ?? 2025);
 const toYear = Number(process.argv[3] ?? 2026);
-const lastMonth = Number(process.argv[4] ?? 8);
+// Varsayılan: hedef yılın karnesindeki son tam ay (lib/sector/period.ts)
+const lastMonth = Number(process.argv[4] ?? lastFullMonth(karnePeriodEnd(toYear) ?? `${toYear}-08-31`));
 const CACHE = path.join(process.cwd(), ".cache", "epias");
 const HOUR = 3_600_000;
 const hoursOf = (y: number) => (Date.UTC(y, lastMonth, 1) - Date.UTC(y, 0, 1)) / HOUR;

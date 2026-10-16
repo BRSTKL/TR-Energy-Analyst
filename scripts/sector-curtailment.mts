@@ -4,7 +4,7 @@
  * lib/analysis/sector-loss.ts ile grup ve yıl özeti (aynı aylar: Ocak – sonAy). Uydu verisi önce
  * `scripts/satellite-sync.mts` ile çekilmiş olmalı. EPİAŞ'a gidilmez.
  *
- *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/sector-curtailment.mts [sonAy=8]
+ *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/sector-curtailment.mts [sonAy=karnedeki son tam ay]
  * Çıktı: .cache/epias/sector-curtailment.json
  */
 
@@ -16,8 +16,10 @@ import { detectLostHours, monthlyLoss } from "@/lib/forecast/curtailment";
 import { LOSS_GROUP_LABEL, sectorLoss, type SectorLossPlant } from "@/lib/analysis/sector-loss";
 import { readPoolPlantInfo } from "@/lib/pool/pool-store";
 import { lossInputs } from "@/lib/services/production-loss";
+import { karnePeriodEnd, lastFullMonth } from "@/lib/sector/period";
 
-const lastMonth = Number(process.argv[2] ?? 8);
+// Varsayılan: içinde bulunulan yılın karnesindeki son tam ay (lib/sector/period.ts)
+const lastMonth = Number(process.argv[2] ?? lastFullMonth(karnePeriodEnd(new Date().getUTCFullYear()) ?? "2026-08-31"));
 const CACHE = path.join(process.cwd(), ".cache", "epias");
 const YEARS = [2025, 2026];
 const nf = (v: number, d = 1) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });

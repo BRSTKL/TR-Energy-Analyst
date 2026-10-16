@@ -2,14 +2,17 @@
  * Sektör karnesi verisi: EPİAŞ'ta üretimi yayımlanan lisanslı RES ve GES (isteğe bağlı HES) santrallerinin bir yıllık
  * göstergeleri ve saatlik serileri.
  *
- *   node --env-file=.env node_modules/.bin/tsx scripts/sector-collect.mts [yıl=2025] [dönem sonu, YYYY-AA-GG] [--hes] [--rebuild]
+ *   node --env-file=.env node_modules/.bin/tsx scripts/sector-collect.mts [yıl=2025] [dönem sonu, YYYY-AA-GG] [--hes] [--rebuild] [--only-new]
  *
  *   --hes      hidroelektrik santralleri de toplar (hidro karnesi; yaklaşık bir saat ek süre)
  *   --rebuild  EPİAŞ'a bağlanmadan, havuzdaki saatlik serilerden ve veritabanındaki güncel piyasa fiyatlarından karneyi
  *              yeniden kurar (ör. piyasa verisi yeniden çekildikten sonra)
+ *   --only-new yalnız diskte göstergesi olmayan hedefler EPİAŞ'tan çekilir (ör. tür kuralı değişince eklenen santraller);
+ *              diğerlerinin dosyası olduğu gibi kalır, özet hepsinden kurulur
  *
- * Dönem sonu verilmezse geçmiş yıllarda 31 Aralık, içinde bulunulan yılda geçen ayın son günüdür (yıl içi karne:
- * ör. 2026 için Ocak–Ağustos). Kalite süzgeci ve dağılımlar bu döneme göre hesaplanır.
+ * Dönem sonu verilmezse geçmiş yıllarda 31 Aralık, içinde bulunulan yılda veritabanında piyasa verisi olan son tam gündür
+ * (en güncel tarih; kullanıcı kararı 16.10.2026: veri her zaman en son tarihe kadar çekilir; önce piyasa verisi
+ * senkronlanmalı). Kalite süzgeci ve dağılımlar bu döneme göre hesaplanır.
  *
  * Veri tek yerden, veri havuzundan (data/pool; PLAN 7.5) okunur: her santral için ensurePlantCoverage havuzda olmayan ya da
  * yenilenme zamanı gelmiş ayları EPİAŞ'tan çekip havuza yazar (başka projelerin çektiği aylar yeniden çekilmez), sonra ilk
@@ -25,10 +28,12 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { fetchKgup, fetchUevm, listUevcbsForPlant, listUevmPowerPlants, listYekdemPlantIds, plantOwnerIndex } from "../lib/services/epias-plants";
-import { guessTechnologyFromName } from "../lib/epias-plant/plant-data";
+import { buildTechIndex, resolveTechnology } from "../lib/sector/plant-technology";
+import { loadEpdkTechLicenses } from "../lib/sector/epdk-licenses";
+import { fuelInRange } from "../lib/pool/pool-codec";
 import { ensurePlantCoverage, type PoolFetchers } from "../lib/pool/pool-sync";
 import { poolPlantRows } from "../lib/pool/pool-hours";
-import { writePoolPlantInfo } from "../lib/pool/pool-store";
+import { readPoolYear, writePoolPlantInfo } from "../lib/pool/pool-store";
 import { processHourlyRecord } from "../lib/calculations/engine";
 import { DEFAULT_IMBALANCE_PROFILE, SystemDirection } from "../lib/calculations/types";
 import { buildBenchmark, plantMetrics, type SectorPlantMetrics, type SectorTech } from "../lib/sector/benchmark";
@@ -41,9 +46,17 @@ const TYPES: SectorTech[] = flags.has("--hes") ? ["RES", "GES", "HES"] : ["RES",
 const rebuild = flags.has("--rebuild");
 const year = Number(args[0] ?? 2025);
 const now = new Date();
-const periodEnd =
-  args[1] ??
-  (year < now.getUTCFullYear() ? `${year}-12-31` : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0)).toISOString().slice(0, 10));
+const prisma = new PrismaClient();
+/** İçinde bulunulan yıl: piyasa verisi 23:00 saatine kadar olan son gün (dünden ileri değil) */
+async function latestMarketDay(): Promise<string> {
+  const last = await prisma.marketData.findFirst({ orderBy: { timestamp: "desc" }, select: { timestamp: true } });
+  if (!last) throw new Error("Veritabanında piyasa verisi yok.");
+  const t = last.timestamp.getTime();
+  const fullDay = new Date(t - (last.timestamp.getUTCHours() === 23 ? 0 : 86_400_000)).toISOString().slice(0, 10);
+  const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1)).toISOString().slice(0, 10);
+  return fullDay < yesterday ? fullDay : yesterday;
+}
+const periodEnd = args[1] ?? (year < now.getUTCFullYear() ? `${year}-12-31` : await latestMarketDay());
 if (!periodEnd.startsWith(`${year}-`)) throw new Error(`Dönem sonu ${year} içinde olmalı: ${periodEnd}`);
 const periodStart = `${year}-01-01`;
 const endExclusive = Date.parse(`${periodEnd}T00:00:00Z`) + 86_400_000;
@@ -52,7 +65,6 @@ await fs.mkdir(dir, { recursive: true });
 const expectedHours = (endExclusive - Date.UTC(year, 0, 1)) / 3_600_000;
 console.log(`dönem ${periodStart} – ${periodEnd} (${expectedHours} saat)`);
 
-const prisma = new PrismaClient();
 const market = new Map(
   (await prisma.marketData.findMany({ where: { timestamp: { gte: new Date(Date.UTC(year, 0, 1)), lt: new Date(endExclusive) } } })).map((m) => [
     m.timestamp.getTime(),
@@ -75,9 +87,21 @@ const [plantsAll, owners, yekdem] = rebuild
       listYekdemPlantIds(year).catch(() => null),
     ]);
 type Target = { p: { id: number; name: string; shortName?: string | null }; type: SectorTech };
+// Tür (lib/sector/plant-technology.ts): ad açıkça söylüyorsa ad, yoksa EPDK lisansı (sıkı ad eşleşmesi), yoksa havuzdaki
+// UEVM kaynak kırılımı. EPDK dışa aktarımı yoksa (.cache/epdk) yalnız ad ve kırılım.
+let techIndex: ReturnType<typeof buildTechIndex> | null = null;
+try {
+  techIndex = buildTechIndex(loadEpdkTechLicenses());
+} catch {
+  console.log("EPDK lisans listesi yok (.cache/epdk): tür addan ve UEVM kaynak kırılımından");
+}
+const techOf = async (p: { id: number; name: string }) => {
+  const doc = await readPoolYear(p.id, year).catch(() => null);
+  return resolveTechnology(p.name, techIndex, doc ? fuelInRange([doc], `${year}-01-01`, `${year}-12-31`) : null).type;
+};
 const targets: Target[] = (
   plantsAll
-    ? plantsAll.map((p) => ({ p, type: guessTechnologyFromName(p.name) }))
+    ? await Promise.all(plantsAll.map(async (p) => ({ p, type: await techOf(p) })))
     : Array.from(saved.entries()).map(([id, m]) => ({ p: { id, name: m.name }, type: m.type as string }))
 ).filter((x): x is Target => TYPES.includes(x.type as SectorTech));
 /** Santralin saatlik sonuçları: veritabanındaki piyasa fiyatlarıyla (fiyatı olmayan saat atlanır) */
@@ -104,7 +128,7 @@ const price = (rows: Array<{ timestamp: Date; forecastMwh: number; actualMwh: nu
 // Havuz sayesinde tamamlanmış santral EPİAŞ'a gitmez (ensurePlantCoverage yalnız eksik ve yenilenme zamanı gelmiş ayları
 // çeker); bu yüzden her çalıştırmada bütün hedefler gezilir. Devam eden ay günde bir, biten ama kesinleşmemiş ay haftada bir
 // yenilenir (havuz kuralı). Yeniden kurmada EPİAŞ'a hiç gidilmez.
-const todo = rebuild ? [] : targets;
+const todo = rebuild ? [] : flags.has("--only-new") ? targets.filter((t) => !saved.has(t.p.id)) : targets;
 console.log(`hedef ${targets.length} santral (${TYPES.join("+")}), diskte göstergesi olan ${saved.size}`);
 
 if (rebuild) {

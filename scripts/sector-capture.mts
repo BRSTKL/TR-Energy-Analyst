@@ -2,7 +2,7 @@
  * Sektör capture rate (PLAN 19.2): sektör karnesinin santralleri (kalite süzgeçli) için capture fiyatı ve oranı,
  * teknoloji (rüzgâr, güneş, hidro barajlı / nehir tipi) ve ay bazında; santraller arası dağılım.
  *
- *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/sector-capture.mts [sonAy=8]
+ *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/sector-capture.mts [sonAy=karnedeki son tam ay]
  *
  * Yıllar: sektör karnesi olan yıllar (sector-<yıl>.json). Kıyas iki yılda da Ocak–<sonAy> (aynı aylar); önceki yılın tam
  * yılı ayrıca (fullYear). Üretim havuzdan (UEVM), PTF MarketData'dan. EPİAŞ'a gidilmez.
@@ -14,8 +14,10 @@ import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import { readPoolYearCached } from "@/lib/pool/pool-store";
 import { groupCapture, captureStat, type CaptureHour, type GroupCapture } from "@/lib/analysis/capture-rate";
+import { karnePeriodEnd, lastFullMonth } from "@/lib/sector/period";
 
-const lastMonth = Number(process.argv[2] ?? 8);
+// Varsayılan: içinde bulunulan yılın karnesindeki son tam ay (lib/sector/period.ts)
+const lastMonth = Number(process.argv[2] ?? lastFullMonth(karnePeriodEnd(new Date().getUTCFullYear()) ?? "2026-08-31"));
 const CACHE = path.join(process.cwd(), ".cache", "epias");
 const HOUR = 3_600_000;
 const years = fs

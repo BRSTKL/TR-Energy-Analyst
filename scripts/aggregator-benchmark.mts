@@ -1,7 +1,7 @@
 /**
  * Toplayıcılar arası kıyası üretir (PLAN 8.7): .cache/epias/aggregator-benchmark-<yıl>.json
  *
- *   npx tsx --tsconfig tsconfig.json scripts/aggregator-benchmark.mts [yıl=2026] [bitiş=2026-08-31]
+ *   npx tsx --tsconfig tsconfig.json scripts/aggregator-benchmark.mts [yıl=2026] [bitiş=karnenin dönem sonu]
  *
  * Girdi: toplayıcı üyelik listesi (.cache/epias/aggregator-membership.json), veri havuzu (data/pool; ilk KGÜP ve UEVM),
  * santral sahibi ve türü (sektör karnesi santral dosyaları), EPİAŞ resmi dengesizlik fiyatları (MarketData). EPİAŞ'a
@@ -13,9 +13,11 @@ import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import { benchmarkAggregator } from "@/lib/analysis/aggregator-benchmark";
 import { loadBenchmarkPlants, loadBenchmarkPrices, otherTechIds } from "@/lib/services/aggregator-data";
+import { karnePeriodEnd } from "@/lib/sector/period";
 
 const year = Number(process.argv[2] ?? 2026);
-const end = process.argv[3] ?? `${year}-08-31`;
+// Varsayılan: o yılın sektör karnesinin dönem sonu (en güncel gün; lib/sector/period.ts)
+const end = process.argv[3] ?? karnePeriodEnd(year) ?? `${year}-12-31`;
 const start = `${year}-01-01`;
 const CACHE = path.join(process.cwd(), ".cache", "epias");
 
