@@ -18,7 +18,9 @@ import { prisma } from "@/lib/prisma";
 import { poolDir } from "@/lib/pool/pool-store";
 import { projectPeriod } from "@/lib/services/project-records";
 
-const MAX_ENTRIES = 120;
+// 15 proje × ≈ 17 hesap ≈ 255 kayıt, üstüne santral / parametre seçimleri (hata ayıklama testi 16.10.2026: 120 kayıtta bütün
+// projeler gezilince ağır hesaplar düşüp yeniden yapılıyordu). En az kullanılan atılır; kayıtlar çoğunlukla ≤ 1 MB.
+const MAX_ENTRIES = 400;
 // Geliştirme sunucusu modülleri yeniden yükler ve rotalar ayrı paketlenebilir: önbellek süreç genelinde tek olsun
 const g = globalThis as unknown as {
   __trResponseCache?: Map<string, { version: string; value: unknown }>;

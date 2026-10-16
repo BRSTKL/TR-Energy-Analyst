@@ -436,14 +436,14 @@ export default function SectorPage() {
                 Santraller
               </Button>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="relative">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+              <div className="relative min-w-0 flex-1 sm:flex-none">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder={view === "company" ? "Şirket ara" : "Santral ya da şirket ara"}
-                  className="h-9 w-64 rounded-md border border-slate-200 bg-white pl-8 pr-2 text-sm"
+                  className="h-9 w-full rounded-md border border-slate-200 bg-white pl-8 pr-2 text-sm sm:w-64"
                 />
               </div>
               <Button size="sm" variant="outline" className="gap-1.5" onClick={() => downloadCsv(rows, tech, view, data.year)}>

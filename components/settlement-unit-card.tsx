@@ -17,7 +17,17 @@ interface AggregatorOption {
  * Toplayıcı modunda sonuçlar, DSG sayfası ve PowerPoint raporu portföyün netleşme değerini gösterir. Toplayıcı EPİAŞ'tan
  * seçilirse portföyünün santral sayısı ve teknoloji dağılımı kaydedilir; rapor kapsamı buna göre yazar.
  */
-export function SettlementUnitCard({ projectId }: { projectId: string }) {
+/**
+ * `initial` verilirse proje yeniden istenmez (santraller sayfası projeyi zaten çekiyor; hata ayıklama testi 16.10.2026:
+ * aynı proje isteği iki kez gidiyordu).
+ */
+export function SettlementUnitCard({
+  projectId,
+  initial,
+}: {
+  projectId: string;
+  initial?: { aggregatorName: string | null; aggregatorPortfolio: AggregatorPortfolio | null };
+}) {
   const [saved, setSaved] = useState<string | null | undefined>(undefined);
   const [portfolio, setPortfolio] = useState<AggregatorPortfolio | null>(null);
   const [mode, setMode] = useState<"owner" | "aggregator">("owner");
@@ -30,17 +40,21 @@ export function SettlementUnitCard({ projectId }: { projectId: string }) {
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
 
   useEffect(() => {
+    const apply = (v: string | null, p: AggregatorPortfolio | null) => {
+      setSaved(v);
+      setPortfolio(p);
+      setMode(v ? "aggregator" : "owner");
+      setName(v ?? "");
+    };
+    if (initial) {
+      apply(initial.aggregatorName, initial.aggregatorPortfolio);
+      return;
+    }
     fetch(`/api/projects/${projectId}`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => {
-        const v: string | null = d.project?.aggregatorName ?? null;
-        setSaved(v);
-        setPortfolio(d.project?.aggregatorPortfolio ?? null);
-        setMode(v ? "aggregator" : "owner");
-        setName(v ?? "");
-      })
+      .then((d) => apply(d.project?.aggregatorName ?? null, d.project?.aggregatorPortfolio ?? null))
       .catch(() => setSaved(null));
-  }, [projectId]);
+  }, [projectId, initial]);
 
   const dirty = (mode === "owner" ? null : name.trim() || null) !== (saved ?? null) || picked !== null;
 

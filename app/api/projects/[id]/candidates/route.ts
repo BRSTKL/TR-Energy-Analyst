@@ -26,7 +26,8 @@ async function handleGET(request: Request, { params }: { params: { id: string } 
   const access: AccessFilter = a === "independent" || a === "group" || a === "aggregator" || a === "retail" || a === "unknown" ? a : "all";
   try {
     const out = await projectCandidates(params.id, { types: types.length ? types : SECTOR_TECHS, top, sortBy, yekdem, access });
-    if ("error" in out) return NextResponse.json({ success: false, error: out.error }, { status: 422 });
+    // Proje yoksa 404 (diğer uçlarla aynı); veri eksikliği (karne, saatlik seri) 422
+    if ("error" in out) return NextResponse.json({ success: false, error: out.error }, { status: out.error === "Proje bulunamadı." ? 404 : 422 });
     return NextResponse.json({ success: true, ...out });
   } catch (error) {
     console.error("Candidates error:", error);

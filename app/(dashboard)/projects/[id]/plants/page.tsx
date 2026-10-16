@@ -51,6 +51,7 @@ export default function PlantsPage() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [newDraft, setNewDraft] = useState<Draft>(EMPTY_DRAFT);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [settlement, setSettlement] = useState<React.ComponentProps<typeof SettlementUnitCard>["initial"]>(undefined);
   const [loading, setLoading] = useState(true);
   // Çift tıklamada aynı isteğin iki kez gitmesini engeller (state güncellemesi gelmeden ikinci tık)
   const inFlight = useRef(false);
@@ -62,6 +63,7 @@ export default function PlantsPage() {
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Proje yüklenemedi.");
       setProjectName(data.project.name);
+      setSettlement({ aggregatorName: data.project.aggregatorName ?? null, aggregatorPortfolio: data.project.aggregatorPortfolio ?? null });
       setPlants(data.project.plants);
       setDrafts(Object.fromEntries(data.project.plants.map((p: Plant) => [p.id, toDraft(p)])));
       setLoadError(null);
@@ -198,163 +200,171 @@ export default function PlantsPage() {
         {loadError && <Notice msg={{ kind: "error", text: loadError }} />}
         {messages.list && <Notice msg={messages.list} />}
 
-        <SettlementUnitCard projectId={projectId} />
+        {loadError && !projectName ? (
+          <Link href="/projects" className="text-sm text-slate-600 underline">
+            Projelere dön
+          </Link>
+        ) : (
+          <>
+          {settlement && <SettlementUnitCard projectId={projectId} initial={settlement} />}
 
-        <Card className="shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Factory className="h-4 w-4 text-indigo-600" /> Mevcut santraller
-            </CardTitle>
-            <CardDescription>
-              Ad değişikliği mevcut kayıtları etkilemez. Silme, santralin tüm saatlik kayıtlarını da siler
-              (öncesinde veritabanı yedeklenir).
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {loading && <p className="text-sm text-slate-500">Yükleniyor...</p>}
-            {!loading && plants.length === 0 && !loadError && (
-              <p className="rounded-lg border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">
-                Bu projede henüz santral yok. Aşağıdan ekleyin.
-              </p>
-            )}
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Factory className="h-4 w-4 text-indigo-600" /> Mevcut santraller
+              </CardTitle>
+              <CardDescription>
+                Ad değişikliği mevcut kayıtları etkilemez. Silme, santralin tüm saatlik kayıtlarını da siler
+                (öncesinde veritabanı yedeklenir).
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {loading && <p className="text-sm text-slate-500">Yükleniyor...</p>}
+              {!loading && plants.length === 0 && !loadError && (
+                <p className="rounded-lg border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">
+                  Bu projede henüz santral yok. Aşağıdan ekleyin.
+                </p>
+              )}
 
-            {plants.map((plant) => {
-              const draft = drafts[plant.id] ?? toDraft(plant);
-              const dirty = isDirty(plant, draft);
-              const rowBusy = busy === plant.id;
-              return (
-                <div key={plant.id} className="rounded-lg border border-slate-200 bg-white p-3">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_110px_140px_auto] sm:items-end">
-                    <Field label="Santral adı">
-                      <input
-                        className={inputClass}
-                        value={draft.name}
-                        onChange={(e) => updateDraft(plant.id, { name: e.target.value })}
-                      />
-                    </Field>
-                    <Field label="Tür">
-                      <TypeSelect value={draft.type} onChange={(type) => updateDraft(plant.id, { type })} />
-                    </Field>
-                    <Field label="Kurulu güç (MW)">
-                      <input
-                        className={inputClass}
-                        inputMode="decimal"
-                        value={draft.capacityMw}
-                        onChange={(e) => updateDraft(plant.id, { capacityMw: e.target.value })}
-                      />
-                    </Field>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => savePlant(plant)}
-                        disabled={!dirty || busy !== null}
-                        className="bg-indigo-600 text-white hover:bg-indigo-700"
-                      >
-                        <Save className="mr-1.5 h-3.5 w-3.5" /> {rowBusy && dirty ? "Kaydediliyor..." : "Kaydet"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setConfirmDelete(plant.id)}
-                        disabled={busy !== null}
-                        className="border-rose-200 text-rose-700 hover:bg-rose-50"
-                        aria-label={`${plant.name} santralini sil`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="mt-2 text-xs text-slate-500">
-                    {plant.recordCount > 0
-                      ? `${plant.recordCount.toLocaleString("tr-TR")} saatlik kayıt`
-                      : "Henüz veri yüklenmedi"}
-                    {" · Kurulu güç: "}
-                    <span className={plant.capacitySource === "EPIAS_YEKDEM" || plant.capacitySource === "USER" ? "" : "text-amber-700"}>
-                      {plant.capacityRef ?? "tahmin (kaynak belirlenmemiş; EPİAŞ bilgilerini güncelleyin)"}
-                    </span>
-                  </div>
-
-                  {confirmDelete === plant.id && (
-                    <div className="mt-3 flex flex-col gap-2 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between">
-                      <span>
-                        <strong>{plant.name}</strong> ve{" "}
-                        {plant.recordCount > 0
-                          ? `${plant.recordCount.toLocaleString("tr-TR")} saatlik kaydı`
-                          : "tanımı"}{" "}
-                        silinecek. Emin misiniz?
-                      </span>
+              {plants.map((plant) => {
+                const draft = drafts[plant.id] ?? toDraft(plant);
+                const dirty = isDirty(plant, draft);
+                const rowBusy = busy === plant.id;
+                return (
+                  <div key={plant.id} className="rounded-lg border border-slate-200 bg-white p-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_110px_140px_auto] sm:items-end">
+                      <Field label="Santral adı">
+                        <input
+                          className={inputClass}
+                          value={draft.name}
+                          onChange={(e) => updateDraft(plant.id, { name: e.target.value })}
+                        />
+                      </Field>
+                      <Field label="Tür">
+                        <TypeSelect value={draft.type} onChange={(type) => updateDraft(plant.id, { type })} />
+                      </Field>
+                      <Field label="Kurulu güç (MW)">
+                        <input
+                          className={inputClass}
+                          inputMode="decimal"
+                          value={draft.capacityMw}
+                          onChange={(e) => updateDraft(plant.id, { capacityMw: e.target.value })}
+                        />
+                      </Field>
                       <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => setConfirmDelete(null)} disabled={rowBusy}>
-                          Vazgeç
+                        <Button
+                          size="sm"
+                          onClick={() => savePlant(plant)}
+                          disabled={!dirty || busy !== null}
+                          className="bg-indigo-600 text-white hover:bg-indigo-700"
+                        >
+                          <Save className="mr-1.5 h-3.5 w-3.5" /> {rowBusy && dirty ? "Kaydediliyor..." : "Kaydet"}
                         </Button>
                         <Button
                           size="sm"
-                          onClick={() => deletePlant(plant)}
-                          disabled={rowBusy}
-                          className="bg-rose-600 text-white hover:bg-rose-700"
+                          variant="outline"
+                          onClick={() => setConfirmDelete(plant.id)}
+                          disabled={busy !== null}
+                          className="border-rose-200 text-rose-700 hover:bg-rose-50"
+                          aria-label={`${plant.name} santralini sil`}
                         >
-                          {rowBusy ? "Siliniyor..." : "Evet, sil"}
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     </div>
-                  )}
 
-                  {messages[plant.id] && <Notice msg={messages[plant.id]} compact />}
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
+                    <div className="mt-2 text-xs text-slate-500">
+                      {plant.recordCount > 0
+                        ? `${plant.recordCount.toLocaleString("tr-TR")} saatlik kayıt`
+                        : "Henüz veri yüklenmedi"}
+                      {" · Kurulu güç: "}
+                      <span className={plant.capacitySource === "EPIAS_YEKDEM" || plant.capacitySource === "USER" ? "" : "text-amber-700"}>
+                        {plant.capacityRef ?? "tahmin (kaynak belirlenmemiş; EPİAŞ bilgilerini güncelleyin)"}
+                      </span>
+                    </div>
 
-        <Card className="shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Plus className="h-4 w-4 text-emerald-600" /> Santral ekle
-            </CardTitle>
-            <CardDescription>
-              Santrali elle tanımlayıp verisini dosyadan yükleyin ya da{" "}
-              <Link href={`/projects/epias?projectId=${projectId}`} className="font-medium text-sky-700 underline">
-                EPİAŞ&apos;tan adıyla arayıp ekleyin
-              </Link>{" "}
-              (veri otomatik çekilir).
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form
-              className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_110px_140px_auto] sm:items-end"
-              onSubmit={(e) => {
-                e.preventDefault();
-                addPlant();
-              }}
-            >
-              <Field label="Santral adı">
-                <input
-                  className={inputClass}
-                  placeholder="Örn: RES_3"
-                  value={newDraft.name}
-                  onChange={(e) => setNewDraft((d) => ({ ...d, name: e.target.value }))}
-                />
-              </Field>
-              <Field label="Tür">
-                <TypeSelect value={newDraft.type} onChange={(type) => setNewDraft((d) => ({ ...d, type }))} />
-              </Field>
-              <Field label="Kurulu güç (MW)">
-                <input
-                  className={inputClass}
-                  inputMode="decimal"
-                  placeholder="Örn: 45"
-                  value={newDraft.capacityMw}
-                  onChange={(e) => setNewDraft((d) => ({ ...d, capacityMw: e.target.value }))}
-                />
-              </Field>
-              <Button type="submit" size="sm" disabled={busy !== null} className="bg-emerald-600 text-white hover:bg-emerald-700">
-                <Plus className="mr-1.5 h-3.5 w-3.5" /> {busy === "new" ? "Ekleniyor..." : "Ekle"}
-              </Button>
-            </form>
-            {messages.new && <Notice msg={messages.new} compact />}
-          </CardContent>
-        </Card>
+                    {confirmDelete === plant.id && (
+                      <div className="mt-3 flex flex-col gap-2 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between">
+                        <span>
+                          <strong>{plant.name}</strong> ve{" "}
+                          {plant.recordCount > 0
+                            ? `${plant.recordCount.toLocaleString("tr-TR")} saatlik kaydı`
+                            : "tanımı"}{" "}
+                          silinecek. Emin misiniz?
+                        </span>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" onClick={() => setConfirmDelete(null)} disabled={rowBusy}>
+                            Vazgeç
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => deletePlant(plant)}
+                            disabled={rowBusy}
+                            className="bg-rose-600 text-white hover:bg-rose-700"
+                          >
+                            {rowBusy ? "Siliniyor..." : "Evet, sil"}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {messages[plant.id] && <Notice msg={messages[plant.id]} compact />}
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Plus className="h-4 w-4 text-emerald-600" /> Santral ekle
+              </CardTitle>
+              <CardDescription>
+                Santrali elle tanımlayıp verisini dosyadan yükleyin ya da{" "}
+                <Link href={`/projects/epias?projectId=${projectId}`} className="font-medium text-sky-700 underline">
+                  EPİAŞ&apos;tan adıyla arayıp ekleyin
+                </Link>{" "}
+                (veri otomatik çekilir).
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form
+                className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_110px_140px_auto] sm:items-end"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  addPlant();
+                }}
+              >
+                <Field label="Santral adı">
+                  <input
+                    className={inputClass}
+                    placeholder="Örn: RES_3"
+                    value={newDraft.name}
+                    onChange={(e) => setNewDraft((d) => ({ ...d, name: e.target.value }))}
+                  />
+                </Field>
+                <Field label="Tür">
+                  <TypeSelect value={newDraft.type} onChange={(type) => setNewDraft((d) => ({ ...d, type }))} />
+                </Field>
+                <Field label="Kurulu güç (MW)">
+                  <input
+                    className={inputClass}
+                    inputMode="decimal"
+                    placeholder="Örn: 45"
+                    value={newDraft.capacityMw}
+                    onChange={(e) => setNewDraft((d) => ({ ...d, capacityMw: e.target.value }))}
+                  />
+                </Field>
+                <Button type="submit" size="sm" disabled={busy !== null} className="bg-emerald-600 text-white hover:bg-emerald-700">
+                  <Plus className="mr-1.5 h-3.5 w-3.5" /> {busy === "new" ? "Ekleniyor..." : "Ekle"}
+                </Button>
+              </form>
+              {messages.new && <Notice msg={messages.new} compact />}
+            </CardContent>
+          </Card>
+          </>
+        )}
       </main>
     </div>
   );

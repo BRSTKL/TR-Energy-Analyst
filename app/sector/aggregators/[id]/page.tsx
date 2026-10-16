@@ -46,7 +46,15 @@ export default function AggregatorDetailPage() {
       .catch(() => setError("Ayrıntı yüklenemedi."));
   }, [id, year]);
 
-  if (error) return <div className="mx-auto max-w-5xl p-6 text-sm text-red-600">{error}</div>;
+  if (error)
+    return (
+      <div className="mx-auto max-w-5xl space-y-2 p-6 text-sm">
+        <p className="text-red-600">{error === "Geçersiz istek." ? "Bu toplayıcı bulunamadı." : error}</p>
+        <Link href="/sector" className="text-slate-600 underline">
+          Sektör karnesine dön
+        </Link>
+      </div>
+    );
   if (!data)
     return (
       <div className="flex items-center justify-center gap-2 p-16 text-sm text-slate-500">
