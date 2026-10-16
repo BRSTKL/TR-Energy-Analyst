@@ -39,6 +39,7 @@ Konum koordinatlı bir kayıttan alınır. Tahmin ancak kayıt bulunamazsa kulla
   - Kural (kaynaklar, doğrulama, üzerine yazma): `lib/epias-plant/location.ts`.
   - Kaydetme: `lib/services/plant-location.ts`. Havuzdaki santral tanımına (`data/pool/<id>/plant.json`, projede olmayan santraller dahil) ve aynı kimlikteki `PowerPlant` kayıtlarına yazar.
   - Elle giriş, pilot listesi ve projelere kopyalama: `scripts/plant-location.mts` (`set`, `pilot`, `sync`).
+  - Otomatik doldurma: `scripts/location-autofill.mts`. `--gem` GEM kaydıyla (EPDK lisans no ya da birebir ad; EPDK ilçe merkezinden 40 km'den uzaksa reddedilir), `--epdk` EPDK il / ilçe merkeziyle (tahmin). GEM dosyası `scripts/tools/gem-tracker-extract.py` ile `.cache/gem/` altına çıkarılır.
 - **Santral kaydı:** `PowerPlant.locationSource` şu değerlerden birini alır:
   - `USER`: elle doğrulandı. Bu değere hiçbir otomatik işlem dokunmaz.
   - `GEM_TRACKER` ya da `OSM`: koordinatlı kayıt.
