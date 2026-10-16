@@ -1,40 +1,23 @@
 import { NextResponse } from "next/server";
-import { projectWeatherPlants, weatherDay } from "@/lib/services/weather-preview";
-import { forecastReference, lossCalendar, plantLoss, withLoss } from "@/lib/services/production-loss";
+import { projectLiveForecast } from "@/lib/services/live-forecast";
+import { forecastReference } from "@/lib/services/production-loss";
 
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/projects/[id]/forecast?plant=<epiasPlantId>&date=YYYY-MM-DD
- * Üretim tahmini sayfası (PLAN 15.2 önizleme): projenin güneş santralleri, konum ve hava verisi durumu; hava verisi olan
- * seçili santral için günün saatlik ışınım tahmini, üretimi ve ilk KGÜP'ü. Santral verilmezse hava verisi olan ilki;
- * gün verilmezse son ortak gün. Kayıp üretim (PLAN 20.3): seçili santralin uyduyla kayıp özeti, günün ayının takvimi,
- * günün saatlerinde uydu ışınımı ve beklenen üretim; açık referans sıralaması (Aşama 15, projenin santralleri).
+ * GET /api/projects/[id]/forecast
+ * Üretim tahmini sayfası (kullanıcı kararı 16.10.2026; eski "Üretim tahmini" sayfası artık /losses): projenin konumu olan
+ * güneş santralleri için yarın ve öbür gün saatlik beklenen üretim (lib/services/live-forecast.ts) ve modelin geçmiş
+ * başarısı (geriye dönük test: kalıcılıksız sürüm 3 ile şirketin ilk KGÜP'ü).
  */
-export async function GET(req: Request, { params }: { params: { id: string } }) {
-  const url = new URL(req.url);
+export async function GET(_req: Request, { params }: { params: { id: string } }) {
   try {
-    const list = await projectWeatherPlants(params.id);
-    if (!list) return NextResponse.json({ success: false, error: "Proje bulunamadı." }, { status: 404 });
-    const ready = list.plants.filter((p) => p.epiasPlantId !== null && p.weatherYears.length > 0);
-    const requested = Number(url.searchParams.get("plant"));
-    const id = ready.find((p) => p.epiasPlantId === requested)?.epiasPlantId ?? ready[0]?.epiasPlantId ?? null;
-    const raw = id !== null ? await weatherDay(id, url.searchParams.get("date")) : null;
-    const day = raw && !("error" in raw) ? await withLoss(raw) : null;
-    const loss = id !== null ? await plantLoss(id) : null;
-    const calendar = id !== null && day ? await lossCalendar(id, day.date.slice(0, 7)) : [];
-    const ids = list.plants.map((p) => p.epiasPlantId).filter((x): x is number => x !== null);
-    return NextResponse.json({
-      success: true,
-      ...list,
-      day,
-      dayError: raw && "error" in raw ? raw.error : null,
-      loss,
-      calendar,
-      reference: forecastReference(ids),
-    });
+    const live = await projectLiveForecast(params.id);
+    if (!live) return NextResponse.json({ success: false, error: "Proje bulunamadı." }, { status: 404 });
+    const ids = live.plants.map((p) => p.epiasPlantId).filter((x): x is number => x !== null);
+    return NextResponse.json({ success: true, ...live, reference: forecastReference(ids) });
   } catch (error) {
-    console.error("Forecast page error:", error);
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : "Üretim tahmini verisi hazırlanamadı." }, { status: 500 });
+    console.error("Live forecast error:", error);
+    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : "Üretim tahmini hazırlanamadı." }, { status: 500 });
   }
 }

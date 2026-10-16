@@ -163,10 +163,25 @@ export interface ReferenceRow {
   /** Tüm saatler, TL/MWh */
   modelAllTlPerMwh: number;
   kgupAllTlPerMwh: number;
+  /** Canlı tahmin modeli (sürüm 3 kalıcılıksız; ileriye dönük tahmin sayfası): kayıp hariç ve tüm saatler; yoksa NaN */
+  liveTlPerMwh: number;
+  liveAllTlPerMwh: number;
+}
+
+/** Geriye dönük testin bütün santralleri (proje dışı dahil), kayıp hariç: toplam maliyet ÷ toplam üretim */
+export interface ReferenceSummary {
+  plants: number;
+  modelTlPerMwh: number;
+  liveTlPerMwh: number;
+  kgupTlPerMwh: number;
+  /** Canlı modelin ilk KGÜP'ten ucuz olduğu santral sayısı */
+  liveWins: number;
 }
 
 /** Aşama 15 geriye dönük testinden açık referans sıralaması (sürüm 3 ile ilk KGÜP); dosya yoksa null */
-export function forecastReference(epiasPlantIds: number[]): { period: { from: string; to: string }; generatedAt: string; rows: ReferenceRow[] } | null {
+export function forecastReference(
+  epiasPlantIds: number[]
+): { period: { from: string; to: string }; generatedAt: string; rows: ReferenceRow[]; summary: ReferenceSummary | null } | null {
   const f = path.join(process.cwd(), ".cache", "forecast", "solar-backtest.json");
   if (!fs.existsSync(f)) return null;
   const doc = JSON.parse(fs.readFileSync(f, "utf8"));
@@ -181,6 +196,22 @@ export function forecastReference(epiasPlantIds: number[]): { period: { from: st
       kgupTlPerMwh: unit(p.sets.exLoss["ilk KGÜP"]),
       modelAllTlPerMwh: unit(p.sets.all["sürüm 3"]),
       kgupAllTlPerMwh: unit(p.sets.all["ilk KGÜP"]),
+      liveTlPerMwh: unit(p.sets.exLoss["sürüm 3 kalıcılıksız"]),
+      liveAllTlPerMwh: unit(p.sets.all["sürüm 3 kalıcılıksız"]),
     }));
-  return { period: doc.period, generatedAt: doc.generatedAt, rows };
+  const all = (doc.plants ?? []).filter((p: any) => p.sets?.exLoss?.["sürüm 3 kalıcılıksız"]);
+  const tot = (n: string) => {
+    const t = all.reduce((a: { totalTl: number; uevmMwh: number }, p: any) => ({ totalTl: a.totalTl + p.sets.exLoss[n].totalTl, uevmMwh: a.uevmMwh + p.sets.exLoss[n].uevmMwh }), { totalTl: 0, uevmMwh: 0 });
+    return unit(t);
+  };
+  const summary: ReferenceSummary | null = all.length
+    ? {
+        plants: all.length,
+        modelTlPerMwh: tot("sürüm 3"),
+        liveTlPerMwh: tot("sürüm 3 kalıcılıksız"),
+        kgupTlPerMwh: tot("ilk KGÜP"),
+        liveWins: all.filter((p: any) => p.sets.exLoss["sürüm 3 kalıcılıksız"].totalTl < p.sets.exLoss["ilk KGÜP"].totalTl).length,
+      }
+    : null;
+  return { period: doc.period, generatedAt: doc.generatedAt, rows, summary };
 }

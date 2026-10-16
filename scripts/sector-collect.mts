@@ -12,7 +12,7 @@
  *
  * Dönem sonu verilmezse geçmiş yıllarda 31 Aralık, içinde bulunulan yılda veritabanında piyasa verisi olan son tam gündür
  * (en güncel tarih; kullanıcı kararı 16.10.2026: veri her zaman en son tarihe kadar çekilir; önce piyasa verisi
- * senkronlanmalı). Kalite süzgeci ve dağılımlar bu döneme göre hesaplanır.
+ * senkronlanmalı). Özetin dönemi ise havuzdaki son üretim (UEVM) gününde biter: EPİAŞ UEVM'yi aylık yayımlar. Kalite süzgeci ve dağılımlar bu döneme göre hesaplanır.
  *
  * Veri tek yerden, veri havuzundan (data/pool; PLAN 7.5) okunur: her santral için ensurePlantCoverage havuzda olmayan ya da
  * yenilenme zamanı gelmiş ayları EPİAŞ'tan çekip havuza yazar (başka projelerin çektiği aylar yeniden çekilmez), sonra ilk
@@ -227,7 +227,29 @@ for (const f of await fs.readdir(dir)) {
   const type = targetType.get(m.epiasPlantId);
   if (type) all.push({ ...m, type });
 }
-const bench = { ...buildBenchmark(year, all, expectedHours), period: { start: periodStart, end: periodEnd } };
+// İçinde bulunulan yılda dönem sonu verilmediyse özet, havuzdaki son üretim (UEVM) gününe kadar: EPİAŞ UEVM'yi aylık
+// uzlaştırmadan sonra yayımlar (16.10.2026: Ekim'in KGÜP'ü var, UEVM'si yok). Santral göstergeleri zaten yalnız UEVM'si
+// olan saatlerden; düzeltilen dönem etiketi ve kalite süzgecinin (veri ≥ %90) paydası.
+let summaryEnd = periodEnd;
+if (!args[1] && year === now.getUTCFullYear()) {
+  let last = 0;
+  for (const { p } of targets) {
+    const doc = await readPoolYear(p.id, year).catch(() => null);
+    if (!doc) continue;
+    for (let i = doc.uevm.length - 1; i >= 0; i--)
+      if (doc.uevm[i] !== null) {
+        last = Math.max(last, Date.parse(doc.start) + i * 3_600_000);
+        break;
+      }
+  }
+  const dataEnd = last ? new Date(last).toISOString().slice(0, 10) : periodEnd;
+  if (dataEnd < periodEnd) {
+    summaryEnd = dataEnd;
+    console.log(`üretim verisi (UEVM) ${dataEnd} gününe kadar: özet dönemi ${periodStart} – ${dataEnd}`);
+  }
+}
+const summaryHours = (Date.parse(`${summaryEnd}T00:00:00Z`) + 86_400_000 - Date.UTC(year, 0, 1)) / 3_600_000;
+const bench = { ...buildBenchmark(year, all, summaryHours), period: { start: periodStart, end: summaryEnd } };
 await fs.writeFile(path.join(process.cwd(), ".cache", "epias", `sector-${year}.json`), JSON.stringify(bench));
 console.log(`BİTTİ: toplanan ${all.length}, kıyaslamaya alınan ${bench.plants.length}, elenen ${bench.excluded}, bu turda hata ${failed}`);
 for (const t of TYPES) {

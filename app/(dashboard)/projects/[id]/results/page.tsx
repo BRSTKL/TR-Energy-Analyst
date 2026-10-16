@@ -32,7 +32,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { ClipboardCheck, SunMedium,
+import { ClipboardCheck, CloudSun, SunMedium,
   Activity,
   AlertCircle,
   ArrowDownRight,
@@ -552,9 +552,15 @@ export default function ProjectResultsPage() {
                 Doğrulama paketi
               </Link>
             </Button>
-            <Button asChild variant="outline" size="sm" className="gap-1.5" title="Açık hava verisiyle güneş üretim tahmini (Aşama 15)">
-              <Link href={`/projects/${projectId}/forecast`}>
+            <Button asChild variant="outline" size="sm" className="gap-1.5" title="Güneş santrallerinin uyduyla ölçülen kayıp üretimi: planlı kısıntı ve plansız kayıp (geçmiş)">
+              <Link href={`/projects/${projectId}/losses`}>
                 <SunMedium className="h-3.5 w-3.5" />
+                Kayıp üretim
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="gap-1.5" title="Açık hava tahminiyle güneş santrallerinin yarın ve öbür gün beklenen üretimi">
+              <Link href={`/projects/${projectId}/forecast`}>
+                <CloudSun className="h-3.5 w-3.5" />
                 Üretim tahmini
               </Link>
             </Button>

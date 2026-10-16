@@ -5,9 +5,11 @@
  * Maliyet: lib/forecast/production-backtest.ts (dönemin kuralı + KÜPST). Saat kümeleri: tüm saatler, sıfır fiyat hariç ve
  * ADİL: uyduyla işaretlenen kayıp saatler (curtailment.ts) bütün adaylardan çıkarılır — "planlı hariç" (şirketin kendini
  * gerçekleştiren kısıntı planı) ve "bütün kayıplar hariç" (arıza / talimat da). Sürüm 3 = sürüm 2 + uydu etiketli eğitim
- * temizliği (etiket yalnız eğitim saatleriyle, uydu gecikmesinden önce elde olanlarla).
+ * temizliği (etiket yalnız eğitim saatleriyle, uydu gecikmesinden önce elde olanlarla). "Sürüm 3 kalıcılıksız" = sürüm 3,
+ * 48 saat önceki üretim girdisi olmadan (`noLag`): ileriye dönük tahmin sayfasının modeli (kamu üretim verisi aylık
+ * yayımlandığı için canlıda bu girdi yok); geçmiş başarısı o sayfada gösterilir.
  *
- *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/forecast-backtest.mts [sonAy=2026-08]
+ *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/forecast-backtest.mts [sonAy=karnedeki son tam ay]
  * Çıktı: .cache/forecast/solar-backtest.json (gün bazında maliyetler: 15.6 bootstrap)
  */
 
@@ -22,8 +24,15 @@ import { listPoolPlants, readPoolPlantInfo } from "@/lib/pool/pool-store";
 import { loadSolarHours } from "@/lib/services/production-data";
 import { detectLostHours, trainingLossFilter, type LossKind } from "@/lib/forecast/curtailment";
 import { SATELLITE_DELAY_DAYS } from "@/lib/weather/satellite";
+import { karnePeriodEnd, lastFullMonth } from "@/lib/sector/period";
 
-const [ly, lm] = (process.argv[2] ?? "2026-08").split("-").map(Number);
+// Varsayılan: içinde bulunulan yılın sektör karnesindeki son tam ay (en güncel; lib/sector/period.ts)
+const defaultEnd = (() => {
+  const y = new Date().getUTCFullYear();
+  const e = karnePeriodEnd(y);
+  return e ? `${y}-${String(lastFullMonth(e)).padStart(2, "0")}` : `${y}-08`;
+})();
+const [ly, lm] = (process.argv[2] ?? defaultEnd).split("-").map(Number);
 const FIRST = { y: 2025, m: 1 };
 const months: Array<{ y: number; m: number }> = [];
 for (let y = FIRST.y, m = FIRST.m; y < ly || (y === ly && m <= lm); m === 12 ? ((y += 1), (m = 1)) : (m += 1)) months.push({ y, m });
@@ -37,7 +46,7 @@ const market = new Map<number, MarketPriceRecord>(
   ])
 );
 
-type Hour = SolarHourV2 & { v1: number | null; v2: number | null; v3: number | null };
+type Hour = SolarHourV2 & { v1: number | null; v2: number | null; v3: number | null; v3nl: number | null };
 type Sets = Record<string, Record<string, CandidateResult>>;
 const results: Array<{ id: number; name: string; latitude: number; longitude: number; months: number; mounts: Record<string, number>; sets: Sets; lost: { planned: number; unplanned: number; hours: number }; final: Record<string, CandidateResult> }> = [];
 const nf = (v: number, d = 1) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -58,6 +67,7 @@ for (const id of await listPoolPlants()) {
     let v1: ReturnType<typeof fitSolarModel>;
     let v2: ReturnType<typeof fitSolarModelV2>;
     let v3: ReturnType<typeof fitSolarModelV2>;
+    let v3nl: ReturnType<typeof fitSolarModelV2>;
     try {
       v1 = fitSolarModel(train, data.site);
       v2 = fitSolarModelV2(train, data.site);
@@ -68,12 +78,13 @@ for (const id of await listPoolPlants()) {
         SATELLITE_DELAY_DAYS
       );
       v3 = fitSolarModelV2(train, data.site, { exclude: clean.exclude });
+      v3nl = fitSolarModelV2(train, data.site, { exclude: clean.exclude, noLag: true });
     } catch {
       continue; // eğitim verisi yetersiz (devreye alma öncesi)
     }
     used++;
     mounts[v2.mount] = (mounts[v2.mount] ?? 0) + 1;
-    for (const h of test) tested.push({ ...h, v1: v1.predict(h), v2: v2.predict(h), v3: v3.predict(h) });
+    for (const h of test) tested.push({ ...h, v1: v1.predict(h), v2: v2.predict(h), v3: v3.predict(h), v3nl: v3nl.predict(h) });
   }
   if (!tested.length) continue;
   // Ölçüm aracı (değerlendirme maskesi): uyduyla kayıp saatler, test döneminin tamamıyla; bütün adaylara aynı uygulanır
@@ -82,7 +93,7 @@ for (const id of await listPoolPlants()) {
     data.site
   );
   const kind = (h: Hour): LossKind | undefined => loss.lost.get(h.t);
-  const candidates = { "sürüm 1": (h: Hour) => h.v1, "sürüm 2": (h: Hour) => h.v2, "sürüm 3": (h: Hour) => h.v3, "ilk KGÜP": (h: Hour) => h.kgupFirst, "D-2": (h: Hour) => h.lag48 };
+  const candidates = { "sürüm 1": (h: Hour) => h.v1, "sürüm 2": (h: Hour) => h.v2, "sürüm 3": (h: Hour) => h.v3, "sürüm 3 kalıcılıksız": (h: Hour) => h.v3nl, "ilk KGÜP": (h: Hour) => h.kgupFirst, "D-2": (h: Hour) => h.lag48 };
   const sets: Sets = {
     all: evaluateForecasts(tested, candidates, market, "GES"),
     exZero: evaluateForecasts(tested, candidates, market, "GES", (h) => h.ptf === null || h.ptf > 1),
@@ -106,9 +117,9 @@ const SET_LABEL: Record<string, string> = { all: "Tüm saatler", exZero: "Sıfı
 const sum = (k: string, n: string, f: "totalTl" | "uevmMwh" | "hours") => results.reduce((s, r) => s + r.sets[k][n][f], 0);
 for (const k of Object.keys(SET_LABEL)) {
   console.log(`\n${SET_LABEL[k]} (${sum(k, "ilk KGÜP", "hours")} saat): toplam maliyet ve ilk KGÜP'ü yenen santral`);
-  for (const n of ["sürüm 1", "sürüm 2", "sürüm 3", "ilk KGÜP", "D-2"]) {
+  for (const n of ["sürüm 1", "sürüm 2", "sürüm 3", "sürüm 3 kalıcılıksız", "ilk KGÜP", "D-2"]) {
     const wins = n === "ilk KGÜP" ? "" : `  yendiği santral ${results.filter((r) => r.sets[k][n].totalTl < r.sets[k]["ilk KGÜP"].totalTl).length} / ${results.length}`;
-    console.log(`  ${n.padEnd(9)} ${nf(sum(k, n, "totalTl") / 1e6, 2)} M TL  (${nf(sum(k, n, "totalTl") / sum(k, n, "uevmMwh"))} TL/MWh)${wins}`);
+    console.log(`  ${n.padEnd(20)} ${nf(sum(k, n, "totalTl") / 1e6, 2)} M TL  (${nf(sum(k, n, "totalTl") / sum(k, n, "uevmMwh"))} TL/MWh)${wins}`);
   }
 }
 const fin = results.filter((r) => r.final["son KGÜP"].hours > 0);

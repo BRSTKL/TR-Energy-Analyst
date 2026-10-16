@@ -52,6 +52,12 @@ export interface SolarHourV2 extends SolarHour {
   satGhi?: number | null;
   satDirect?: number | null;
   satDiffuse?: number | null;
+  /**
+   * Canlı tahmin saati (ileriye dönük tahmin sayfası; lib/services/live-forecast.ts): girdiler sayfanın açıldığı andaki en
+   * yeni hava tahminidir, geriye dönük testin parçası değildir. Bilgi zamanı denetimi yalnız bu saatlerin TAHMİNİNDE
+   * atlanır; eğitimde canlı saat kabul edilmez.
+   */
+  live?: boolean;
 }
 
 function features(h: SolarHourV2, site: SolarSite, mount: PanelMount): { x: number[]; info: FeatureInfo[]; poa: number; clearSky: number } | null {
@@ -102,6 +108,7 @@ function fitMount(train: SolarHourV2[], site: SolarSite, mount: PanelMount, lamb
   let peak = 0;
   for (const h of train) if (h.uevm !== null) peak = Math.max(peak, h.uevm);
   for (const h of train) {
+    if (h.live) throw new Error("Canlı tahmin saati eğitime giremez");
     const f = features(h, site, mount);
     if (!f || h.uevm === null) {
       ex.missing++;
@@ -158,14 +165,20 @@ function fitMount(train: SolarHourV2[], site: SolarSite, mount: PanelMount, lamb
  * `exclude`: eğitimden çıkarılacak saatler (ör. uydu etiketli kayıp saatler; sürüm 3 = sürüm 2 + bu temizlik).
  * `leakUpperBound: true`: bilgi zamanı denetimi atlanır (1 / 0 gün önceki hava; yalnız sızıntı üst sınırı ölçümü, ana
  * sonuçta kullanılmaz). Bayrak yokken kesim sonrası girdi `LeakageError` verir.
+ * `noLag: true` (kalıcılıksız; ileriye dönük tahmin sayfası, 16.10.2026): 48 saat önceki üretim girdisi hem eğitimde hem
+ * tahminde yok sayılır. Şirket kendi üretimini ertesi gün bilir (info-time.ts), ama kamu verisi (EPİAŞ UEVM) aylık
+ * uzlaştırmadan sonra yayımlandığı için canlı tahminde bu girdi yoktur. Geçmiş başarısı geriye dönük testte ayrıca ölçülür.
  */
 export function fitSolarModelV2(
   train: SolarHourV2[],
   site: SolarSite,
-  opts: { lambda?: number; curtail?: boolean; mounts?: string[]; leakUpperBound?: boolean; exclude?: (h: SolarHourV2) => boolean } = {}
+  opts: { lambda?: number; curtail?: boolean; mounts?: string[]; leakUpperBound?: boolean; exclude?: (h: SolarHourV2) => boolean; noLag?: boolean } = {}
 ): SolarModelV2 {
   const lambda = opts.lambda ?? DEFAULT_PRODUCTION_LAMBDA;
   const leak = opts.leakUpperBound === true;
+  const noLag = opts.noLag === true;
+  const strip = (h: SolarHourV2): SolarHourV2 => (noLag ? { ...h, lag48: null } : h);
+  if (noLag) train = train.map(strip); // exclude (uydu etiketi) saatin zamanıyla çalışır: kopyalar sorun değil
   let best: { id: string; mount: PanelMount; fit: NonNullable<ReturnType<typeof fitMount>> } | null = null;
   for (const m of PANEL_MOUNTS.filter((x) => !opts.mounts || opts.mounts.includes(x.id))) {
     const fit = fitMount(train, site, m.mount, lambda, opts.curtail ?? V2_FROZEN.curtail, leak, opts.exclude);
@@ -175,10 +188,11 @@ export function fitSolarModelV2(
   const { ridge, trainMax } = best.fit;
   const mount = best.mount;
   return {
-    predict: (h) => {
+    predict: (h0) => {
+      const h = strip(h0);
       const f = features(h, site, mount);
       if (!f) return null;
-      if (!leak) assertAvailable(f.info, h.t);
+      if (!leak && !h.live) assertAvailable(f.info, h.t);
       if (f.clearSky < 1 && f.poa < 1) return 0;
       return Math.min(trainMax, Math.max(0, predictRidge(ridge as RidgeModel, f.x)));
     },
