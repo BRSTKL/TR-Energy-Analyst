@@ -25,7 +25,8 @@ import { annotateOutages, summarizeOfficial, type OfficialOutageSummary, type Ou
 import { analyzeDsgScenario, MAX_EXACT_PLANTS } from "@/lib/analysis/dsg-scenarios";
 import { combineBacktests, MIN_FEASIBLE_LAG_HOURS, persistenceStrategy, runBacktest } from "@/lib/analysis/backtest";
 import { KUPST_REGIMES, kupstCommunityHours, kupstCommunityTotal, kupstForHour, kupstTotal } from "@/lib/calculations/kupst";
-import { classifyHydro, percentileRank, quantile, type Distribution, type HydroKind } from "@/lib/sector/benchmark";
+import { percentileRank, quantile, type Distribution, type HydroKind } from "@/lib/sector/benchmark";
+import { kindFromName } from "@/lib/sector/hydro-kind";
 import type { ProjectHourly } from "@/lib/services/project-hourly";
 import { intradayPeerStats, peerGroup, type AggregatorBenchmarkRow, type IntradayPeerStats } from "@/lib/analysis/aggregator-benchmark";
 
@@ -122,7 +123,7 @@ export interface ReportContext {
     label?: string;
     /** Teknoloji ("RES", "GES", "HES") ve hidro alt tipi ("HES:RESERVOIR", "HES:RUN_OF_RIVER") başına dağılım */
     byType: Partial<Record<string, { unitImbalanceTl: Distribution; unitKupstTl: Distribution; values: number[]; kupstValues: number[] }>>;
-    /** Karnedeki hidro santrallerin alt tipi (EPİAŞ santral kimliği → tip); karnede olmayan santralin tipi kendi serisinden tahmin edilir */
+    /** Karnedeki hidro santrallerin kayıtlı alt tipi (EPİAŞ santral kimliği → tip, null = sınıflanmamış); karnede olmayanda yalnız ad eki */
     hydroKindById?: Record<number, HydroKind | null>;
   };
   /** Geçmişle sınama (scripts/sector-backtest.mts; Aşama 12.2–12.3): toYear veri yılıyla eşleşirse kullanılır */
@@ -1064,12 +1065,13 @@ export function buildPlantReport(
   const sectorCtx = context.sector;
   if (sectorCtx && sectorCtx.year === new Date(start).getUTCFullYear()) {
     const types: NonNullable<PlantReportData["sector"]>["types"] = [];
-    // Hidro santralin alt tipi: karnedeki tip (aynı yöntem, aynı dönem); karnede yoksa kendi saatlik serisinden
+    // Hidro santralin alt tipi: karnedeki KAYITLI tip (lib/sector/hydro-kind.ts); karnede yoksa yalnız ad eki ("Barajı",
+    // "Regülatörü"); bilinmeyen bütün hidrolarla kıyaslanır (üretim deseni tahmini kullanılmaz: büyük barajları nehir sayıyordu)
     const hydroKindOf = (name: string): HydroKind | null => {
       const w = withData.find((x) => x.plantName === name);
       if (!w) return null;
       const known = w.epiasPlantId !== null ? sectorCtx.hydroKindById?.[w.epiasPlantId] : undefined;
-      return known !== undefined ? known : classifyHydro(w.plantName, w.hourly);
+      return known !== undefined ? known : kindFromName(w.plantName);
     };
     // Satır = (teknoloji, hidroda alt tip). Hidroda alt tipi bilinen santraller kendi alt tipinin dağılımıyla; bilinmeyenler
     // bütün hidrolarla kıyaslanır. Alt tip dağılımı yeterince büyük değilse (< 10 santral) genel hidro dağılımı kullanılır.

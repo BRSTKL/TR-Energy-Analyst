@@ -48,8 +48,15 @@ export interface SectorPlantMetrics {
   outageHours?: number;
   /** K1: bu saatler hariç MWh başına dengesizlik (tahmin kalitesinin daha adil kıyası); eski karnelerde yok */
   unitImbalanceExOutageTl?: number;
-  /** Yalnızca HES: tahmini alt tip (ad ve gün içi üretim esnekliğinden); belirlenemezse null */
+  /**
+   * Yalnızca HES: alt tip. Santral dosyasında üretim deseninden tahmin (`classifyHydro`); karne özetinde (sector-collect)
+   * KAYITTAN (lib/sector/hydro-kind.ts: GEM, ad eki, EPDK lisansı), kayıt yoksa null (sınıflanmamış).
+   */
   hydroKind?: HydroKind | null;
+  /** Karne özetinde: alt tipin kaynağı; null = sınıflanmamış */
+  hydroKindSource?: "GEM" | "NAME" | "EPDK" | null;
+  /** Karne özetinde: üretim desenine göre tahmin (yalnız etiket; grup dağılımlarına girmez) */
+  hydroKindGuess?: HydroKind | null;
 }
 
 /** Gün içi esneklik eşiği: günlük (en yüksek − en düşük) / ortalama üretimin medyanı bunun üstündeyse barajlı sayılır */

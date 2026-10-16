@@ -29,6 +29,7 @@ import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { fetchKgup, fetchUevm, listUevcbsForPlant, listUevmPowerPlants, listYekdemPlantIds, plantOwnerIndex } from "../lib/services/epias-plants";
 import { buildTechIndex, resolveTechnology } from "../lib/sector/plant-technology";
+import { resolveHydroKind, type GemHydroLite } from "../lib/sector/hydro-kind";
 import { loadEpdkTechLicenses } from "../lib/sector/epdk-licenses";
 import { fuelInRange } from "../lib/pool/pool-codec";
 import { ensurePlantCoverage, type PoolFetchers } from "../lib/pool/pool-sync";
@@ -221,11 +222,20 @@ await Promise.all(Array.from({ length: WORKERS }, worker));
 // Özet yalnızca bu turun hedeflerinden kurulur; teknoloji güncel ad tahmininden alınır (tahmin düzeldiyse eski dosyadaki
 // yanlış tür kıyaslamaya girmez, hedef dışına düşen santral dışarıda kalır)
 const targetType = new Map(targets.map((x) => [x.p.id, x.type]));
+// Hidro alt tipi kayıttan (lib/sector/hydro-kind.ts; kullanıcı kararı 17.10.2026): GEM hidro izleyicisi, ad eki, EPDK lisansı.
+// Santral dosyasındaki desen tahmini yalnız etiket (hydroKindGuess). Dosyalar yoksa (GEM / EPDK indirilmemiş) yalnız ad eki.
+const readJson = async (f: string) => JSON.parse(await fs.readFile(path.join(process.cwd(), f), "utf8").catch(() => "null"));
+const gemHydro: GemHydroLite[] = (await readJson(".cache/gem/hydro-tr.json"))?.plants ?? [];
+const epdkHes: string[] = ((await readJson(".cache/epdk/hes-licenses.json"))?.licenses ?? []).map((l: { plant: string }) => l.plant);
 const all: SectorPlantMetrics[] = [];
 for (const f of await fs.readdir(dir)) {
   const m: SectorPlantMetrics = JSON.parse(await fs.readFile(path.join(dir, f), "utf8"));
   const type = targetType.get(m.epiasPlantId);
-  if (type) all.push({ ...m, type });
+  if (!type) continue;
+  if (type === "HES") {
+    const r = resolveHydroKind(m.name, gemHydro, epdkHes);
+    all.push({ ...m, type, hydroKind: r.kind, hydroKindSource: r.source, hydroKindGuess: m.hydroKind ?? null });
+  } else all.push({ ...m, type });
 }
 // İçinde bulunulan yılda dönem sonu verilmediyse özet, havuzdaki son üretim (UEVM) gününe kadar: EPİAŞ UEVM'yi aylık
 // uzlaştırmadan sonra yayımlar (16.10.2026: Ekim'in KGÜP'ü var, UEVM'si yok). Santral göstergeleri zaten yalnız UEVM'si

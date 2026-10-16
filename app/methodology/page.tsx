@@ -454,8 +454,12 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
               ağırlıklı ortalamayla verilir; santralin yeri teknoloji içindeki yüzdelik sırasıdır. <b>K1 görünümü</b> olası arıza / kısıntı saatlerini (&quot;Veri bütünlüğü ve arıza saatleri&quot; bölümü) dışarıda bırakır.
             </p>
             <p>
-              Hidro alt tipi (barajlı / nehir tipi) addan ya da gün içi üretim esnekliğinden tahmin edilir. <Tag kind="exact" /> (alt tip:{" "}
-              <Tag kind="estimate" />)
+              Hidro alt tipi (barajlı / nehir tipi) kayıttan alınır: önce Global Energy Monitor hidro izleyicisi (depolamalı → barajlı, &quot;run-of-river&quot; →
+              nehir tipi; CC BY 4.0), sonra santral ya da EPDK lisans adındaki &quot;Barajı&quot; / &quot;Regülatörü&quot; eki. Kaydı olmayan santral
+              sınıflanmamış kalır ve bütün hidrolarla kıyaslanır; gün içi üretim esnekliğinden yapılan tahmin yalnız etiket olarak gösterilir (büyük barajları
+              programla bloklar hâlinde çalıştıkları için nehir tipi sayıyordu). Barajlı santral üretimini kendi planına uydurabildiği, nehir tipi akışa bağlı
+              olduğu için ikisi ayrı dağılımlarla kıyaslanır (2026 Ocak–Ağustos medyanı barajlı 71, nehir tipi 107 TL/MWh). <Tag kind="exact" /> (alt tip
+              kaydı olmayanlarda: kıyas bütün hidrolarla)
             </p>
           </Section>
 

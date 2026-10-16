@@ -6,7 +6,7 @@ import { ArrowLeft, Download, Loader2, PlusCircle, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { SECTOR_TECHS, type Distribution, type HydroKind, type SectorBenchmark, type SectorCompanyRow, type SectorTech } from "@/lib/sector/benchmark";
+import { SECTOR_TECHS, distribution, percentileRank, type Distribution, type HydroKind, type SectorBenchmark, type SectorCompanyRow, type SectorTech } from "@/lib/sector/benchmark";
 import type { SectorPlant } from "@/lib/services/sector";
 
 import { MethodLink } from "@/components/method-link";
@@ -55,9 +55,15 @@ interface Row {
   deviationPct: number | null;
   sameDirectionPct: number | null;
   yekdem: boolean | null;
-  /** Yalnızca hidro santral satırında (tahmini) */
+  /** Yalnızca hidro santral satırında: kayıtlı alt tür (GEM, ad eki, EPDK lisansı); null = sınıflanmamış */
   hydroKind?: HydroKind | null;
+  hydroKindSource?: "GEM" | "NAME" | "EPDK" | null;
+  /** Üretim desenine göre tahmin (yalnız etiket) */
+  hydroKindGuess?: HydroKind | null;
 }
+
+/** Alt türün kaynağı (satır etiketi) */
+const KIND_SOURCE: Record<string, string> = { GEM: " (GEM)", NAME: "", EPDK: " (EPDK lisansı)" };
 
 type SortKey = "name" | "mw" | "actualMwh" | "unitTl" | "unitKupstTl" | "rankPct";
 
@@ -100,6 +106,8 @@ function toRows(data: SectorResponse, tech: Tech, view: "company" | "plant"): Ro
       sameDirectionPct: p.sameDirectionPct,
       yekdem: p.yekdem,
       hydroKind: p.type === "HES" ? p.hydroKind ?? null : undefined,
+      hydroKindSource: p.type === "HES" ? p.hydroKindSource ?? null : undefined,
+      hydroKindGuess: p.type === "HES" ? p.hydroKindGuess ?? null : undefined,
     }));
 }
 
@@ -247,8 +255,30 @@ export default function SectorPage() {
 
   const techs = SECTOR_TECHS.filter((t) => data.byType[t]);
   // Seçili teknoloji bu yılın karnesinde yoksa (ör. hidro toplanmamış) rüzgâra dön
-  const dist = data.byType[tech] ?? data.byType.RES;
-  const techValues = data.plants.filter((p) => p.type === tech).map((p) => p.unitImbalanceTl);
+  const techDist = data.byType[tech] ?? data.byType.RES;
+  // Hidroda alt tür seçiliyse (santral görünümü) dağılım ve ölçütler o grubun santralleriyle: barajlı santral üretimini
+  // kendi planına uydurabilir, nehir tipi akışa bağlıdır; aynı dağılımda kıyas adil değil (kullanıcı kararı 17.10.2026)
+  const hydroGroup = (k: HydroKind) => data.plants.filter((p) => p.type === "HES" && p.hydroKind === k);
+  const groupValues: Record<HydroKind, number[]> = {
+    RESERVOIR: hydroGroup("RESERVOIR").map((p) => p.unitImbalanceTl),
+    RUN_OF_RIVER: hydroGroup("RUN_OF_RIVER").map((p) => p.unitImbalanceTl),
+  };
+  const subgroup = tech === "HES" && view === "plant" && (hydro === "RESERVOIR" || hydro === "RUN_OF_RIVER") ? hydroGroup(hydro) : null;
+  const dist =
+    subgroup && subgroup.length >= 10
+      ? {
+          ...techDist,
+          unitImbalanceTl: distribution(
+            subgroup.map((p) => p.unitImbalanceTl),
+            subgroup.map((p) => p.actualMwh)
+          ),
+          unitKupstTl: distribution(subgroup.map((p) => p.unitKupstTl)),
+          sameDirectionPct: distribution(subgroup.map((p) => p.sameDirectionPct)),
+        }
+      : techDist;
+  const techValues = (subgroup && subgroup.length >= 10 ? subgroup : data.plants.filter((p) => p.type === tech)).map((p) => p.unitImbalanceTl);
+  const groupRank = (r: Row) => (r.hydroKind ? percentileRank(groupValues[r.hydroKind], r.unitTl) : null);
+  const unclassified = data.plants.filter((p) => p.type === "HES" && !p.hydroKind).length;
   const selectedRows = allRows.filter((r) => selected.includes(r.key));
   const toggle = (key: string) => setSelected((s) => (s.includes(key) ? s.filter((k) => k !== key) : [...s, key].slice(-5)));
   const header = (key: SortKey, label: string, right = true) => (
@@ -356,13 +386,18 @@ export default function SectorPage() {
         </div>
         {tech === "HES" && (
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="text-slate-500">Alt tip (tahmini):</span>
+            <span className="text-slate-500">Alt tür:</span>
             {(["all", "RESERVOIR", "RUN_OF_RIVER", "unknown"] as HydroFilter[]).map((h) => (
               <Button key={h} size="sm" variant={hydro === h ? "default" : "outline"} onClick={() => setHydro(h)}>
-                {h === "all" ? "Tümü" : h === "unknown" ? "Belirsiz" : HYDRO_LABEL[h]}
+                {h === "all" ? "Tümü" : h === "unknown" ? `Sınıflanmamış (${unclassified})` : `${HYDRO_LABEL[h]} (${groupValues[h].length})`}
               </Button>
             ))}
-            <span className="text-xs text-slate-500">Santral görünümünde süzer; addaki baraj / regülatör, yoksa gün içi üretim esnekliği.</span>
+            <span className="text-xs text-slate-500">
+              Santral görünümünde süzer; barajlı ya da nehir tipi seçilince dağılım ve ölçütler o grubun santralleriyle. Kaynak: GEM hidro izleyicisi, santral ya
+              da EPDK lisans adındaki &quot;Barajı&quot; / &quot;Regülatörü&quot; eki; kaydı olmayan sınıflanmamış. Medyan: barajlı{" "}
+              {groupValues.RESERVOIR.length ? nf(distribution(groupValues.RESERVOIR).median) : "–"}, nehir tipi{" "}
+              {groupValues.RUN_OF_RIVER.length ? nf(distribution(groupValues.RUN_OF_RIVER).median) : "–"} TL/MWh.
+            </span>
           </div>
         )}
 
@@ -383,7 +418,9 @@ export default function SectorPage() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">{TECH_LABEL[tech]} santrallerinin dağılımı</CardTitle>
+            <CardTitle className="text-base">
+              {subgroup && subgroup.length >= 10 ? `${HYDRO_LABEL[hydro as HydroKind]} hidro santrallerinin dağılımı (${subgroup.length})` : `${TECH_LABEL[tech]} santrallerinin dağılımı`}
+            </CardTitle>
             <CardDescription>Tablodan en fazla 5 şirket ya da santral seçin; dağılımdaki yerleri işaretlenir.</CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
@@ -461,6 +498,7 @@ export default function SectorPage() {
                   {header("unitTl", "Dengesizlik TL/MWh")}
                   {header("unitKupstTl", "KÜPST TL/MWh")}
                   {header("rankPct", "Sektörün % kaçından iyi")}
+                  {tech === "HES" && view === "plant" && <TableHead className="text-right">Alt türünde % kaçından iyi</TableHead>}
                   {view === "plant" && <TableHead className="text-right">Sapma %</TableHead>}
                 </TableRow>
               </TableHeader>
@@ -475,7 +513,11 @@ export default function SectorPage() {
                         <p className="text-xs text-slate-500">
                           {r.sub}
                           {r.yekdem ? " · YEKDEM" : ""}
-                          {r.hydroKind ? ` · ${HYDRO_LABEL[r.hydroKind]} (tahmini)` : ""}
+                          {r.hydroKind
+                            ? ` · ${HYDRO_LABEL[r.hydroKind]}${KIND_SOURCE[r.hydroKindSource ?? ""] ?? ""}`
+                            : r.hydroKindGuess
+                              ? ` · sınıflanmamış (üretim desenine göre ${HYDRO_LABEL[r.hydroKindGuess].toLocaleLowerCase("tr-TR")} olabilir)`
+                              : ""}
                         </p>
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{nf(r.mw)}</TableCell>
@@ -483,13 +525,16 @@ export default function SectorPage() {
                       <TableCell className={`text-right font-semibold tabular-nums ${tone}`}>{nf(r.unitTl)}</TableCell>
                       <TableCell className="text-right tabular-nums">{nf(r.unitKupstTl)}</TableCell>
                       <TableCell className="text-right tabular-nums">%{betterThan(r.rankPct)}</TableCell>
+                      {tech === "HES" && view === "plant" && (
+                        <TableCell className="text-right tabular-nums text-slate-600">{groupRank(r) === null ? "–" : `%${betterThan(groupRank(r)!)}`}</TableCell>
+                      )}
                       {view === "plant" && <TableCell className="text-right tabular-nums">{r.deviationPct === null ? "–" : nf(r.deviationPct, 1)}</TableCell>}
                     </TableRow>
                   );
                 })}
                 {rows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-8 text-center text-sm text-slate-500">
+                    <TableCell colSpan={8} className="py-8 text-center text-sm text-slate-500">
                       Sonuç yok. Kıyaslamada yalnızca yılın en az %90&apos;ında verisi olan santraller var.
                     </TableCell>
                   </TableRow>
