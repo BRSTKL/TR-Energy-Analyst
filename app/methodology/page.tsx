@@ -675,21 +675,24 @@ Rüzgâr: beklenen = santralin güç eğrisi (100 m hız 0,5 m/s × 8 yön hücr
         plansız yalnız: iki kaynak da bulmuş ve ≥ 6 saat kesintisiz`}
             </F>
             <p>
+              <b>Rüzgâr konumu:</b> önce GEM kaydı (EPDK lisans no ya da birebir ad); yoksa OSM türbin kümesi, yalnız santrale ait ad
+              ya da şirket kümenin etiketinde geçiyorsa (rüzgâr korelasyonu bölgeyi doğrular, aynı 9 km hücresindeki çiftlikleri ayırt etmez);
+              yoksa EPDK lisansındaki ilçe merkezi, o noktanın rüzgârıyla r ≥ 0,85 ise (tahmin, &quot;~&quot;).{" "}
               <b>Rüzgâr neden daha temkinli:</b> santrale ölçülen bir &quot;üretebileceği&quot; yok (güneşte uydu ışınımı var); 0,25° / 9 km ızgara sırtı ve
               vadiyi görmez, bu yüzden güç eğrisi her santralin kendi üretiminden öğrenilir (kısıntılı saatler eğitimden çıkarılarak). İki hava
               kaynağının anlaşması (ana kaynağın kayıp saatlerinden ikincide de aynı türde olanların payı, santral medyanı; scripts/wind-loss-summary.mts):
-              planlı saatlerde %61, tek tek plansız saatlerde %50, en az 6 saat süren plansız olaylarda %82. Bu yüzden plansız kayıp alt sınırdır: yalnız
+              planlı saatlerde %64, tek tek plansız saatlerde %51, en az 6 saat süren plansız olaylarda %82. Bu yüzden plansız kayıp alt sınırdır: yalnız
               santralin büyük kısmının durduğu, iki kaynağın birlikte bulduğu uzun düşüşler sayılır; birkaç türbinin arızası görünmez. Kayıpsız günlerde günlük beklenen ile gerçekleşen üretimin korelasyonu
               0,85&apos;in altındaki santralde rakam gösterilmez. <Tag kind="estimate" />
             </p>
             <Table
               head={["Projelerdeki rüzgâr santralleri (17.10.2026)", "Değer"]}
               rows={[
-                ["Konumu olan (Global Energy Monitor, Global Wind Power Tracker 2026-02, CC BY 4.0)", "129 santralin 97'si"],
-                ["Kalite eşiğini geçen (günlük r ≥ 0,85)", "97 konumlu santralin 90'ı (medyan r 0,95)"],
-                ["Son 12 ay kayıp payı, planlı / plansız (en az); santral başına son 12 tam ay, potansiyel üretime oran", "%2,5 / %0,3"],
-                ["Plansız olay (≥ 6 saat, iki kaynak)", "255; 12'si EPİAŞ arıza / bakım bildirimiyle çakışıyor"],
-                ["Olayların 08:00–10:59 arasında başlayan payı", "%26 (düzgün dağılımda %12,5); 00:00'da da yığılma var. Mesai başında başlayan bakım olasılığıyla uyumlu, neden doğrulanmadı"],
+                ["Konumu olan", "129 santralin 118'i: 99 Global Energy Monitor Global Wind Power Tracker (2026-02, CC BY 4.0), 3 OpenStreetMap türbin kümesi (ODbL), 16 EPDK ilçe / il merkezi (~ tahmin)"],
+                ["Kalite eşiğini geçen (günlük r ≥ 0,85)", "118 konumlu santralin 109'u (medyan r 0,95)"],
+                ["Son 12 ay kayıp payı, planlı / plansız (en az); santral başına son 12 tam ay, potansiyel üretime oran", "%2,9 / %0,3"],
+                ["Plansız olay (≥ 6 saat, iki kaynak)", "363; 15'i EPİAŞ arıza / bakım bildirimiyle çakışıyor"],
+                ["Olayların 08:00–10:59 arasında başlayan payı", "%30 (düzgün dağılımda %12,5); 00:00'da da yığılma var. Mesai başında başlayan bakım olasılığıyla uyumlu, neden doğrulanmadı"],
               ]}
             />
             <p>
@@ -1018,7 +1021,7 @@ Rüzgâr: beklenen = santralin güç eğrisi (100 m hız 0,5 m/s × 8 yön hücr
                 [
                   "1.24",
                   "17 Ekim 2026",
-                  "Kayıp üretim bölümü ve rüzgâr santralleri: konum Global Energy Monitor Global Wind Power Tracker'dan (2026-02, CC BY 4.0; projelerde 129 santralin 97'si); 100 m rüzgâr (ECMWF IFS 9 km kısa vadeli model çıktısı, ERA5 yeniden analizi) ve santral başına güç eğrisiyle planlı kısıntı ve en az 6 saatlik, iki kaynağın birlikte bulduğu plansız kayıp (alt sınır); kalite eşiği günlük r ≥ 0,85. Diğer hesaplar değişmedi.",
+                  "Kayıp üretim bölümü ve rüzgâr santralleri: konum Global Energy Monitor Global Wind Power Tracker'dan (2026-02, CC BY 4.0), OpenStreetMap türbin kümelerinden ve EPDK ilçe merkezinden (~ tahmin; projelerde 129 santralin 118'i); 100 m rüzgâr (ECMWF IFS 9 km kısa vadeli model çıktısı, ERA5 yeniden analizi) ve santral başına güç eğrisiyle planlı kısıntı ve en az 6 saatlik, iki kaynağın birlikte bulduğu plansız kayıp (alt sınır); kalite eşiği günlük r ≥ 0,85. Diğer hesaplar değişmedi.",
                 ],
                 [
                   "1.23",

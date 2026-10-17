@@ -23,6 +23,11 @@ const STATE_LABEL: Record<HourLossState, string> = {
   normal: "rüzgârlı, kayıp yok",
   none: "rüzgâr zayıf / veri yok",
 };
+/** "Son 12 ay"; verisi daha kısa santralde ay sayısı ("Verisi olan 6 ay") */
+const periodLabel = (from: string, to: string) => {
+  const n = (Number(to.slice(0, 4)) - Number(from.slice(0, 4))) * 12 + Number(to.slice(5, 7)) - Number(from.slice(5, 7)) + 1;
+  return n >= 12 ? "Son 12 ay" : `Verisi olan ${n} ay`;
+};
 const r3 = (v: number | null) => (v === null ? "–" : nf(v, 2));
 const eventDate = (s: string) => `${Number(s.slice(8, 10))} ${MONTHS_SHORT[Number(s.slice(5, 7)) - 1]} ${s.slice(0, 4)} ${s.slice(11, 13)}:00`;
 
@@ -76,7 +81,7 @@ export function WindLossCard({
           <>
             {s ? (
               <p className="text-sm text-slate-800">
-                Son 12 ay ({monthLabel(s.from)} – {monthLabel(s.to)}): potansiyel üretimin <b>%{nf(s.lossPct, 1)}</b> kaybı = {nf(s.plannedLossMwh + s.unplannedLossMwh)} MWh
+                {periodLabel(s.from, s.to)} ({monthLabel(s.from)} – {monthLabel(s.to)}): potansiyel üretimin <b>%{nf(s.lossPct, 1)}</b> kaybı = {nf(s.plannedLossMwh + s.unplannedLossMwh)} MWh
                 (planlı {nf(s.plannedLossMwh)}, plansız en az {nf(s.unplannedLossMwh)}). PTF ile karşılığı <b>{tl(s.plannedValueTl + s.unplannedValueTl)}</b>.
               </p>
             ) : (

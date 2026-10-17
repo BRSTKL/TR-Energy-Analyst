@@ -16,6 +16,9 @@
  * bölgedeki en iyi r'nin en çok 0,05 altında. Kanıt (EPDK yeri, küme, r) kaynak notuna yazılır.
  * Aday rüzgârı `.cache/osm/wind-candidates/` altında saklanır (yeniden çalıştırmada istek yok). `--write` olmadan hiçbir
  * şey yazılmaz. Konum `OSM` kaynağıyla (GEM_TRACKER ve USER'a dokunulmaz).
+ * `--district` (kullanıcı, 17.10.2026): bölgesi doğrulanan ama çiftliği ayırt edilemeyen santrale EPDK lisansındaki ilçe
+ * merkezi (ilçesi "-" ise il merkezi) `DISTRICT_CENTER` (tahmin, "~") olarak; yalnız o noktanın rüzgârıyla da r ≥
+ * WIND_MIN_DAILY_R ise (güneşteki ilçe merkezi kuralıyla aynı ölçüt).
  */
 
 import fs from "node:fs";
@@ -29,6 +32,7 @@ import { fetchWind, OpenMeteoLimitError, type WindResponse } from "@/lib/weather
 import { setPlantLocation } from "@/lib/services/plant-location";
 
 const WRITE = process.argv.includes("--write");
+const DISTRICT = process.argv.includes("--district");
 const MAX_CANDIDATES = 6;
 const VALIDATION_FROM = "2026-03-01";
 const VALIDATION_TO = "2026-08-31";
@@ -89,7 +93,7 @@ async function dailyR(epiasPlantId: number, capacityMw: number, w: WindResponse)
   return detectWindLoss(hours, capacityMw).dailyR;
 }
 
-const found: Array<{ id: number; name: string; c: Cluster; r: number; ref: string }> = [];
+const found: Array<{ id: number; name: string; c: { lat: number; lon: number }; r: number; ref: string; source: "OSM" | "DISTRICT_CENTER" }> = [];
 let stopped = false;
 outer: for (const [id, t] of targets) {
   const name = t.name.replace(/\s*\([^)]*\)\s*/g, " ").trim();
@@ -141,7 +145,34 @@ outer: for (const [id, t] of targets) {
   let verdict: string;
   if (!top) verdict = "korelasyon hesaplanamadı (üretim verisi yetersiz)";
   else if (top.r! < WIND_MIN_DAILY_R) verdict = `bölgede en iyi r ${nf(top.r!)} < ${nf(WIND_MIN_DAILY_R, 2)}: bölge de doğrulanmadı`;
-  else if (!best) verdict = `bölge doğrulandı (r ${nf(top.r!)}), çiftlik ayırt edilemiyor${namedOk.length > 1 ? ` (${namedOk.length} adı eşleşen küme)` : ""}`;
+  else if (!best) {
+    verdict = `bölge doğrulandı (r ${nf(top.r!)}), çiftlik ayırt edilemiyor${namedOk.length > 1 ? ` (${namedOk.length} adı eşleşen küme)` : ""}`;
+    if (DISTRICT) {
+      // En iyi kümeye en yakın EPDK yeri; o noktanın rüzgârıyla da sınanır
+      const center = [...centers].sort((a, b) => km(a.p, top.c) - km(b.p, top.c))[0];
+      let r: number | null = null;
+      try {
+        r = await dailyR(id, t.capacityMw, await candidateWind(center.p.lat, center.p.lon));
+      } catch (e) {
+        if (!(e instanceof OpenMeteoLimitError)) throw e;
+        console.log(`\nOpen-Meteo sınırı (${e.message}): durdu.`);
+        stopped = true;
+        break outer;
+      }
+      const level = foldName(lics.find((l) => `${l.il}${foldName(l.ilce) ? ` / ${l.ilce}` : ""}` === center.where)?.ilce ?? "") ? "ilçe" : "il";
+      if (r !== null && r >= WIND_MIN_DAILY_R) {
+        verdict += `; ${level} merkezi ${center.where} r ${nf(r)} → ~ tahmin`;
+        found.push({
+          id,
+          name: t.name,
+          c: { lat: center.p.lat, lon: center.p.lon },
+          r,
+          source: "DISTRICT_CENTER",
+          ref: `Tahmin: EPDK rüzgâr lisansındaki ${level} merkezi ${center.where} (OSM yer düğümü ${center.p.osm}); santralin kendi noktası değil. Bölgede ${ok.length} OSM türbin kümesi rüzgârla doğrulandı (en iyi r ${nf(top.r!)}) ama çiftlik ayırt edilemedi; ${level} merkezinin IFS 9 km rüzgârıyla günlük r ${nf(r)} (${VALIDATION_FROM} – ${VALIDATION_TO}); kullanıcı kararı; ${new Date().toISOString().slice(0, 10)}`,
+        });
+      } else verdict += `; ${level} merkezinde r ${nf(r ?? NaN)} < ${nf(WIND_MIN_DAILY_R, 2)}, yazılmadı`;
+    }
+  }
   else if (best.r! < WIND_MIN_DAILY_R || top.r! - best.r! > 0.05) verdict = `adı eşleşen küme rüzgârla tutmuyor (r ${nf(best.r!)}, bölgede en iyi ${nf(top.r!)})`;
   else {
     verdict = `KABUL ${best.c.id}${best.named ? " (adı eşleşen)" : ""}`;
@@ -150,15 +181,16 @@ outer: for (const [id, t] of targets) {
       name: t.name,
       c: best.c,
       r: best.r!,
+      source: "OSM",
       ref: `OpenStreetMap türbin kümesi ${best.c.id} (${best.c.turbines} türbin${best.c.names.length ? `, "${best.c.names[0]}"` : ""}${best.c.operators.length ? `, işletmeci "${best.c.operators[0]}"` : ""}; ODbL, Geofabrik çıkarımı, indirme ${turbDoc.pbfDate ?? "?"}); EPDK lisans yeri ${centers.map((x) => x.where).join(", ")}, ${nf(best.d, 1)} km; IFS 9 km rüzgârla günlük r ${nf(best.r!)} (${VALIDATION_FROM} – ${VALIDATION_TO})${second ? `, ikinci aday ${nf(second.r!)}` : ""}; ${new Date().toISOString().slice(0, 10)}`,
     });
   }
   console.log(`${label} ${verdict}\n           ${list}`);
 }
-console.log(`\nOSM türbinleriyle kabul: ${found.length} / ${targets.size}${stopped ? " (sınırda durdu)" : ""}${WRITE ? " (yazılıyor)" : " (kuru çalışma; yazmak için --write)"}`);
+console.log(`\nKabul: ${found.filter((f) => f.source === "OSM").length} OSM, ${found.filter((f) => f.source === "DISTRICT_CENTER").length} ilçe merkezi (~) / ${targets.size}${stopped ? " (sınırda durdu)" : ""}${WRITE ? " (yazılıyor)" : " (kuru çalışma; yazmak için --write)"}`);
 if (WRITE)
   for (const f of found) {
-    const r = await setPlantLocation(f.id, { latitude: f.c.lat, longitude: f.c.lon, locationSource: "OSM", locationRef: f.ref });
+    const r = await setPlantLocation(f.id, { latitude: f.c.lat, longitude: f.c.lon, locationSource: f.source, locationRef: f.ref });
     console.log(`  #${f.id} ${f.name}: havuz ${r.pool ? "yazıldı" : "korundu"}, proje santrali ${r.projectPlants}`);
   }
 await prisma.$disconnect();
