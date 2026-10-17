@@ -406,12 +406,24 @@ export function buildBridgeSteps(r: PlantReportData): { steps: BridgeStep[]; loa
   return { steps, loadEnd, imb2026, intradaySaving, afterIntraday };
 }
 
+/** Kayıtlı kurulu gücün kaynakları: "EPİAŞ YEKDEM kaydı (12 santral) ve EPDK lisansı (3)" */
+function recordedCapacityText(r: PlantReportData, withCounts: boolean): string {
+  const yek = r.plants.filter((p) => p.capacitySource === "EPIAS_YEKDEM").length;
+  const epdk = r.plants.filter((p) => p.capacitySource === "EPDK_LICENSE").length;
+  const user = r.plants.filter((p) => p.capacitySource === "USER").length;
+  const parts = [
+    yek ? `EPİAŞ YEKDEM katılımcı listesindeki lisanslı kurulu güç${withCounts ? ` (${yek} santral)` : ""}` : null,
+    epdk ? `EPDK üretim lisansı (rüzgârda işletmedeki güç)${withCounts ? ` (${epdk} santral)` : ""}` : null,
+    user ? `kullanıcı girdisi${withCounts ? ` (${user} santral)` : ""}` : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(", ") : "resmî kayıt yok";
+}
+
 /** Ek B: kurulu gücün kaynağı (kural: lib/epias-plant/installed-capacity.ts) */
 function capacitySourceSentence(r: PlantReportData): string {
   const est = r.plants.filter((p) => p.capacityEstimated);
-  const rec = r.plants.length - est.length;
   return (
-    `Kurulu güç: EPİAŞ YEKDEM katılımcı listesindeki lisanslı kurulu güç (${rec} santral)` +
+    `Kurulu güç: ${recordedCapacityText(r, true)}` +
     (est.length
       ? `; ${est.length} santralde kayıt yok ya da üretim kaydı aştığı için dönemdeki en yüksek saatlik üretim (tahmin, alt sınır). Kurulu güç yalnızca arıza tespiti${
           r.plants.length > 1 ? ", topluluk KÜPST toleransının ağırlığı" : ""
@@ -2511,8 +2523,8 @@ export async function exportPlantReportPptx(
         : `Şirketler: ${r.settlement.companies.map((c) => `${c.name ?? "sahibi bulunamadı"} (${c.plantNames.join(", ")})`).join("; ")}.${missingNote}`;
     const estimated = r.plants.filter((p) => p.capacityEstimated);
     const capacityNote = estimated.length
-      ? ` MW: EPİAŞ YEKDEM kaydındaki kurulu güç; "~" işaretli ${estimated.length} santralde kayıt yok ya da üretim kaydı aşıyor (kapasite artışı), en yüksek saatlik üretim kullanıldı (alt sınır).`
-      : " MW: EPİAŞ YEKDEM kaydındaki kurulu güç.";
+      ? ` MW: ${recordedCapacityText(r, false)}; "~" işaretli ${estimated.length} santralde kayıt yok ya da üretimle çelişiyor (kapasite artışı), en yüksek saatlik üretim kullanıldı (alt sınır).`
+      : ` MW: ${recordedCapacityText(r, false)}.`;
     text(
       s,
       `${owners}${capacityNote} ${agg ? "KÜPST topluluk (portföy) bazındadır; santral satırındaki KÜPST, santral tek başına olsaydı rakamdır." : `KÜPST santral bazındadır ve ${unit.loc} netleşmez.`} Plan farkı: saatlik |gerçekleşen − plan| toplamının gerçekleşen üretime oranı.`,

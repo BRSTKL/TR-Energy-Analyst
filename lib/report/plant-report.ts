@@ -12,6 +12,7 @@
  * Sahibi bilinmeyen santral kendi başına bir şirket sayılır.
  */
 
+import { isRecordedCapacity } from "@/lib/epias-plant/installed-capacity";
 import { processHourlyRecord } from "@/lib/calculations/engine";
 import { aggregateMonthly } from "@/lib/calculations/aggregate";
 import { HourlyResult, ImbalancePricingProfile, REGULATORY_IMBALANCE_REGIMES } from "@/lib/calculations/types";
@@ -35,10 +36,12 @@ export interface ReportPlantRow {
   type: string;
   capacityMw: number;
   /**
-   * Kurulu güç tahmin mi: resmî kayıt (EPİAŞ YEKDEM) yok ya da üretim kaydı aştı, değer en yüksek saatlik üretimden
-   * (alt sınır). Raporda işaretlenir (kural: lib/epias-plant/installed-capacity.ts)
+   * Kurulu güç tahmin mi: resmî kayıt (EPİAŞ YEKDEM, EPDK lisansı) yok ya da üretimle çelişiyor, değer en yüksek
+   * saatlik üretimden (alt sınır). Raporda işaretlenir (kural: lib/epias-plant/installed-capacity.ts)
    */
   capacityEstimated: boolean;
+  /** Kurulu gücün kaynağı (EPIAS_YEKDEM, EPDK_LICENSE, PEAK_ESTIMATE, USER) */
+  capacitySource: string | null;
   /** Dönemdeki en yüksek saatlik üretim (MWh/h) */
   peakMw: number;
   organizationName: string | null;
@@ -154,7 +157,7 @@ export interface PlantReportData {
    * Portföy toplamı, şirket bazında uzlaştırmayla (aynı şirketin santralleri netleşmiş). imbalanceCostTl ana rakamdır.
    * costShareOfRevenuePct: portföyde YEKDEM santrali varsa null.
    */
-  totals: Omit<ReportPlantRow, "name" | "type" | "organizationName" | "yekdem" | "yekdemNextYear" | "biasPct" | "sameDirectionPct" | "capacityEstimated" | "peakMw"> & { plantCount: number };
+  totals: Omit<ReportPlantRow, "name" | "type" | "organizationName" | "yekdem" | "yekdemNextYear" | "biasPct" | "sameDirectionPct" | "capacityEstimated" | "capacitySource" | "peakMw"> & { plantCount: number };
   /**
    * Tahmini KÜPST (tüm santraller; YEKDEM santralleri dahil şirkete aittir). next2026Tl: aynı saatlik veri, en güncel
    * oran tablosuyla (2026: rüzgâr %15, güneş %8); veri zaten 2026+ ise null.
@@ -611,7 +614,8 @@ function plantRow(p: Plant): ReportPlantRow {
     name: p.plantName,
     type: p.plantType,
     capacityMw: p.capacityMw,
-    capacityEstimated: p.capacitySource !== "EPIAS_YEKDEM" && p.capacitySource !== "USER",
+    capacityEstimated: !isRecordedCapacity(p.capacitySource),
+    capacitySource: p.capacitySource ?? null,
     peakMw: peak,
     // Toplayıcı portföyünde uzlaştırma birimi toplayıcıdır; santral satırında lisans sahibi gösterilir
     organizationName: p.ownerName !== undefined ? p.ownerName : p.organizationName,

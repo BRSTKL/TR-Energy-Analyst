@@ -1,5 +1,6 @@
 "use client";
 
+import { isRecordedCapacity } from "@/lib/epias-plant/installed-capacity";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -278,7 +279,7 @@ export default function PlantsPage() {
                         ? `${plant.recordCount.toLocaleString("tr-TR")} saatlik kayıt`
                         : "Henüz veri yüklenmedi"}
                       {" · Kurulu güç: "}
-                      <span className={plant.capacitySource === "EPIAS_YEKDEM" || plant.capacitySource === "USER" ? "" : "text-amber-700"}>
+                      <span className={isRecordedCapacity(plant.capacitySource) ? "" : "text-amber-700"}>
                         {plant.capacityRef ?? "tahmin (kaynak belirlenmemiş; EPİAŞ bilgilerini güncelleyin)"}
                       </span>
                     </div>

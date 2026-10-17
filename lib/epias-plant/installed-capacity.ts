@@ -7,16 +7,28 @@
  * olmadığı için santral adı + teknoloji + sahip şirketle eşleştirilir. Hiç YEKDEM'e girmemiş santrallerde (ör. eski
  * kamu santralleri, lisanssız birimler) kayıt yoktur: kurulu güç dönemdeki en yüksek saatlik üretimden tahmin edilir
  * (gerçeğin altında kalır).
+ *
+ * İKİNCİ RESMÎ KAYNAK (kullanıcı kararı 17.10.2026): YEKDEM kaydı yoksa ya da üretimle çelişiyorsa EPDK üretim lisansı
+ * (kullanıcının lisans.epdk.gov.tr dışa aktarımı; `matchEpdkCapacity`). Güneşte lisans MWe (YEKDEM'li 20 santralin 20'sinde
+ * YEKDEM ile aynı), rüzgârda işletmedeki MWe, 0 ise lisans MWe (rüzgârda lisans MWe kurulmamış genişlemeyi de içerir;
+ * işletmedeki MWe YEKDEM'li 49 santralin 44'ünde YEKDEM ile aynı). Değer, en yüksek saatlik üretim / değer
+ * EPDK_MIN_RATIO–EPDK_MAX_RATIO ise kullanılır; değilse en yüksek üretim alt sınır kalır ve EPDK değeri kaynak notuna yazılır.
  */
 
 import { normalizePlantName } from "./plant-data";
 import { brandOf, isUnlicensedName } from "@/lib/analysis/candidate-access";
 import { pctOf } from "@/lib/format";
+import { foldName, nameTokens, plantNumbers } from "./location-match";
 
-export type CapacitySource = "EPIAS_YEKDEM" | "PEAK_ESTIMATE" | "USER";
+export type CapacitySource = "EPIAS_YEKDEM" | "EPDK_LICENSE" | "PEAK_ESTIMATE" | "USER";
+
+/** Resmî kayıttan gelen (tahmin olmayan) kaynaklar */
+export const RECORDED_CAPACITY_SOURCES: ReadonlySet<string> = new Set(["EPIAS_YEKDEM", "EPDK_LICENSE", "USER"]);
+export const isRecordedCapacity = (source: string | null | undefined) => !!source && RECORDED_CAPACITY_SOURCES.has(source);
 
 export const CAPACITY_SOURCE_LABEL: Record<CapacitySource, string> = {
   EPIAS_YEKDEM: "EPİAŞ YEKDEM kaydı",
+  EPDK_LICENSE: "EPDK lisans kaydı",
   PEAK_ESTIMATE: "tahmin (en yüksek saatlik üretim)",
   USER: "kullanıcı girdisi",
 };
@@ -117,7 +129,7 @@ export interface CapacityMatch {
   /** Okunur kaynak notu (rapor ve santral sayfası) */
   ref: string;
   /** Eşleşme nasıl bulundu (denetim için) */
-  method: "name+org" | "name" | "partial+org" | "peak";
+  method: "name+org" | "name" | "partial+org" | "peak" | "epdk";
   entry?: CapacityEntry;
   /** Kayıt bulundu ama kullanılmadı ya da şüpheli: nedeni */
   warning?: string;
@@ -272,4 +284,83 @@ export function participantYears(entry: CapacityEntry, index: ParticipantYearInd
     if (sameOrg || sameMw) years.add(r.year);
   }
   return Array.from(years).sort((a, b) => a - b);
+}
+
+/** EPDK üretim lisansı dışa aktarımının bir satırı (scripts/tools/epdk-licenses-extract.py) */
+export interface EpdkLicense {
+  licenseNo: string;
+  status: string;
+  plant: string;
+  il: string;
+  ilce: string;
+  /** Mekanik, elektriksel ve işletmedeki elektriksel güç (MW; dışa aktarımdaki metin) */
+  mwm: string;
+  mwe: string;
+  opMwe: string;
+}
+
+export const EPDK_MIN_RATIO = 0.8;
+export const EPDK_MAX_RATIO = 1.1;
+
+/** Lisanstan kurulu güç: rüzgârda işletmedeki MWe (0 ise lisans MWe), diğerlerinde lisans MWe */
+export function epdkCapacityOf(l: EpdkLicense, type: string): number {
+  const mwe = Number(l.mwe) || 0;
+  const op = Number(l.opMwe) || 0;
+  return type === "RES" && op > 0 ? op : mwe;
+}
+
+/**
+ * Santralin EPDK lisansları: santral adının (parantezli ek atılarak) bütün ayırt edici kelimeleri tesis adında ve numara
+ * çelişkisi yok (location-autofill --epdk ile aynı); yürürlükteki lisanslar önce.
+ */
+export function epdkLicensesOf(name: string, licenses: EpdkLicense[]): EpdkLicense[] {
+  const clean = name.replace(/\s*\([^)]*\)\s*/g, " ").trim();
+  const own = nameTokens(clean);
+  const nums = plantNumbers(clean);
+  if (!own.size) return [];
+  const all = licenses.filter((e) => {
+    const theirs = nameTokens(e.plant);
+    const common = Array.from(own).filter((x) => theirs.has(x));
+    if (!common.length) return false;
+    const en = plantNumbers(e.plant);
+    if (nums.length && en.length && nums.join() !== en.join()) return false;
+    const bare = (s: string) => foldName(s).replace(/ (res|ges|hes)$/, "");
+    return common.length === own.size || bare(e.plant) === bare(clean);
+  });
+  const live = all.filter((l) => l.status === "Yürürlükte");
+  return live.length ? live : all;
+}
+
+/**
+ * EPDK lisansından kurulu güç (ikinci resmî kaynak). Lisanslar tek bir değere çıkmıyorsa (aynı adlı farklı santraller)
+ * null. Değer en yüksek üretimle tutmuyorsa (oran EPDK_MIN_RATIO–EPDK_MAX_RATIO dışı) `rejected` ile döner: kullanılmaz,
+ * yalnız kaynak notuna yazılır. Az veride (MIN_HOURS_FOR_LOW_CHECK saatten az) alt oran denetlenmez.
+ */
+export function matchEpdkCapacity(q: CapacityQuery, licenses: EpdkLicense[]): { match: CapacityMatch | null; note: string | null } {
+  if (isUnlicensedName(q.name)) return { match: null, note: null };
+  const ls = epdkLicensesOf(q.name, licenses);
+  const values = Array.from(new Set(ls.map((l) => epdkCapacityOf(l, q.type)).filter((v) => v > 0)));
+  if (!ls.length || !values.length) return { match: null, note: null };
+  const what = q.type === "RES" ? "işletmedeki MWe" : "lisans MWe";
+  if (values.length > 1) return { match: null, note: `EPDK'da aynı adlı birden çok lisans (${values.map(fmtMw).join(" / ")} MW), ayırt edilemedi` };
+  const mw = values[0];
+  const l = ls.find((x) => epdkCapacityOf(x, q.type) === mw)!;
+  const desc = `EPDK lisansı ${l.licenseNo}: ${l.plant} (${l.il}${l.ilce && l.ilce !== "-" ? ` / ${l.ilce}` : ""}), ${what} ${fmtMw(mw)} MW${q.type === "RES" && Number(l.mwe) !== mw ? ` (lisans ${fmtMw(Number(l.mwe))} MWe)` : ""}, MWm ${l.mwm}`;
+  const ratio = mw > 0 ? q.peakMw / mw : Infinity;
+  const lowOk = q.hours < MIN_HOURS_FOR_LOW_CHECK || ratio >= EPDK_MIN_RATIO;
+  if (ratio > EPDK_MAX_RATIO || !lowOk)
+    return { match: null, note: `${desc}; en yüksek saatlik üretim bunun ${pctOf(ratio * 100)}, kullanılmadı` };
+  return { match: { source: "EPDK_LICENSE", mw, ref: desc, method: "epdk" }, note: null };
+}
+
+/**
+ * Kurulu güç kuralının tamamı: YEKDEM; YEKDEM kayıt vermezse (tahmine düştüyse) EPDK lisansı; o da yoksa en yüksek
+ * üretim (alt sınır). EPDK değeri kullanılmadıysa tahminin kaynak notuna eklenir.
+ */
+export function resolveCapacity(q: CapacityQuery, index: CapacityIndex | null, licenses: EpdkLicense[] | null): CapacityMatch {
+  const yekdem = index ? matchInstalledCapacity(q, index) : peakEstimate(q);
+  if (yekdem.source !== "PEAK_ESTIMATE" || !licenses?.length) return yekdem;
+  const { match, note } = matchEpdkCapacity(q, licenses);
+  if (match) return { ...match, warning: yekdem.warning };
+  return note ? { ...yekdem, ref: `${yekdem.ref}. ${note}` } : yekdem;
 }

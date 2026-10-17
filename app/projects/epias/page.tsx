@@ -68,10 +68,10 @@ interface PlantForm {
   capacityEdited?: boolean;
 }
 
-/** Kurulu güç önizlemesi (EPİAŞ YEKDEM kaydı ya da tahmin; kural lib/epias-plant/installed-capacity.ts) */
+/** Kurulu güç önizlemesi (EPİAŞ YEKDEM ya da EPDK lisans kaydı, yoksa tahmin; kural lib/epias-plant/installed-capacity.ts) */
 interface CapacityInfo {
   key: string;
-  source: "EPIAS_YEKDEM" | "PEAK_ESTIMATE" | "USER";
+  source: "EPIAS_YEKDEM" | "EPDK_LICENSE" | "PEAK_ESTIMATE" | "USER";
   mw: number;
   ref: string;
   warning: string | null;
@@ -914,7 +914,7 @@ function PlantReview({
               {form.capacityEdited
                 ? "Elle girildi"
                 : capacity
-                  ? `${capacity.source === "EPIAS_YEKDEM" ? "Kaynak" : "Tahmin"}: ${capacity.ref}`
+                  ? `${capacity.source === "EPIAS_YEKDEM" || capacity.source === "EPDK_LICENSE" ? "Kaynak" : "Tahmin"}: ${capacity.ref}`
                   : "Tahmin: en yüksek saatlik üretim (kayıt aranıyor)"}
               {!form.capacityEdited && capacity?.warning && <span className="block text-amber-700">Uyarı: {capacity.warning}</span>}
             </span>

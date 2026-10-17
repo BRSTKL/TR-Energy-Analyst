@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   buildCapacityIndex,
   capacityKey,
+  matchEpdkCapacity,
   matchInstalledCapacity,
+  resolveCapacity,
   techOfFacilityType,
+  type EpdkLicense,
   type YekdemParticipant,
 } from "@/lib/epias-plant/installed-capacity";
 
@@ -96,5 +99,47 @@ describe("kurulu güç: YEKDEM kaydı eşleştirme", () => {
     const m = matchInstalledCapacity(q("INAVITAS-LÜY-GÜNEŞ", "GES", null, 12.34), index);
     expect(m.source).toBe("PEAK_ESTIMATE");
     expect(m.mw).toBe(12.4);
+  });
+});
+
+describe("EPDK lisansı (ikinci resmî kaynak)", () => {
+  const lic = (plant: string, mwe: string, opMwe: string, status = "Yürürlükte", ilce = "MERKEZ"): EpdkLicense => ({ licenseNo: `EÜ/${plant}`, status, plant, il: "İZMİR", ilce, mwm: mwe, mwe, opMwe });
+  const licenses = [
+    lic("GÖKTEPE RES", "226.5", "118.4"),
+    lic("ATASA RES", "23.4", "23.4"),
+    lic("POYRAZ RES", "30", "30", "Yürürlükte", "SUSURLUK"),
+    lic("POYRAZ RES", "75.3", "75.3", "Yürürlükte", "KEPSUT"),
+    lic("G4-VİRANŞEHİR-1 GES", "50", "0"),
+    lic("ESKİ RES", "10", "10", "Sonlandırıldı"),
+    lic("ESKİ RES", "12", "12"),
+  ];
+  const qq = (name: string, type: string, peakMw: number, hours = 5000) => ({ name, type, organizationName: null, peakMw, hours });
+
+  it("rüzgârda işletmedeki MWe, güneşte lisans MWe; oran 0,8–1,10", () => {
+    expect(matchEpdkCapacity(qq("ATASA RES", "RES", 23), licenses).match?.mw).toBe(23.4);
+    expect(matchEpdkCapacity(qq("G4-VİRANŞEHİR-1 GES", "GES", 47.5), licenses).match).toMatchObject({ source: "EPDK_LICENSE", mw: 50 });
+    // işletmedeki MWe üretimin altında (güncel değil): kullanılmaz, not düşer
+    const g = matchEpdkCapacity(qq("GÖKTEPE RES", "RES", 199.8), licenses);
+    expect(g.match).toBeNull();
+    expect(g.note).toContain("118,4");
+    // üretim değerin %80'inin altında: kullanılmaz; az veride alt oran denetlenmez
+    expect(matchEpdkCapacity(qq("ATASA RES", "RES", 15), licenses).match).toBeNull();
+    expect(matchEpdkCapacity(qq("ATASA RES", "RES", 15, 500), licenses).match?.mw).toBe(23.4);
+  });
+
+  it("aynı adlı farklı santraller ayırt edilmez; yürürlükteki lisans önce", () => {
+    const p = matchEpdkCapacity(qq("POYRAZ RES", "RES", 70), licenses);
+    expect(p.match).toBeNull();
+    expect(p.note).toContain("birden çok lisans");
+    expect(matchEpdkCapacity(qq("ESKİ RES", "RES", 11.5), licenses).match?.mw).toBe(12);
+  });
+
+  it("sıra: YEKDEM önce, sonra EPDK, sonra en yüksek üretim", () => {
+    expect(resolveCapacity(q("Kanije RES", "RES", "KANİJE ENERJİ A.Ş.", 47), index, licenses).source).toBe("EPIAS_YEKDEM");
+    expect(resolveCapacity(qq("ATASA RES", "RES", 23), index, licenses).source).toBe("EPDK_LICENSE");
+    const est = resolveCapacity(qq("GÖKTEPE RES", "RES", 199.8), index, licenses);
+    expect(est.source).toBe("PEAK_ESTIMATE");
+    expect(est.ref).toContain("EPDK lisansı");
+    expect(resolveCapacity(qq("ATASA RES", "RES", 23), index, null).source).toBe("PEAK_ESTIMATE");
   });
 });

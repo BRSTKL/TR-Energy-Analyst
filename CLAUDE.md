@@ -4,12 +4,16 @@
 
 Santralin kurulu gücü resmî kayıttan alınır. Tahmin ancak kayıt bulunamazsa kullanılır, ve tahmin olduğu her yerde söylenir.
 
-- **Kaynak:** EPİAŞ santral listelerinde kurulu güç yok. Santral bazında lisanslı kurulu güç yalnızca YEKDEM katılımcı listesinde var: `POST /renewables/data/renewables-participant {year}` (2016–2025). Listede santral kimliği olmadığı için eşleştirme ad + teknoloji + sahip şirketle yapılır.
+- **Kaynak:** EPİAŞ santral listelerinde kurulu güç yok. Sıra:
+  1. YEKDEM katılımcı listesi: `POST /renewables/data/renewables-participant {year}` (2016–2025). Listede santral kimliği olmadığı için eşleştirme ad + teknoloji + sahip şirketle yapılır.
+  2. YEKDEM kayıt vermezse EPDK üretim lisansı (kullanıcı kararı 17.10.2026; güneş ve rüzgâr). Kullanıcının lisans.epdk.gov.tr dışa aktarımı, `scripts/tools/epdk-licenses-extract.py` ile `.cache/epdk/solar-licenses.json` ve `res-licenses.json`. Güneşte lisans MWe, rüzgârda işletmedeki MWe (0 ise lisans MWe; rüzgârda lisans MWe kurulmamış genişlemeyi de içerir). Eşleştirme ad (bütün ayırt edici kelimeler, numara çelişkisi yok); aynı adlı farklı değerli lisanslar ayırt edilmez. Değer yalnız en yüksek saatlik üretim / değer 0,8–1,10 ise kullanılır (2.000 saatten az veride alt oran denetlenmez); değilse alt sınır kalır ve EPDK değeri kaynak notuna yazılır.
+  3. İkisi de yoksa en yüksek saatlik üretim (alt sınır).
 - **Kodun yeri:**
   - Eşleştirme kuralı: `lib/epias-plant/installed-capacity.ts`.
-  - EPİAŞ'tan alma ve önbellek: `lib/services/installed-capacity.ts` (`.cache/epias/yekdem-participants.json`).
+  - EPİAŞ'tan alma, önbellek ve EPDK dosyaları: `lib/services/installed-capacity.ts` (`.cache/epias/yekdem-participants.json`, `.cache/epdk/`).
 - **Santral kaydı:** `PowerPlant.capacitySource` şu değerlerden birini alır:
   - `EPIAS_YEKDEM`
+  - `EPDK_LICENSE`: EPDK lisans kaydı (resmî kayıt; tahmin sayılmaz).
   - `PEAK_ESTIMATE`: dönemdeki en yüksek saatlik üretim, alt sınır.
   - `USER`: elle girildi. Bu değere hiçbir otomatik işlem dokunmaz.
 

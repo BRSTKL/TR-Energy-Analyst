@@ -1,5 +1,5 @@
 /**
- * Proje santrallerinin kurulu gücünü EPİAŞ YEKDEM kayıtlarından doldurur ve eski tahminin (en yüksek saatlik üretim)
+ * Proje santrallerinin kurulu gücünü EPİAŞ YEKDEM kayıtlarından, yoksa EPDK lisansından (güneş, rüzgâr) doldurur ve eski tahminin (en yüksek saatlik üretim)
  * hatasını raporlar. Kullanıcının elle girdiği değerlere (capacitySource = USER) dokunmaz.
  *
  *   npx tsx --env-file=.env scripts/installed-capacity-backfill.mts            # yalnızca rapor
@@ -39,8 +39,9 @@ for (const project of projects) {
 }
 if (jsonOut) fs.writeFileSync(jsonOut, JSON.stringify(rows, null, 1));
 
-const yek = rows.filter((r) => r.source === "EPIAS_YEKDEM");
-console.log(`Santral: ${rows.length}, YEKDEM kaydı bulunan: ${yek.length} (%${((yek.length / rows.length) * 100).toFixed(0)}), tahmin: ${rows.length - yek.length}`);
+const yek = rows.filter((r) => r.source === "EPIAS_YEKDEM" || r.source === "EPDK_LICENSE");
+const epdkN = rows.filter((r) => r.source === "EPDK_LICENSE").length;
+console.log(`Santral: ${rows.length}, kaydı bulunan: ${yek.length} (%${((yek.length / rows.length) * 100).toFixed(0)}; YEKDEM ${yek.length - epdkN}, EPDK lisansı ${epdkN}), tahmin: ${rows.length - yek.length}`);
 const byType = new Map<string, number[]>();
 for (const r of yek) byType.set(r.type, [...(byType.get(r.type) ?? []), (r.old - r.next) / r.next]);
 const q = (a: number[], p: number) => a.slice().sort((x, y) => x - y)[Math.min(a.length - 1, Math.floor(p * a.length))];

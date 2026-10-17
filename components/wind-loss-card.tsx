@@ -54,7 +54,7 @@ export function WindLossCard({
   const month = calendar[0]?.date.slice(0, 7);
   const monthRow = loss.months.find((m) => m.month === month);
   const quality = `Kayıpsız ${nf(loss.days)} günde günlük beklenen ile gerçekleşen üretimin korelasyonu ${r3(loss.dailyR)} (ECMWF IFS 9 km; ERA5 ile ${r3(loss.dailyRSecondary)})`;
-  const capacity = `${loss.capacitySource === "PEAK_ESTIMATE" ? "≥ " : ""}${nf(loss.capacityMw, 1)} MW${loss.capacitySource === "PEAK_ESTIMATE" ? " (kayıt yok; en yüksek üretimden alt sınır)" : loss.capacitySource === "EPIAS_YEKDEM" ? " (YEKDEM kaydı)" : ""}`;
+  const capacity = `${loss.capacitySource === "PEAK_ESTIMATE" ? "≥ " : ""}${nf(loss.capacityMw, 1)} MW${loss.capacitySource === "PEAK_ESTIMATE" ? " (kayıt yok; en yüksek üretimden alt sınır)" : loss.capacitySource === "EPIAS_YEKDEM" ? " (YEKDEM kaydı)" : loss.capacitySource === "EPDK_LICENSE" ? " (EPDK lisansı)" : ""}`;
 
   return (
     <Card className="shadow-sm">

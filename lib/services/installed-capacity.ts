@@ -1,8 +1,10 @@
 /**
- * TR-Energy Analyst - Kurulu güç kaynağı (EPİAŞ YEKDEM katılımcı listeleri)
+ * TR-Energy Analyst - Kurulu güç kaynağı (EPİAŞ YEKDEM katılımcı listeleri, EPDK lisansları)
  *
  * Kural ve eşleştirme: lib/epias-plant/installed-capacity.ts. Bu dosya listeleri EPİAŞ'tan alır ve önbellekte tutar
  * (.cache/epias/yekdem-participants.json): geçmiş yılların listesi değişmez, içinde bulunulan yılınki bir gün geçerli.
+ * EPDK lisansları kullanıcının dışa aktarımından (.cache/epdk/<tür>-licenses.json; scripts/tools/epdk-licenses-extract.py;
+ * güneş ve rüzgâr); dosya yoksa yalnız YEKDEM.
  */
 
 import { promises as fs } from "node:fs";
@@ -11,8 +13,9 @@ import { epiasRequest } from "@/lib/services/epias-service";
 import { poolPlantRows } from "@/lib/pool/pool-hours";
 import {
   buildCapacityIndex,
-  matchInstalledCapacity,
   peakEstimate,
+  resolveCapacity,
+  type EpdkLicense,
   type CapacityIndex,
   type CapacityMatch,
   type YekdemParticipant,
@@ -134,9 +137,31 @@ export async function resolveInstalledCapacities(
   } catch (e) {
     errors.push(`Kurulu güç kayıtları alınamadı (${e instanceof Error ? e.message : "bağlantı"}); tahmin kullanıldı`);
   }
-  const matches = plants.map((p, i) => {
-    const q = { name: p.name, type: p.type, organizationName: p.organizationName, ...measured[i] };
-    return index ? matchInstalledCapacity(q, index) : peakEstimate(q);
-  });
+  const matches = await Promise.all(
+    plants.map(async (p, i) => {
+      const q = { name: p.name, type: p.type, organizationName: p.organizationName, ...measured[i] };
+      return index || (await epdkLicenses(p.type)) ? resolveCapacity(q, index, await epdkLicenses(p.type)) : peakEstimate(q);
+    })
+  );
   return { matches, peaks: measured, errors };
+}
+
+/** EPDK lisans dışa aktarımı (güneş, rüzgâr); dosya yoksa null. Dosya değişmedikçe bellekte */
+const EPDK_FILE: Record<string, string> = { GES: "solar-licenses.json", RES: "res-licenses.json" };
+const epdkMemo = new Map<string, { mtimeMs: number; licenses: EpdkLicense[] }>();
+export async function epdkLicenses(type: string): Promise<EpdkLicense[] | null> {
+  const name = EPDK_FILE[type];
+  if (!name) return null;
+  const file = path.join(process.cwd(), ".cache", "epdk", name);
+  try {
+    const { mtimeMs } = await fs.stat(file);
+    const m = epdkMemo.get(type);
+    if (m && m.mtimeMs === mtimeMs) return m.licenses;
+    const licenses = (JSON.parse(await fs.readFile(file, "utf8")) as { licenses: EpdkLicense[] }).licenses;
+    epdkMemo.set(type, { mtimeMs, licenses });
+    return licenses;
+  } catch (e: any) {
+    if (e?.code === "ENOENT") return null;
+    throw e;
+  }
 }

@@ -15,7 +15,7 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.24";
+const VERSION = "1.25";
 const VERSION_DATE = "17 Ekim 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
@@ -681,7 +681,7 @@ Rüzgâr: beklenen = santralin güç eğrisi (100 m hız 0,5 m/s × 8 yön hücr
               <b>Rüzgâr neden daha temkinli:</b> santrale ölçülen bir &quot;üretebileceği&quot; yok (güneşte uydu ışınımı var); 0,25° / 9 km ızgara sırtı ve
               vadiyi görmez, bu yüzden güç eğrisi her santralin kendi üretiminden öğrenilir (kısıntılı saatler eğitimden çıkarılarak). İki hava
               kaynağının anlaşması (ana kaynağın kayıp saatlerinden ikincide de aynı türde olanların payı, santral medyanı; scripts/wind-loss-summary.mts):
-              planlı saatlerde %64, tek tek plansız saatlerde %51, en az 6 saat süren plansız olaylarda %82. Bu yüzden plansız kayıp alt sınırdır: yalnız
+              planlı saatlerde %61, tek tek plansız saatlerde %51, en az 6 saat süren plansız olaylarda %82. Bu yüzden plansız kayıp alt sınırdır: yalnız
               santralin büyük kısmının durduğu, iki kaynağın birlikte bulduğu uzun düşüşler sayılır; birkaç türbinin arızası görünmez. Kayıpsız günlerde günlük beklenen ile gerçekleşen üretimin korelasyonu
               0,85&apos;in altındaki santralde rakam gösterilmez. <Tag kind="estimate" />
             </p>
@@ -691,12 +691,12 @@ Rüzgâr: beklenen = santralin güç eğrisi (100 m hız 0,5 m/s × 8 yön hücr
                 ["Konumu olan", "129 santralin 118'i: 99 Global Energy Monitor Global Wind Power Tracker (2026-02, CC BY 4.0), 3 OpenStreetMap türbin kümesi (ODbL), 16 EPDK ilçe / il merkezi (~ tahmin)"],
                 ["Kalite eşiğini geçen (günlük r ≥ 0,85)", "118 konumlu santralin 109'u (medyan r 0,95)"],
                 ["Son 12 ay kayıp payı, planlı / plansız (en az); santral başına son 12 tam ay, potansiyel üretime oran", "%2,9 / %0,3"],
-                ["Plansız olay (≥ 6 saat, iki kaynak)", "363; 15'i EPİAŞ arıza / bakım bildirimiyle çakışıyor"],
+                ["Plansız olay (≥ 6 saat, iki kaynak)", "367; 15'i EPİAŞ arıza / bakım bildirimiyle çakışıyor"],
                 ["Olayların 08:00–10:59 arasında başlayan payı", "%30 (düzgün dağılımda %12,5); 00:00'da da yığılma var. Mesai başında başlayan bakım olasılığıyla uyumlu, neden doğrulanmadı"],
               ]}
             />
             <p>
-              Sınırlar: kurulu güç kayıttan (YEKDEM) ya da en yüksek üretimden alt sınır (129 rüzgâr santralinin 62'sinde alt sınır; kayıp eşiği buna
+              Sınırlar: kurulu güç kayıttan (YEKDEM, EPDK lisansı) ya da en yüksek üretimden alt sınır (129 rüzgâr santralinin 35'inde alt sınır; kayıp eşiği buna
               bağlı); kapasite artışı eğriyi dönem içinde değiştirebilir; talimatla kısma ilk KGÜP&apos;te görünmüyorsa plansız sayılır. Gecikme: IFS ≈ 1
               gün, ERA5 ≈ 5–6 gün; plansız kayıp ERA5 kadar gecikir. Kaynaklar: Open-Meteo.com (CC BY 4.0); ERA5: Copernicus Climate Change Service;
               SARAH3: EUMETSAT CM SAF. Güneşte plansız kayıp kar örtüsünü de içerebilir.
@@ -1018,6 +1018,11 @@ Rüzgâr: beklenen = santralin güç eğrisi (100 m hız 0,5 m/s × 8 yön hücr
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.25",
+                  "17 Ekim 2026",
+                  "Kurulu güç için ikinci resmî kaynak: YEKDEM kaydı yoksa ya da üretimle çelişiyorsa EPDK üretim lisansı (güneşte lisans MWe, rüzgârda işletmedeki MWe; en yüksek üretim / değer 0,8–1,10 ise). Proje santrallerinde 38 santralin tahmini kayda dönüştü (27 rüzgâr, 11 güneş); rüzgârda alt sınır 62 → 35 santral. Rapor Ek A / B kaynağı YEKDEM ve EPDK diye ayrı yazar. Dengesizlik ve santral KÜPST'ü kurulu güce bağlı olmadığı için değişmedi.",
+                ],
                 [
                   "1.24",
                   "17 Ekim 2026",
