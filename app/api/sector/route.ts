@@ -55,5 +55,7 @@ export async function GET(request: Request) {
     byType: bench.byType,
     plants,
     companies: companyRollup(plants),
+    // Kıyas dışı lisanssız toplamlar (benchmark.ts `unlicensed`): ayrı tabloda, sırasız
+    unlicensed: loaded.unlicensed ?? [],
   });
 }

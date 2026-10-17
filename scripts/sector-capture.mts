@@ -39,11 +39,12 @@ async function ptfYear(year: number): Promise<Map<number, number>> {
 }
 
 async function yearCapture(year: number, untilMonth: number) {
-  const sector = JSON.parse(fs.readFileSync(path.join(CACHE, `sector-${year}.json`), "utf8")) as { plants: SectorPlant[] };
+  const sector = JSON.parse(fs.readFileSync(path.join(CACHE, `sector-${year}.json`), "utf8")) as { plants: SectorPlant[]; unlicensed?: SectorPlant[] };
   const ptf = await ptfYear(year);
   const entries: Array<{ key: string; group: string; hours: CaptureHour[] }> = [];
   let missing = 0;
-  for (const p of sector.plants) {
+  // Lisanssız toplamlar da (gerçek üretim; karnede kıyas dışı ayrı liste)
+  for (const p of [...sector.plants, ...(sector.unlicensed ?? [])]) {
     const doc = await readPoolYearCached(p.epiasPlantId, year);
     if (!doc) {
       missing++;

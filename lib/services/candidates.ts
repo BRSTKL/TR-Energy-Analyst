@@ -173,7 +173,9 @@ export async function projectCandidates(
 
   const inProject = new Set(withData.map((p) => p.epiasPlantId).filter((id): id is number => id !== null));
   const inAggregator = new Set(data.aggregator?.portfolio?.plantIds ?? []);
-  const open = bench.plants.filter((p) => types.includes(p.type) && !inProject.has(p.epiasPlantId) && !inAggregator.has(p.epiasPlantId));
+  // Lisanssız toplamlar karnenin dağılımında yok (benchmark.ts `unlicensed`) ama aday olarak "Lisanssız / tedarik" süzgecinde
+  const benchPool = [...bench.plants, ...(bench.unlicensed ?? [])];
+  const open = benchPool.filter((p) => types.includes(p.type) && !inProject.has(p.epiasPlantId) && !inAggregator.has(p.epiasPlantId));
   // YEKDEM çıkışı: iki EPİAŞ YEKDEM listesinden (alınamazsa çıkış bilgisi olmadan devam)
   const exitIndex = await loadYekdemExitIndex().catch((e) => {
     console.error("YEKDEM exit index error:", e);
@@ -251,8 +253,8 @@ export async function projectCandidates(
     accessCounts,
     aggregatorList: membership ? { asOf: membership.asOf, aggregators: membership.aggregatorCount, failed: membership.failedCount } : null,
     excluded: {
-      inProject: bench.plants.filter((p) => inProject.has(p.epiasPlantId)).length,
-      inAggregatorPortfolio: bench.plants.filter((p) => !inProject.has(p.epiasPlantId) && inAggregator.has(p.epiasPlantId)).length,
+      inProject: benchPool.filter((p) => inProject.has(p.epiasPlantId)).length,
+      inAggregatorPortfolio: benchPool.filter((p) => !inProject.has(p.epiasPlantId) && inAggregator.has(p.epiasPlantId)).length,
       byYekdem: open.length - byYekdem.length,
       byAccess: byYekdem.length - pool.length,
     },

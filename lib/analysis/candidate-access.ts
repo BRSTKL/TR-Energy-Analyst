@@ -49,7 +49,7 @@ export function brandOf(orgName: string | null | undefined): string | null {
 
 const isRetailOrg = (orgName: string | null | undefined) => !!orgName && /^K3\s|PERAKENDE/i.test(orgName.trim());
 /** Lisanssız santral birimi ya da görevli tedarik portföyü (adda LÜY, LÜM_, K3_): lisanslı santrallerle kıyaslanmaz */
-export const isUnlicensedName = (plantName: string) => /(^|[-_\s])LÜY([-_\s]|$)|^LÜM_|^K3_/i.test(plantName);
+export const isUnlicensedName = (plantName: string) => /(^|[-_\s])LÜY([-_\s]|$)|^LÜM_|^K3[_\s]/i.test(plantName);
 
 /** Sahip dizininden şirket ve marka başına santral sayıları */
 export function groupCounts(owners: Iterable<{ organizationId: number; organizationName: string }>): {

@@ -30,6 +30,8 @@ interface SectorResponse {
   byType: SectorBenchmark["byType"];
   plants: SectorPlant[];
   companies: SectorCompanyRow[];
+  /** Kıyas dışı lisanssız toplamlar (K3_, LÜM_, LÜY); eski API yanıtlarında yok */
+  unlicensed?: SectorBenchmark["plants"];
 }
 
 const TECH_LABEL: Record<Tech, string> = { RES: "Rüzgâr", GES: "Güneş", HES: "Hidro" };
@@ -543,6 +545,50 @@ export default function SectorPage() {
             </Table>
           </CardContent>
         </Card>
+
+        {(() => {
+          const ul = (data.unlicensed ?? []).filter((p) => p.type === tech).sort((a, b) => b.actualMwh - a.actualMwh);
+          if (!ul.length) return null;
+          return (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Lisanssız toplamlar (kıyas dışı, {ul.length})</CardTitle>
+                <CardDescription>
+                  Bir dağıtım bölgesindeki binlerce küçük lisanssız tesisin toplamı (K3_, LÜM_, LÜY). Dağılıma ve sıralara girmez: EPİAŞ bunların geçmiş aylardaki
+                  ilk planını (KGÜP) sonradan değiştirebiliyor (Ekim 2026 yeniden çekiminde K3_DİCLE Haziran–Ağustos için 181 → 70 TL/MWh, üretim aynı); plan gün
+                  öncesi tahmin sayılamaz. Rakamlar yalnız bilgi içindir.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="overflow-x-auto p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Toplam</TableHead>
+                      <TableHead className="text-right">Üretim</TableHead>
+                      <TableHead className="text-right">Dengesizlik TL/MWh</TableHead>
+                      <TableHead className="text-right">KÜPST TL/MWh</TableHead>
+                      <TableHead className="text-right">Sapma %</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {ul.map((p) => (
+                      <TableRow key={p.epiasPlantId}>
+                        <TableCell>
+                          <p className="font-medium text-slate-900">{p.name}</p>
+                          <p className="text-xs text-slate-500">{p.organizationName ?? "–"}</p>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{gwh(p.actualMwh)}</TableCell>
+                        <TableCell className="text-right tabular-nums text-slate-600">{nf(p.unitImbalanceTl)}</TableCell>
+                        <TableCell className="text-right tabular-nums text-slate-600">{nf(p.unitKupstTl)}</TableCell>
+                        <TableCell className="text-right tabular-nums text-slate-600">{nf(p.deviationPct, 1)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          );
+        })()}
 
         <p className="text-xs text-slate-500">
           Kaynak: EPİAŞ Şeffaflık Platformu, {data.label} saatlik KGÜP (ilk versiyon), UEVM, PTF ve SMF. Değerler santral tek başına

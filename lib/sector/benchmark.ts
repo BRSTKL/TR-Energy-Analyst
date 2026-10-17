@@ -12,6 +12,7 @@ import type { HourlyResult } from "@/lib/calculations/types";
 import { kupstTotal } from "@/lib/calculations/kupst";
 import { detectOutages } from "@/lib/analysis/outage-detection";
 import { normalizePlantName } from "@/lib/epias-plant/plant-data";
+import { isUnlicensedName } from "@/lib/analysis/candidate-access";
 
 /** Karnedeki teknolojiler; HES isteğe bağlı toplanır (eski karnelerde yoktur) */
 export type SectorTech = "RES" | "GES" | "HES";
@@ -194,8 +195,15 @@ export interface SectorBenchmark {
   /** Veri dönemi (yıl içi karnede ör. 2026-01-01 – 2026-08-31); eski dosyalarda yok: tam yıl */
   period?: { start: string; end: string };
   generatedAt: string;
-  /** Kalite süzgecinden geçen santraller */
+  /** Kalite süzgecinden geçen LİSANSLI santraller (dağılımlar ve sıralar bunlarla) */
   plants: SectorPlantMetrics[];
+  /**
+   * Kalite süzgecinden geçen lisanssız toplamlar (K3_, LÜM_, LÜY: bir dağıtım bölgesindeki binlerce küçük tesis). Kıyas dışı
+   * (kullanıcı kararı 17.10.2026): EPİAŞ bunların geçmiş ilk KGÜP'ünü sonradan değiştirebiliyor (16.10.2026 yeniden
+   * çekiminde K3_DİCLE 181 → 70 TL/MWh, üretim aynı); gün öncesi tahmin değil. Üretimleri capture ve aday taramasında
+   * kullanılır. Eski dosyalarda yok (o zaman plants içindeydiler).
+   */
+  unlicensed?: SectorPlantMetrics[];
   /** Kalite süzgecinde elenen santral sayısı (eksik veri, plan–gerçekleşen tutarsızlığı, aşırı sapma) */
   excluded: number;
   /** Elenenlerden sapması üretiminin DEVIATION_MAX_PCT'sini aşanlar (olası talimat ya da veri sorunu); eski dosyalarda yok */
@@ -237,7 +245,9 @@ export function passesQuality(m: SectorPlantMetrics, expectedHours: number): boo
 }
 
 export function buildBenchmark(year: number, all: SectorPlantMetrics[], expectedHours: number): SectorBenchmark {
-  const plants = all.filter((m) => passesQuality(m, expectedHours));
+  const passing = all.filter((m) => passesQuality(m, expectedHours));
+  const plants = passing.filter((m) => !isUnlicensedName(m.name));
+  const unlicensed = passing.filter((m) => isUnlicensedName(m.name));
   const highDeviation = all.filter((m) => m.deviationPct > DEVIATION_MAX_PCT && passesQuality({ ...m, deviationPct: 0 }, expectedHours)).length;
   const dist = (type: SectorTech): TypeDistribution => {
     const ps = plants.filter((p) => p.type === type);
@@ -258,7 +268,8 @@ export function buildBenchmark(year: number, all: SectorPlantMetrics[], expected
     year,
     generatedAt: new Date().toISOString(),
     plants,
-    excluded: all.length - plants.length,
+    unlicensed,
+    excluded: all.length - passing.length,
     excludedHighDeviation: highDeviation,
     byType: { RES: dist("RES"), GES: dist("GES"), ...(hasHydro ? { HES: dist("HES") } : {}) },
   };
