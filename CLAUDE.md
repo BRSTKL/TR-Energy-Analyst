@@ -53,3 +53,13 @@ Konum koordinatlı bir kayıttan alınır. Tahmin ancak kayıt bulunamazsa kulla
 ## Raporlar
 
 Rapor, hesaplama ya da veri koduna dokunduktan sonra `npm run check:reports` (0 hata) ve `npm test` çalıştırılır.
+
+## Ekran ve dışarıya giden metin
+
+- Sayfa, API ya da bileşen değişikliğinden sonra, geliştirme sunucusu açıkken `npm run test:smoke` çalıştırılır (`scripts/smoke-test.mts`).
+  - Sistemdeki Chrome ile bütün sayfaları gezer: 3 proje, uç durumlar ve telefon genişliği.
+  - Hata sayar: konsol hatası, 400 ve üstü yanıt, ekranda NaN / undefined, yatay taşma.
+  - Yalnız okur. Yaklaşık 5 dakika sürer. Bütün projeler için `-- --all` eklenir.
+- LinkedIn yazısı, şirket raporu, demo metni gibi dışarıya giden her metin, yayımlanmadan önce `iddia-denetcisi` agent'ına verilir.
+  - Her sayıyı verinin bugünkü hâliyle karşılaştırır.
+  - PLAN ve commit mesajları kaynak sayılmaz.
