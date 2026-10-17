@@ -15,8 +15,8 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.22";
-const VERSION_DATE = "15 Ekim 2026";
+const VERSION = "1.23";
+const VERSION_DATE = "17 Ekim 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
   { id: "ozet", title: "Özet" },
@@ -629,23 +629,30 @@ Capture rate = capture fiyatı / baz PTF;   profil indirimi = 100 − capture ra
 Beklenen (portföy) = Σ teknolojinin üretim payı × teknolojinin sektör capture rate'i`}
             </F>
             <p>
-              Sektör: sektör karnesinin santralleri (kalite süzgeçli), iki yılda da Ocak–Ağustos, üretim EPİAŞ UEVM, fiyat PTF. Teknoloji oranı
+              Sektör: sektör karnesinin lisanslı santralleri (kalite süzgeçli), her yıl Ocak–Ağustos, üretim EPİAŞ UEVM, fiyat PTF. Yıllar arası
+              değişim yalnız ortak kümeyle verilir: iki yılın karnesinde de aynı grupta olan santraller (yeni santraller oranı kendi başına
+              değiştirir). Lisanssız toplamlar (K3_, LÜM_, LÜY) ayrı grup: 2025 karnesinde yoklar, 2026&apos;da 32 güneş toplamı 21,9 TWh ile
+              lisanslı güneşin (58 santral, 4,2 TWh) 5 katı; Ocak–Ağustos 2026 toplam capture rate&apos;leri %64,6. Lisanslı oranlara, yıl kıyasına, sektördeki yere ve PPA
+              kıyasına girmezler. Teknoloji oranı
               üretim ağırlıklıdır (santraller birleştirilir); santraller arası dağılım her santrali bir nokta sayar (1 GWh altı hariç). Sonuç
               sayfasındaki &quot;sektördeki yer&quot;, santralin kendi teknolojisinin (hidroda barajlı / nehir tipi) santralleri arasındaki
               yüzdeliğidir; raporun PPA kutusu portföyün oranını karışıma göre beklenenle kıyaslar. <Tag kind="exact" />
             </p>
             <Table
-              head={["Ocak–Ağustos", "2025", "2026", "Sıfır fiyatlı üretim (2026)"]}
+              head={["Ocak–Ağustos, ortak küme", "Santral", "2025", "2026", "Sıfır fiyatlı üretim (2026)"]}
               rows={[
-                ["Güneş", "%84,8", "%66,2 (Mayıs %17)", "%16,2"],
-                ["Rüzgâr", "%99,2", "%105,6", "%4,0"],
-                ["Hidro · barajlı", "%106,5", "%101,3", "%5,3"],
-                ["Hidro · nehir tipi", "%100,8", "%95,1", "%5,7"],
+                ["Güneş", "46", "%84,8", "%70,8 (Mayıs %19)", "%13,8"],
+                ["Rüzgâr", "277", "%99,1", "%105,7", "%4,0"],
+                ["Hidro · barajlı", "128", "%106,8", "%101,5", "%5,6"],
+                ["Hidro · nehir tipi", "226", "%100,5", "%99,2", "%3,9"],
+                ["Lisanssız toplamlar · güneş (ayrı)", "32", "–", "%64,6", "%17,1"],
               ]}
             />
+            <p>Sınıflanmamış hidrolar (ortak kümede 278 santral) barajlı ve nehir tipi satırlarında yok; hidro toplamına girerler.</p>
             <p>
               Güneş fiyatını kendisi düşürüyor (öğle saatlerinde sıfır fiyat); öğle fiyatı düşünce rüzgârın akşam ve gece üretimi görece değerleniyor;
-              barajlı hidro üretimi pahalı saatlere kaydırabildiği için Nisan–Mayıs 2026&apos;da hidro toplamı %122–129&apos;a çıktı. Sınırlar: geçmiş
+              öğle saatlerinde güneşin düşürdüğü fiyat ortalamayı aşağı çektiği için Nisan–Mayıs 2026&apos;da hidro toplamı %124–129&apos;a çıktı (nehir tipi
+              Mayıs&apos;ta %163, barajlı %120; yalnız üretimini kaydırabilen barajlı değil, düz profilli üretim de %100&apos;ün üstüne çıkıyor). Sınırlar: geçmiş
               fiyatlarla (fiyat tahmini değil); talimatla (YAT) kısılan üretim sayılmadığından kısıntının yoğun olduğu saatlerde oran olduğundan
               yüksek görünebilir; santral konumu veride yok, bölge ayrımı yapılmaz.
             </p>
@@ -966,6 +973,11 @@ Beklenen (portföy) = Σ teknolojinin üretim payı × teknolojinin sektör capt
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.23",
+                  "17 Ekim 2026",
+                  "Capture rate kümeleri: oranlar sektör karnesinin lisanslı santralleriyle; lisanssız toplamlar (2025 karnesinde yok, 2026'da 32 güneş toplamı) ayrı grup. Yıllar arası değişim ortak kümeyle (iki yılda da karnede olan santraller): güneş %84,8 → %70,8 (46 santral; önceki %66,2'nin 2026 tarafında 32 lisanssız toplam ve 12 yeni lisanslı santral vardı). Raporun PPA kutusunda sektör oranı lisanslı santrallerle (güneşli portföylerde beklenen oran yükseldi). Diğer hesaplar değişmedi.",
+                ],
                 [
                   "1.22",
                   "15 Ekim 2026",

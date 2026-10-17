@@ -4,8 +4,9 @@
  *
  *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/sector-capture.mts [sonAy=karnedeki son tam ay]
  *
- * Yıllar: sektör karnesi olan yıllar (sector-<yıl>.json). Kıyas iki yılda da Ocak–<sonAy> (aynı aylar); önceki yılın tam
- * yılı ayrıca (fullYear). Üretim havuzdan (UEVM), PTF MarketData'dan. EPİAŞ'a gidilmez.
+ * Yıllar: sektör karnesi olan yıllar (sector-<yıl>.json). Ana grup karnenin lisanslı santralleri; lisanssız toplamlar
+ * (K3_, LÜM_, LÜY) yılın `unlicensed` alanında ayrı. Yıllar arası kıyas (`common`) iki yılda da aynı gruptaki lisanslı
+ * santrallerle ve aynı aylarla (Ocak–<sonAy>); önceki yılın tam yılı ayrıca (fullYear). Üretim havuzdan (UEVM), PTF MarketData'dan. EPİAŞ'a gidilmez.
  * Çıktı: .cache/epias/sector-capture.json
  */
 
@@ -38,13 +39,13 @@ async function ptfYear(year: number): Promise<Map<number, number>> {
   return new Map(rows.map((r) => [r.timestamp.getTime(), r.ptf]));
 }
 
-async function yearCapture(year: number, untilMonth: number) {
-  const sector = JSON.parse(fs.readFileSync(path.join(CACHE, `sector-${year}.json`), "utf8")) as { plants: SectorPlant[]; unlicensed?: SectorPlant[] };
-  const ptf = await ptfYear(year);
-  const entries: Array<{ key: string; group: string; hours: CaptureHour[] }> = [];
+type Entry = { key: string; group: string; hours: CaptureHour[] };
+
+/** Santral listesi → teknoloji (ve hidro alt tipi) girdileri; havuzda olmayanlar sayılır */
+async function entriesOf(list: SectorPlant[], year: number, untilMonth: number, ptf: Map<number, number>): Promise<{ entries: Entry[]; missing: number }> {
+  const entries: Entry[] = [];
   let missing = 0;
-  // Lisanssız toplamlar da (gerçek üretim; karnede kıyas dışı ayrı liste)
-  for (const p of [...sector.plants, ...(sector.unlicensed ?? [])]) {
+  for (const p of list) {
     const doc = await readPoolYearCached(p.epiasPlantId, year);
     if (!doc) {
       missing++;
@@ -65,6 +66,17 @@ async function yearCapture(year: number, untilMonth: number) {
     entries.push({ key, group: p.type, hours });
     if (p.type === "HES" && p.hydroKind) entries.push({ key, group: `HES:${p.hydroKind}`, hours });
   }
+  return { entries, missing };
+}
+
+/**
+ * Yılın capture'ı. Ana grup karnenin lisanslı santralleri (`plants`); lisanssız toplamlar (K3_, LÜM_, LÜY; karnede kıyas
+ * dışı `unlicensed`) ayrı grup: gerçek üretim, ama EPİAŞ geçmişlerini sonradan değiştiriyor ve 2025 karnesinde yoklar.
+ */
+async function yearCapture(year: number, untilMonth: number) {
+  const sector = JSON.parse(fs.readFileSync(path.join(CACHE, `sector-${year}.json`), "utf8")) as { plants: SectorPlant[]; unlicensed?: SectorPlant[] };
+  const ptf = await ptfYear(year);
+  const { entries, missing } = await entriesOf(sector.plants, year, untilMonth, ptf);
   const groups = groupCapture(entries);
   // Santral başına oran (sonuç sayfasında sektördeki yer için): grup → [id, oran, üretim]
   const plants: Record<string, Array<[number, number, number]>> = {};
@@ -73,17 +85,46 @@ async function yearCapture(year: number, untilMonth: number) {
     if (s.ratePct === null || s.mwh < 1000) continue;
     (plants[e.group] ??= []).push([Number(e.key), Math.round(s.ratePct * 100) / 100, Math.round(s.mwh)]);
   }
-  return { year, months: untilMonth, plants: new Set(entries.map((e) => e.key)).size, missing, groups, plantRates: plants };
+  const un = await entriesOf(sector.unlicensed ?? [], year, untilMonth, ptf);
+  const unlicensed = un.entries.length ? { plants: new Set(un.entries.map((e) => e.key)).size, missing: un.missing, groups: groupCapture(un.entries) } : null;
+  const result = { year, months: untilMonth, plants: new Set(entries.map((e) => e.key)).size, missing, groups, plantRates: plants, unlicensed };
+  return { result, entries };
 }
 
-const out: { generatedAt: string; lastMonth: number; years: Awaited<ReturnType<typeof yearCapture>>[]; fullYear: Awaited<ReturnType<typeof yearCapture>> | null } = {
+/** Yıllar arası kıyas: iki yılda da aynı gruptaki lisanslı santraller (ortak küme), aynı aylar */
+function commonCapture(a: { year: number; entries: Entry[] }, b: { year: number; entries: Entry[] }, months: number) {
+  const id = (e: Entry) => `${e.group}|${e.key}`;
+  const inB = new Set(b.entries.map(id));
+  const both = new Set(a.entries.map(id).filter((k) => inB.has(k)));
+  return {
+    fromYear: a.year,
+    toYear: b.year,
+    months,
+    byYear: [a, b].map((y) => ({ year: y.year, groups: groupCapture(y.entries.filter((e) => both.has(id(e)))) })),
+  };
+}
+
+const out: {
+  generatedAt: string;
+  lastMonth: number;
+  years: Awaited<ReturnType<typeof yearCapture>>["result"][];
+  common: ReturnType<typeof commonCapture> | null;
+  fullYear: Awaited<ReturnType<typeof yearCapture>>["result"] | null;
+} = {
   generatedAt: new Date().toISOString(),
   lastMonth,
   years: [],
+  common: null,
   fullYear: null,
 };
-for (const y of years) out.years.push(await yearCapture(y, lastMonth));
-if (years.length > 1) out.fullYear = await yearCapture(years[years.length - 2], 12);
+const yearEntries: Array<{ year: number; entries: Entry[] }> = [];
+for (const y of years) {
+  const { result, entries } = await yearCapture(y, lastMonth);
+  out.years.push(result);
+  yearEntries.push({ year: y, entries });
+}
+if (yearEntries.length > 1) out.common = commonCapture(yearEntries[yearEntries.length - 2], yearEntries[yearEntries.length - 1], lastMonth);
+if (years.length > 1) out.fullYear = (await yearCapture(years[years.length - 2], 12)).result;
 fs.writeFileSync(path.join(CACHE, "sector-capture.json"), JSON.stringify(out, null, 1));
 
 const f = (v: number | null | undefined, d = 1) => (v === null || v === undefined ? "–" : v.toFixed(d));
@@ -102,6 +143,18 @@ for (const key of ["GES", "RES", "HES", "HES:RESERVOIR", "HES:RUN_OF_RIVER"]) {
       })
       .join("")
   );
+}
+for (const y of out.years)
+  if (y.unlicensed)
+    console.log(
+      `${y.year} lisanssız toplamlar (ayrı, ${y.unlicensed.plants} santral): ${y.unlicensed.groups.map((x) => `${GROUP_LABEL[x.key] ?? x.key} %${f(x.pooled.ratePct)} (${x.plants}, ${f(x.pooled.mwh / 1e6, 2)} TWh)`).join(" · ")}`
+    );
+if (out.common) {
+  console.log(`\nOrtak küme (iki yılda da aynı grupta lisanslı santraller), ${out.common.fromYear} → ${out.common.toYear}:`);
+  for (const key of ["GES", "RES", "HES", "HES:RESERVOIR", "HES:RUN_OF_RIVER"]) {
+    const [a, b] = out.common.byYear.map((y) => y.groups.find((x) => x.key === key));
+    console.log(`  ${GROUP_LABEL[key].padEnd(20)} %${f(a?.pooled.ratePct)} → %${f(b?.pooled.ratePct)} (${b?.plants ?? 0} santral)`);
+  }
 }
 for (const key of ["GES", "RES", "HES"]) {
   console.log(`\n${GROUP_LABEL[key]}, aylık capture rate (%):`);

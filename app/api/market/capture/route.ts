@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 /**
  * GET /api/market/capture
  * Sektör capture rate (PLAN 19.3): teknoloji ve ay bazında capture rate, santraller arası dağılım; yıllar aynı aylarla.
+ * `years[].groups` lisanslı santraller, `years[].unlicensed` lisanssız toplamlar (ayrı); yıllar arası kıyas `common` (ortak küme).
  * Santral başına oranlar döndürülmez (sayfa için gerekmez).
  */
 export async function GET() {
@@ -19,5 +20,5 @@ export async function GET() {
     const { plantRates: _omit, ...rest } = y;
     return rest;
   };
-  return NextResponse.json({ success: true, generatedAt: data.generatedAt, lastMonth: data.lastMonth, years: data.years.map(strip), fullYear: data.fullYear ? strip(data.fullYear) : null });
+  return NextResponse.json({ success: true, generatedAt: data.generatedAt, lastMonth: data.lastMonth, years: data.years.map(strip), common: data.common ?? null, fullYear: data.fullYear ? strip(data.fullYear) : null });
 }

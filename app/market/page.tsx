@@ -10,7 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { LOW_PRICE_MAX, ZERO_PRICE_MAX, pairMonths, type MarketSummary } from "@/lib/analysis/market-summary";
 import type { DirectionBacktest, Forecaster } from "@/lib/analysis/direction-backtest";
 import type { GipLiquidity } from "@/lib/services/gip-liquidity";
-import type { SectorCaptureYear } from "@/lib/services/sector-capture";
+import type { SectorCaptureCommon, SectorCaptureYear } from "@/lib/services/sector-capture";
+import type { GroupCapture } from "@/lib/analysis/capture-rate";
 
 import { MethodLink } from "@/components/method-link";
 import { pctOf, yearLocative } from "@/lib/format";
@@ -786,9 +787,9 @@ const CAPTURE_TECHS: Array<{ id: string; label: string }> = [
   { id: "HES", label: "Hidro" },
 ];
 
-/** PLAN 19.3: sektör capture rate, teknolojiye ve aya göre (kendi verisini ayrı çeker) */
+/** PLAN 19.3: sektör capture rate, teknolojiye ve aya göre (kendi verisini ayrı çeker). Yıl kıyası ortak kümeyle. */
 function CaptureRateCard() {
-  const [data, setData] = useState<{ years: Array<Omit<SectorCaptureYear, "plantRates">>; lastMonth: number } | null>(null);
+  const [data, setData] = useState<{ years: Array<Omit<SectorCaptureYear, "plantRates">>; common: SectorCaptureCommon | null; lastMonth: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tech, setTech] = useState("GES");
   useEffect(() => {
@@ -808,20 +809,28 @@ function CaptureRateCard() {
     );
   if (!data || data.years.length === 0) return null;
   const years = data.years;
-  const [prev, cur] = [years[years.length - 2], years[years.length - 1]];
-  const g = (y: (typeof years)[number] | undefined, key: string) => y?.groups.find((x) => x.key === key);
-  const curSolar = g(cur, "GES");
-  const prevSolar = g(prev, "GES");
-  const worstSolar = curSolar?.monthly.reduce((a, m) => ((m.ratePct ?? 999) < (a.ratePct ?? 999) ? m : a), curSolar.monthly[0]);
+  const cur = years[years.length - 1];
+  const g = (y: { groups: GroupCapture[] } | undefined, key: string) => y?.groups.find((x) => x.key === key);
+  // Yıllar arası kıyas yalnız ortak kümeyle (iki yılda da aynı gruptaki lisanslı santraller); yoksa tek yıl
+  const common = data.common;
+  const [cFrom, cTo] = common ? common.byYear : [undefined, undefined];
+  const series = common ? common.byYear : [cur];
+  const solarTo = g(cTo, "GES");
+  const solarFrom = g(cFrom, "GES");
+  const worstSolar = solarTo?.monthly.reduce((a, m) => ((m.ratePct ?? 999) < (a.ratePct ?? 999) ? m : a), solarTo.monthly[0]);
+  const period = `Ocak–${MONTHS_SHORT[data.lastMonth - 1]}`;
   const months = Array.from({ length: data.lastMonth }, (_, i) => String(i + 1).padStart(2, "0"));
   const chart = months.map((mm) => {
     const row: Record<string, string | number | null> = { ay: MONTHS_SHORT[Number(mm) - 1] };
-    for (const y of years) row[String(y.year)] = g(y, tech)?.monthly.find((m) => m.month.endsWith(`-${mm}`))?.ratePct ?? null;
+    for (const y of series) row[String(y.year)] = g(y, tech)?.monthly.find((m) => m.month.endsWith(`-${mm}`))?.ratePct ?? null;
     return row;
   });
   const rows = ["GES", "RES", "HES:RESERVOIR", "HES:RUN_OF_RIVER"];
-  const label: Record<string, string> = { GES: "Güneş", RES: "Rüzgâr", "HES:RESERVOIR": "Hidro · barajlı", "HES:RUN_OF_RIVER": "Hidro · nehir tipi" };
+  const label: Record<string, string> = { GES: "Güneş", RES: "Rüzgâr", HES: "Hidro", "HES:RESERVOIR": "Hidro · barajlı", "HES:RUN_OF_RIVER": "Hidro · nehir tipi" };
   const pctTxt = (v: number | null | undefined, d = 1) => (v === null || v === undefined ? "–" : `%${nf(v, d)}`);
+  const unlicensed = cur.unlicensed;
+  const dist = (c: GroupCapture | undefined) =>
+    c?.distribution ? `%${nf(c.distribution.p10, 0)}–${nf(c.distribution.p50, 0)}–${nf(c.distribution.p90, 0)} (${c.distribution.n})` : "–";
 
   return (
     <Card className="shadow-sm">
@@ -829,16 +838,19 @@ function CaptureRateCard() {
         <CardTitle className="text-base">Capture rate: santraller ürettikleri saatlerde ne fiyat alıyor?</CardTitle>
         <CardDescription>
           Capture rate = üretim ağırlıklı PTF ÷ dönemin saatlik ortalama PTF&apos;si. %100&apos;ün altı: üretim fiyatın düşük olduğu saatlerde yoğun
-          (profil indirimi). Sektör karnesinin santralleri, iki yılda da Ocak–{MONTHS_SHORT[data.lastMonth - 1]}. Ayrıntı: Metodoloji.
+          (profil indirimi). Sektör karnesinin lisanslı santralleri, her yıl {period}. Yıl kıyası yalnız iki yılda da karnede olan santrallerle
+          (ortak küme); lisanssız toplamlar ayrı satırda. Ayrıntı: Metodoloji.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {prev && curSolar && prevSolar && (
+        {common && solarTo && solarFrom && (
           <p className="text-sm text-slate-800">
-            Güneşin capture rate&apos;i {prev.year} {pctTxt(prevSolar.pooled.ratePct)} → {cur.year} <b>{pctTxt(curSolar.pooled.ratePct)}</b>
-            {worstSolar && <> ({MONTHS_SHORT[Number(worstSolar.month.slice(5, 7)) - 1]} {cur.year}: {pctTxt(worstSolar.ratePct, 0)})</>}; güneş üretiminin{" "}
-            {pctTxt(curSolar.pooled.zeroSharePct)} kadarı sıfır fiyatlı saatlerde. Rüzgâr {pctTxt(g(prev, "RES")?.pooled.ratePct)} →{" "}
-            {pctTxt(g(cur, "RES")?.pooled.ratePct)}: öğle fiyatı güneşle düşünce rüzgârın akşam ve gece üretimi görece değerlendi.
+            Aynı {solarTo.plants} lisanslı güneş santralinde capture rate {common.fromYear} {period} {pctTxt(solarFrom.pooled.ratePct)} → {common.toYear}{" "}
+            {period} <b>{pctTxt(solarTo.pooled.ratePct)}</b>
+            {worstSolar && <> ({MONTHS_SHORT[Number(worstSolar.month.slice(5, 7)) - 1]} {common.toYear}: {pctTxt(worstSolar.ratePct, 0)})</>}; bu santrallerin{" "}
+            {common.toYear} üretiminin {pctTxt(solarTo.pooled.zeroSharePct)} kadarı sıfır fiyatlı saatlerde. Rüzgâr (aynı {g(cTo, "RES")?.plants ?? 0}{" "}
+            santral) {pctTxt(g(cFrom, "RES")?.pooled.ratePct)} → {pctTxt(g(cTo, "RES")?.pooled.ratePct)}: öğle fiyatı güneşle düşünce rüzgârın akşam
+            ve gece üretimi görece değerlendi.
           </p>
         )}
         <div className="flex flex-wrap items-center gap-1.5">
@@ -856,24 +868,28 @@ function CaptureRateCard() {
               <YAxis {...axis.y} tickFormatter={(v) => `%${v}`} domain={[0, "auto"]} />
               <Tooltip formatter={(v: unknown) => (v === null ? "–" : `%${nf(Number(v), 1)}`)} />
               <Legend {...legend} />
-              {years.map((y, i) => (
-                <Line key={y.year} isAnimationActive={false} dataKey={String(y.year)} stroke={i === years.length - 1 ? COLOR.cur : COLOR.prev} strokeWidth={2} connectNulls />
+              {series.map((y, i) => (
+                <Line key={y.year} isAnimationActive={false} dataKey={String(y.year)} stroke={i === series.length - 1 ? COLOR.cur : COLOR.prev} strokeWidth={2} connectNulls />
               ))}
             </LineChart>
           </ResponsiveContainer>
         </div>
+        {common && <p className="text-xs text-slate-500">Grafik: ortak küme ({label[tech] ?? tech}, {g(cTo, tech)?.plants ?? 0} santral).</p>}
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Grup</TableHead>
-                {years.map((y) => (
-                  <TableHead key={y.year} className="text-right">
-                    {y.year}
-                  </TableHead>
-                ))}
-                <TableHead className="text-right">Sıfır fiyatlı üretim ({cur.year})</TableHead>
-                <TableHead className="text-right">Santraller arası P10–P50–P90 ({cur.year})</TableHead>
+                {common && (
+                  <>
+                    <TableHead className="text-right">{common.fromYear} (ortak)</TableHead>
+                    <TableHead className="text-right">{common.toYear} (ortak)</TableHead>
+                    <TableHead className="text-right">Ortak santral</TableHead>
+                  </>
+                )}
+                <TableHead className="text-right">{cur.year}, bütün lisanslı</TableHead>
+                <TableHead className="text-right">Sıfır fiyatlı üretim ({cur.year}, bütün)</TableHead>
+                <TableHead className="text-right">Santraller arası P10–P50–P90 ({cur.year}, bütün)</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -882,21 +898,47 @@ function CaptureRateCard() {
                 return (
                   <TableRow key={key}>
                     <TableCell>{label[key]}</TableCell>
-                    {years.map((y) => (
-                      <TableCell key={y.year} className="text-right tabular-nums">
-                        {pctTxt(g(y, key)?.pooled.ratePct)}
-                      </TableCell>
-                    ))}
-                    <TableCell className="text-right tabular-nums">{pctTxt(c?.pooled.zeroSharePct)}</TableCell>
+                    {common && (
+                      <>
+                        <TableCell className="text-right tabular-nums">{pctTxt(g(cFrom, key)?.pooled.ratePct)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{pctTxt(g(cTo, key)?.pooled.ratePct)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{g(cTo, key)?.plants ?? "–"}</TableCell>
+                      </>
+                    )}
                     <TableCell className="text-right tabular-nums">
-                      {c?.distribution ? `%${nf(c.distribution.p10, 0)}–${nf(c.distribution.p50, 0)}–${nf(c.distribution.p90, 0)} (${c.distribution.n})` : "–"}
+                      {pctTxt(c?.pooled.ratePct)} {c && <span className="text-slate-400">({c.plants})</span>}
                     </TableCell>
+                    <TableCell className="text-right tabular-nums">{pctTxt(c?.pooled.zeroSharePct)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{dist(c)}</TableCell>
                   </TableRow>
                 );
               })}
+              {unlicensed?.groups.map((c) => (
+                <TableRow key={`un-${c.key}`} className="text-slate-600">
+                  <TableCell>Lisanssız toplamlar · {(label[c.key] ?? c.key).toLowerCase()}</TableCell>
+                  {common && (
+                    <>
+                      <TableCell className="text-right">–</TableCell>
+                      <TableCell className="text-right">–</TableCell>
+                      <TableCell className="text-right">–</TableCell>
+                    </>
+                  )}
+                  <TableCell className="text-right tabular-nums">
+                    {pctTxt(c.pooled.ratePct)} <span className="text-slate-400">({c.plants})</span>
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{pctTxt(c.pooled.zeroSharePct)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{dist(c)}</TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </div>
+        {unlicensed && (
+          <p className="text-xs leading-relaxed text-slate-500">
+            Lisanssız toplamlar (K3_, LÜM_, LÜY: bir dağıtım bölgesindeki çok sayıda küçük tesis) {cur.year} karnesinde var, önceki yılınkinde yok;
+            EPİAŞ geçmiş kayıtlarını sonradan değiştirebildiği için karnede kıyas dışılar. Lisanslı oranlara ve yıl kıyasına katılmazlar.
+          </p>
+        )}
         <p className="text-xs leading-relaxed text-slate-500">
           Grup oranı üretim ağırlıklıdır (santraller birleştirilmiş); dağılım her santrali bir nokta sayar (1 GWh altı santraller hariç). Talimatla
           (YAT) kısılan üretim sayılmadığı için kısıntının yoğun olduğu saatlerde capture rate olduğundan yüksek görünebilir. Bölge ayrımı yok

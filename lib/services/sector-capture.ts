@@ -3,6 +3,10 @@
  *
  * scripts/sector-capture.mts çıktısını okur (.cache/epias/sector-capture.json) ve bir projenin santrallerinin ve teknoloji
  * toplamlarının sektördeki yerini (yüzdelik; yüksek capture rate = iyi) verir. Dosya yoksa null.
+ *
+ * Kümeler: yılın `groups` / `plantRates` alanları karnenin lisanslı santralleri (ana kıyas); lisanssız toplamlar (K3_, LÜM_,
+ * LÜY) `unlicensed` alanında ayrı. Yıllar arası değişim yalnız `common` ile (iki yılda da aynı gruptaki lisanslı santraller):
+ * iki yılın `groups` alanları farklı kümelerdir (yeni santraller), doğrudan kıyaslanmaz.
  */
 
 import fs from "node:fs";
@@ -18,12 +22,23 @@ export interface SectorCaptureYear {
   groups: GroupCapture[];
   /** Grup → [EPİAŞ santral kimliği, capture rate %, üretim MWh] */
   plantRates: Record<string, Array<[number, number, number]>>;
+  /** Lisanssız toplamlar, ayrı grup (yoksa null; ana kıyasa ve plantRates'e girmez) */
+  unlicensed?: { plants: number; missing: number; groups: GroupCapture[] } | null;
+}
+
+/** Yıllar arası kıyas: iki yılda da aynı gruptaki lisanslı santraller, aynı aylar (Ocak–months) */
+export interface SectorCaptureCommon {
+  fromYear: number;
+  toYear: number;
+  months: number;
+  byYear: Array<{ year: number; groups: GroupCapture[] }>;
 }
 
 export interface SectorCapture {
   generatedAt: string;
   lastMonth: number;
   years: SectorCaptureYear[];
+  common?: SectorCaptureCommon | null;
   fullYear: SectorCaptureYear | null;
 }
 
@@ -34,6 +49,11 @@ export const CAPTURE_GROUP_LABEL: Record<string, string> = {
   "HES:RESERVOIR": "Hidro · barajlı",
   "HES:RUN_OF_RIVER": "Hidro · nehir tipi",
 };
+
+export const MONTH_NAMES = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+
+/** "2026 Ocak–Ağustos" */
+export const capturePeriodLabel = (year: number, months: number) => `${year} Ocak–${MONTH_NAMES[months - 1]}`;
 
 export function loadSectorCapture(): SectorCapture | null {
   try {
