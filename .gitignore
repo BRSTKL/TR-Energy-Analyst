@@ -56,3 +56,7 @@ scripts/tmp/
 
 # Üretilmiş raporlar (şirket adları içerir)
 /Raporlar/
+
+# Ham kaynak dosyaları (EPDK dökümlerinde iletişim bilgisi, GEM dosyaları büyük); yalnız README depoda
+/kaynaklar/*
+!/kaynaklar/README.md

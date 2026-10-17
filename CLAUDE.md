@@ -34,6 +34,14 @@ Santralin kurulu gücü resmî kayıttan alınır. Tahmin ancak kayıt bulunamaz
   - `npm run check:reports` iki şeyi hata sayar: `capacity-peak` (kayıtlı kurulu güç üretimin altında kalıyor) ve `capacity-estimate`.
 - **Yasak:** Kurulu gücü yeni bir yerde üretimden türetmek (ör. `suggestCapacityMw`) ya da kaynağını göstermeden rapora koymak.
 
+## Kaynak dosyaları
+
+Kullanıcının indirdiği ham veri dosyaları `kaynaklar/` klasöründe: Global Energy Monitor güneş / rüzgâr / hidro takipçileri ve EPDK güneş / rüzgâr / hidro lisans dökümleri. Ne olduğu, sürümü, çıkarıcısı ve `.cache/` çıktısı `kaynaklar/README.md`'de yazar.
+
+- Bir veri gerektiğinde (konum, kurulu güç, lisans, sahip, santral türü) önce bu klasöre bakılır; kullanıcıdan yeni dosya ancak burada yoksa istenir.
+- Kod ham dosyayı doğrudan okumaz. Çıkarıcı (`scripts/tools/`) gereken sütunları `.cache/` altına yazar; dosya yenilenince çıkarıcı yeniden çalışır ve README güncellenir.
+- Yeni indirilen dosya da buraya konur (EPDK dökümü `epdk-lisans-<tür>-<tarih>.xls` adıyla). Ham dosyalar git dışındadır.
+
 ## Santral konumu
 
 Konum koordinatlı bir kayıttan alınır. Tahmin ancak kayıt bulunamazsa kullanılır, ve tahmin olduğu her yerde söylenir.
