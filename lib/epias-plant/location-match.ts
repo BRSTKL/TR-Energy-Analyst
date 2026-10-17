@@ -43,6 +43,21 @@ export function nameTokens(s: string | null | undefined): Set<string> {
   );
 }
 
+const COMPANY_GENERIC = new Set(["santralleri", "guc", "grup", "enr", "ur", "el", "en", "yat", "ins", "holding", "grubu", "sirketler", "renewables", "renewable", "inc", "ruzgar", "rüzgar", "wind", "uretimi", "production", "energy", "ltd", "co"]);
+
+/**
+ * Şirket kelimeleri (aynı adlı santralleri sahibine göre ayırmak için): 2 harfli kısaltmalar da sayılır ("NM ENR." → nm,
+ * "(SE)" → se); genel kelimeler ve `exclude` içindeki kelimeler (santralin kendi adı: "SOMA RES(SOMA ENR.)" → soma ayırt
+ * etmez) hariç.
+ */
+export function companyTokens(s: string | null | undefined, exclude: Set<string> = new Set()): Set<string> {
+  return new Set(
+    foldName(s)
+      .split(" ")
+      .filter((t) => t.length >= 2 && !GENERIC_WORDS.has(t) && !COMPANY_GENERIC.has(t) && !/^\d+$/.test(t) && !exclude.has(t))
+  );
+}
+
 /** Santral numaraları ("bor 1" → 1; "agri 1 2" → 1, 2; YEKA kodu g4 hariç) */
 export function plantNumbers(s: string | null | undefined): number[] {
   return foldName(s)
@@ -144,11 +159,20 @@ export function districtCandidates(plantName: string, places: OsmPlace[]): OsmPl
 /**
  * EPDK lisans kaydındaki il / ilçe için yer düğümü (PLAN 20.2): ilçe "MERKEZ" ise il merkezi; aynı adlı birden çok yer
  * varsa il merkezine en yakın olan. İl merkezi bulunamazsa ve ilçe adı tek yerse o yer. Bulunamazsa null.
+ * İlçesi boş ya da harfsiz ("-": eski rüzgâr lisanslarında) kayıt il merkezini alır (`districtIsProvince` ile ayırt edilir);
+ * katlanınca boş kalan yer adları (Latin dışı yazı, ör. Arapça) hiçbir şeyle eşleşmez.
  */
+/** İlçe bilgisi yok ya da "MERKEZ": konum il düzeyinde */
+export const districtIsProvince = (ilce: string | null | undefined) => {
+  const k = foldName(ilce ?? "").replace(/\s+/g, " ").trim();
+  return !k || k === "merkez";
+};
+
 export function districtPoint(il: string, ilce: string, places: OsmPlace[]): OsmPlace | null {
   const f = (s: string) => foldName(s).replace(/\s+/g, " ").trim();
-  const ilCenter = places.filter((p) => f(p.name) === f(il)).sort((a, b) => (a.place === "city" ? -1 : 1) - (b.place === "city" ? -1 : 1))[0] ?? null;
-  if (!ilce || f(ilce) === "merkez") return ilCenter;
+  const k = f(il);
+  const ilCenter = k ? places.filter((p) => f(p.name) === k).sort((a, b) => (a.place === "city" ? -1 : 1) - (b.place === "city" ? -1 : 1))[0] ?? null : null;
+  if (districtIsProvince(ilce)) return ilCenter;
   const same = places.filter((p) => f(p.name) === f(ilce));
   if (!same.length) return null;
   if (same.length === 1 || !ilCenter) return same.length === 1 ? same[0] : null;

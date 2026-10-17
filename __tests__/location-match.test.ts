@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { districtCandidates, districtPoint, foldName, nameTokens, numberConflict, osmCandidates, plantNumbers, type OsmPlace, type OsmPlant } from "@/lib/epias-plant/location-match";
+import { companyTokens, districtCandidates, districtIsProvince, districtPoint, foldName, nameTokens, numberConflict, osmCandidates, plantNumbers, type OsmPlace, type OsmPlant } from "@/lib/epias-plant/location-match";
 
 const o = (osm: string, name: string, operator = "", source = "solar"): OsmPlant => ({ osm, source, name, operator, mw: "", lat: 38, lon: 35, km2: 0.1 });
 
@@ -65,5 +65,18 @@ describe("OSM konum adayı (20.2)", () => {
     expect(districtPoint("VAN", "EDREMİT", places)?.osm).toBe("t1"); // Balıkesir Edremit değil
     expect(districtPoint("MUĞLA", "MERKEZ", places)?.osm).toBe("c2");
     expect(districtPoint("KARS", "KAĞIZMAN", places)).toBeNull();
+    // Eski rüzgâr lisanslarında ilçe "-": il merkezi; Latin dışı adlı yer (katlanınca boş) "-" ile eşleşmez
+    const withArabic = [...places, pl("x1", "حارم", 36.21, 36.52)];
+    expect(districtPoint("MUĞLA", "-", withArabic)?.osm).toBe("c2");
+    expect(districtPoint("ÇANAKKALE", "-", withArabic)).toBeNull();
+    expect(districtIsProvince("-")).toBe(true);
+    expect(districtIsProvince("EDREMİT")).toBe(false);
+  });
+
+  it("şirket kelimeleri: 2 harfli kısaltma sayılır, genel kelime ve santral adı sayılmaz", () => {
+    expect([...companyTokens("NM ENR.")]).toEqual(["nm"]);
+    expect([...companyTokens("SE SANTRAL ELEKTRİK ÜRETİM SANAYİ VE TİCARET A.Ş.")]).toEqual(["se"]);
+    expect([...companyTokens("BİLGİN GÜÇ SANTRALLERİ ENERJİ ÜRETİM A.Ş.")]).toEqual(["bilgin"]);
+    expect([...companyTokens("SOMA ENR.", new Set(["soma"]))]).toEqual([]);
   });
 });

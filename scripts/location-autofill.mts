@@ -27,9 +27,15 @@
  * scripts/tools/gem-tracker-extract.py; CC BY 4.0, koordinatlı kayıt). Eşleşme önce EPDK lisans numarasıyla (santral adı
  * EPDK dışa aktarımında birebir → lisans no → GEM "Other IDs"), yoksa birebir adla (GEM proje / yerel / diğer adlar,
  * "solar project" eki atılır; `strictSameName`). Yalnız konum doğruluğu "exact" olanlar;
- * eşleşen kayıtlar 5 km'den çok ayrılıyorsa belirsiz; EPDK ilçe merkezinden 40 km'den uzak GEM koordinatı reddedilir (GEM'de
+ * eşleşen kayıtlar 5 km'den çok ayrılıyorsa belirsiz; EPDK ilçe merkezinden 40 km'den (ilçesi olmayan lisansta il merkezinden 150 km'den) uzak GEM koordinatı reddedilir (GEM'de
  * lisans no yanlış kayıtta olabiliyor). GEM'in Türkiye satırlarında "State/Province" kaymış; il "City" sütunundan. `GEM_TRACKER` ilçe merkezinin ve boş konumun yerini alır; OSM ve
  * elle girilen konuma dokunulmaz (mesafe raporlanır). Uydu korelasyonu bilgi için yazılır (depolama / kısıntı düşürür).
+ * `--gem --res` (kullanıcı, 17.10.2026; rüzgâr sayfaları için): aynı kural rüzgârla: Global Wind Power Tracker
+ * (`.cache/gem/wind-tr.json`), EPDK rüzgâr lisansları (`.cache/epdk/res-licenses.json`), proje / karne RES santralleri. Uydu
+ * ışınımı rüzgârda anlamsız olduğu için korelasyon hesaplanmaz; kanıt lisans no / birebir ad ve EPDK ilçe sınırıdır. Aynı
+ * adlı birden çok kayıt (Soma (Bilgin) / Soma (Polat)) santral adındaki parantezli ek ve EPİAŞ şirket adıyla GEM'in proje
+ * parantezi / sahip / işletmeci adı karşılaştırılarak ayrılır (`companyTokens`); ayrılmazsa belirsiz.
+ * `--res` yalnız `--gem` ile (OSM, EPDK ve ilçe kipleri güneşe göre).
  * `--district` (kullanıcı kararı 15.10.2026): yalnız ilçe merkezi aşaması. Adında il / ilçe adı geçen konumsuz santraller için
  * o yerin OSM düğümü (`.cache/osm/places-tr.json`, scripts/tools/osm-places-extract.py); aynı ölçüt (≥ 0,85, aynı adlı uzak
  * yer yakınsa belirsiz); `DISTRICT_CENTER` kaynağıyla (tahmin, "~"); korelasyon tutmayan boş kalır.
@@ -39,7 +45,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import { isUnlicensedName } from "@/lib/analysis/candidate-access";
-import { districtCandidates, districtPoint, foldName, nameTokens, osmCandidates, plantNumbers, tokenFrequency, type OsmPlace, type OsmPlant } from "@/lib/epias-plant/location-match";
+import { companyTokens, districtCandidates, districtPoint, foldName, nameTokens, osmCandidates, plantNumbers, tokenFrequency, type OsmPlace, type OsmPlant } from "@/lib/epias-plant/location-match";
 import { listPoolPlants, readPoolPlantInfo, readPoolYear } from "@/lib/pool/pool-store";
 import { setPlantLocation } from "@/lib/services/plant-location";
 import { emptySatelliteYear, fetchSatellite, mergeSatellite } from "@/lib/weather/satellite";
@@ -49,6 +55,8 @@ const WRITE = process.argv.includes("--write");
 const DISTRICT = process.argv.includes("--district");
 const EPDK = process.argv.includes("--epdk");
 const GEM = process.argv.includes("--gem");
+const TECH = process.argv.includes("--res") ? "RES" : "GES";
+if (TECH === "RES" && !GEM) throw new Error("--res yalnız --gem ile kullanılır");
 const MIN_R = 0.85;
 const AMBIGUOUS_KM = 10;
 const AMBIGUOUS_DR = 0.02;
@@ -73,10 +81,10 @@ if (SECTOR || EPDK || GEM) {
   const cache = path.join(process.cwd(), ".cache", "epias");
   const year = Math.max(...fs.readdirSync(cache).map((f) => Number(/^sector-(\d{4})\.json$/.exec(f)?.[1] ?? 0)));
   const sector = JSON.parse(fs.readFileSync(path.join(cache, `sector-${year}.json`), "utf8")) as { plants: Array<{ epiasPlantId: number; name: string; type: string; organizationName?: string | null }> };
-  for (const p of sector.plants) if (p.type === "GES" && !isUnlicensedName(p.name)) targets.set(p.epiasPlantId, { name: p.name, org: p.organizationName ?? null });
+  for (const p of sector.plants) if (p.type === TECH && !isUnlicensedName(p.name)) targets.set(p.epiasPlantId, { name: p.name, org: p.organizationName ?? null });
 }
 if (!SECTOR) {
-  const rows = await prisma.powerPlant.findMany({ where: { type: "GES", projectId: { not: null }, epiasPlantId: { not: null } }, select: { epiasPlantId: true, name: true, organizationName: true } });
+  const rows = await prisma.powerPlant.findMany({ where: { type: TECH, projectId: { not: null }, epiasPlantId: { not: null } }, select: { epiasPlantId: true, name: true, organizationName: true } });
   for (const r of rows) if (!isUnlicensedName(r.name)) targets.set(r.epiasPlantId!, { name: r.name, org: r.organizationName });
 }
 
@@ -242,11 +250,11 @@ if (DISTRICT) {
 
 // GEM kipi (--gem; başlıktaki açıklama)
 if (GEM) {
-  const gemDoc = JSON.parse(fs.readFileSync(path.join(process.cwd(), ".cache", "gem", "solar-tr.json"), "utf8")) as {
+  const gemDoc = JSON.parse(fs.readFileSync(path.join(process.cwd(), ".cache", "gem", TECH === "RES" ? "wind-tr.json" : "solar-tr.json"), "utf8")) as {
     version: string;
-    plants: Array<{ project: string; phase: string | null; localName: string | null; otherNames: string | null; mw: number | null; status: string | null; lat: number; lon: number; accuracy: string | null; city: string | null; province: string | null; gemLocationId: string; gemPhaseId: string; epdkLicenses: string[] }>;
+    plants: Array<{ project: string; phase: string | null; localName: string | null; otherNames: string | null; mw: number | null; status: string | null; lat: number; lon: number; accuracy: string | null; city: string | null; province: string | null; gemLocationId: string; gemPhaseId: string; epdkLicenses: string[]; owner: string | null; operator: string | null }>;
   };
-  const epdkDoc = JSON.parse(fs.readFileSync(path.join(process.cwd(), ".cache", "epdk", "solar-licenses.json"), "utf8")) as { licenses: Array<{ licenseNo: string; plant: string; il: string; ilce: string }> };
+  const epdkDoc = JSON.parse(fs.readFileSync(path.join(process.cwd(), ".cache", "epdk", TECH === "RES" ? "res-licenses.json" : "solar-licenses.json"), "utf8")) as { licenses: Array<{ licenseNo: string; plant: string; il: string; ilce: string }> };
   const placesDoc = JSON.parse(fs.readFileSync(path.join(process.cwd(), ".cache", "osm", "places-tr.json"), "utf8")) as { places: OsmPlace[] };
   // GEM'in Türkiye satırlarında "State/Province" kaymış (ör. Acıpayam için Van); il "City" sütununda
   const gemIl = (g: (typeof gemDoc.plants)[number]) => g.city ?? g.province;
@@ -254,7 +262,7 @@ if (GEM) {
   const gemNames = (g: (typeof gemDoc.plants)[number]) =>
     [g.project, g.localName, ...(g.otherNames ?? "").split(/[,;]/)]
       .filter((x): x is string => !!x && !!x.trim())
-      .map((x) => x.replace(/\s+(solar|pv)\s+(project|farm|plant|power plant)$/i, "").trim());
+      .map((x) => x.replace(/\s+(solar|pv|wind)\s+(project|farm|plant|power plant|power station)$/i, "").trim());
   const found: Array<{ id: number; name: string; g: (typeof gemDoc.plants)[number]; how: string; r: number }> = [];
   let n = 0;
   for (const [id, t0] of targets) {
@@ -266,27 +274,73 @@ if (GEM) {
     const nos = new Set(lics.map((l) => l.licenseNo));
     // EPDK ilçe merkezleri: GEM koordinatı bunlardan MAX_KM'den uzaksa reddedilir (GEM'de lisans no başka santrale yazılmış
     // olabilir: "Silopi" lisansı Sivas'taki kayıtta; aynı şirketin komşu ilçedeki santrali: Omicron Erciş / Edremit)
+    // İlçesi olmayan lisans ("-", eski rüzgâr lisansları) il merkeziyle: il ilçeden büyük olduğu için sınır PROVINCE_KM ("MERKEZ" ilçedir, 40 km)
     const MAX_KM = 40;
-    const centers = lics.map((l) => districtPoint(l.il, l.ilce, placesDoc.places)).filter((x): x is OsmPlace => !!x);
+    const PROVINCE_KM = 150;
+    const centers = lics
+      .map((l) => ({ p: districtPoint(l.il, l.ilce, placesDoc.places), max: foldName(l.ilce) ? MAX_KM : PROVINCE_KM }))
+      .filter((x): x is { p: OsmPlace; max: number } => !!x.p);
     const byLicense = gemDoc.plants.filter((g) => g.epdkLicenses.some((x) => nos.has(x)));
     const byName = gemDoc.plants.filter((g) => !byLicense.includes(g) && gemNames(g).some((x) => strictSameName(name, x)));
     const hits = [...byLicense, ...byName];
     const how = (g: (typeof gemDoc.plants)[number]) => (byLicense.includes(g) ? "EPDK lisans no" : "birebir ad");
-    const dist = (g: { lat: number; lon: number }) => (centers.length ? Math.min(...centers.map((c) => km(g, c))) : NaN);
+    const dist = (g: { lat: number; lon: number }) => (centers.length ? Math.min(...centers.map((c) => km(g, c.p))) : NaN);
+    const near = (g: { lat: number; lon: number }) => !centers.length || centers.some((c) => km(g, c.p) <= c.max);
     const exactAll = hits.filter((g) => g.accuracy === "exact");
-    const exact = exactAll.filter((g) => !(dist(g) > MAX_KM));
+    const exact = exactAll.filter(near);
     let verdict: string;
     if (!hits.length) verdict = "GEM'de yok";
     else if (!exactAll.length) verdict = `yalnız yaklaşık konum (${hits.length})`;
-    else if (!exact.length) verdict = `EPDK ilçesinden uzak, reddedildi: ${exactAll.map((g) => `${g.project} ${gemIl(g) ?? ""} ${nf(dist(g), 0)} km`).join(" | ")}`;
-    else if (exact.some((g) => km(g, exact[0]) > 5)) verdict = `belirsiz: ${exact.map((g) => `${g.project} ${gemIl(g) ?? ""}`).join(" | ")}`;
+    else if (!exact.length) verdict = `EPDK ilçe / il merkezinden uzak, reddedildi: ${exactAll.map((g) => `${g.project} ${gemIl(g) ?? ""} ${nf(dist(g), 0)} km`).join(" | ")}`;
     else {
-      const g = exact[0];
-      const r = await correlationAt(id, g.lat, g.lon);
-      if (cur?.locationSource === "OSM") verdict = `OSM korunuyor (GEM ${nf(km(g, { lat: cur.latitude, lon: cur.longitude }), 1)} km uzakta)`;
+      // Aynı adlı santraller (Soma (Bilgin) / Soma (Polat)): santral adındaki parantezli ek ve EPİAŞ'taki şirket adı, GEM'in
+      // proje parantezi / sahip / işletmeci adıyla; yalnız eşleşenler tek yerde toplanıyorsa kabul (kullanıcı, 17.10.2026)
+      let pick = exact;
+      let byCompany = false;
+      let conflict = false;
+      if (exact.some((g) => km(g, exact[0]) > 5)) {
+        const base = nameTokens(name.replace(/\([^)]*\)/g, " "));
+        // Şirket kelimesi adın kendisi olabilir ("BAĞLAR RES (BAĞLAR ELK.)"): GEM sahip / işletmeci adında geçiyorsa sayılır, GEM
+        // proje adında (yer adı: "Soma (Polat)") sayılmaz
+        const mine = new Set([...companyTokens((/\(([^)]*)\)/.exec(t0.name) ?? [])[1]), ...companyTokens(t0.org)]);
+        const theirs = (g: (typeof gemDoc.plants)[number]) =>
+          new Set([...companyTokens((/\(([^)]*)\)/.exec(g.project) ?? [])[1], base), ...companyTokens([g.owner, g.operator].filter(Boolean).join(" "))]);
+        // En iyi örtüşen sahip (Jaccard): "DATÇA RES" (Datça Rüzgar) faz 3'e, "DARES DATÇA RES" faz 1–2'ye
+        const score = (g: (typeof gemDoc.plants)[number]) => {
+          const t = theirs(g);
+          const inter = Array.from(t).filter((x) => mine.has(x)).length;
+          return inter ? inter / new Set([...Array.from(t), ...Array.from(mine)]).size : 0;
+        };
+        const best = Math.max(0, ...exact.map(score));
+        const hit = best > 0 ? exact.filter((g) => score(g) === best) : [];
+        if (hit.length) {
+          pick = hit;
+          byCompany = true;
+        } else if (Array.from(mine).some((t) => !base.has(t))) conflict = true;
+      }
+      // Aynı projenin uzak fazları (GEM konum kimliği aynı; Dares Datça, Akbük (Ayen)): en büyük fazın kayıtlı koordinatı. Şirket
+      // biliniyor ama GEM sahibiyle uyuşmuyorsa (AKBÜK RES(SUAY ENR.)) uygulanmaz
+      let phase = false;
+      if (!conflict && pick.some((g) => km(g, pick[0]) > 5) && new Set(pick.map((g) => g.gemLocationId)).size === 1) {
+        // Santral numarası fazla eşleşirse o faz ("AKBÜK II RES" → faz 2), yoksa en büyük faz
+        const roman: Record<string, number> = { i: 1, ii: 2, iii: 3, iv: 4, v: 5 };
+        const nums = new Set([...plantNumbers(name), ...foldName(name).split(" ").flatMap((t) => (roman[t] ? [roman[t]] : []))]);
+        const numbered = pick.filter((g) => g.phase !== null && nums.has(Math.trunc(Number(g.phase))));
+        pick = numbered.length === 1 ? numbered : [[...pick].sort((a, b) => (b.mw ?? 0) - (a.mw ?? 0))[0]];
+        phase = true;
+      }
+      const how2 = (g: (typeof gemDoc.plants)[number]) => how(g) + (byCompany ? " + şirket adı" : "") + (phase ? " + aynı projenin fazı" : "");
+      if (pick.some((g) => km(g, pick[0]) > 5)) verdict = `belirsiz: ${exact.map((g) => `${g.project} ${gemIl(g) ?? ""}`).join(" | ")}`;
       else {
-        verdict = `KABUL (${how(g)}; ${g.project}${g.phase ? ` ${g.phase}` : ""}, ${gemIl(g) ?? "?"}; r ${nf(r)}; EPDK ilçe merkezinden ${nf(dist(g), 1)} km)`;
-        found.push({ id, name: t0.name, g, how: how(g), r });
+        const g = pick[0];
+        // Uydu ışınımı korelasyonu yalnız güneşte anlamlı
+        const r = TECH === "GES" ? await correlationAt(id, g.lat, g.lon) : NaN;
+        const where = `EPDK ${centers.some((c) => c.max === PROVINCE_KM) ? "il" : "ilçe"} merkezinden ${nf(dist(g), 1)} km`;
+        if (cur?.locationSource === "OSM") verdict = `OSM korunuyor (GEM ${nf(km(g, { lat: cur.latitude, lon: cur.longitude }), 1)} km uzakta)`;
+        else {
+          verdict = `KABUL (${how2(g)}; ${g.project}${g.phase ? ` ${g.phase}` : ""}, ${gemIl(g) ?? "?"}${TECH === "GES" ? `; r ${nf(r)}` : ""}; ${where})`;
+          found.push({ id, name: t0.name, g, how: how2(g), r });
+        }
       }
     }
     console.log(`#${String(id).padEnd(8)} ${t0.name.slice(0, 26).padEnd(26)} ${verdict}`);
@@ -298,7 +352,7 @@ if (GEM) {
         latitude: f.g.lat,
         longitude: f.g.lon,
         locationSource: "GEM_TRACKER",
-        locationRef: `Global Energy Monitor, Global Solar Power Tracker ${gemDoc.version} (CC BY 4.0): ${f.g.project}${f.g.phase ? ` / ${f.g.phase}` : ""}, ${gemIl(f.g) ?? ""} (GEM ${f.g.gemLocationId}, konum doğruluğu ${f.g.accuracy}); eşleşme ${f.how}${f.g.epdkLicenses.length ? ` (${f.g.epdkLicenses.join(", ")})` : ""}; uydu GHI–UEVM korelasyonu ${Number.isFinite(f.r) ? nf(f.r) : "hesaplanamadı"}; ${new Date().toISOString().slice(0, 10)}`,
+        locationRef: `Global Energy Monitor, Global ${TECH === "RES" ? "Wind" : "Solar"} Power Tracker ${gemDoc.version} (CC BY 4.0): ${f.g.project}${f.g.phase ? ` / ${f.g.phase}` : ""}, ${gemIl(f.g) ?? ""} (GEM ${f.g.gemLocationId}, konum doğruluğu ${f.g.accuracy}); eşleşme ${f.how}${f.g.epdkLicenses.length ? ` (${f.g.epdkLicenses.join(", ")})` : ""}${TECH === "GES" ? `; uydu GHI–UEVM korelasyonu ${Number.isFinite(f.r) ? nf(f.r) : "hesaplanamadı"}` : ""}; ${new Date().toISOString().slice(0, 10)}`,
       });
       console.log(`  #${f.id} ${f.name}: havuz ${r.pool ? "yazıldı" : "korundu"}, proje santrali ${r.projectPlants}`);
     }
