@@ -194,8 +194,8 @@ export interface MonthlyLoss {
   commissioning: boolean;
 }
 
-/** Santral × ay kayıp özeti (Aşama 20.1): `detectLostHours` sonucundan */
-export function monthlyLoss(hours: LossInput[], r: LossResult): MonthlyLoss[] {
+/** Santral × ay kayıp özeti (Aşama 20.1): `detectLostHours` (güneş) ya da `detectWindLoss` (rüzgâr) sonucundan */
+export function monthlyLoss(hours: Array<Pick<LossInput, "t" | "uevm" | "ptf">>, r: Pick<LossResult, "lost" | "expected" | "steadyFrom">): MonthlyLoss[] {
   const byMonth = new Map<string, MonthlyLoss>();
   for (const h of hours) {
     if (h.uevm === null) continue;

@@ -11,6 +11,7 @@ import { gunzipSync, gzipSync } from "node:zlib";
 import { poolDir } from "@/lib/pool/pool-store";
 import type { WeatherYear } from "./weather-codec";
 import type { SatelliteYear } from "./satellite";
+import type { WindModel, WindYear } from "./reanalysis-wind";
 
 export const weatherDir = (): string => path.join(poolDir(), "weather");
 const yearFile = (epiasPlantId: number, year: number) => path.join(weatherDir(), String(epiasPlantId), `${year}.json.gz`);
@@ -46,6 +47,26 @@ export async function readSatelliteYear(epiasPlantId: number, year: number): Pro
 
 export async function writeSatelliteYear(doc: SatelliteYear): Promise<void> {
   const file = satFile(doc.epiasPlantId, doc.year);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  await fs.writeFile(tmp, gzipSync(JSON.stringify(doc)));
+  await fs.rename(tmp, file);
+}
+
+const windFile = (epiasPlantId: number, model: WindModel, year: number) => path.join(weatherDir(), String(epiasPlantId), `wind-${model}-${year}.json.gz`);
+
+/** Gerçekleşen rüzgâr (reanalysis-wind.ts): aynı klasörde `wind-<model>-<yıl>.json.gz` */
+export async function readWindYear(epiasPlantId: number, model: WindModel, year: number): Promise<WindYear | null> {
+  try {
+    return JSON.parse(gunzipSync(await fs.readFile(windFile(epiasPlantId, model, year))).toString("utf8"));
+  } catch (e: any) {
+    if (e?.code === "ENOENT") return null;
+    throw e;
+  }
+}
+
+export async function writeWindYear(doc: WindYear): Promise<void> {
+  const file = windFile(doc.epiasPlantId, doc.model, doc.year);
   await fs.mkdir(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tmp, gzipSync(JSON.stringify(doc)));

@@ -75,7 +75,7 @@ async function weatherYears(epiasPlantId: number): Promise<number[]> {
 }
 
 /** Santral kaydındaki konum (geçerliyse), yoksa havuz tanımındaki */
-async function plantLocation(row: { epiasPlantId: number | null; latitude: number | null; longitude: number | null; locationSource: string | null; locationRef: string | null }): Promise<PlantLocation | null> {
+export async function plantLocation(row: { epiasPlantId: number | null; latitude: number | null; longitude: number | null; locationSource: string | null; locationRef: string | null }): Promise<PlantLocation | null> {
   if (row.latitude !== null && row.longitude !== null && isLocationSource(row.locationSource))
     return { latitude: row.latitude, longitude: row.longitude, locationSource: row.locationSource, locationRef: row.locationRef ?? "" };
   return row.epiasPlantId !== null ? (await readPoolPlantInfo(row.epiasPlantId))?.location ?? null : null;

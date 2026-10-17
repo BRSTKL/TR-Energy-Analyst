@@ -15,7 +15,7 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.23";
+const VERSION = "1.24";
 const VERSION_DATE = "17 Ekim 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
@@ -37,6 +37,7 @@ const SECTIONS: Array<{ id: string; title: string }> = [
   { id: "sozlesme", title: "Sözleşme fiyatı" },
   { id: "butce", title: "Gelecek yıl bütçesi" },
   { id: "capture", title: "Capture rate ve profil indirimi" },
+  { id: "kayip", title: "Kayıp üretim (kısıntı ve arıza)" },
   { id: "gip", title: "Gün içi piyasa senaryosu" },
   { id: "gun-ici-etkinlik", title: "Gün içi etkinlik ve tahmin fırsatı" },
   { id: "sinama", title: "Geçmişle sınama" },
@@ -658,6 +659,47 @@ Beklenen (portföy) = Σ teknolojinin üretim payı × teknolojinin sektör capt
             </p>
           </Section>
 
+          <Section id="kayip" n={next()} title="Kayıp üretim (kısıntı ve arıza)">
+            <p>
+              Santralin geçmişte üretebileceği ile ürettiği arasındaki fark, santral verisi olmadan. Üretebileceği geçmiş havadan, ürettiği EPİAŞ
+              UEVM&apos;sinden. Kayıp saat, şirketin ilk KGÜP&apos;ü beklenenin %10&apos;unun altındaysa <b>planlı</b> (kısıntı ya da önceden bildirilen bakım),
+              değilse <b>plansız</b> (arıza, ilk KGÜP&apos;te olmayan bakım, talimat, şebeke ya da model hatası). Parasal karşılık kayıp MWh × PTF. Güneşte
+              ölçümdür (uydu); rüzgârda beklenen üretim santrale özgü bir güç eğrisinden, kaba ölçümdür. İkisi de geçmiş analizidir, tahmin modeli değildir.
+            </p>
+            <F>
+              {`Güneş:  beklenen = uydu ışınımı (EUMETSAT CM SAF SARAH3) panel düzleminde × normal verim (P90; ay ve komşu aylar)
+        kayıp saat: ışınım ≥ 200 W/m² ve üretim < beklenen × 0,5
+Rüzgâr: beklenen = santralin güç eğrisi (100 m hız 0,5 m/s × 8 yön hücresi, üretim medyanı) × 100 m rüzgâr
+        (ana: ECMWF IFS 9 km, 1–12 saatlik kısa vadeli model çıktısı; denetim: ERA5 0,25° yeniden analizi)
+        kayıp saat: beklenen ≥ kurulu güç × 0,3 ve üretim < beklenen × 0,2
+        plansız yalnız: iki kaynak da bulmuş ve ≥ 6 saat kesintisiz`}
+            </F>
+            <p>
+              <b>Rüzgâr neden daha temkinli:</b> santrale ölçülen bir &quot;üretebileceği&quot; yok (güneşte uydu ışınımı var); 0,25° / 9 km ızgara sırtı ve
+              vadiyi görmez, bu yüzden güç eğrisi her santralin kendi üretiminden öğrenilir (kısıntılı saatler eğitimden çıkarılarak). İki hava
+              kaynağının anlaşması (ana kaynağın kayıp saatlerinden ikincide de aynı türde olanların payı, santral medyanı; scripts/wind-loss-summary.mts):
+              planlı saatlerde %61, tek tek plansız saatlerde %50, en az 6 saat süren plansız olaylarda %82. Bu yüzden plansız kayıp alt sınırdır: yalnız
+              santralin büyük kısmının durduğu, iki kaynağın birlikte bulduğu uzun düşüşler sayılır; birkaç türbinin arızası görünmez. Kayıpsız günlerde günlük beklenen ile gerçekleşen üretimin korelasyonu
+              0,85&apos;in altındaki santralde rakam gösterilmez. <Tag kind="estimate" />
+            </p>
+            <Table
+              head={["Projelerdeki rüzgâr santralleri (17.10.2026)", "Değer"]}
+              rows={[
+                ["Konumu olan (Global Energy Monitor, Global Wind Power Tracker 2026-02, CC BY 4.0)", "129 santralin 97'si"],
+                ["Kalite eşiğini geçen (günlük r ≥ 0,85)", "97 konumlu santralin 90'ı (medyan r 0,95)"],
+                ["Son 12 ay kayıp payı, planlı / plansız (en az); santral başına son 12 tam ay, potansiyel üretime oran", "%2,5 / %0,3"],
+                ["Plansız olay (≥ 6 saat, iki kaynak)", "255; 12'si EPİAŞ arıza / bakım bildirimiyle çakışıyor"],
+                ["Olayların 08:00–10:59 arasında başlayan payı", "%26 (düzgün dağılımda %12,5); 00:00'da da yığılma var. Mesai başında başlayan bakım olasılığıyla uyumlu, neden doğrulanmadı"],
+              ]}
+            />
+            <p>
+              Sınırlar: kurulu güç kayıttan (YEKDEM) ya da en yüksek üretimden alt sınır (129 rüzgâr santralinin 62'sinde alt sınır; kayıp eşiği buna
+              bağlı); kapasite artışı eğriyi dönem içinde değiştirebilir; talimatla kısma ilk KGÜP&apos;te görünmüyorsa plansız sayılır. Gecikme: IFS ≈ 1
+              gün, ERA5 ≈ 5–6 gün; plansız kayıp ERA5 kadar gecikir. Kaynaklar: Open-Meteo.com (CC BY 4.0); ERA5: Copernicus Climate Change Service;
+              SARAH3: EUMETSAT CM SAF. Güneşte plansız kayıp kar örtüsünü de içerebilir.
+            </p>
+          </Section>
+
           <Section id="gip" n={next()} title="Gün içi piyasa senaryosu">
             <p>
               Tahmin hatasının bir kısmı teslimattan önce görülüp gün içi piyasasında kapatılsaydı riskin ne kadar azalacağı test edilir. GİP
@@ -973,6 +1015,11 @@ Beklenen (portföy) = Σ teknolojinin üretim payı × teknolojinin sektör capt
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.24",
+                  "17 Ekim 2026",
+                  "Kayıp üretim bölümü ve rüzgâr santralleri: konum Global Energy Monitor Global Wind Power Tracker'dan (2026-02, CC BY 4.0; projelerde 129 santralin 97'si); 100 m rüzgâr (ECMWF IFS 9 km kısa vadeli model çıktısı, ERA5 yeniden analizi) ve santral başına güç eğrisiyle planlı kısıntı ve en az 6 saatlik, iki kaynağın birlikte bulduğu plansız kayıp (alt sınır); kalite eşiği günlük r ≥ 0,85. Diğer hesaplar değişmedi.",
+                ],
                 [
                   "1.23",
                   "17 Ekim 2026",
