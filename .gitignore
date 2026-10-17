@@ -60,3 +60,4 @@ scripts/tmp/
 # Ham kaynak dosyaları (EPDK dökümlerinde iletişim bilgisi, GEM dosyaları büyük); yalnız README depoda
 /kaynaklar/*
 !/kaynaklar/README.md
+!/kaynaklar/EPIAS-VERI-LISTESI.md
