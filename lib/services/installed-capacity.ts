@@ -4,7 +4,7 @@
  * Kural ve eşleştirme: lib/epias-plant/installed-capacity.ts. Bu dosya listeleri EPİAŞ'tan alır ve önbellekte tutar
  * (.cache/epias/yekdem-participants.json): geçmiş yılların listesi değişmez, içinde bulunulan yılınki bir gün geçerli.
  * EPDK lisansları kullanıcının dışa aktarımından (.cache/epdk/<tür>-licenses.json; scripts/tools/epdk-licenses-extract.py;
- * güneş ve rüzgâr); dosya yoksa yalnız YEKDEM.
+ * güneş, rüzgâr ve hidro); dosya yoksa yalnız YEKDEM.
  */
 
 import { promises as fs } from "node:fs";
@@ -146,8 +146,8 @@ export async function resolveInstalledCapacities(
   return { matches, peaks: measured, errors };
 }
 
-/** EPDK lisans dışa aktarımı (güneş, rüzgâr); dosya yoksa null. Dosya değişmedikçe bellekte */
-const EPDK_FILE: Record<string, string> = { GES: "solar-licenses.json", RES: "res-licenses.json" };
+/** EPDK lisans dışa aktarımı (güneş, rüzgâr, hidro); dosya yoksa null. Dosya değişmedikçe bellekte */
+const EPDK_FILE: Record<string, string> = { GES: "solar-licenses.json", RES: "res-licenses.json", HES: "hes-licenses.json" };
 const epdkMemo = new Map<string, { mtimeMs: number; licenses: EpdkLicense[] }>();
 export async function epdkLicenses(type: string): Promise<EpdkLicense[] | null> {
   const name = EPDK_FILE[type];

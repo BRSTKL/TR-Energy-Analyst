@@ -26,7 +26,7 @@ Kaynak: lisans.epdk.gov.tr, Elektrik Piyasası Üretim Lisansları sorgusu. Sorg
 |---|---|---|---|---|---|
 | `epdk-lisans-gunes-2026-10-15.xls` | 15.10.2026 | Güneş lisansları (196) | `scripts/tools/epdk-licenses-extract.py <dosya> GES 2026-10-15` | `.cache/epdk/solar-licenses.json` (çıkarıcı `ges-licenses.json` adıyla yazar; ilk dosyanın adı korundu) | Kurulu güç (lisans MWe), güneş konumu (il / ilçe) |
 | `epdk-lisans-ruzgar-2026-10-15.xls` | 15.10.2026 | Rüzgâr lisansları (637) | `… RES 2026-10-15` | `.cache/epdk/res-licenses.json` | Kurulu güç (işletmedeki MWe), rüzgâr konumu (il / ilçe) |
-| `epdk-lisans-hidro-2026-10-15.xls` | 15.10.2026 | Hidro lisansları (1.631) | `… HES 2026-10-15` | `.cache/epdk/hes-licenses.json` | Hidro alt türü (lisans adındaki "Barajı" / "Regülatörü"); kurulu güç kuralına alınmadı |
+| `epdk-lisans-hidro-2026-10-15.xls` | 15.10.2026 | Hidro lisansları (1.631) | `… HES 2026-10-15` | `.cache/epdk/hes-licenses.json` | Hidro alt türü (lisans adındaki "Barajı" / "Regülatörü"); kurulu güç (18.10.2026'dan, işletmedeki MWe; `lib/services/installed-capacity.ts`) |
 
 Çıkarıcı yalnız şu sütunları alır: lisans no, durum, başlangıç, tesis adı, il, ilçe, teknoloji, MWm, MWe, işletmedeki MWe. İletişim bilgileri (adres, telefon) alınmaz.
 

@@ -8,17 +8,18 @@
  * kamu santralleri, lisanssız birimler) kayıt yoktur: kurulu güç dönemdeki en yüksek saatlik üretimden tahmin edilir
  * (gerçeğin altında kalır).
  *
- * İKİNCİ RESMÎ KAYNAK (kullanıcı kararı 17.10.2026): YEKDEM kaydı yoksa ya da üretimle çelişiyorsa EPDK üretim lisansı
- * (kullanıcının lisans.epdk.gov.tr dışa aktarımı; `matchEpdkCapacity`). Güneşte lisans MWe (YEKDEM'li 20 santralin 20'sinde
- * YEKDEM ile aynı), rüzgârda işletmedeki MWe, 0 ise lisans MWe (rüzgârda lisans MWe kurulmamış genişlemeyi de içerir;
- * işletmedeki MWe YEKDEM'li 49 santralin 44'ünde YEKDEM ile aynı). Değer, en yüksek saatlik üretim / değer
+ * İKİNCİ RESMÎ KAYNAK (kullanıcı kararı 17.10.2026; hidro 18.10.2026): YEKDEM kaydı yoksa ya da üretimle çelişiyorsa EPDK
+ * üretim lisansı (kullanıcının lisans.epdk.gov.tr dışa aktarımı; `matchEpdkCapacity`). Güneşte lisans MWe (YEKDEM'li 20
+ * santralin 20'sinde YEKDEM ile aynı), rüzgâr ve hidroda işletmedeki MWe, 0 ise lisans MWe (lisans MWe kurulmamış
+ * genişlemeyi de içerir; rüzgârda işletmedeki MWe YEKDEM'li 49 santralin 44'ünde YEKDEM ile aynı; hidroda ör. Hastarla HES
+ * lisans 8,5, işletmedeki 5,16 MWe, en yüksek üretim 5,12). Değer, en yüksek saatlik üretim / değer
  * EPDK_MIN_RATIO–EPDK_MAX_RATIO ise kullanılır; değilse en yüksek üretim alt sınır kalır ve EPDK değeri kaynak notuna yazılır.
  */
 
 import { normalizePlantName } from "./plant-data";
 import { brandOf, isUnlicensedName } from "@/lib/analysis/candidate-access";
 import { pctOf } from "@/lib/format";
-import { foldName, nameTokens, plantNumbers } from "./location-match";
+import { foldName, GENERIC_WORDS as LOCATION_GENERIC_WORDS } from "./location-match";
 
 export type CapacitySource = "EPIAS_YEKDEM" | "EPDK_LICENSE" | "PEAK_ESTIMATE" | "USER";
 
@@ -302,33 +303,66 @@ export interface EpdkLicense {
 export const EPDK_MIN_RATIO = 0.8;
 export const EPDK_MAX_RATIO = 1.1;
 
-/** Lisanstan kurulu güç: rüzgârda işletmedeki MWe (0 ise lisans MWe), diğerlerinde lisans MWe */
+/** İşletmedeki MWe'nin kullanıldığı türler (lisans MWe kurulmamış genişlemeyi de içerebilir) */
+const EPDK_OPERATING_TYPES = new Set(["RES", "HES"]);
+
+/** Lisanstan kurulu güç: rüzgâr ve hidroda işletmedeki MWe (0 ise lisans MWe), güneşte lisans MWe */
 export function epdkCapacityOf(l: EpdkLicense, type: string): number {
   const mwe = Number(l.mwe) || 0;
   const op = Number(l.opMwe) || 0;
-  return type === "RES" && op > 0 ? op : mwe;
+  return EPDK_OPERATING_TYPES.has(type) && op > 0 ? op : mwe;
+}
+
+/** EPDK eşleştirmesinde ayırt etmeyen kelimeler: santral / teknoloji ekleri (hidroda "REG. VE HES" ile "REGÜLATÖRÜ VE HES" aynı) */
+const EPDK_GENERIC = new Set([
+  ...Array.from(LOCATION_GENERIC_WORDS),
+  "hes", "reg", "regulatoru", "regulator", "regulatorleri", "baraji", "baraj", "hidroelektrik", "hidro", "santralleri", "bes",
+]);
+/** Romen ünite numaraları: "AHİKÖY_I", "KULP-I", "ÇAMLICA-III" */
+const ROMAN: Record<string, number> = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8 };
+
+/** EPDK eşleştirmesi için ad: "VEHES" yazım hatası ayrılır, Romen ünite numaraları sayıya çevrilir */
+function epdkWords(s: string): string[] {
+  return foldName(s)
+    .replace(/\bvehes\b/g, "ve hes")
+    .split(" ")
+    .filter(Boolean)
+    .map((w) => (ROMAN[w] !== undefined ? String(ROMAN[w]) : w));
 }
 
 /**
- * Santralin EPDK lisansları: santral adının (parantezli ek atılarak) bütün ayırt edici kelimeleri tesis adında ve numara
- * çelişkisi yok (location-autofill --epdk ile aynı); yürürlükteki lisanslar önce.
+ * Ayırt edici kelimeler; teknolojinin kendi adı yalnız o teknolojide genel ("GÜNEŞ HES" bir hidro santralinin adıdır, güneşte
+ * "GÜNEŞ" genel kelime).
  */
-export function epdkLicensesOf(name: string, licenses: EpdkLicense[]): EpdkLicense[] {
+function epdkTokens(s: string, type: string | undefined): Set<string> {
+  const keep = type === "HES" ? new Set(["gunes", "solar"]) : new Set<string>();
+  return new Set(epdkWords(s).filter((t) => t.length >= 3 && !/^\d+$/.test(t) && !/^g\d+$/.test(t) && (keep.has(t) || !EPDK_GENERIC.has(t))));
+}
+const epdkNumbers = (s: string) => epdkWords(s).filter((t) => /^\d{1,2}$/.test(t)).map(Number);
+
+/**
+ * Santralin EPDK lisansları: santral adının (parantezli ek atılarak) bütün ayırt edici kelimeleri tesis adında ve numara
+ * çelişkisi yok; santral numaralıysa aynı numaralı lisanslar numarasızlardan önce ("ÇAMLICA 1 HES" → "ÇAMLICA I HES", aynı
+ * adlı numarasız başka santral değil); yürürlükteki lisanslar önce.
+ */
+export function epdkLicensesOf(name: string, licenses: EpdkLicense[], type?: string): EpdkLicense[] {
   const clean = name.replace(/\s*\([^)]*\)\s*/g, " ").trim();
-  const own = nameTokens(clean);
-  const nums = plantNumbers(clean);
+  const own = epdkTokens(clean, type);
+  const nums = epdkNumbers(clean);
   if (!own.size) return [];
   const all = licenses.filter((e) => {
-    const theirs = nameTokens(e.plant);
+    const theirs = epdkTokens(e.plant, type);
     const common = Array.from(own).filter((x) => theirs.has(x));
     if (!common.length) return false;
-    const en = plantNumbers(e.plant);
+    const en = epdkNumbers(e.plant);
     if (nums.length && en.length && nums.join() !== en.join()) return false;
     const bare = (s: string) => foldName(s).replace(/ (res|ges|hes)$/, "");
     return common.length === own.size || bare(e.plant) === bare(clean);
   });
-  const live = all.filter((l) => l.status === "Yürürlükte");
-  return live.length ? live : all;
+  const numbered = nums.length ? all.filter((l) => epdkNumbers(l.plant).join() === nums.join()) : [];
+  const pool = numbered.length ? numbered : all;
+  const live = pool.filter((l) => l.status === "Yürürlükte");
+  return live.length ? live : pool;
 }
 
 /**
@@ -338,14 +372,14 @@ export function epdkLicensesOf(name: string, licenses: EpdkLicense[]): EpdkLicen
  */
 export function matchEpdkCapacity(q: CapacityQuery, licenses: EpdkLicense[]): { match: CapacityMatch | null; note: string | null } {
   if (isUnlicensedName(q.name)) return { match: null, note: null };
-  const ls = epdkLicensesOf(q.name, licenses);
+  const ls = epdkLicensesOf(q.name, licenses, q.type);
   const values = Array.from(new Set(ls.map((l) => epdkCapacityOf(l, q.type)).filter((v) => v > 0)));
   if (!ls.length || !values.length) return { match: null, note: null };
-  const what = q.type === "RES" ? "işletmedeki MWe" : "lisans MWe";
+  const what = EPDK_OPERATING_TYPES.has(q.type) ? "işletmedeki MWe" : "lisans MWe";
   if (values.length > 1) return { match: null, note: `EPDK'da aynı adlı birden çok lisans (${values.map(fmtMw).join(" / ")} MW), ayırt edilemedi` };
   const mw = values[0];
   const l = ls.find((x) => epdkCapacityOf(x, q.type) === mw)!;
-  const desc = `EPDK lisansı ${l.licenseNo}: ${l.plant} (${l.il}${l.ilce && l.ilce !== "-" ? ` / ${l.ilce}` : ""}), ${what} ${fmtMw(mw)} MW${q.type === "RES" && Number(l.mwe) !== mw ? ` (lisans ${fmtMw(Number(l.mwe))} MWe)` : ""}, MWm ${l.mwm}`;
+  const desc = `EPDK lisansı ${l.licenseNo}: ${l.plant} (${l.il}${l.ilce && l.ilce !== "-" ? ` / ${l.ilce}` : ""}), ${what} ${fmtMw(mw)} MW${EPDK_OPERATING_TYPES.has(q.type) && Number(l.mwe) !== mw ? ` (lisans ${fmtMw(Number(l.mwe))} MWe)` : ""}, MWm ${l.mwm}`;
   const ratio = mw > 0 ? q.peakMw / mw : Infinity;
   const lowOk = q.hours < MIN_HOURS_FOR_LOW_CHECK || ratio >= EPDK_MIN_RATIO;
   if (ratio > EPDK_MAX_RATIO || !lowOk)

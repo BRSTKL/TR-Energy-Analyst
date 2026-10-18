@@ -1,5 +1,5 @@
 /**
- * Proje santrallerinin kurulu gücünü EPİAŞ YEKDEM kayıtlarından, yoksa EPDK lisansından (güneş, rüzgâr) doldurur ve eski tahminin (en yüksek saatlik üretim)
+ * Proje santrallerinin kurulu gücünü EPİAŞ YEKDEM kayıtlarından, yoksa EPDK lisansından (güneş, rüzgâr, hidro) doldurur ve eski tahminin (en yüksek saatlik üretim)
  * hatasını raporlar. Kullanıcının elle girdiği değerlere (capacitySource = USER) dokunmaz.
  *
  *   npx tsx --env-file=.env scripts/installed-capacity-backfill.mts            # yalnızca rapor

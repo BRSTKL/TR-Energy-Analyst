@@ -143,3 +143,50 @@ describe("EPDK lisansı (ikinci resmî kaynak)", () => {
     expect(resolveCapacity(qq("ATASA RES", "RES", 23), index, null).source).toBe("PEAK_ESTIMATE");
   });
 });
+
+describe("EPDK lisansı, hidro (18.10.2026)", () => {
+  const lic = (licenseNo: string, plant: string, mwe: string, opMwe = mwe, status = "Yürürlükte"): EpdkLicense => ({
+    licenseNo,
+    status,
+    plant,
+    il: "X",
+    ilce: "-",
+    mwm: mwe,
+    mwe,
+    opMwe,
+  });
+  const hes = [
+    lic("EÜ/1", "HASTARLA HES", "8.5", "5.161"),
+    lic("EÜ/2", "ÇAKIRMAN REGÜLATÖRÜ VE HES", "6.98"),
+    lic("EÜ/3", "HEMŞİN I REG VEHES", "1.276"),
+    lic("EÜ/4", "HEMŞİN HES", "2.99", "0.0", "Sonlandırıldı"),
+    lic("EÜ/5", "ÇAMLICA I HES", "84.0"),
+    lic("EÜ/6", "ÇAMLICA-III HES", "27.62"),
+    lic("EÜ/7", "ÇAMLICA HES", "22.652"),
+    lic("EÜ/8", "AHİKÖY I HES", "2.028"),
+    lic("EÜ/9", "AHİKÖY II HES", "2.393"),
+    lic("EÜ/10", "GÜNEŞ HES", "4.543"),
+    lic("EÜ/11", "GÜNEŞLİ HES", "1.8"),
+    lic("EÜ/12", "MURAT HES", "35.628"),
+    lic("EÜ/13", "MURAT HES", "11.089"),
+  ];
+  const h = (name: string, peakMw: number) => matchEpdkCapacity({ name, type: "HES", organizationName: null, peakMw, hours: 5000 }, hes);
+
+  it("işletmedeki MWe (lisans MWe kurulmamış genişlemeyi içerebilir)", () => {
+    expect(h("HASTARLA HES", 5.12).match).toMatchObject({ source: "EPDK_LICENSE", mw: 5.161 });
+    expect(h("HASTARLA HES", 5.12).match?.ref).toContain("işletmedeki MWe");
+  });
+
+  it("REG. ve HES / REGÜLATÖRÜ VE HES / VEHES aynı; Romen numaralar", () => {
+    expect(h("ÇAKIRMAN REG. ve HES", 6.98).match?.mw).toBe(6.98);
+    expect(h("HEMŞİN I REG. ve HES", 1.17).match?.mw).toBe(1.276);
+    expect(h("ÇAMLICA 1 HES", 83.7).match?.mw).toBe(84);
+    expect(h("AHİKÖY_I HES", 2.0).match?.mw).toBe(2.028);
+    expect(h("AHİKÖY II HES", 2.3).match?.mw).toBe(2.393);
+  });
+
+  it("hidroda 'GÜNEŞ' santral adıdır; aynı adlı farklı lisanslar ayırt edilmez", () => {
+    expect(h("GÜNEŞ HES(TİMSE ELK.)", 4.54).match?.mw).toBe(4.543);
+    expect(h("MURAT HES", 34).match).toBeNull();
+  });
+});

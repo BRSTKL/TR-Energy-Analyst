@@ -15,7 +15,7 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.26";
+const VERSION = "1.27";
 const VERSION_DATE = "18 Ekim 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
@@ -1019,6 +1019,11 @@ Rüzgâr: beklenen = santralin güç eğrisi (100 m hız 0,5 m/s × 8 yön hücr
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.27",
+                  "18 Ekim 2026",
+                  "Kurulu güç: EPDK üretim lisansı hidroya da uygulanır (işletmedeki MWe, 0 ise lisans MWe; en yüksek üretim / değer 0,8–1,10 ise). Ad eşleştirmesi düzeltildi: \"REG. VE HES\" ile \"REGÜLATÖRÜ VE HES\" ve Romen ünite numaraları eşitlenir, numaralı santralde aynı numaralı lisans önce. Projelerde tahmini kurulu güç 95 → 62 santral (32 hidro, 1 güneş kayda geçti); hidroda tahmin 44 → 12.",
+                ],
                 [
                   "1.26",
                   "18 Ekim 2026",
