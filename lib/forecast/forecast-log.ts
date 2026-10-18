@@ -13,8 +13,11 @@ import { decisionCutoff, TR_UTC_OFFSET_MS } from "./info-time";
 /** Kayıt biçimi sürümü (alan eklenirse artar; eski kayıtlar olduğu gibi okunur) */
 export const FORECAST_LOG_SCHEMA = 1;
 
-/** Güneş modelinin kayıt adı: donmuş sürüm 3, kalıcılıksız (lib/services/live-forecast.ts) */
-export const SOLAR_MODEL_ID = "solar-v3-nolag";
+/**
+ * Güneş modelinin kayıt adı: donmuş sürüm 3, kalıcılıksız (lib/services/live-forecast.ts); "-gzu": eğitim geçici üretimle
+ * (EPİAŞ gerçek zamanlı üretimi) son tam güne kadar (18.10.2026)
+ */
+export const SOLAR_MODEL_ID = "solar-v3-nolag-gzu";
 
 export interface ForecastLogPlant {
   epiasPlantId: number;
@@ -24,7 +27,7 @@ export interface ForecastLogPlant {
   warning?: string;
   /** D günü 00:00'dan 24 saat, MWh */
   hours?: Array<number | null>;
-  train?: { from: string; to: string; hours: number; mount: string; maxMwh: number };
+  train?: { from: string; to: string; hours: number; mount: string; maxMwh: number; provisionalHours?: number; provisionalThrough?: string };
   weatherFetchedAt?: string;
   location?: { latitude: number; longitude: number; locationSource: string };
 }

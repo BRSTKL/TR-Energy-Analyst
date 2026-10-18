@@ -4,8 +4,9 @@
  * Projenin konumu olan güneş santralleri için yarın ve öbür gün saatlik beklenen üretim. Model: donmuş sürüm 3
  * (production-model-v2.ts: panel düzlemi ışınımı, çarpımsal biçim, uydu etiketli eğitim temizliği), KALICILIKSIZ
  * (`noLag`): kamu üretim verisi (EPİAŞ UEVM) aylık uzlaştırmadan sonra yayımlandığı için 48 saat önceki üretim canlıda
- * yoktur. Eğitim: havuzdaki son tam üretim ayından önceki 4 ay (geriye dönük testle aynı pencere), 2 gün önceki hava
- * tahminiyle (`d2`). Tahmin girdisi: isteğin yapıldığı andaki en yeni ECMWF IFS 0,25° tahmini (lib/weather/live-forecast.ts);
+ * yoktur (gerçek zamanlı üretim iki gün gecikir; kalıcılık 48 saatle kurulduğu için yine kapalı). Eğitim: havuzdaki son
+ * tam üretim ayından önceki 4 ay (geriye dönük testle aynı pencere); geçici üretim (EPİAŞ gerçek zamanlı üretimi,
+ * lib/pool/provisional.ts) daha ileriyse son tam güne kadar 4 ay (18.10.2026). Hava: 2 gün önceki tahmin (`d2`). Tahmin girdisi: isteğin yapıldığı andaki en yeni ECMWF IFS 0,25° tahmini (lib/weather/live-forecast.ts);
  * koordinat başına 3 saat önbellek (.cache/forecast/live). Kurulu güç sınırı: eğitimdeki en yüksek üretim.
  * Bu bir açık referanstır: geçmiş başarısı geriye dönük testte (scripts/forecast-backtest.mts, "sürüm 3 kalıcılıksız").
  */
@@ -17,7 +18,7 @@ import { trainingLossFilter } from "@/lib/forecast/curtailment";
 import { liveForecastUrl, liveWeatherHours } from "@/lib/weather/live-forecast";
 import type { OpenMeteoHourly } from "@/lib/weather/weather-codec";
 import { SATELLITE_DELAY_DAYS } from "@/lib/weather/satellite";
-import { readPoolPlantInfo, readPoolYear } from "@/lib/pool/pool-store";
+import { readPoolPlantInfo, readPoolYear, readProvisionalYear } from "@/lib/pool/pool-store";
 import { loadSolarHours } from "./production-data";
 import { projectWeatherPlants } from "./weather-preview";
 
@@ -78,9 +79,15 @@ async function cachedLiveWeather(lat: number, lon: number, fresh = false): Promi
   return c;
 }
 
-/** Havuzdaki son üretim (UEVM) saatinden: eğitimin bittiği ay başı (son TAM ay sonrası) */
-async function trainingEnd(epiasPlantId: number, now: number): Promise<number | null> {
+/**
+ * Eğitimin bitişi ve başlangıcı. `now` yalnız yılı seçer: havuzda o an ne varsa kullanılır (geçmiş bir `now` ile çağrılırsa
+ * sonradan çekilmiş veri de girer; günlük tahmin kaydı geçmiş günü zaten reddeder). Yalnız UEVM varsa: son TAM ay sonrası ay başı, 4 ay geriye (geriye dönük testle aynı
+ * pencere). Geçici üretim (EPİAŞ gerçek zamanlı üretimi; 18.10.2026) UEVM'den ilerideyse: son çekilen tam günün ertesi,
+ * 4 ay geriye (en güncel üretimle eğitim).
+ */
+async function trainingWindow(epiasPlantId: number, now: number): Promise<{ start: number; end: number; provisional: boolean } | null> {
   const y = new Date(now).getUTCFullYear();
+  let uevmEnd: number | null = null;
   for (const year of [y, y - 1]) {
     const doc = await readPoolYear(epiasPlantId, year);
     if (!doc) continue;
@@ -93,9 +100,26 @@ async function trainingEnd(epiasPlantId: number, now: number): Promise<number | 
     const d = new Date(t);
     // Ayın son saati de doluysa o ay tam: eğitim ertesi ay başında biter; değilse ay başında
     const nextMonth = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1);
-    return t + HOUR >= nextMonth ? nextMonth : Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
+    uevmEnd = t + HOUR >= nextMonth ? nextMonth : Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
+    break;
   }
-  return null;
+  let provEnd: number | null = null;
+  for (const year of [y, y - 1]) {
+    const g = await readProvisionalYear(epiasPlantId, year);
+    if (g?.fetchedThrough) {
+      provEnd = Date.parse(`${g.fetchedThrough}T00:00:00Z`) + DAY;
+      break;
+    }
+  }
+  if (provEnd !== null && (uevmEnd === null || provEnd > uevmEnd)) {
+    // 4 ay geriye; ayın 29–31'inde kısa aya taşmasın (30 Haziran → 28/29 Şubat değil 2 Mart)
+    const e = new Date(provEnd);
+    const back = new Date(Date.UTC(e.getUTCFullYear(), e.getUTCMonth() - 4, 1));
+    const day = Math.min(e.getUTCDate(), new Date(Date.UTC(back.getUTCFullYear(), back.getUTCMonth() + 1, 0)).getUTCDate());
+    return { start: Date.UTC(back.getUTCFullYear(), back.getUTCMonth(), day), end: provEnd, provisional: true };
+  }
+  if (uevmEnd === null) return null;
+  return { start: Date.UTC(new Date(uevmEnd).getUTCFullYear(), new Date(uevmEnd).getUTCMonth() - 4, 1), end: uevmEnd, provisional: false };
 }
 
 /** Tek santralin tahmini (sayfa ve günlük tahmin kaydı aynı yolu kullanır) */
@@ -105,7 +129,9 @@ export interface SolarPlantForecast {
   warning?: string;
   /** Saat başına MWh, `from`'dan itibaren `hours` saat */
   hours?: Array<number | null>;
-  train?: { from: string; to: string; hours: number; mount: string; maxMwh: number };
+  /** provisionalHours: eğitimde geçici üretimle (GZÜ) doldurulan saat */
+  /** provisionalThrough: geçici üretimin çekildiği son tam gün (kayıt sonradan, UEVM gelince, yeniden kurulamaz; iz için) */
+  train?: { from: string; to: string; hours: number; mount: string; maxMwh: number; provisionalHours?: number; provisionalThrough?: string };
   /** Hava tahmininin alındığı an (ISO) */
   weatherFetchedAt?: string;
   location?: { latitude: number; longitude: number; locationSource: string };
@@ -113,7 +139,8 @@ export interface SolarPlantForecast {
 
 /**
  * Konumu havuzda olan güneş santrali için `from` (Türkiye duvar saati ms, gün başı) itibaren `count` saatlik tahmin.
- * Eğitim: havuzdaki son tam üretim ayından önceki 4 ay; girdi: o andaki en yeni hava tahmini.
+ * Eğitim: `trainingWindow` (son tam üretim ayı ya da geçici üretimle son tam gün, 4 ay geriye); girdi: o andaki en yeni hava
+ * tahmini.
  */
 export async function forecastSolarPlant(epiasPlantId: number, from: number, count: number, opts: { now?: number; fresh?: boolean } = {}): Promise<SolarPlantForecast> {
   const now = opts.now ?? Date.now();
@@ -121,10 +148,10 @@ export async function forecastSolarPlant(epiasPlantId: number, from: number, cou
     const info = await readPoolPlantInfo(epiasPlantId);
     const loc = info?.location;
     if (!loc) throw new Error("Havuzda konum yok");
-    const end = await trainingEnd(epiasPlantId, now);
-    if (end === null) return { status: "no-data", message: "Havuzda üretim verisi yok" };
-    const start = Date.UTC(new Date(end).getUTCFullYear(), new Date(end).getUTCMonth() - 4, 1);
-    const data = await loadSolarHours(epiasPlantId, start, end);
+    const win = await trainingWindow(epiasPlantId, now);
+    if (win === null) return { status: "no-data", message: "Havuzda üretim verisi yok" };
+    const { start, end } = win;
+    const data = await loadSolarHours(epiasPlantId, start, end, { provisional: win.provisional });
     if (!data) throw new Error("Eğitim verisi okunamadı");
     const clean = trainingLossFilter(
       data.hours.map((h) => ({ t: h.t, uevm: h.uevm, kgupFirst: h.kgupFirst, satGhi: h.satGhi ?? null, satDirect: h.satDirect ?? null, satDiffuse: h.satDiffuse ?? null })),
@@ -148,7 +175,14 @@ export async function forecastSolarPlant(epiasPlantId: number, from: number, cou
       status: "ok",
       ...(model.trainHours < MIN_TRAIN_HOURS ? { warning: `Eğitimde yalnız ${model.trainHours} saat (yeni santral ya da veri eksik): tahmin kaba` } : {}),
       hours,
-      train: { from: new Date(start).toISOString().slice(0, 10), to: new Date(end - DAY).toISOString().slice(0, 10), hours: model.trainHours, mount: model.mount, maxMwh: model.trainMaxMwh },
+      train: {
+        from: new Date(start).toISOString().slice(0, 10),
+        to: new Date(end - DAY).toISOString().slice(0, 10),
+        hours: model.trainHours,
+        mount: model.mount,
+        maxMwh: model.trainMaxMwh,
+        ...(win.provisional ? { provisionalHours: data.provisionalHours ?? 0, provisionalThrough: new Date(end - DAY).toISOString().slice(0, 10) } : {}),
+      },
       weatherFetchedAt: w.fetchedAt,
       location: { latitude: loc.latitude, longitude: loc.longitude, locationSource: loc.locationSource },
     };

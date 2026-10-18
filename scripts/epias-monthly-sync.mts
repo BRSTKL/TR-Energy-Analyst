@@ -74,8 +74,6 @@ function notify(title: string, text: string) {
   spawn("osascript", ["-e", `display notification "${q(text)}" with title "${q(title)}"`], { stdio: "ignore" });
 }
 
-if (state.status === "done") process.exit(0);
-
 // Kilit: başka bir çalışma sürüyorsa çık (süreç ölmüşse kilit bayattır)
 if (fs.existsSync(LOCK_FILE)) {
   const pid = Number(fs.readFileSync(LOCK_FILE, "utf8"));
@@ -89,6 +87,34 @@ if (fs.existsSync(LOCK_FILE)) {
   if (alive) process.exit(0);
   fs.rmSync(LOCK_FILE, { force: true });
 }
+
+// Geçici üretim (EPİAŞ gerçek zamanlı üretimi): son başarıdan 12 saat geçtiyse dene (VPN kapalıysa birkaç saniyede düşer).
+// Aylık eşitleme sürerken çalışmaz (kilit yukarıda): EPİAŞ dakikada 80 istek sınırı.
+{
+  let lastOk = 0;
+  try {
+    lastOk = Date.parse(JSON.parse(fs.readFileSync(path.join(CACHE, "realtime-sync.json"), "utf8")).lastOkAt ?? "") || 0;
+  } catch {
+    /* ilk çalışma */
+  }
+  if (!dry && Date.now() - lastOk > 12 * 3_600_000) {
+    const r = await new Promise<number | null>((resolve) => {
+      const c = spawn(process.execPath, ["--env-file=.env", "node_modules/.bin/tsx", "--tsconfig", "tsconfig.json", "scripts/realtime-sync.mts", "--all-project"], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
+      let out = "";
+      c.stdout.on("data", (b) => (out += b));
+      c.stderr.on("data", (b) => (out += b));
+      const timer = setTimeout(() => c.kill("SIGTERM"), 20 * 60_000);
+      c.on("close", (code) => {
+        clearTimeout(timer);
+        console.log(`${stamp()} geçici üretim: ${out.trim().split("\n")[0] ?? ""}`);
+        resolve(code);
+      });
+    });
+    void r;
+  }
+}
+
+if (state.status === "done") process.exit(0);
 
 // Erişim ve yayım denetimi: en büyük üç karne santralinde hedef ayın son günü UEVM
 function sentinelPlants(): number[] {

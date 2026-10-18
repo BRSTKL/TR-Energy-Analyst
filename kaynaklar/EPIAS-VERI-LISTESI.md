@@ -96,9 +96,12 @@ Günlük değil; ayda bir yenilemek yeterli.
 | D2 | Primer / sekonder frekans kontrolü kapasite fiyatı ve miktarı | `/markets/ancillary-services/data/primary-frequency-capacity-price`, `…-amount`, `secondary-frequency-capacity-price`, `…-amount` | Depolama senaryosu (şu an kapalı) | 2026-10-11'e kadar; düşük öncelik |
 | D3 | TL/USD | A1'deki PTF'nin TL ve USD değerlerinin oranından türetiliyor | Reel TL ve USD birimleri | A1 ile birlikte gelir |
 
+## Gerçek zamanlı üretim (geçici üretim, 18.10.2026'dan)
+
+`/generation/data/realtime-generation` (santral kimliği `/generation/data/powerplant-list`'ten, UEVM listesindekinden farklı; eşleşme EIC ile). Her gün iki gün gecikmeyle gelir (UEVM aylık). Eylül 2026'da 8 proje güneş santralinde UEVM ile aylık fark %0,5 içinde. Havuzda ayrı dosyada (`data/pool/<id>/rt-<yıl>.json.gz`), UEVM gelince UEVM geçerli. `scripts/realtime-sync.mts`; saatlik görev ve sabahki tahmin kaydı çağırır (VPN açıkken). Bazı santrallerde gece saatleri hiç dönmüyor (Serra GES).
+
 ## Gerekmeyenler
 
-- **Gerçek zamanlı üretim:** Değerleri UEVM ile aynı, ayrıca gerekmiyor.
 - **EAK:** Yalnız tahmin denemesinde bakıldı; güneşte KGÜP'ün kopyası çıktı.
 - **Yük tahmin planı:** Kullanılmıyor.
 - **2024'ten önceki dönemler.**

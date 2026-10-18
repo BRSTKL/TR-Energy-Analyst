@@ -10,12 +10,14 @@
  *
  * `--late`: kesimi geçmiş yarın için yine de yaz (`onTime: false`, karne saymaz). Kesimden önce başlayıp sonra biten
  * çalışma da `onTime: false` yazar (`issuedAt` bütün tahminlerden sonra alınır).
+ * Önce (her adımdan önce kesime 15 dakikadan çok kalmışsa) eğitim verisi tazelenir: EPİAŞ gerçek zamanlı üretimi (scripts/realtime-sync.mts;
+ * VPN kapalıysa atlanır), hava tahmini arşivi ve uydu ışınımı (Open-Meteo); her adım en çok 6 dakika, hatası kaydı durdurmaz.
  * Zamanlama: scripts/launchd/ (Mac saatiyle 08:30 ve 10:00). Kesime WAIT_MARGIN'dan çok varken şu durumlarda yazmadan
  * çıkar (sonraki çalışma yazar): günün 00Z ECMWF çalışması henüz yayımlanmamış (ya da bilinmiyor), bir santralin hava
  * isteği düşmüş. Kesime daha az kaldıysa elde olanla yazar. Kayıt varsa ikinci çalışma bir şey yapmaz.
  */
 
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import { prisma } from "@/lib/prisma";
 import { isUnlicensedName } from "@/lib/analysis/candidate-access";
 import { readPoolPlantInfo } from "@/lib/pool/pool-store";
@@ -53,6 +55,25 @@ const rows = await prisma.powerPlant.findMany({ where: { projectId: { not: null 
 await prisma.$disconnect();
 const plants = new Map<number, string>();
 for (const r of rows) if (!isUnlicensedName(r.name)) plants.set(r.epiasPlantId!, r.name);
+
+// Eğitim verisini tazele (en iyi çaba): her adımdan önce kesime 15 dakikadan çok kalmalı (adım en çok 6 dakika; tahminler
+// ve kayıt için en az 9 dakika kalır)
+{
+  const ids = Array.from(plants.keys()).map(String);
+  for (const [label, args] of [
+    ["gerçek zamanlı üretim", ["scripts/realtime-sync.mts", ...ids]],
+    ["hava tahmini arşivi", ["scripts/weather-sync.mts", ...ids]],
+    ["uydu ışınımı", ["scripts/satellite-sync.mts", ...ids]],
+  ] as const) {
+    if (forecastCutoff(target) - Date.now() < 15 * 60_000) {
+      console.log(`${stamp()} ${target}: ${label}: kesime az kaldı, atlandı`);
+      continue;
+    }
+    const r = spawnSync(process.execPath, ["--env-file=.env", "node_modules/.bin/tsx", "--tsconfig", "tsconfig.json", ...args], { cwd: process.cwd(), timeout: 6 * 60_000, encoding: "utf8" });
+    const last = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim().split("\n").filter((l) => /santral|istek|erişil|Gerçek zamanlı/i.test(l)).slice(-1)[0] ?? "";
+    console.log(`${stamp()} ${target}: ${label}: ${r.status === 0 ? "tamam" : r.error ? "zaman aşımı" : "atlandı"}${last ? ` (${last.slice(0, 160)})` : ""}`);
+  }
+}
 
 // Hava modelinin son çalışması (tahmin isteği o andaki en yeni çalışmayı döndürür; tahminlerden önce ve sonra okunur)
 async function lastRunInit(): Promise<string | null> {

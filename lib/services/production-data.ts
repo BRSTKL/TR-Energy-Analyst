@@ -8,7 +8,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { readPoolPlantInfo, readPoolYear } from "@/lib/pool/pool-store";
+import { readPoolPlantInfo, readPoolYear, readProvisionalYear } from "@/lib/pool/pool-store";
 import { readSatelliteYear, readWeatherYear } from "@/lib/weather/weather-store";
 import type { WeatherLead } from "@/lib/weather/weather-codec";
 import type { WeatherLeadDays } from "@/lib/forecast/info-time";
@@ -23,15 +23,19 @@ export interface SolarPlantData {
   site: SolarSite;
   /** Sürüm 1 bu alanların alt kümesini kullanır (SolarHourV2, SolarHour'u genişletir) */
   hours: SolarHourV2[];
+  /** [from, to) içinde geçici üretimle (GZÜ) doldurulan saat sayısı (`provisional` açıksa) */
+  provisionalHours?: number;
 }
 
 /** [from, to) aralığı (duvar saati ms; ay başları önerilir). Konum ya da hava verisi yoksa null. `notAfter` verilirse
- * bu andan sonraki saat istenince hata (tasarım verisini kilitlemek için) */
+ * bu andan sonraki saat istenince hata (tasarım verisini kilitlemek için). `provisional`: UEVM'si olmayan saatlerde
+ * geçici üretim (EPİAŞ gerçek zamanlı üretimi, lib/pool/provisional.ts) kullanılır; yalnız canlı tahmin açar (geriye
+ * dönük testler UEVM ile kalır) */
 export async function loadSolarHours(
   epiasPlantId: number,
   from: number,
   to: number,
-  opts: { notAfter?: number; weatherLead?: WeatherLeadDays } = {}
+  opts: { notAfter?: number; weatherLead?: WeatherLeadDays; provisional?: boolean } = {}
 ): Promise<SolarPlantData | null> {
   const lead = opts.weatherLead ?? 2;
   const key = (`d${lead}` as const) satisfies WeatherLead;
@@ -52,6 +56,24 @@ export async function loadSolarHours(
     if (!p) continue;
     const start = Date.parse(p.start);
     p.uevm.forEach((v, i) => uevm.set(start + i * HOUR, v));
+  }
+  // 48 saat önceki üretim yalnız UEVM'den (geçici üretim D−1 12:30'da D−2 için henüz yok: kalıcılık özelliğine girmez)
+  const uevmOnly = new Map(uevm);
+  let provisionalHours = 0;
+  if (opts.provisional) {
+    // UEVM önce: geçici değer yalnız UEVM'si olmayan saate yazılır
+    for (let y = firstYear - 1; y <= lastYear; y++) {
+      const g = await readProvisionalYear(epiasPlantId, y);
+      if (!g) continue;
+      const start = Date.parse(g.start);
+      g.values.forEach((v, i) => {
+        const t = start + i * HOUR;
+        if (v !== null && (uevm.get(t) ?? null) === null) {
+          uevm.set(t, v);
+          if (t >= from && t < to) provisionalHours++;
+        }
+      });
+    }
   }
   // Yıl başındaki ilk 48 saat için önceki yılın son GHI değerleri
   const prev = new Map<number, [number | null, number | null, number | null]>();
@@ -85,7 +107,7 @@ export async function loadSolarHours(
         temp: d2.temperature_2m[i],
         cloud: d2.cloud_cover[i],
         weatherLead: lead,
-        lag48: uevm.get(t - 48 * HOUR) ?? null,
+        lag48: uevmOnly.get(t - 48 * HOUR) ?? null,
         ghiLag48: i >= 48 ? d2.shortwave_radiation[i - 48] : (prev.get(t - 48 * HOUR)?.[0] ?? null),
         directLag48: i >= 48 ? d2.direct_radiation[i - 48] : (prev.get(t - 48 * HOUR)?.[1] ?? null),
         diffuseLag48: i >= 48 ? d2.diffuse_radiation[i - 48] : (prev.get(t - 48 * HOUR)?.[2] ?? null),
@@ -96,5 +118,5 @@ export async function loadSolarHours(
     }
   }
   if (!anyWeather) return null;
-  return { epiasPlantId, name: info.name ?? String(epiasPlantId), site: { latitude: info.location.latitude, longitude: info.location.longitude }, hours };
+  return { epiasPlantId, name: info.name ?? String(epiasPlantId), site: { latitude: info.location.latitude, longitude: info.location.longitude }, hours, ...(opts.provisional ? { provisionalHours } : {}) };
 }

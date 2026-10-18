@@ -10,6 +10,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { gunzipSync, gzipSync } from "node:zlib";
 import type { PoolYear } from "./pool-codec";
+import type { ProvisionalYear } from "./provisional";
 import type { PlantLocation } from "@/lib/epias-plant/location";
 
 export function poolDir(): string {
@@ -28,6 +29,24 @@ export async function readPoolYear(epiasPlantId: number, year: number): Promise<
     if (e?.code === "ENOENT") return null;
     throw e;
   }
+}
+
+/** Geçici üretim (EPİAŞ gerçek zamanlı üretimi; lib/pool/provisional.ts): `data/pool/<id>/rt-<yıl>.json.gz`, yoksa null */
+export async function readProvisionalYear(epiasPlantId: number, year: number): Promise<ProvisionalYear | null> {
+  try {
+    return JSON.parse(gunzipSync(await fs.readFile(path.join(poolDir(), String(epiasPlantId), `rt-${year}.json.gz`))).toString("utf8"));
+  } catch (e: any) {
+    if (e?.code === "ENOENT") return null;
+    throw e;
+  }
+}
+
+export async function writeProvisionalYear(doc: ProvisionalYear): Promise<void> {
+  const file = path.join(poolDir(), String(doc.epiasPlantId), `rt-${doc.year}.json.gz`);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  await fs.writeFile(tmp, gzipSync(JSON.stringify(doc)));
+  await fs.rename(tmp, file);
 }
 
 export async function writePoolYear(doc: PoolYear): Promise<void> {
