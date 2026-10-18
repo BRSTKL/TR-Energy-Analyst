@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Aylık EPİAŞ eşitlemesi (güneş motoru yol haritası 2. adım): saatte bir scripts/epias-monthly-sync.mts. Geçen ayın verisi
+  tamamsa hemen çıkar; EPİAŞ'a erişilemiyorsa (VPN kapalı) ayın 5'inden sonra günde bir kez bildirim; erişilebilir ve ayın
+  üretimi yayımlanmışsa eşitlemeyi kaldığı yerden yürütür. caffeinate çalışma sürerken Mac'in uyumasını önler.
+  Kurulum: scripts/launchd/README.md.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.tr-energy.epias-monthly</string>
+  <key>WorkingDirectory</key>
+  <string>/Users/test/Desktop/TR-Energy Analyst</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/caffeinate</string>
+    <string>-i</string>
+    <string>/Users/test/.local/node/bin/node</string>
+    <string>--env-file=.env</string>
+    <string>node_modules/.bin/tsx</string>
+    <string>--tsconfig</string>
+    <string>tsconfig.json</string>
+    <string>scripts/epias-monthly-sync.mts</string>
+  </array>
+  <key>StartInterval</key>
+  <integer>3600</integer>
+  <key>StandardOutPath</key>
+  <string>/Users/test/Library/Logs/tr-energy-epias-monthly.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/test/Library/Logs/tr-energy-epias-monthly.log</string>
+</dict>
+</plist>

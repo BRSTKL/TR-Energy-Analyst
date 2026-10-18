@@ -34,7 +34,9 @@ Uyarı: 17.10.2026 akşamı yarım kalan toplama, 2026 sektör karnesini bozmuş
 | 7. Karneyi Ocak–Eylül'e taşıma | ✓ 1.014 lisanslı santral (RES 292, GES 57, HES 665), medyanlar 175 / 118 / 90 TL/MWh; sektör analizleri (yakalama oranı, güneş / rüzgâr / hidro kaybı, geçmişle sınama, toplayıcı kıyası) Ocak–Eylül ile yeniden çalıştırıldı |
 | 8. Kontroller ve commit | ✓ |
 
-**Bir dahaki yenilemede:**
+**Otomatik aylık eşitleme (18.10.2026'dan):** `scripts/epias-monthly-sync.mts` Mac'te saatte bir çalışır; VPN Türkiye'den açıkken ve ayın üretimi yayımlanmışsa aşağıdaki adımları kendisi yürütür (scripts/launchd/README.md). Elle yapılması gereken yalnız VPN'i açmak.
+
+**Elle yenilemede:**
 1. VPN çıkışının Türkiye olduğunu doğrula: `curl ipinfo.io/country` → `TR`.
 2. 403 gelirse toplamayı durdur, erişim dönünce aynı komutla sürdür (biten santraller atlanır). Üç 403'te durduran izleyici: süreci adıyla değil süreç numarasıyla izlemeli (adı komut satırında geçen kabuk da eşleşir).
 3. Tur çok hatayla biterse karneyi `sector-collect.mts 2026 <önceki dönem sonu> --hes --rebuild` ile geri kur.
