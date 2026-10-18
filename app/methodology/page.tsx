@@ -15,8 +15,8 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.25";
-const VERSION_DATE = "17 Ekim 2026";
+const VERSION = "1.26";
+const VERSION_DATE = "18 Ekim 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
   { id: "ozet", title: "Özet" },
@@ -436,10 +436,10 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
               değerlenme) dolar bazındaki artış reel TL&apos;deki artıştan büyük görünür. <Tag kind="exact" />
             </p>
             <p>
-              Bulgu (2026 Ocak–Ağustos, aynı aylar, Eylül 2026 TL&apos;si): makas reel olarak 743 (2024) → 696 (2025) → 830 TL/MWh (2026), dolar
-              bazında 11,8 → 12,8 → 16,9 $/MWh. PTF reel olarak 4.196 → 3.616 → 2.047 TL/MWh&apos;ye indi; makas PTF&apos;nin %17,5&apos;inden
-              %40,8&apos;ine çıktı. Sektör karnesinde aynı santrallerin MWh başına maliyeti 2025 → 2026 (Ocak–Ağustos) nominal medyan rüzgâr +%61,
-              güneş +%91, hidro +%54; enflasyon düşülünce +%27, +%51, +%22 (genel fiyat ×1,26).
+              Bulgu (Ocak–Eylül, aynı aylar, Eylül 2026 TL&apos;si): makas reel olarak 746 (2024) → 679 (2025) → 822 TL/MWh (2026), dolar
+              bazında 11,9 → 12,5 → 16,7 $/MWh. PTF reel olarak 4.190 → 3.608 → 2.124 TL/MWh&apos;ye indi; makas PTF&apos;nin %17,8&apos;inden
+              %38,7&apos;sine çıktı. Sektör karnesinde aynı santrallerin MWh başına maliyeti 2025 → 2026 (Ocak–Eylül) nominal medyan rüzgâr +%62,
+              güneş +%82, hidro +%56; enflasyon düşülünce +%27, +%43, +%23 (genel fiyat ×1,27).
             </p>
           </Section>
 
@@ -459,7 +459,7 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
               nehir tipi; CC BY 4.0), sonra santral ya da EPDK lisans adındaki &quot;Barajı&quot; / &quot;Regülatörü&quot; eki. Kaydı olmayan santral
               sınıflanmamış kalır ve bütün hidrolarla kıyaslanır; gün içi üretim esnekliğinden yapılan tahmin yalnız etiket olarak gösterilir (büyük barajları
               programla bloklar hâlinde çalıştıkları için nehir tipi sayıyordu). Barajlı santral üretimini kendi planına uydurabildiği, nehir tipi akışa bağlı
-              olduğu için ikisi ayrı dağılımlarla kıyaslanır (2026 Ocak–Ağustos medyanı barajlı 71, nehir tipi 107 TL/MWh). <Tag kind="exact" /> (alt tip
+              olduğu için ikisi ayrı dağılımlarla kıyaslanır (2026 Ocak–Eylül medyanı barajlı 76, nehir tipi 115 TL/MWh). <Tag kind="exact" /> (alt tip
               kaydı olmayanlarda: kıyas bütün hidrolarla)
             </p>
           </Section>
@@ -554,24 +554,25 @@ Tavan = (tek başına dengesizlik + KÜPST) / üretim          santralin bağım
               Tavan ≤ taban ise teklif verilmez (portföye katılmak santrale kazandırmıyor). Taban eksiyse öneri 0&apos;a çekilir. <Tag kind="exact" />
             </p>
             <p>
-              <b>Sözleşme biçimi geçmişle sınandı (16.2).</b> Sektör karnesinin 858 santralinde bedel 2025 verisiyle (2026 kurallarıyla) tahmini
+              <b>Sözleşme biçimi geçmişle sınandı (16.2).</b> Sektör karnesinin 945 santralinde bedel 2025 verisiyle (2026 kurallarıyla) tahmini
               maliyetin (1 + kâr payı) katı olarak belirlenip 2026&apos;da üç biçimde uygulandı: sabit TL/MWh; PTF&apos;nin sabit yüzdesi (santralin
               üretim ağırlıklı PTF&apos;siyle); makasa endeksli (bedel × 2026 piyasa makası / 2025 piyasa makası; makas = dönemin ortalama |SMF − PTF|).
             </p>
             <Table
-              head={["Ocak–Ağustos, 2025 → 2026", "Sabit TL", "PTF yüzdesi", "Makas endeksi"]}
+              head={["Ocak–Eylül, 2025 → 2026", "Sabit TL", "PTF yüzdesi", "Makas endeksi"]}
               rows={[
-                ["Karşılama medyanı (bedel / gerçek maliyet, kâr payı 0)", "0,73", "0,55", "1,16"],
-                ["Zarar eden santral, kâr payı %50: tümü", "%36", "%74", "%10"],
-                ["Rüzgâr / hidro / güneş", "%24 / %41 / %63", "%75 / %71 / %100", "%0 / %16 / %7"],
+                ["Karşılama medyanı (bedel / gerçek maliyet, kâr payı 0)", "0,73", "0,56", "1,17"],
+                ["Zarar eden santral, kâr payı %50: tümü", "%39", "%73", "%10"],
+                ["Rüzgâr / hidro / güneş", "%33 / %40 / %62", "%77 / %69 / %100", "%0 / %14 / %7"],
               ]}
             />
             <p>
-              Neden: maliyet arttı (gerçek / tahmin medyanı ×1,36) ve bunu makas yönetti (piyasa makası ×1,58); santrallerin üretim ağırlıklı
-              PTF&apos;si ise nominal düştü (medyan ×0,75, güneşte ×0,60). PTF&apos;ye bağlı bedel maliyet artarken azaldı. Öneri bu yüzden makasa
+              Neden: maliyet arttı (gerçek / tahmin medyanı ×1,37) ve bunu makas yönetti (piyasa makası ×1,60); santrallerin üretim ağırlıklı
+              PTF&apos;si ise nominal düştü (medyan ×0,78, güneşte ×0,65). PTF&apos;ye bağlı bedel maliyet artarken azaldı. Öneri bu yüzden makasa
               endeksli verilir: uzlaştırma döneminde bedel = öneri × gerçekleşen piyasa makası / referans makas (projenin dönemindeki ortalama).
-              Sabit TL karşılaştırma için durur; sabit TL&apos;de tipik durum (×1,35) ve kötü senaryo (P90) marjı ayrıca gösterilir. Gain 2026&apos;nın
-              bağımsız ilk 10 adayında pazarlık alanı 14–41 TL/MWh; sabit TL&apos;de tipik durumda bile hepsinde marj eksi (−35 ile −59 TL/MWh):
+              Sabit TL karşılaştırma için durur; sabit TL&apos;de tipik durum (geçmişle sınamanın medyanı, rüzgârda ×1,39) ve kötü senaryo (P90) marjı
+              ayrıca gösterilir. Gain 2026&apos;nın bağımsız ilk 10 adayında (hepsi rüzgâr, Ocak–Eylül) pazarlık alanı 14–41 TL/MWh; sabit TL&apos;de tipik
+              durumda bile hepsinde marj eksi (−40 ile −68 TL/MWh):
               adil prim, gelecek yılın maliyeti için sabit bir bedelin tabanı olamaz. <Tag kind="estimate" />
             </p>
             <p>
@@ -605,10 +606,10 @@ Gün: portföyün 24 saati, sapma ve fiyat aynı günden (sapma ile sistem yön�
               ]}
             />
             <p>
-              <b>Geçmişle sınama.</b> Aynı yöntemle 2026 bütçesi yalnız 2025 verisiyle kurulup 2026 Ocak–Ağustos gerçekleşenle karşılaştırıldı (13 portföy):
-              gerçek / bütçe medyanı 1,02, 9 portföy ±%25 içinde; sapanların hepsi bütçenin üstünde. Kötü durum aralığı dar: P90&apos;ın altında kalan ay
-              payı %54 (beklenen %90; 7 günlük bloklarla %56). Iskalamaların çoğu üretimden (2025 kurak yıl: aynı hidro santraller 2026&apos;da ×1,41);
-              üretim doğru bilinseydi P90 kapsamı %69. Kalan kısım portföyün tahmin kalitesinin yıldan yıla değişmesi. Bu yüzden P90 ve P95 alt sınır
+              <b>Geçmişle sınama.</b> Aynı yöntemle 2026 bütçesi yalnız 2025 verisiyle kurulup 2026 Ocak–Eylül gerçekleşenle karşılaştırıldı (14 portföy):
+              gerçek / bütçe medyanı 1,05, 8 portföy ±%25 içinde; sapanların hepsi bütçenin üstünde. Kötü durum aralığı dar: P90&apos;ın altında kalan ay
+              payı %49 (beklenen %90; 7 günlük bloklarla %50). Iskalamaların çoğu üretimden (2025 kurak yıl: projelerdeki 190 hidro santrali 2026&apos;da
+              ×1,47 üretti); üretim doğru bilinseydi P90 kapsamı %70. Kalan kısım portföyün tahmin kalitesinin yıldan yıla değişmesi. Bu yüzden P90 ve P95 alt sınır
               olarak okunmalıdır. <Tag kind="estimate" />
             </p>
             <p>
@@ -630,26 +631,26 @@ Capture rate = capture fiyatı / baz PTF;   profil indirimi = 100 − capture ra
 Beklenen (portföy) = Σ teknolojinin üretim payı × teknolojinin sektör capture rate'i`}
             </F>
             <p>
-              Sektör: sektör karnesinin lisanslı santralleri (kalite süzgeçli), her yıl Ocak–Ağustos, üretim EPİAŞ UEVM, fiyat PTF. Yıllar arası
+              Sektör: sektör karnesinin lisanslı santralleri (kalite süzgeçli), her yıl Ocak–Eylül, üretim EPİAŞ UEVM, fiyat PTF. Yıllar arası
               değişim yalnız ortak kümeyle verilir: iki yılın karnesinde de aynı grupta olan santraller (yeni santraller oranı kendi başına
-              değiştirir). Lisanssız toplamlar (K3_, LÜM_, LÜY) ayrı grup: 2025 karnesinde yoklar, 2026&apos;da 32 güneş toplamı 21,9 TWh ile
-              lisanslı güneşin (58 santral, 4,2 TWh) 5 katı; Ocak–Ağustos 2026 toplam capture rate&apos;leri %64,6. Lisanslı oranlara, yıl kıyasına, sektördeki yere ve PPA
+              değiştirir). Lisanssız toplamlar (K3_, LÜM_, LÜY) ayrı grup: 2025 karnesinde yoklar, 2026&apos;da 37 güneş toplamı 26,5 TWh ile
+              lisanslı güneşin (57 santral, 4,7 TWh) 5,6 katı; Ocak–Eylül 2026 toplam capture rate&apos;leri %66,7. Lisanslı oranlara, yıl kıyasına, sektördeki yere ve PPA
               kıyasına girmezler. Teknoloji oranı
               üretim ağırlıklıdır (santraller birleştirilir); santraller arası dağılım her santrali bir nokta sayar (1 GWh altı hariç). Sonuç
               sayfasındaki &quot;sektördeki yer&quot;, santralin kendi teknolojisinin (hidroda barajlı / nehir tipi) santralleri arasındaki
               yüzdeliğidir; raporun PPA kutusu portföyün oranını karışıma göre beklenenle kıyaslar. <Tag kind="exact" />
             </p>
             <Table
-              head={["Ocak–Ağustos, ortak küme", "Santral", "2025", "2026", "Sıfır fiyatlı üretim (2026)"]}
+              head={["Ocak–Eylül, ortak küme", "Santral", "2025", "2026", "Sıfır fiyatlı üretim (2026)"]}
               rows={[
-                ["Güneş", "46", "%84,8", "%70,8 (Mayıs %19)", "%13,8"],
-                ["Rüzgâr", "277", "%99,1", "%105,7", "%4,0"],
-                ["Hidro · barajlı", "128", "%106,8", "%101,5", "%5,6"],
-                ["Hidro · nehir tipi", "226", "%100,5", "%99,2", "%3,9"],
-                ["Lisanssız toplamlar · güneş (ayrı)", "32", "–", "%64,6", "%17,1"],
+                ["Güneş", "45", "%84,6", "%72,7 (Mayıs %19)", "%12,3"],
+                ["Rüzgâr", "276", "%99,0", "%104,5", "%3,6"],
+                ["Hidro · barajlı", "126", "%106,6", "%102,2", "%5,0"],
+                ["Hidro · nehir tipi", "222", "%99,8", "%97,9", "%3,7"],
+                ["Lisanssız toplamlar · güneş (ayrı)", "37", "–", "%66,7", "%15,4"],
               ]}
             />
-            <p>Sınıflanmamış hidrolar (ortak kümede 278 santral) barajlı ve nehir tipi satırlarında yok; hidro toplamına girerler.</p>
+            <p>Sınıflanmamış hidrolar (ortak kümede 276 santral) barajlı ve nehir tipi satırlarında yok; hidro toplamına girerler.</p>
             <p>
               Güneş fiyatını kendisi düşürüyor (öğle saatlerinde sıfır fiyat); öğle fiyatı düşünce rüzgârın akşam ve gece üretimi görece değerleniyor;
               öğle saatlerinde güneşin düşürdüğü fiyat ortalamayı aşağı çektiği için Nisan–Mayıs 2026&apos;da hidro toplamı %124–129&apos;a çıktı (nehir tipi
@@ -726,20 +727,20 @@ Rüzgâr: beklenen = santralin güç eğrisi (100 m hız 0,5 m/s × 8 yön hücr
 İşlem (saat) = işaret(istenen) × min(|istenen|, %10 × GİP hacmi)`}
             </F>
             <Table
-              head={["2026 Ocak–Ağustos", "Ort. üretim", "Katılım P90", "P99", "En çok", "%10 sınırının bağladığı saat"]}
+              head={["2026 Ocak–Eylül", "Ort. üretim", "Katılım P90", "P99", "En çok", "%10 sınırının bağladığı saat"]}
               rows={[
-                ["Aksa", "692 MWh/saat", "%8,0", "%12,5", "%19", "%4,2"],
-                ["Pure", "485 MWh/saat", "%7,4", "%13,7", "%28,5", "%3,8"],
-                ["Inavitas", "609 MWh/saat", "%3,8", "%8,1", "%15", "%0,4"],
-                ["Gain", "137 MWh/saat", "%0,7", "%1,5", "%3", "%0"],
+                ["Aksa", "686 MWh/saat", "%8,3", "%12,6", "%19", "%4,7"],
+                ["Pure", "478 MWh/saat", "%7,3", "%13,5", "%28,5", "%3,7"],
+                ["Inavitas", "607 MWh/saat", "%3,8", "%8,0", "%14,6", "%0,4"],
+                ["Gain", "133 MWh/saat", "%0,7", "%1,5", "%3,1", "%0"],
               ]}
             />
             <p>
               Dayanak: en büyük toplayıcıların gözlenen üst katılımı (P99 ≈ %12–14). %10 bunun ihtiyatlı altıdır; büyük toplayıcıların tipik
               katılımı (P90 medyanı ≈ %2) sınır olarak alınmadı, çünkü toplayıcıların genelde ne yaptığını gösterir, piyasanın ne kadarını
               kaldırdığını değil. Etkisi (geriye dönük test, örneklem dışı, sınırsız / %13 / %10): 13 portföyün 10&apos;unda sınır bağlamıyor; Doğuş&apos;ta
-              kalıcılık 115,3 / 86,0 / 83,3 milyon TL (strateji piyasanın kaldırabileceğinden fazla işlem istiyordu). Saatlik hacim 2026&apos;da medyan
-              1.981 MWh (gece ≈ 1.230, öğleden sonra ≈ 2.380); en düşük–en yüksek eşleşme fiyatı aralığı hacimden bağımsız ≈ %25–27.{" "}
+              kalıcılık 115,3 / 86,0 / 83,3 milyon TL (strateji piyasanın kaldırabileceğinden fazla işlem istiyordu). Saatlik hacim 2026 Ocak–Eylül&apos;de
+              medyan 1.923 MWh (gece 00–05 ≈ 1.440, öğleden sonra 14–17 ≈ 2.620); en düşük–en yüksek eşleşme fiyatı aralığı hacimden bağımsız ≈ %26–29.{" "}
               <Tag kind="estimate" />
             </p>
             <p>
@@ -782,8 +783,8 @@ Rüzgâr: beklenen = santralin güç eğrisi (100 m hız 0,5 m/s × 8 yön hücr
 
           <Section id="sinama" n={next()} title="Geçmişle sınama">
             <p>
-              &quot;Ne olurdu&quot; rakamları gerçekle karşılaştırılır: yöntem 2025 Ocak–Ağustos verisiyle çalıştırılır, 2026&apos;nın aynı
-              aylarında gerçekte ne olduğuna bakılır (sektör karnesindeki 858 santral; scripts/sector-backtest.mts).
+              &quot;Ne olurdu&quot; rakamları gerçekle karşılaştırılır: yöntem 2025 Ocak–Eylül verisiyle çalıştırılır, 2026&apos;nın aynı
+              aylarında gerçekte ne olduğuna bakılır (sektör karnesindeki 945 santral; scripts/sector-backtest.mts).
             </p>
             <Table
               head={["Hesap", "Sınama", "Sonuç ve rapordaki kullanım"]}
@@ -791,17 +792,17 @@ Rüzgâr: beklenen = santralin güç eğrisi (100 m hız 0,5 m/s × 8 yön hücr
                 [
                   "Risk primi",
                   "2025 verisi 2026 kurallarıyla (raporun yöntemi) ile 2026 gerçekleşen TL/MWh",
-                  "Gerçek / tahmin medyanı 1,36 (%50 aralık 1,11–1,68), tipik hata %41; farkın çoğu fiyat makasından (×1,20), kalanı tahmin kalitesinden (×1,13). Prim geçmişe bakar, makas açılırsa düşük kalır; rapor primin yanında bu hata dağılımıyla bir aralık verir.",
+                  "Gerçek / tahmin medyanı 1,37 (%50 aralık 1,12–1,69), tipik hata %43; farkın çoğu fiyat makasından (×1,22), kalanı tahmin kalitesinden (×1,14). Prim geçmişe bakar, makas açılırsa düşük kalır; rapor primin yanında bu hata dağılımıyla bir aralık verir.",
                 ],
                 [
                   "Tahmin iyileştirme fırsatı",
                   "2025'te teknolojisinin medyanından pahalı santrallerin sapma oranı (WAPE) 2026'da",
-                  "Tipik santral iyileşmedi (rüzgâr −%3, hidro +%4, güneş +%21); en iyi çeyrek rüzgârda %12, hidroda %26 iyileşti. Ana rakam bu en iyi çeyrek iyileşmesiyle (en fazla medyana kadar); \"medyana inse\" üst sınırdır.",
+                  "Tipik santral iyileşmedi (rüzgâr −%1, hidro +%3, güneş +%20); en iyi çeyrek rüzgârda %10, hidroda %25 iyileşti. Ana rakam bu en iyi çeyrek iyileşmesiyle (en fazla medyana kadar); \"medyana inse\" üst sınırdır.",
                 ],
                 [
                   "Büyüme adayları",
-                  "2025'te bağımsızken bir toplayıcıya katılan 361 santralin portföye katkısı (TL/MWh), 2025 ve 2026 verisiyle (toplayıcı üyeliği EPİAŞ'tan ay ay)",
-                  "Sıra büyük ölçüde korundu (Spearman 0,67; tahminde en iyi çeyrekteki santrallerin %87'si gerçekte en iyi yarıda); tutar düşük kaldı (gerçek / tahmin 1,67). Sıra güvenilir, tutar alt sınırdır.",
+                  "2025'te bağımsızken bir toplayıcıya katılan 393 santralin portföye katkısı (TL/MWh), 2025 ve 2026 verisiyle (toplayıcı üyeliği EPİAŞ'tan ay ay)",
+                  "Sıra büyük ölçüde korundu (Spearman 0,69; tahminde en iyi çeyrekteki santrallerin %84'ü gerçekte en iyi yarıda); tutar düşük kaldı (gerçek / tahmin 1,67). Sıra güvenilir, tutar alt sınırdır.",
                 ],
                 [
                   "Arıza tespiti",
@@ -1018,6 +1019,11 @@ Rüzgâr: beklenen = santralin güç eğrisi (100 m hız 0,5 m/s × 8 yön hücr
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.26",
+                  "18 Ekim 2026",
+                  "Bulgular Ocak–Eylül 2026 verisiyle yenilendi (sektör karnesi 1.014 lisanslı santral): reel TL / USD piyasa bulgusu ve sektör maliyet değişimi, hidro alt tip medyanları, sözleşme biçimi sınaması, bütçe sınaması, capture rate ortak kümesi, GİP katılımı ve geçmişle sınama. Yöntem değişmedi. Saatlik GİP hacmi doğrudan hesaplandı (önceki metindeki 2026 medyanı yalnız Ocak ayınındı).",
+                ],
                 [
                   "1.25",
                   "17 Ekim 2026",
