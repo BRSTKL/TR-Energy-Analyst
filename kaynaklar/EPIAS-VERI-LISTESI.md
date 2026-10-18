@@ -21,23 +21,23 @@
 
 Uyarı: 17.10.2026 akşamı yarım kalan toplama, 2026 sektör karnesini bozmuştu (Ocak–Eylül döneminde Eylül'ü eksik 861 santral elendi). Karne EPİAŞ'a gitmeden havuzdaki Ocak–Ağustos verisinden yeniden kuruldu (1.023 lisanslı santral). Eylül verisi gelince Ocak–Eylül'e geçilir.
 
-## İlerleme (17.10.2026 akşamı, yarıda bırakıldı)
+## İlerleme (18.10.2026 akşamı, tamamlandı)
 
 | Adım | Durum |
 |---|---|
-| 1. Bağlantı | ✓ (VPN çıkışı GB göründü) |
+| 1. Bağlantı | ✓ |
 | 2. Piyasa fiyatları + dengesizlik | ✓ fiyatlar 2026-10-16'ya kadar; dengesizlik fiyatı Eylül tam, Ekim EPİAŞ'ta henüz yok (uzlaştırmadan sonra) |
 | 3. Arıza / bakım bildirimleri | ✓ Ekim yenilendi |
 | 4. YEKDEM listeleri | ✓ |
 | 5. Toplayıcı portföyleri | ✓ 30 toplayıcı, 867 santral |
-| 6. Santral UEVM + KGÜP 2026 Eylül–Ekim | **durduruldu:** KGÜP ucunda (`/generation/data/dpp`) sürekli 429 (GB çıkışı). 2026 havuzu: 543 santral Eylül'e kadar, 717 santral Ağustos'ta |
-| 7. Karneyi Ocak–Eylül'e taşıma | bekliyor (karne şimdi Ocak–Ağustos, 1.023 lisanslı santral, sağlam) |
-| 8. Kontroller ve commit | bekliyor |
+| 6. Santral UEVM + KGÜP 2026 Eylül | ✓ 18.10.2026: 1.489 santral toplandı, 27 hata (çoğu uzlaştırma birimi kaydı olmayan santral: KGÜP çekilemez). EPİAŞ güvenlik duvarı dört kez HTTP 403 ile engelledi; her seferinde beklenip kalınan yerden sürdürüldü |
+| 7. Karneyi Ocak–Eylül'e taşıma | ✓ 1.014 lisanslı santral (RES 292, GES 57, HES 665), medyanlar 175 / 118 / 90 TL/MWh; sektör analizleri (yakalama oranı, güneş / rüzgâr / hidro kaybı, geçmişle sınama, toplayıcı kıyası) Ocak–Eylül ile yeniden çalıştırıldı |
+| 8. Kontroller ve commit | ✓ |
 
-**Sürdürmek için:**
+**Bir dahaki yenilemede:**
 1. VPN çıkışının Türkiye olduğunu doğrula: `curl ipinfo.io/country` → `TR`.
-2. 6. adımı aynı komutla yeniden çalıştır. Biten santraller atlanır.
-3. Tur çok hatayla biterse karneyi `sector-collect.mts 2026 2026-08-31 --hes --rebuild` ile Ocak–Ağustos'a geri kur.
+2. 403 gelirse toplamayı durdur, erişim dönünce aynı komutla sürdür (biten santraller atlanır). Üç 403'te durduran izleyici: süreci adıyla değil süreç numarasıyla izlemeli (adı komut satırında geçen kabuk da eşleşir).
+3. Tur çok hatayla biterse karneyi `sector-collect.mts 2026 <önceki dönem sonu> --hes --rebuild` ile geri kur.
 
 ## A. Piyasa verileri (sistem geneli, saatlik)
 

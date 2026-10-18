@@ -40,7 +40,13 @@ export interface Notice {
   operatorPower: number;
   capacityAtCaseTime: number;
   cause: NoticeCause;
+  /** Gerekçe su / kaynak durumu (kaynak yetersizliği, düşük göl seviyesi, boğulma): hidroda kayıp değil (18.10.2026) */
+  resource?: boolean;
 }
+
+/** Su / kaynak durumu gerekçesi (hidro kayıp hesabında kayıptan ayrılır; gerekçe metni saklanmaz) */
+export const isResourceReason = (reason: string | null | undefined) =>
+  /kaynak\s*yetersiz|g[öo]l\s*seviye|su\s*seviye|d[üu][şs][üu]k\s*su|su\s*yetersiz|bo[ğg]ulma|kurakl[ıi]k|debi/i.test((reason ?? "").toLocaleLowerCase("tr-TR"));
 
 export function toNotice(m: UmmMessage): Notice | null {
   const start = wallClockMs(m.caseStartDate);
@@ -53,6 +59,7 @@ export function toNotice(m: UmmMessage): Notice | null {
     operatorPower: Number(m.operatorPower ?? 0),
     capacityAtCaseTime: Number(m.capacityAtCaseTime ?? 0),
     cause: noticeCause(m.reason),
+    resource: isResourceReason(m.reason),
   };
 }
 

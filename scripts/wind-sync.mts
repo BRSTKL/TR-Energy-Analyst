@@ -5,11 +5,16 @@
  * yeniden istenmez, yalnız kesinleşmemiş aylardan başlayan aralık istenir. Open-Meteo günlük sınırına takılırsa durur;
  * yeniden çalıştırınca kaldığı yerden sürer. Yalnız etiket içindir (tahmin girdisi değil).
  *
- *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/wind-sync.mts [epiasPlantId ...]
+ *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/wind-sync.mts [epiasPlantId ...] [--sector]
+ * `--sector`: proje santralleri yerine sektör karnelerinin (2025, 2026) konumu olan lisanslı rüzgâr santralleri (sektör
+ * sayfasındaki rüzgâr kayıp özeti için; scripts/sector-wind-curtailment.mts).
  * Çıktı: data/pool/weather/<id>/wind-<model>-<yıl>.json.gz
  */
 
+import fs from "node:fs";
+import path from "node:path";
 import { prisma } from "@/lib/prisma";
+import { isUnlicensedName } from "@/lib/analysis/candidate-access";
 import { readPoolPlantInfo } from "@/lib/pool/pool-store";
 import { emptyWindYear, fetchWind, mergeWind, monthFinal, OpenMeteoLimitError, WIND_FIRST_YEAR, WIND_MODELS, windRequestKey, type WindResponse } from "@/lib/weather/reanalysis-wind";
 import { readWindYear, writeWindYear } from "@/lib/weather/weather-store";
@@ -17,8 +22,19 @@ import { readWindYear, writeWindYear } from "@/lib/weather/weather-store";
 const DAY = 86_400_000;
 const yesterday = new Date(Date.now() + 3 * 3_600_000 - DAY).toISOString().slice(0, 10);
 const args = process.argv.slice(2).map(Number).filter(Boolean);
+const sectorIds = () => {
+  const out = new Set<number>();
+  for (const y of [2025, 2026]) {
+    const f = path.join(process.cwd(), ".cache", "epias", `sector-${y}.json`);
+    if (!fs.existsSync(f)) continue;
+    for (const p of JSON.parse(fs.readFileSync(f, "utf8")).plants as Array<{ epiasPlantId: number; name: string; type: string }>) if (p.type === "RES" && !isUnlicensedName(p.name)) out.add(p.epiasPlantId);
+  }
+  return Array.from(out).sort((a, b) => a - b);
+};
 const ids = args.length
   ? args
+  : process.argv.includes("--sector")
+  ? sectorIds()
   : Array.from(new Set((await prisma.powerPlant.findMany({ where: { type: "RES", projectId: { not: null }, epiasPlantId: { not: null }, latitude: { not: null } }, select: { epiasPlantId: true } })).map((r) => r.epiasPlantId!))).sort((a, b) => a - b);
 const cache = new Map<string, WindResponse>();
 let requests = 0;

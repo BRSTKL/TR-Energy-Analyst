@@ -318,6 +318,12 @@ export async function windPlantLoss(epiasPlantId: number, capacityMw: number, ca
   return (await cached(epiasPlantId, capacityMw, capacitySource))?.loss ?? null;
 }
 
+/** Saat → kayıp durumu (geriye dönük testte değerlendirme maskesi; bütün adaylara aynı uygulanır) */
+export async function windLossStates(epiasPlantId: number, capacityMw: number, capacitySource: string | null = null): Promise<Map<number, HourLossState> | null> {
+  const c = await cached(epiasPlantId, capacityMw, capacitySource);
+  return c ? new Map(Array.from(c.hours, ([t, x]) => [t, x.state])) : null;
+}
+
 /** Ayın takvimi: gün × saat durumu (24 saat) */
 export async function windLossCalendar(epiasPlantId: number, capacityMw: number, month: string): Promise<Array<{ date: string; hours: HourLossState[] }>> {
   const c = await cached(epiasPlantId, capacityMw);
