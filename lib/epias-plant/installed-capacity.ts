@@ -321,10 +321,14 @@ const EPDK_GENERIC = new Set([
 /** Romen ünite numaraları: "AHİKÖY_I", "KULP-I", "ÇAMLICA-III" */
 const ROMAN: Record<string, number> = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8 };
 
-/** EPDK eşleştirmesi için ad: "VEHES" yazım hatası ayrılır, Romen ünite numaraları sayıya çevrilir */
+/**
+ * EPDK eşleştirmesi için ad: "VEHES" yazım hatası ayrılır, bitişik numara ayrılır ("G4-BOR2" = "G4-BOR-2"), Romen ünite
+ * numaraları sayıya çevrilir
+ */
 function epdkWords(s: string): string[] {
   return foldName(s)
     .replace(/\bvehes\b/g, "ve hes")
+    .replace(/\b([a-z]{2,})(\d{1,2})\b/g, "$1 $2")
     .split(" ")
     .filter(Boolean)
     .map((w) => (ROMAN[w] !== undefined ? String(ROMAN[w]) : w));

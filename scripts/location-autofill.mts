@@ -258,6 +258,8 @@ if (GEM) {
   const placesDoc = JSON.parse(fs.readFileSync(path.join(process.cwd(), ".cache", "osm", "places-tr.json"), "utf8")) as { places: OsmPlace[] };
   // GEM'in Türkiye satırlarında "State/Province" kaymış (ör. Acıpayam için Van); il "City" sütununda
   const gemIl = (g: (typeof gemDoc.plants)[number]) => g.city ?? g.province;
+  // Lisans no karşılaştırması: GEM bazı kayıtlarda "EÜ" yerine "EU" yazıyor (G4-Bor-1: EU/12883-1/06264)
+  const licenseKey = (no: string) => no.toLocaleUpperCase("tr-TR").replace(/^E[ÜU]\//, "EU/").replace(/\s+/g, "");
   const tidy = (n: string) => n.replace(/\s*\([^)]*\)\s*/g, " ").replace(/([A-Za-zÇĞİÖŞÜçğıöşü]{2,})(\d+)\b/g, "$1 $2").trim();
   const gemNames = (g: (typeof gemDoc.plants)[number]) =>
     [g.project, g.localName, ...(g.otherNames ?? "").split(/[,;]/)]
@@ -270,8 +272,9 @@ if (GEM) {
     if (cur?.locationSource === "USER" || cur?.locationSource === "GEM_TRACKER") continue;
     n++;
     const name = tidy(t0.name);
-    const lics = epdkDoc.licenses.filter((l) => strictSameName(name, l.plant));
-    const nos = new Set(lics.map((l) => l.licenseNo));
+    // EPDK adı da aynı biçimde ayrılır ("OMİCRON ENGİL208 GES": santral adı ayrılıp EPDK'daki ayrılmazsa eşleşmiyordu)
+    const lics = epdkDoc.licenses.filter((l) => strictSameName(name, tidy(l.plant)));
+    const nos = new Set(lics.map((l) => licenseKey(l.licenseNo)));
     // EPDK ilçe merkezleri: GEM koordinatı bunlardan MAX_KM'den uzaksa reddedilir (GEM'de lisans no başka santrale yazılmış
     // olabilir: "Silopi" lisansı Sivas'taki kayıtta; aynı şirketin komşu ilçedeki santrali: Omicron Erciş / Edremit)
     // İlçesi olmayan lisans ("-", eski rüzgâr lisansları) il merkeziyle: il ilçeden büyük olduğu için sınır PROVINCE_KM ("MERKEZ" ilçedir, 40 km)
@@ -280,7 +283,7 @@ if (GEM) {
     const centers = lics
       .map((l) => ({ p: districtPoint(l.il, l.ilce, placesDoc.places), max: foldName(l.ilce) ? MAX_KM : PROVINCE_KM }))
       .filter((x): x is { p: OsmPlace; max: number } => !!x.p);
-    const byLicense = gemDoc.plants.filter((g) => g.epdkLicenses.some((x) => nos.has(x)));
+    const byLicense = gemDoc.plants.filter((g) => g.epdkLicenses.some((x) => nos.has(licenseKey(x))));
     const byName = gemDoc.plants.filter((g) => !byLicense.includes(g) && gemNames(g).some((x) => strictSameName(name, x)));
     const hits = [...byLicense, ...byName];
     const how = (g: (typeof gemDoc.plants)[number]) => (byLicense.includes(g) ? "EPDK lisans no" : "birebir ad");

@@ -134,6 +134,14 @@ describe("EPDK lisansı (ikinci resmî kaynak)", () => {
     expect(matchEpdkCapacity(qq("ESKİ RES", "RES", 11.5), licenses).match?.mw).toBe(12);
   });
 
+  it("bitişik numara ayrılır: G4-BOR2 = G4-BOR-2, başka numara değil", () => {
+    const bor = [
+      { licenseNo: "EÜ/1", status: "Yürürlükte", plant: "G4-BOR-2 GES", il: "NİĞDE", ilce: "BOR", mwm: "130.2", mwe: "100.0", opMwe: "100.0" },
+      { licenseNo: "EÜ/2", status: "Yürürlükte", plant: "G4-BOR-3 GES", il: "NİĞDE", ilce: "BOR", mwm: "130.1", mwe: "90.0", opMwe: "90.0" },
+    ];
+    expect(matchEpdkCapacity(qq("G4-BOR2 GES", "GES", 100), bor).match?.mw).toBe(100);
+  });
+
   it("sıra: YEKDEM önce, sonra EPDK, sonra en yüksek üretim", () => {
     expect(resolveCapacity(q("Kanije RES", "RES", "KANİJE ENERJİ A.Ş.", 47), index, licenses).source).toBe("EPIAS_YEKDEM");
     expect(resolveCapacity(qq("ATASA RES", "RES", 23), index, licenses).source).toBe("EPDK_LICENSE");
