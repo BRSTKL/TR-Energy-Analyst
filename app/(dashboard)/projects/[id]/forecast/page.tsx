@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ForecastReferenceCard } from "@/components/forecast-reference-card";
+import { ForecastScorecardCard } from "@/components/forecast-scorecard-card";
 import type { ProjectLiveForecast, LivePlantForecast } from "@/lib/services/live-forecast";
 import type { ReferenceRow, ReferenceSummary } from "@/lib/services/production-loss";
 
@@ -210,6 +211,8 @@ export default function ForecastPage() {
           </CardContent>
         </Card>
       )}
+
+      {data && data.plants.length > 0 && <ForecastScorecardCard projectId={id} />}
 
       {data?.reference && data.reference.rows.length > 0 && (
         <ForecastReferenceCard period={data.reference.period} rows={data.reference.rows} summary={data.reference.summary} />
