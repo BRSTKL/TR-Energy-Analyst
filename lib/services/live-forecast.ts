@@ -59,14 +59,16 @@ export interface ProjectLiveForecast {
   total: Array<number | null>;
 }
 
-async function cachedLiveWeather(lat: number, lon: number): Promise<{ res: OpenMeteoHourly; fetchedAt: string }> {
+/** `fresh`: önbelleğe bakmadan çek (günlük tahmin kaydı: hava girdisinin ne zaman alındığı kesin yazılır) */
+async function cachedLiveWeather(lat: number, lon: number, fresh = false): Promise<{ res: OpenMeteoHourly; fetchedAt: string }> {
   const file = path.join(CACHE_DIR, `${lat.toFixed(4)}_${lon.toFixed(4)}.json`);
-  try {
-    const c = JSON.parse(fs.readFileSync(file, "utf8")) as { res: OpenMeteoHourly; fetchedAt: string };
-    if (Date.now() - Date.parse(c.fetchedAt) < CACHE_TTL_MS) return c;
-  } catch {
-    /* önbellek yok */
-  }
+  if (!fresh)
+    try {
+      const c = JSON.parse(fs.readFileSync(file, "utf8")) as { res: OpenMeteoHourly; fetchedAt: string };
+      if (Date.now() - Date.parse(c.fetchedAt) < CACHE_TTL_MS) return c;
+    } catch {
+      /* önbellek yok */
+    }
   const r = await fetch(liveForecastUrl(lat, lon, LIVE_DAYS + 1), { headers: { "User-Agent": "TR-Energy-Analyst/1.0 (non-commercial research)" } });
   const body = await r.json();
   if (!r.ok || !body?.hourly?.time) throw new Error(`Open-Meteo: ${r.status} ${body?.reason ?? ""}`);
@@ -96,6 +98,65 @@ async function trainingEnd(epiasPlantId: number, now: number): Promise<number | 
   return null;
 }
 
+/** Tek santralin tahmini (sayfa ve günlük tahmin kaydı aynı yolu kullanır) */
+export interface SolarPlantForecast {
+  status: "ok" | "no-data" | "error";
+  message?: string;
+  warning?: string;
+  /** Saat başına MWh, `from`'dan itibaren `hours` saat */
+  hours?: Array<number | null>;
+  train?: { from: string; to: string; hours: number; mount: string; maxMwh: number };
+  /** Hava tahmininin alındığı an (ISO) */
+  weatherFetchedAt?: string;
+  location?: { latitude: number; longitude: number; locationSource: string };
+}
+
+/**
+ * Konumu havuzda olan güneş santrali için `from` (Türkiye duvar saati ms, gün başı) itibaren `count` saatlik tahmin.
+ * Eğitim: havuzdaki son tam üretim ayından önceki 4 ay; girdi: o andaki en yeni hava tahmini.
+ */
+export async function forecastSolarPlant(epiasPlantId: number, from: number, count: number, opts: { now?: number; fresh?: boolean } = {}): Promise<SolarPlantForecast> {
+  const now = opts.now ?? Date.now();
+  try {
+    const info = await readPoolPlantInfo(epiasPlantId);
+    const loc = info?.location;
+    if (!loc) throw new Error("Havuzda konum yok");
+    const end = await trainingEnd(epiasPlantId, now);
+    if (end === null) return { status: "no-data", message: "Havuzda üretim verisi yok" };
+    const start = Date.UTC(new Date(end).getUTCFullYear(), new Date(end).getUTCMonth() - 4, 1);
+    const data = await loadSolarHours(epiasPlantId, start, end);
+    if (!data) throw new Error("Eğitim verisi okunamadı");
+    const clean = trainingLossFilter(
+      data.hours.map((h) => ({ t: h.t, uevm: h.uevm, kgupFirst: h.kgupFirst, satGhi: h.satGhi ?? null, satDirect: h.satDirect ?? null, satDiffuse: h.satDiffuse ?? null })),
+      data.site,
+      end,
+      SATELLITE_DELAY_DAYS
+    );
+    let model;
+    try {
+      model = fitSolarModelV2(data.hours, data.site, { exclude: clean.exclude, noLag: true });
+    } catch {
+      return { status: "no-data", message: "Son 4 ayda eğitim için yeterli üretim saati yok (yeni santral?)" };
+    }
+    const w = await cachedLiveWeather(loc.latitude, loc.longitude, opts.fresh);
+    const hours = liveWeatherHours(w.res, from, from + count * HOUR).map((wh) => {
+      const h: SolarHourV2 = { ...wh, uevm: null, kgupFirst: null, kgupFinal: null, ptf: null, lag48: null, ghiLag48: null, directLag48: null, diffuseLag48: null, live: true };
+      const v = model.predict(h);
+      return v === null ? null : Math.round(v * 1000) / 1000;
+    });
+    return {
+      status: "ok",
+      ...(model.trainHours < MIN_TRAIN_HOURS ? { warning: `Eğitimde yalnız ${model.trainHours} saat (yeni santral ya da veri eksik): tahmin kaba` } : {}),
+      hours,
+      train: { from: new Date(start).toISOString().slice(0, 10), to: new Date(end - DAY).toISOString().slice(0, 10), hours: model.trainHours, mount: model.mount, maxMwh: model.trainMaxMwh },
+      weatherFetchedAt: w.fetchedAt,
+      location: { latitude: loc.latitude, longitude: loc.longitude, locationSource: loc.locationSource },
+    };
+  } catch (e) {
+    return { status: "error", message: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 export async function projectLiveForecast(projectId: string, now = Date.now()): Promise<ProjectLiveForecast | null> {
   const list = await projectWeatherPlants(projectId);
   if (!list) return null;
@@ -112,54 +173,18 @@ export async function projectLiveForecast(projectId: string, now = Date.now()): 
       plants.push({ ...base, status: p.locationText.startsWith("lisanssız") ? "unlicensed" : "no-location" });
       continue;
     }
-    try {
-      const info = await readPoolPlantInfo(p.epiasPlantId);
-      const loc = info?.location;
-      if (!loc) throw new Error("Havuzda konum yok");
-      const end = await trainingEnd(p.epiasPlantId, now);
-      if (end === null) {
-        plants.push({ ...base, status: "no-data", message: "Havuzda üretim verisi yok" });
-        continue;
-      }
-      const start = Date.UTC(new Date(end).getUTCFullYear(), new Date(end).getUTCMonth() - 4, 1);
-      const data = await loadSolarHours(p.epiasPlantId, start, end);
-      if (!data) throw new Error("Eğitim verisi okunamadı");
-      const clean = trainingLossFilter(
-        data.hours.map((h) => ({ t: h.t, uevm: h.uevm, kgupFirst: h.kgupFirst, satGhi: h.satGhi ?? null, satDirect: h.satDirect ?? null, satDiffuse: h.satDiffuse ?? null })),
-        data.site,
-        end,
-        SATELLITE_DELAY_DAYS
-      );
-      let model;
-      try {
-        model = fitSolarModelV2(data.hours, data.site, { exclude: clean.exclude, noLag: true });
-      } catch {
-        plants.push({ ...base, status: "no-data", message: "Son 4 ayda eğitim için yeterli üretim saati yok (yeni santral?)" });
-        continue;
-      }
-      const w = await cachedLiveWeather(loc.latitude, loc.longitude);
-      fetchedTimes.push(w.fetchedAt);
-      const hours = liveWeatherHours(w.res, tomorrow, tomorrow + n * HOUR).map((wh) => {
-        const h: SolarHourV2 = { ...wh, uevm: null, kgupFirst: null, kgupFinal: null, ptf: null, lag48: null, ghiLag48: null, directLag48: null, diffuseLag48: null, live: true };
-        const v = model.predict(h);
-        return v === null ? null : Math.round(v * 1000) / 1000;
-      });
-      hours.forEach((v, i) => {
-        if (v !== null) total[i] = (total[i] ?? 0) + v;
-      });
-      const daily = days.map((_, d) => hours.slice(d * 24, d * 24 + 24).reduce((a: number, v) => a + (v ?? 0), 0));
-      plants.push({
-        ...base,
-        status: "ok",
-        ...(model.trainHours < MIN_TRAIN_HOURS ? { warning: `Eğitimde yalnız ${model.trainHours} saat (yeni santral ya da veri eksik): tahmin kaba` } : {}),
-        hours,
-        daily,
-        peakMwh: Math.max(0, ...hours.map((v) => v ?? 0)),
-        train: { from: new Date(start).toISOString().slice(0, 10), to: new Date(end - DAY).toISOString().slice(0, 10), hours: model.trainHours, mount: model.mount, maxMwh: model.trainMaxMwh },
-      });
-    } catch (e) {
-      plants.push({ ...base, status: "error", message: e instanceof Error ? e.message : String(e) });
+    const f = await forecastSolarPlant(p.epiasPlantId, tomorrow, n, { now });
+    if (f.status !== "ok") {
+      plants.push({ ...base, status: f.status, message: f.message });
+      continue;
     }
+    const hours = f.hours!;
+    fetchedTimes.push(f.weatherFetchedAt!);
+    hours.forEach((v, i) => {
+      if (v !== null) total[i] = (total[i] ?? 0) + v;
+    });
+    const daily = days.map((_, d) => hours.slice(d * 24, d * 24 + 24).reduce((a: number, v) => a + (v ?? 0), 0));
+    plants.push({ ...base, status: "ok", ...(f.warning ? { warning: f.warning } : {}), hours, daily, peakMwh: Math.max(0, ...hours.map((v) => v ?? 0)), train: f.train });
   }
   // En eski önbellek anı: sayfadaki "hava tahmini şu andan" notu için kötümser değer
   const weatherFetchedAt = fetchedTimes.length ? fetchedTimes.sort()[0] : null;

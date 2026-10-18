@@ -1,0 +1,67 @@
+/**
+ * TR-Energy Analyst - Günlük tahmin kaydı (PLAN 21.1; kullanıcı 18.10.2026: "başlayalım")
+ *
+ * Tahmin motorunun temeli: her gün, D günü için yapılan saatlik tahmin GÖP kesiminden (D-1 12:30, Türkiye) önce bir kez
+ * yazılır ve bir daha değişmez. Geriye dönük testten güçlü kanıttır: "o gün bunu tahmin ettik". Karne (21.4) yalnız
+ * kesimden önce yazılmış (`onTime`) kayıtları sayar; kesimden sonra yazılan kayıt saklanır ama işaretlidir.
+ * Kayıt model sürümünü, eğitim penceresini ve hava girdisinin ne zaman alındığını taşır (sürüm yarışı, 21.5).
+ * SAF: I/O yok (dosya lib/services/forecast-log.ts).
+ */
+
+import { decisionCutoff, TR_UTC_OFFSET_MS } from "./info-time";
+
+/** Kayıt biçimi sürümü (alan eklenirse artar; eski kayıtlar olduğu gibi okunur) */
+export const FORECAST_LOG_SCHEMA = 1;
+
+/** Güneş modelinin kayıt adı: donmuş sürüm 3, kalıcılıksız (lib/services/live-forecast.ts) */
+export const SOLAR_MODEL_ID = "solar-v3-nolag";
+
+export interface ForecastLogPlant {
+  epiasPlantId: number;
+  name: string;
+  status: "ok" | "no-data" | "error";
+  message?: string;
+  warning?: string;
+  /** D günü 00:00'dan 24 saat, MWh */
+  hours?: Array<number | null>;
+  train?: { from: string; to: string; hours: number; mount: string; maxMwh: number };
+  weatherFetchedAt?: string;
+  location?: { latitude: number; longitude: number; locationSource: string };
+}
+
+export interface ForecastLog {
+  schema: number;
+  tech: "GES";
+  /** Tahmin edilen gün (YYYY-MM-DD, Türkiye) */
+  targetDate: string;
+  /** Kaydın yazıldığı an (ISO, UTC) */
+  issuedAt: string;
+  /** GÖP kesimi (ISO, UTC): D-1 12:30 Türkiye */
+  cutoff: string;
+  /** issuedAt kesimden önce mi (karne yalnız bunları sayar) */
+  onTime: boolean;
+  model: { id: string; trainingMonths: number };
+  /** runInit: tahminlerden önce okunan son çalışma; runInitAfter: sonra okunan, farklıysa (arada yeni çalışma çıktı) */
+  weather: { source: string; model: string; runInit: string | null; runInitAfter?: string | null };
+  /** Kodun sürümü (git commit), biliniyorsa */
+  code: string | null;
+  plants: ForecastLogPlant[];
+}
+
+/** D gününün başı, Türkiye duvar saati ms (havuz kuralı: Türkiye saati UTC alanlarında) */
+export const targetDayWall = (targetDate: string) => Date.parse(`${targetDate}T00:00:00Z`);
+
+/** D günü (YYYY-MM-DD) için GÖP kesimi, gerçek an (UTC ms): D-1 12:30 Türkiye */
+export function forecastCutoff(targetDate: string): number {
+  return decisionCutoff(targetDayWall(targetDate)) - TR_UTC_OFFSET_MS;
+}
+
+/** Şu andan sonraki ilk tahmin edilecek gün: Türkiye saatiyle yarın (YYYY-MM-DD) */
+export function nextTargetDate(now: number): string {
+  const wall = new Date(now + TR_UTC_OFFSET_MS);
+  return new Date(Date.UTC(wall.getUTCFullYear(), wall.getUTCMonth(), wall.getUTCDate() + 1)).toISOString().slice(0, 10);
+}
+
+export function isOnTime(issuedAt: number, targetDate: string): boolean {
+  return issuedAt < forecastCutoff(targetDate);
+}

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Günlük güneş tahmin kaydı (PLAN 21.1): her gün Mac saatiyle 08:30 ve 10:00. Mac Orta Avrupa saatinde: GÖP kesimi
+  (Türkiye 12:30) yazın 11:30, kışın 10:30. 08:30 çalışması günün 00Z hava çalışması yoksa bekler; 10:00 her durumda
+  kesimden önce yazar. Kayıt varsa ikinci çalışma bir şey yapmaz. Mac uykudaysa uyanınca çalışır (kesim geçtiyse yazmaz);
+  kapalıysa o günün kaydı eksik kalır. Kurulum: scripts/launchd/README.md.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.tr-energy.solar-forecast</string>
+  <key>WorkingDirectory</key>
+  <string>/Users/test/Desktop/TR-Energy Analyst</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/test/.local/node/bin/node</string>
+    <string>--env-file=.env</string>
+    <string>node_modules/.bin/tsx</string>
+    <string>--tsconfig</string>
+    <string>tsconfig.json</string>
+    <string>scripts/solar-forecast-daily.mts</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict>
+      <key>Hour</key>
+      <integer>8</integer>
+      <key>Minute</key>
+      <integer>30</integer>
+    </dict>
+    <dict>
+      <key>Hour</key>
+      <integer>10</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+  </array>
+  <key>StandardOutPath</key>
+  <string>/Users/test/Library/Logs/tr-energy-solar-forecast.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/test/Library/Logs/tr-energy-solar-forecast.log</string>
+</dict>
+</plist>
