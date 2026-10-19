@@ -12,7 +12,11 @@
  *   - `prob` (22.5): `gbm` kümesinin üstüne, ağırlıklı+düzeltme tahmininden P10 / P50 / P90 (lib/solar-engine/models/quantiles.ts:
  *     düzeltilmiş tahminin önceki aylardaki örneklem dışı hatası, en çok 12 ay) ve maliyete göre teklif (geçmiş aylarda en
  *     ucuz çeyreklik, gerçek fiyatlarla). Test Nisan 2025'ten (en az 3 aylık düzeltilmiş geçmiş). Kapsama: [P10, P90] içinde
- *     kalan saat oranı (hedef %80).
+ *     kalan saat oranı (hedef %80). Kapsama ayrıca (22.5 a2): genişlik çarpanı (`WIDTHS`) Nisan–Aralık 2025'in BÜTÜN
+ *     saatleriyle (bütün santraller birlikte) seçilir, 2026'da sınanır (test üzerinde seçim yok); ana sonuç 2026 bütün
+ *     saatler. "Kayıp hariç" kapsama İYİMSERDİR: kayıp etiketi gerçekleşen üretimle sonradan konur ve yalnız alt kuyruktaki
+ *     ıskaları atar (D-1'de bilinmez); yalnız koşullu doğruluk olarak, etiketiyle verilir. Tavan kırpması kayıtlı kurulu
+ *     güçle: bugünkü kayıt geçmişe uygulanır (kaydın kabulü bütün dönemin üretimine bakar), yalnız karşılaştırma.
  *   - `curt` (22.6): `gbm` kümesinin ağırlıklı+düzeltme tahmininden beklenen planlı kısıntı düşülür (lib/forecast/zero-price.ts):
  *     tahmin × (1 − P(PTF ≤ 1) × santralin kısma oranı). Olasılık: her test ayı için önceki 12 ayın gündüz saatleriyle
  *     (06–19) kurulan lojistik model; "+kısıntı" yalnız takvim ve geçmiş fiyatla (bütün santraller için tek model),
@@ -46,7 +50,7 @@ import { NWP_MODELS, type NwpYear } from "@/lib/weather/nwp-models";
 import { archiveVariants, ENSEMBLE_SOURCES, fitEnsemble, noLag, type NwpArchive } from "@/lib/solar-engine/models/ensemble";
 import { readNwpYear } from "@/lib/weather/weather-store";
 import { fitCorrection, recentErrorFor } from "@/lib/solar-engine/models/correction";
-import { chooseBidQuantile, fitResidualQuantiles } from "@/lib/solar-engine/models/quantiles";
+import { chooseBidQuantile, chooseWidth, fitResidualQuantiles, WIDTHS } from "@/lib/solar-engine/models/quantiles";
 import { TRAIN_ZERO_PRICE_MAX } from "@/lib/solar-engine/models/production-model";
 import { brier, buildZeroPriceRows, curtailedForecast, curtailmentRate, fitZeroPrice, zeroPriceClimatology, zeroPricePersistence, type ZeroPriceRow } from "@/lib/forecast/zero-price";
 
@@ -58,6 +62,14 @@ const SET: "nwp" | "phys" | "gbm" | "prob" | "curt" =
 const CORR = SET === "gbm" || SET === "prob" || SET === "curt";
 /** Olasılıksal kümenin ilk test ayı */
 const PROB_FIRST = Date.UTC(2025, 3, 1);
+/** Genişlik çarpanının sınama dönemi başı: öncesi (Nisan–Aralık 2025) seçim dönemi */
+const WIDTH_TEST_FROM = Date.UTC(2026, 0, 1);
+type Cov = [number, number];
+const covNew = (): Cov[] => WIDTHS.map(() => [0, 0] as Cov);
+/** Kapsama sayaçları: dönem (seçim / sınama) × kapsam (tüm / kayıp hariç) × çarpan; ay ay (kayıp hariç, çarpan 1); kayıtlı tavan */
+const cov = { sel: { all: covNew(), ex: covNew() }, test: { all: covNew(), ex: covNew() } };
+const covMonth = new Map<string, Cov>();
+const covRecorded: { raw: Cov; rec: Cov } = { raw: [0, 0], rec: [0, 0] };
 const [ly, lm] = endArg.split("-").map(Number);
 const FIRST = { y: 2025, m: 1 };
 const months: Array<{ y: number; m: number }> = [];
@@ -285,6 +297,8 @@ for (const id of await listPoolPlants()) {
     tested.length = 0;
     tested.push(...out);
   }
+  /** Olasılıksal küme: saat → bantlar (çarpan sırasıyla) ve kayıtlı tavanla bant */
+  const bands = new Map<number, { p10: number[]; p90: number[]; rec: [number, number] | null }>();
   if (SET === "prob") {
     const K = "ağırlıklı+düzeltme";
     const out: Hour[] = [];
@@ -306,6 +320,8 @@ for (const id of await listPoolPlants()) {
       const cap = test.find((h) => h.pred._cap)?.pred._cap ?? 0;
       const qm = fitResidualQuantiles(usable.map((h) => ({ pred: h.pred[K]!, actual: h.uevm! })), cap);
       if (!qm) continue;
+      const recMw = recorded.get(id);
+      const qmRec = recMw ? fitResidualQuantiles(usable.map((h) => ({ pred: h.pred[K]!, actual: h.uevm! })), cap, { ceiling: Math.max(cap, recMw) }) : null;
       // Teklif çeyrekliği: geçmiş saatlerde gerçek fiyatlarla en ucuzu
       const pick = chooseBidQuantile((qq) => evaluateForecasts(usable, { c: (h: Hour) => qm.quantile(h.pred[K]!, qq) }, market, "GES").c.totalTl);
       notes[`teklif çeyrekliği ${pick.q.toFixed(2)}`] = (notes[`teklif çeyrekliği ${pick.q.toFixed(2)}`] ?? 0) + 1;
@@ -317,6 +333,12 @@ for (const id of await listPoolPlants()) {
         }
         const p10 = qm.quantile(v, 0.1);
         const p90 = qm.quantile(v, 0.9);
+        if (v > 0.01 * cap)
+          bands.set(h.t, {
+            p10: WIDTHS.map((w) => qm.quantile(v, 0.1, w)),
+            p90: WIDTHS.map((w) => qm.quantile(v, 0.9, w)),
+            rec: qmRec ? [qmRec.quantile(v, 0.1), qmRec.quantile(v, 0.9)] : null,
+          });
         if (h.uevm !== null && v > 0.01 * cap) {
           bandN++;
           if (h.uevm >= p10 && h.uevm <= p90) inBand++;
@@ -334,6 +356,31 @@ for (const id of await listPoolPlants()) {
     tested.map((h) => ({ t: h.t, uevm: h.uevm, kgupFirst: h.kgupFirst, satGhi: h.satGhi ?? null, satDirect: h.satDirect ?? null, satDiffuse: h.satDiffuse ?? null })),
     data.site
   );
+  for (const h of tested) {
+    const b = bands.get(h.t);
+    if (!b || h.uevm === null) continue;
+    const per = h.t < WIDTH_TEST_FROM ? cov.sel : cov.test;
+    const exLoss = !loss.lost.has(h.t);
+    WIDTHS.forEach((_, i) => {
+      const inside = h.uevm! >= b.p10[i] && h.uevm! <= b.p90[i] ? 1 : 0;
+      for (const c of exLoss ? [per.all[i], per.ex[i]] : [per.all[i]]) {
+        c[0] += inside;
+        c[1]++;
+      }
+    });
+    if (!exLoss) continue;
+    const mk = new Date(h.t).toISOString().slice(0, 7);
+    const mc = covMonth.get(mk) ?? [0, 0];
+    mc[0] += h.uevm >= b.p10[0] && h.uevm <= b.p90[0] ? 1 : 0;
+    mc[1]++;
+    covMonth.set(mk, mc);
+    if (b.rec) {
+      covRecorded.raw[0] += h.uevm >= b.p10[0] && h.uevm <= b.p90[0] ? 1 : 0;
+      covRecorded.raw[1]++;
+      covRecorded.rec[0] += h.uevm >= b.rec[0] && h.uevm <= b.rec[1] ? 1 : 0;
+      covRecorded.rec[1]++;
+    }
+  }
   const cand: Record<string, (h: Hour) => number | null> = Object.fromEntries(NAMES.map((n) => [n, n === "ilk KGÜP" ? (h: Hour) => h.kgupFirst : (h: Hour) => h.pred[n] ?? null]));
   const all = evaluateForecasts(tested, cand, market, "GES");
   const exLoss = evaluateForecasts(tested, cand, market, "GES", (h) => !loss.lost.has(h.t));
@@ -343,12 +390,24 @@ for (const id of await listPoolPlants()) {
 }
 
 fs.mkdirSync(path.join(process.cwd(), ".cache", "forecast"), { recursive: true });
-fs.writeFileSync(path.join(process.cwd(), ".cache", "forecast", `solar-candidates-backtest-${SET}.json`), JSON.stringify({ generatedAt: new Date().toISOString(), period: { from: SET === "prob" ? "2025-04" : "2025-01", to: endArg }, set: SET, onlyProject, plants: results, ...(SET === "curt" ? { zeroPriceBrier: zpBrier, leaky: LEAKY } : {}) }));
+fs.writeFileSync(path.join(process.cwd(), ".cache", "forecast", `solar-candidates-backtest-${SET}.json`), JSON.stringify({ generatedAt: new Date().toISOString(), period: { from: SET === "prob" ? "2025-04" : "2025-01", to: endArg }, set: SET, onlyProject, plants: results, ...(SET === "curt" ? { zeroPriceBrier: zpBrier, leaky: LEAKY } : {}), ...(SET === "prob" ? { coverage: { widths: WIDTHS, cov, months: Object.fromEntries(covMonth), recorded: covRecorded } } : {}) }));
 const sum = (k: "all" | "exLoss", n: string, f: "totalTl" | "uevmMwh") => results.reduce((s, r) => s + r[k][n][f], 0);
 if (SET === "prob") {
   const n = results.reduce((a, r) => a + (r.notes["kapsama saat"] ?? 0), 0);
   const i = results.reduce((a, r) => a + (r.notes["kapsama içinde"] ?? 0), 0);
   console.log(`\nP10–P90 kapsaması (gündüz, bütün saatler): %${nf((i / Math.max(1, n)) * 100)} (hedef %80; ${n} saat)`);
+  const pc = (c: Cov) => `%${nf((c[0] / Math.max(1, c[1])) * 100)} (${c[1]} saat)`;
+  console.log(`Çarpan 1: bütün saatler seçim ${pc(cov.sel.all[0])}, sınama ${pc(cov.test.all[0])}; kayıp hariç (iyimser) seçim ${pc(cov.sel.ex[0])}, sınama ${pc(cov.test.ex[0])}`);
+  console.log("Ay ay (kayıp hariç, iyimser; çarpan 1):");
+  for (const [mk, c] of [...covMonth.entries()].sort()) console.log(`  ${mk}  ${pc(c)}`);
+  const pick = chooseWidth((w) => cov.sel.all[WIDTHS.indexOf(w)]);
+  const wi = WIDTHS.indexOf(pick.width);
+  console.log(
+    `Genişlik çarpanı (Nisan–Aralık 2025'in bütün saatleriyle seçildi): ${nf(pick.width)} → seçimde %${nf(pick.coverage * 100)}; 2026 sınaması (ANA SONUÇ): bütün saatler ${pc(cov.test.all[wi])}, kayıp hariç (iyimser) ${pc(cov.test.ex[wi])}`
+  );
+  const pickEx = chooseWidth((w) => cov.sel.ex[WIDTHS.indexOf(w)]);
+  console.log(`  Karşılaştırma: kayıp hariç saatlerle seçilseydi ${nf(pickEx.width)} → 2026 bütün saatler ${pc(cov.test.all[WIDTHS.indexOf(pickEx.width)])}`);
+  console.log(`Tavan kırpması (kayıtlı kurulu gücü olan santraller; bugünkü kayıt geçmişe uygulandı; kayıp hariç, iyimser; çarpan 1): eğitim tavanı ${pc(covRecorded.raw)}, kayıtlı güç ${pc(covRecorded.rec)}`);
 }
 if (SET === "curt") {
   const n = zpBrier.reduce((a, b) => a + b.rows, 0);

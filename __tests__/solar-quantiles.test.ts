@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chooseBidQuantile, fitResidualQuantiles } from "@/lib/solar-engine/models/quantiles";
+import { chooseBidQuantile, chooseWidth, fitResidualQuantiles } from "@/lib/solar-engine/models/quantiles";
 
 // Tohumlu: gerçekleşen = tahmin + gürültü; gürültü yüksek düzeyde daha geniş
 let s = 11;
@@ -41,5 +41,21 @@ describe("olasılıksal tahmin", () => {
   it("teklif çeyrekliği: en ucuzu; eşitlikte 0,5'e en yakını", () => {
     expect(chooseBidQuantile((q) => (q - 0.4) ** 2).q).toBe(0.4);
     expect(chooseBidQuantile(() => 1).q).toBe(0.5);
+  });
+
+  it("genişlik çarpanı bandı medyan çevresinde açar; 1 ham bandı verir; kayıtlı tavan kırpmayı kaldırır", () => {
+    expect(m.quantile(5, 0.9, 1)).toBe(m.quantile(5, 0.9));
+    expect(m.quantile(5, 0.5, 1.5)).toBeCloseTo(m.quantile(5, 0.5), 9);
+    expect(m.quantile(5, 0.9, 1.5) - m.quantile(5, 0.1, 1.5)).toBeGreaterThan(m.quantile(5, 0.9) - m.quantile(5, 0.1));
+    const hi = fitResidualQuantiles(rows, cap, { ceiling: 2 * cap })!;
+    expect(hi.quantile(9.9, 0.9)).toBeGreaterThan(cap);
+    expect(m.quantile(9.9, 0.9)).toBeLessThanOrEqual(cap);
+  });
+
+  it("kapsaması hedefe en yakın çarpanı seçer", () => {
+    // kapsama = 0,5 + 0,2 × w: %80 tam 1,5'te
+    const cov = (w: number): [number, number] => [Math.round(1000 * Math.min(1, 0.5 + 0.2 * w)), 1000];
+    expect(chooseWidth(cov).width).toBe(1.5);
+    expect(chooseWidth(() => [0, 0]).width).toBe(1);
   });
 });
