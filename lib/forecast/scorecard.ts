@@ -9,7 +9,12 @@
  * geçici saat sayısı her satırda taşınır, UEVM gelince aynı hesap kesin değeri verir.
  * Ayrımlar: gök durumu (günlük açıklık oranı: uydu GHI ÷ açık gök GHI) ve konum kaynağı (koordinatlı kayıt / ~ ilçe
  * merkezi). Ölçüm maskesi: uyduyla kayıp saatler (kısıntı, arıza; curtailment.ts) iki taraftan da çıkarılmış ayrı küme.
- * Eksik kayıt günleri ve santral boşlukları listelenir.
+ * Eksik kayıt günleri ve santral boşlukları listelenir. Sürüm: santral satırının `modelId`'si (santralin o günkü canlı
+ * sürümü) ya da kaydın `model.id`'si; gölge sürümler (`shadow`) de aynı saatlerle ölçülür (kendi kendine öğrenme,
+ * lib/forecast/self-learning.ts). Gölgesi olan kayıtlarda ayrıca "canlı" serisi: o gün gerçekte gönderilen tahmin
+ * (santralin şampiyonu); sürüm satırları seçim içidir (terfi eden sürüm kendisini seçtiren günleri de içerir), "canlı"
+ * değildir. Boşluk listesi yalnız canlı tahmin için. Sınır: sürümler gün içinde kendi null olmayan saatleriyle ölçülür
+ * (hava ortak olduğu için pratikte aynı saatler); grup toplamları eşleştirilmiş değildir.
  * SAF: I/O yok (veri lib/services/forecast-scorecard.ts).
  */
 
@@ -20,6 +25,7 @@ import { detectLostHours } from "./curtailment";
 import { clearSkyGhiHour } from "./solar-geometry";
 import type { SolarSite } from "./production-model";
 import type { ForecastLog } from "./forecast-log";
+import { LIVE_SERIES } from "./self-learning";
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -191,14 +197,28 @@ export function buildScorecard(input: {
     }
     const d0 = Date.parse(`${date}T00:00:00Z`);
     const inLog = new Map(log.plants.map((p) => [p.epiasPlantId, p]));
+    // Canlı tahmin ve gölge sürümler: (santral, sürüm) → o günün saatleri
+    const entries: Array<{ id: number; modelId: string; hours: Array<number | null>; locationSource?: string }> = [];
     for (const [id, data] of plants) {
       const p = inLog.get(id);
       if (!p || p.status !== "ok" || !p.hours) {
         plantGaps.push({ date, epiasPlantId: id, name: data.name, reason: !p ? "kayıtta yok" : `${p.status}${p.message ? `: ${p.message}` : ""}` });
         continue;
       }
-      const key = `${id}|${log.model.id}`;
-      const s = series.get(key) ?? { id, modelId: log.model.id, location: locationClass(p.location?.locationSource), hours: [], days: 0, scoredDays: 0 };
+      entries.push({ id, modelId: p.modelId ?? log.model.id, hours: p.hours, locationSource: p.location?.locationSource });
+      // Gerçekte gönderilen tahmin, sürümden bağımsız: kendi kendine öğrenmenin seçim yanlılığı taşımayan ölçüsü
+      if (log.shadow?.length) entries.push({ id, modelId: LIVE_SERIES, hours: p.hours, locationSource: p.location?.locationSource });
+      for (const sh of log.shadow ?? []) {
+        const q = sh.plants.find((x) => x.epiasPlantId === id);
+        if (q && q.status === "ok" && q.hours && sh.modelId !== (p.modelId ?? log.model.id)) entries.push({ id, modelId: sh.modelId, hours: q.hours, locationSource: p.location?.locationSource });
+      }
+    }
+    for (const e of entries) {
+      const id = e.id;
+      const data = plants.get(id)!;
+      const p = { hours: e.hours };
+      const key = `${id}|${e.modelId}`;
+      const s = series.get(key) ?? { id, modelId: e.modelId, location: locationClass(e.locationSource), hours: [], days: 0, scoredDays: 0 };
       series.set(key, s);
       s.days++;
       const skyKey = `${id}|${date}`;

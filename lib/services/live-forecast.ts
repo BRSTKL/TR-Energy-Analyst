@@ -86,7 +86,7 @@ async function cachedLiveWeather(lat: number, lon: number, fresh = false): Promi
  * pencere). Geçici üretim (EPİAŞ gerçek zamanlı üretimi; 18.10.2026) UEVM'den ilerideyse: son çekilen tam günün ertesi,
  * 4 ay geriye (en güncel üretimle eğitim).
  */
-async function trainingWindow(epiasPlantId: number, now: number): Promise<{ start: number; end: number; provisional: boolean } | null> {
+async function trainingWindow(epiasPlantId: number, now: number, months = 4): Promise<{ start: number; end: number; provisional: boolean } | null> {
   const y = new Date(now).getUTCFullYear();
   let uevmEnd: number | null = null;
   for (const year of [y, y - 1]) {
@@ -115,12 +115,12 @@ async function trainingWindow(epiasPlantId: number, now: number): Promise<{ star
   if (provEnd !== null && (uevmEnd === null || provEnd > uevmEnd)) {
     // 4 ay geriye; ayın 29–31'inde kısa aya taşmasın (30 Haziran → 28/29 Şubat değil 2 Mart)
     const e = new Date(provEnd);
-    const back = new Date(Date.UTC(e.getUTCFullYear(), e.getUTCMonth() - 4, 1));
+    const back = new Date(Date.UTC(e.getUTCFullYear(), e.getUTCMonth() - months, 1));
     const day = Math.min(e.getUTCDate(), new Date(Date.UTC(back.getUTCFullYear(), back.getUTCMonth() + 1, 0)).getUTCDate());
     return { start: Date.UTC(back.getUTCFullYear(), back.getUTCMonth(), day), end: provEnd, provisional: true };
   }
   if (uevmEnd === null) return null;
-  return { start: Date.UTC(new Date(uevmEnd).getUTCFullYear(), new Date(uevmEnd).getUTCMonth() - 4, 1), end: uevmEnd, provisional: false };
+  return { start: Date.UTC(new Date(uevmEnd).getUTCFullYear(), new Date(uevmEnd).getUTCMonth() - months, 1), end: uevmEnd, provisional: false };
 }
 
 /** Tek santralin tahmini (sayfa ve günlük tahmin kaydı aynı yolu kullanır) */
@@ -136,6 +136,8 @@ export interface SolarPlantForecast {
   /** Hava tahmininin alındığı an (ISO) */
   weatherFetchedAt?: string;
   location?: { latitude: number; longitude: number; locationSource: string };
+  /** `recentFitDays` istendiyse: eğitimin son günlerinde (kayıp saatler hariç) model tahmini ve gerçekleşen (günlük hata düzeltmesinin yedek kaynağı) */
+  recentFit?: Array<{ t: number; forecast: number; actual: number }>;
 }
 
 /**
@@ -143,13 +145,18 @@ export interface SolarPlantForecast {
  * Eğitim: `trainingWindow` (son tam üretim ayı ya da geçici üretimle son tam gün, 4 ay geriye); girdi: o andaki en yeni hava
  * tahmini.
  */
-export async function forecastSolarPlant(epiasPlantId: number, from: number, count: number, opts: { now?: number; fresh?: boolean } = {}): Promise<SolarPlantForecast> {
+export async function forecastSolarPlant(
+  epiasPlantId: number,
+  from: number,
+  count: number,
+  opts: { now?: number; fresh?: boolean; trainingMonths?: number; recentFitDays?: number } = {}
+): Promise<SolarPlantForecast> {
   const now = opts.now ?? Date.now();
   try {
     const info = await readPoolPlantInfo(epiasPlantId);
     const loc = info?.location;
     if (!loc) throw new Error("Havuzda konum yok");
-    const win = await trainingWindow(epiasPlantId, now);
+    const win = await trainingWindow(epiasPlantId, now, opts.trainingMonths ?? 4);
     if (win === null) return { status: "no-data", message: "Havuzda üretim verisi yok" };
     const { start, end } = win;
     const data = await loadSolarHours(epiasPlantId, start, end, { provisional: win.provisional });
@@ -164,7 +171,7 @@ export async function forecastSolarPlant(epiasPlantId: number, from: number, cou
     try {
       model = fitSolarModelV2(data.hours, data.site, { exclude: clean.exclude, noLag: true });
     } catch {
-      return { status: "no-data", message: "Son 4 ayda eğitim için yeterli üretim saati yok (yeni santral?)" };
+      return { status: "no-data", message: `Son ${opts.trainingMonths ?? 4} ayda eğitim için yeterli üretim saati yok (yeni santral?)` };
     }
     const w = await cachedLiveWeather(loc.latitude, loc.longitude, opts.fresh);
     const hours = liveWeatherHours(w.res, from, from + count * HOUR).map((wh) => {
@@ -172,8 +179,20 @@ export async function forecastSolarPlant(epiasPlantId: number, from: number, cou
       const v = model.predict(h);
       return v === null ? null : Math.round(v * 1000) / 1000;
     });
+    // Eğitimin son günlerinde modelin hatası (örneklem içi; eğitimden çıkarılan kayıp saatler hariç)
+    let recentFit: SolarPlantForecast["recentFit"];
+    if (opts.recentFitDays) {
+      const since = end - opts.recentFitDays * DAY;
+      recentFit = [];
+      for (const h of data.hours) {
+        if (h.t < since || h.uevm === null || clean.exclude(h)) continue;
+        const v = model.predict(h);
+        if (v !== null) recentFit.push({ t: h.t, forecast: v, actual: h.uevm });
+      }
+    }
     return {
       status: "ok",
+      ...(recentFit ? { recentFit } : {}),
       ...(model.trainHours < MIN_TRAIN_HOURS ? { warning: `Eğitimde yalnız ${model.trainHours} saat (yeni santral ya da veri eksik): tahmin kaba` } : {}),
       hours,
       train: {

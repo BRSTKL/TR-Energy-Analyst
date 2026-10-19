@@ -628,6 +628,16 @@ Güneş veri bütünlüğü (projelerdeki 36 lisanslı santral; 4 lisanssız top
 4. **Sürüm yarışı (21.5).** Yeni sürüm önce geriye dönük testte, sonra canlının yanında gölge olarak günlük kayda yazılır (aynı dosyada ikinci model); karnede belirli bir süre (ör. 4 hafta) canlıyı maliyetle geçerse yerine geçer. Fikri biz üretiriz, kararı veri verir.
 5. **İyileştirmeler, karnenin gösterdiği sırayla:** 21.3 DC / AC oranı (öğle kırpılması), 21.2 kalan 6 tahmini konum, 21.7 çok modelli hava, 21.6 2024 üretimi, şirket planıyla karışım (zayıf tahminci santraller); her biri 4'teki yarıştan geçer.
 
+**Kendi kendine öğrenen motor (19.10.2026, kullanıcı: "modelin kendi kendine öğrenmesini sağlamak için gerekli geliştirmeleri yapalım").** Önceki durum: her gün yeniden eğitiliyor, ama yöntem kendiliğinden gelişmiyor ve karnenin bulduğu hata modele dönmüyordu. Kurulan döngü (lib/forecast/self-learning.ts, lib/services/self-learning.ts):
+
+- [x] **Gölge sürümler.** Her sabah bütün sürümler aynı kurallarla tahmin yapar: temel (4 ay eğitim), 2 ay, 6 ay, günlük hata düzeltmeli. Santralin şampiyonu canlı satıra (`modelId`), diğerleri gölgeye (`shadow`) yazılır; karne hepsini aynı saatlerle ölçer.
+- [x] **Günlük hata düzeltmesi.** Son 21 günün kayıtlı temel tahminleri gerçekleşenle (UEVM / GZÜ, uyduyla kayıp saatler hariç): günün saati başına gerçekleşen ÷ tahmin, büzülmeli, [0,75; 1,25]. 7 günden az kayıtta eğitimin son 14 günü (örneklem içi) ayrı kimlikle (`-bias-insample`, terfi etmez).
+- [x] **Santral başına şampiyon.** Her sabah son 28 günün karnesi: aday canlı sürümü ≥ 20 ortak günde, maliyeti ≥ %5 düşürerek ve 7 günlük blok önyüklemesiyle (aday sayısına göre Bonferroni) ≥ 0,95 olasılıkla geçerse terfi; temel olmayan canlı sürüm temele göre kötüleşirse ya da hiç günü yoksa geri dönüş; değişiklikten sonra 28 gün bekleme. Kayıt defteri data/pool/forecast-log/solar/champions.json, yalnız günlük kayıt yazılınca işlenir; değişiklik bildirimle.
+- [x] **Seçim yanlılığı olmayan ölçü.** Karnede "canlı" serisi: o gün gerçekte gönderilen tahmin (sürümden bağımsız). Sürüm satırları seçim içidir.
+- [ ] **Aday fabrikası genişlemesi.** DC / AC oranı (21.3), çok modelli hava (21.7), şirket planıyla karışım; her biri aday olarak eklenir, karar kendiliğinden.
+- [ ] **Değişim algılama.** Santral davranışı birden değişirse (kapasite artışı, uzun arıza, konum tutarsızlığı) eğitim yenilenir ya da bildirim.
+Sızıntı denetimi (sizinti-denetcisi): bilgi zamanı sızıntısı yok; bulguları (seçim yanlılığı, iki düzeltme yönteminin karışması, çoklu test, kuru çalışmanın kayıt defterini değiştirmesi, since, şampiyonu verisiz kilitlenme) düzeltildi. Sınır: sürümler gün içinde kendi saatleriyle ölçülür (hava ortak, pratikte aynı saatler); ilk terfi en erken ≈ 20 günlük kayıttan sonra (Kasım ortası).
+
 Değerin olduğu yer (dürüst beklenti): santral içi veri olmadan büyük şirketlerin ticari tahminini toplamda geçmek zor; değer (a) tahmini zayıf santrallerde şirket planını düzeltmek, (b) kendi tahmincisi olmayan küçük bağımsız santraller (toplayıcıların hedefi) için birincil tahmin, (c) bağımsız ikinci görüş ve karne.
 
 ## 3. Karar noktaları (sizin onayınız gerekiyor)

@@ -7,12 +7,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { ProjectScorecard } from "@/lib/services/forecast-scorecard";
 import type { ScorePair, SkyClass } from "@/lib/forecast/scorecard";
+import { BASE_MODEL, BIAS_INSAMPLE_MODEL, LIVE_SERIES } from "@/lib/forecast/self-learning";
 
 const nf = (v: number, d = 1) => (Number.isFinite(v) ? v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d }) : "–");
 const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
 const ym = (s: string) => `${MONTHS[Number(s.slice(5, 7)) - 1]} ${s.slice(0, 4)}`;
 const dm = (s: string) => `${Number(s.slice(8, 10))} ${MONTHS[Number(s.slice(5, 7)) - 1]}`;
 const unit = (r: ScorePair["model"]) => (r.uevmMwh > 0 ? r.totalTl / r.uevmMwh : NaN);
+/** Sürüm adları (kendi kendine öğrenme, lib/forecast/self-learning.ts) */
+const MODEL_LABEL: Record<string, string> = {
+  [LIVE_SERIES]: "Gönderilen tahmin (her santralin o günkü canlı sürümü)",
+  [BASE_MODEL]: "Temel (4 ay eğitim)",
+  [`${BASE_MODEL}-w2`]: "2 ay eğitim",
+  [`${BASE_MODEL}-w6`]: "6 ay eğitim",
+  [`${BASE_MODEL}-bias`]: "Günlük hata düzeltmeli",
+  [BIAS_INSAMPLE_MODEL]: "Hata düzeltmeli (eğitim içi, deneme; terfi etmez)",
+};
+const modelLabel = (id: string) => MODEL_LABEL[id] ?? id;
 const SKY_LABEL: Record<SkyClass, string> = { açık: "Açık gün", parçalı: "Parçalı bulutlu", kapalı: "Kapalı gün", bilinmiyor: "Gök bilinmiyor (uydu yok)" };
 
 function PairCells({ p }: { p: ScorePair }) {
@@ -94,13 +105,14 @@ export function ForecastScorecardCard({ projectId }: { projectId: string }) {
           </p>
         )}
         {card &&
-          card.groups.map((g) => {
+          // Ayrıntı yalnız gönderilen tahmin için ("canlı" serisi; eski kayıtlarda tek sürüm); adaylar aşağıda tek tabloda
+          card.groups.filter((g, _, all) => g.modelId === (all.some((x) => x.modelId === LIVE_SERIES) ? LIVE_SERIES : all[0].modelId)).map((g) => {
             const own = card.rows.filter((r) => r.modelId === g.modelId && r.all.model.hours > 0);
             const wins = (k: "all" | "exLoss") => own.filter((r) => r[k].model.hours > 0 && r[k].model.totalTl < r[k].kgup.totalTl).length;
             return (
               <div key={g.modelId} className="space-y-2">
                 <p className="px-6 text-sm text-slate-800">
-                  Model <span className="font-mono text-xs">{g.modelId}</span>, {dm(card.from)} – {dm(card.to)}, {g.plants} santral. Tüm saatler: model{" "}
+                  {modelLabel(g.modelId)}, {dm(card.from)} – {dm(card.to)}, {g.plants} santral. Tüm saatler: model{" "}
                   <b>{nf(unit(g.all.model))}</b>, ilk KGÜP <b>{nf(unit(g.all.kgup))}</b> TL/MWh (model {wins("all")} / {own.length} santralde ucuz). Kayıp saatler
                   hariç: model <b>{nf(unit(g.exLoss.model))}</b>, ilk KGÜP <b>{nf(unit(g.exLoss.kgup))}</b> TL/MWh ({wins("exLoss")} / {own.length}).
                 {g.all.provisionalHours > 0 && (
@@ -182,6 +194,40 @@ export function ForecastScorecardCard({ projectId }: { projectId: string }) {
               </div>
             );
           })}
+        {card && card.groups.some((g) => g.modelId === LIVE_SERIES) && (
+          <div className="space-y-1">
+            <p className="px-6 text-sm font-medium text-slate-800">Sürümler (kendi kendine öğrenme)</p>
+            <p className="px-6 text-xs text-slate-500">
+              Her gün bütün sürümler aynı kurallarla tahmin yapar; her santralde son 28 günde şirket planına göre en ucuz ve anlamlı biçimde (blok önyüklemesiyle)
+              daha iyi olan aday o santralin canlı sürümü olur. Bu satırlar seçim içidir (terfi eden sürüm kendisini seçtiren günleri de içerir); gerçek başarı
+              yukarıdaki gönderilen tahmindir.
+            </p>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Sürüm</TableHead>
+                    <TableHead className="text-right">Santral</TableHead>
+                    <TableHead className="text-right">Saat</TableHead>
+                    <TableHead className="text-right">WAPE model / KGÜP</TableHead>
+                    <TableHead className="text-right">TL/MWh model / KGÜP</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {card.groups
+                    .filter((g) => g.modelId !== LIVE_SERIES)
+                    .map((g) => (
+                      <TableRow key={g.modelId}>
+                        <TableCell>{modelLabel(g.modelId)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{g.plants}</TableCell>
+                        <PairCells p={g.exLoss} />
+                      </TableRow>
+                    ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        )}
         {card && (card.missingDays.length > 0 || gaps.length > 0 || card.pendingDays.length > 0) && (
           <div className="space-y-1 px-6 text-xs text-slate-600">
             {card.missingDays.length > 0 && (

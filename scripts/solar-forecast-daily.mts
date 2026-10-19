@@ -17,6 +17,9 @@
  * atlanır), hava tahmini arşivi ve uydu ışınımı (Open-Meteo). Her adım kendi süreç grubunda, en çok 6 dakika (kesime 15
  * dakikadan az kalacaksa kısalır; süre dolunca alt süreçleriyle birlikte kapatılır: tsx betiği ayrı süreçte çalıştırır,
  * yalnız dış süreç kapatılınca adım 29 dakika sürmüştü). Hatası kaydı durdurmaz.
+ * Kendi kendine öğrenme (lib/forecast/self-learning.ts, 19.10.2026): önce şampiyon değerlendirmesi (son 28 günün karnesi;
+ * değişiklik bildirimle); sonra her santral için bütün sürümler (4 / 2 / 6 ay eğitim, günlük hata düzeltmeli) tahmin
+ * yapar; santralin şampiyonu canlı tahmin (`modelId`), diğerleri gölge (`shadow`) olarak yazılır.
  * Zamanlama: scripts/launchd/ (Mac saatiyle 08:30 ve 10:00). Kesime WAIT_MARGIN'dan çok varken şu durumlarda yazmadan
  * çıkar (sonraki çalışma yazar): günün 00Z ECMWF çalışması henüz yayımlanmamış (ya da bilinmiyor), bir santralin hava
  * isteği düşmüş. Kesime daha az kaldıysa düşen hava istekleri kesime 10 dakika kalana kadar yeniden denenir (19.10.2026:
@@ -29,7 +32,9 @@ import { isUnlicensedName } from "@/lib/analysis/candidate-access";
 import { readPoolPlantInfo } from "@/lib/pool/pool-store";
 import { forecastSolarPlant } from "@/lib/services/live-forecast";
 import { readForecastLog, writeForecastLog, forecastLogPath } from "@/lib/services/forecast-log";
-import { FORECAST_LOG_SCHEMA, SOLAR_MODEL_ID, forecastCutoff, isOnTime, nextTargetDate, targetDayWall, type ForecastLog, type ForecastLogPlant } from "@/lib/forecast/forecast-log";
+import { FORECAST_LOG_SCHEMA, SOLAR_MODEL_ID, forecastCutoff, isOnTime, nextTargetDate, targetDayWall, type ForecastLog, type ForecastLogPlant, type ForecastLogShadow } from "@/lib/forecast/forecast-log";
+import { BIAS_INSAMPLE_MODEL, BIAS_MIN_LOGGED_DAYS, MODEL_VARIANTS, applyBias, biasFactors } from "@/lib/forecast/self-learning";
+import { championOf, loggedBiasSamples, readChampions, reviewChampions } from "@/lib/services/self-learning";
 import { WEATHER_MODEL } from "@/lib/weather/weather-codec";
 
 const arg = process.argv.slice(2).find((a) => /^\d{4}-\d{2}-\d{2}$/.test(a));
@@ -153,12 +158,63 @@ if ((runInit === null || Date.parse(runInit) < today00z) && canWait()) {
   process.exit(0);
 }
 
+// Şampiyon değerlendirmesi (son 28 günün karnesi): canlı sürümler bu günün tahmininden önce belirlenir; kayıt defterine
+// yalnız günlük kayıt yazıldıktan sonra işlenir (kuru çalışmada ya da yazılmadan çıkışta değişmez)
+const review = await reviewChampions(Array.from(plants.keys()), started, { targetDate: target }).catch(async (e) => {
+  console.log(`${stamp()} ${target}: şampiyon değerlendirmesi yapılamadı (${e instanceof Error ? e.message.slice(0, 120) : e})`);
+  return { decisions: [], registry: await readChampions(), commit: async () => {} };
+});
+const decisions = review.decisions;
+for (const d of decisions) console.log(`${stamp()} ${target}: #${d.epiasPlantId} ${plants.get(d.epiasPlantId) ?? ""}: ${d.from} → ${d.to} (${d.reason})`);
+const champions = review.registry;
+const shadowByModel = new Map<string, ForecastLogShadow>();
+// Hata düzeltmesinin "bugün"ü: hedef günün bir öncesi (geç kayıtta da hedef günden sonraki üretim girmez)
+const today = new Date(targetDayWall(target) - 86_400_000).toISOString().slice(0, 10);
+
+/** Santralin bütün sürümleri: şampiyon canlı satıra, diğerleri gölgeye */
 async function forecastOne(id: number, name: string): Promise<ForecastLogPlant> {
   if (!(await readPoolPlantInfo(id))?.location) return { epiasPlantId: id, name, status: "error", message: "Havuzda konum yok" };
-  const f = await forecastSolarPlant(id, targetDayWall(target), 24, { now: started, fresh: true });
-  // Hava yanıtında hedef günün saatleri yoksa tahmin yok sayılır
-  if (f.status === "ok" && !(f.hours ?? []).some((v) => v !== null)) return { epiasPlantId: id, name, status: "error", message: "Hava tahmininde hedef günün saatleri yok" };
-  return { epiasPlantId: id, name, ...f };
+  const day0 = targetDayWall(target);
+  const empty = (h: Array<number | null> | undefined) => !(h ?? []).some((v) => v !== null);
+  const results = new Map<string, ForecastLogPlant>();
+  // Temel sürüm önce (hava o an çekilir; diğerleri aynı yanıtı önbellekten kullanır)
+  const base = await forecastSolarPlant(id, day0, 24, { now: started, fresh: true, trainingMonths: 4, recentFitDays: 14 });
+  if (base.status === "ok" && empty(base.hours)) return { epiasPlantId: id, name, status: "error", message: "Hava tahmininde hedef günün saatleri yok" };
+  const { recentFit, ...baseRest } = base;
+  for (const v of MODEL_VARIANTS) {
+    if (v.bias) {
+      if (base.status !== "ok") {
+        results.set(v.id, { epiasPlantId: id, name, status: base.status, message: base.message });
+        continue;
+      }
+      const logged = await loggedBiasSamples(id, today);
+      const useLogged = logged.days >= BIAS_MIN_LOGGED_DAYS;
+      const samples = useLogged ? logged.samples : (recentFit ?? []);
+      const factors = biasFactors(samples);
+      // Örneklem içi (yedek) düzeltme ayrı kimlikle: iki yöntem tek sürüm gibi değerlendirilmez
+      results.set(useLogged ? v.id : BIAS_INSAMPLE_MODEL, {
+        epiasPlantId: id,
+        name,
+        ...baseRest,
+        hours: applyBias(base.hours!, factors),
+        bias: { factors: factors.map((f) => Math.round(f * 1000) / 1000), source: useLogged ? "kayıtlı tahmin" : "eğitimin son günleri", days: useLogged ? logged.days : new Set(samples.map((x) => new Date(x.t).toISOString().slice(0, 10))).size },
+      });
+    } else if (v.trainingMonths === 4) results.set(v.id, { epiasPlantId: id, name, ...baseRest });
+    else {
+      const f = await forecastSolarPlant(id, day0, 24, { now: started, trainingMonths: v.trainingMonths });
+      const { recentFit: _r, ...rest } = f;
+      results.set(v.id, { epiasPlantId: id, name, ...rest });
+    }
+  }
+  const champ = results.has(championOf(champions, id)) ? championOf(champions, id) : SOLAR_MODEL_ID;
+  for (const [modelId, r] of results) {
+    if (modelId === champ) continue;
+    const sh = shadowByModel.get(modelId) ?? { modelId, plants: [] };
+    shadowByModel.set(modelId, sh);
+    sh.plants = sh.plants.filter((p) => p.epiasPlantId !== id);
+    sh.plants.push({ epiasPlantId: id, status: r.status, ...(r.message ? { message: r.message } : {}), ...(r.hours ? { hours: r.hours } : {}), ...(r.train ? { train: r.train } : {}), ...(r.bias ? { bias: r.bias } : {}) });
+  }
+  return { ...results.get(champ)!, modelId: champ };
 }
 const isWeatherFailure = (p: ForecastLogPlant) => p.status === "error" && /Open-Meteo|fetch|ECONN|ETIMEDOUT|abort|timeout/i.test(p.message ?? "");
 
@@ -198,6 +254,7 @@ const log: ForecastLog = {
   weather: { source: "Open-Meteo Forecast API (CC BY 4.0)", model: WEATHER_MODEL, runInit, ...(runInitAfter !== runInit ? { runInitAfter } : {}) },
   code,
   plants: out,
+  shadow: Array.from(shadowByModel.values()),
 };
 const ok = out.filter((p) => p.status === "ok");
 if (!ok.length) {
@@ -206,11 +263,22 @@ if (!ok.length) {
   process.exit(1);
 }
 if (dry) {
+  const champs = new Map<string, number>();
+  for (const p of out) champs.set(p.modelId ?? SOLAR_MODEL_ID, (champs.get(p.modelId ?? SOLAR_MODEL_ID) ?? 0) + 1);
   console.log(`${stamp()} ${target}: kuru çalışma, yazılmadı; ${ok.length}/${out.length} santral; kesimden önce: ${log.onTime ? "evet" : "HAYIR"}; hava çalışması ${runInit ?? "?"}`);
+  console.log(`  canlı sürümler: ${Array.from(champs.entries()).map(([k, v]) => `${k} ${v}`).join(", ")}; gölge: ${log.shadow!.map((s) => `${s.modelId} (${s.plants.filter((p) => p.status === "ok").length})`).join(", ")}`);
+  const bias = out.map((p) => log.shadow!.find((s) => s.modelId.endsWith("-bias"))?.plants.find((q) => q.epiasPlantId === p.epiasPlantId)?.bias).filter(Boolean);
+  if (bias.length) console.log(`  hata düzeltmesi örnek: ${bias[0]!.source}, öğle çarpanı ${bias[0]!.factors[12]}`);
   for (const p of out) if (p.status !== "ok") console.log(`  ${p.name}: ${p.message}`);
   process.exit(0);
 }
 const written = await writeForecastLog(log);
+// Şampiyon değişiklikleri yalnız bu kayıt yazıldıysa kalıcı
+if (written && decisions.length) {
+  await review.commit();
+  const text = `${decisions.length} santralde canlı sürüm değişti: ${decisions.map((d) => `${plants.get(d.epiasPlantId) ?? d.epiasPlantId} → ${d.to.replace(SOLAR_MODEL_ID, "temel")}`).join(", ")}`.slice(0, 220);
+  spawn("osascript", ["-e", `display notification "${text.replace(/"/g, "'")}" with title "Güneş tahmin motoru"`], { stdio: "ignore" });
+}
 const mwh = ok.reduce((s, p) => s + (p.hours ?? []).reduce((a: number, v) => a + (v ?? 0), 0), 0);
 console.log(
   `${stamp()} ${target}: ${written ? "yazıldı" : "başka bir çalışma önce yazmış, dokunulmadı"}; ${ok.length}/${out.length} santral, toplam ${mwh.toFixed(1)} MWh; kesimden önce: ${log.onTime ? "evet" : "HAYIR"}; hava çalışması ${runInit ?? "?"}`

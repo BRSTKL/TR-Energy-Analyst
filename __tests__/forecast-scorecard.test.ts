@@ -103,4 +103,24 @@ describe("tahmin karnesi (21.4)", () => {
     expect(r.days).toBe(2);
     expect(r.scoredDays).toBe(1);
   });
+
+  it("gölge sürümler aynı saatlerle ölçülür; 'canlı' serisi gönderilen tahmindir (şampiyon değişse de)", () => {
+    const dates = ["2026-09-14", "2026-09-15"];
+    const fc2 = fc.map((v) => v * 0.9);
+    const logs = dates.map((d, i) => {
+      const l = log(d, i === 0 ? fc : fc2);
+      // 1. gün canlı m1, gölge m2; 2. gün canlı m2 (terfi), gölge m1
+      l.plants[0].modelId = i === 0 ? "m1" : "m2";
+      l.shadow = [{ modelId: i === 0 ? "m2" : "m1", plants: [{ epiasPlantId: 1, status: "ok", hours: i === 0 ? fc2 : fc }] }];
+      return l;
+    });
+    const card = buildScorecard({ from: dates[0], to: dates[1], logs, plants: new Map([[1, plant(dates, 0.95)]]), market: market(dates) });
+    const by = Object.fromEntries(card.rows.map((r) => [r.modelId, r]));
+    expect(Object.keys(by).sort()).toEqual(["canlı", "m1", "m2"]);
+    expect(by.m1.all.model.hours).toBe(by.m2.all.model.hours);
+    // canlı: 1. gün m1 (12), 2. gün m2 (10,8) → hata ortalaması ikisinin arasında
+    expect(by["canlı"].all.model.maeMwh).toBeCloseTo((by.m1.all.model.maeMwh + by.m2.all.model.maeMwh) / 2, 6);
+    expect(card.plantGaps).toEqual([]);
+  });
 });
+

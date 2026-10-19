@@ -30,6 +30,16 @@ export interface ForecastLogPlant {
   train?: { from: string; to: string; hours: number; mount: string; maxMwh: number; provisionalHours?: number; provisionalThrough?: string };
   weatherFetchedAt?: string;
   location?: { latitude: number; longitude: number; locationSource: string };
+  /** Bu santralin canlı (şampiyon) sürümü; yoksa kaydın `model.id`'si (kendi kendine öğrenme, lib/forecast/self-learning.ts) */
+  modelId?: string;
+  /** Günlük hata düzeltmesi uygulandıysa saat başı çarpanlar ve kaynağı */
+  bias?: { factors: number[]; source: "kayıtlı tahmin" | "eğitimin son günleri"; days: number };
+}
+
+/** Gölge sürüm: canlı olmayan adayın aynı gün, aynı kurallarla yaptığı tahmin (karne hepsini ölçer) */
+export interface ForecastLogShadow {
+  modelId: string;
+  plants: Array<Pick<ForecastLogPlant, "epiasPlantId" | "status" | "message" | "hours" | "train" | "bias">>;
 }
 
 export interface ForecastLog {
@@ -49,6 +59,8 @@ export interface ForecastLog {
   /** Kodun sürümü (git commit), biliniyorsa */
   code: string | null;
   plants: ForecastLogPlant[];
+  /** Gölge sürümler (19.10.2026'dan) */
+  shadow?: ForecastLogShadow[];
 }
 
 /** D gününün başı, Türkiye duvar saati ms (havuz kuralı: Türkiye saati UTC alanlarında) */
