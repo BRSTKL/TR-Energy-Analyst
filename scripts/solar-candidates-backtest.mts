@@ -9,6 +9,10 @@
  *     4. aydaki hatasına göre, üç modelin ortak saatlerinde, ağırlık ∝ 1 / hata²; test ayı görülmez; lib/solar-engine/models/ensemble.ts).
  *     Bir modelin verisi olmayan saat bütün adaylardan düşer.
  *   - `phys` (22.2): fiziksel model ve karma (fizik + ridge).
+ *   - `gbm` (22.4): öğrenen düzeltme katmanı (lib/solar-engine/models/correction.ts) temel ve ağırlıklı birleşimin üstünde.
+ *     Temel ve birleşim Temmuz 2024'ten her ay önceki 4 ayla kurulur (örneklem dışı tahmin serisi); her test ayının düzeltmesi
+ *     o aydan önceki en çok 12 ayın örneklem dışı hatasıyla öğrenilir (sıfır fiyatlı ve uyduyla kayıp saatler hariç; son
+ *     günler trainingLossFilter kuralıyla dışarıda).
  *
  *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/solar-candidates-backtest.mts [sonAy=YYYY-AA] [--project] [--set nwp|phys]
  * --project: yalnız proje santralleri. Çıktı: .cache/forecast/solar-candidates-backtest-<küme>.json
@@ -29,16 +33,22 @@ import { isRecordedCapacity } from "@/lib/epias-plant/installed-capacity";
 import { NWP_MODELS, type NwpYear } from "@/lib/weather/nwp-models";
 import { archiveVariants, ENSEMBLE_SOURCES, fitEnsemble, noLag, type NwpArchive } from "@/lib/solar-engine/models/ensemble";
 import { readNwpYear } from "@/lib/weather/weather-store";
+import { fitCorrection, recentErrorFor } from "@/lib/solar-engine/models/correction";
+import { TRAIN_ZERO_PRICE_MAX } from "@/lib/solar-engine/models/production-model";
 
 const endArg = process.argv.slice(2).find((a) => /^\d{4}-\d{2}$/.test(a)) ?? "2026-09";
 const onlyProject = process.argv.includes("--project");
 const setArg = process.argv[process.argv.indexOf("--set") + 1];
-const SET: "nwp" | "phys" = process.argv.includes("--set") && setArg === "phys" ? "phys" : "nwp";
+const SET: "nwp" | "phys" | "gbm" = process.argv.includes("--set") && (setArg === "phys" || setArg === "gbm") ? setArg : "nwp";
 const [ly, lm] = endArg.split("-").map(Number);
 const FIRST = { y: 2025, m: 1 };
 const months: Array<{ y: number; m: number }> = [];
 for (let y = FIRST.y, m = FIRST.m; y < ly || (y === ly && m <= lm); m === 12 ? ((y += 1), (m = 1)) : (m += 1)) months.push({ y, m });
 const end = Date.UTC(ly, lm, 1);
+/** Düzeltme katmanının örneklem dışı tahmin serisinin başı (ek model arşivi 2024-03'ten, 4 ay eğitim) */
+const SERIES_FIRST = { y: 2024, m: 7 };
+const seriesMonths: Array<{ y: number; m: number }> = [];
+for (let y = SERIES_FIRST.y, m = SERIES_FIRST.m; y < ly || (y === ly && m <= lm); m === 12 ? ((y += 1), (m = 1)) : (m += 1)) seriesMonths.push({ y, m });
 const marketRows = await prisma.marketData.findMany({ where: { timestamp: { gte: new Date(Date.UTC(FIRST.y, FIRST.m - 1, 1)), lt: new Date(end) } } });
 const market = new Map<number, MarketPriceRecord>(
   marketRows.map((m) => [m.timestamp.getTime(), { timestamp: m.timestamp, ptf: m.ptf, smf: m.smf, systemDirection: m.systemDirection as SystemDirection, imbalancePosPrice: m.imbalancePosPrice, imbalanceNegPrice: m.imbalanceNegPrice }])
@@ -51,7 +61,12 @@ const projectIds = new Set(capRows.map((r) => r.epiasPlantId!));
 await prisma.$disconnect();
 
 type Hour = SolarHourV2 & { pred: Record<string, number | null> };
-const NAMES = SET === "phys" ? ["temel", "fiziksel", "karma", "ilk KGÜP"] : ["temel", "ICON-EU", "GFS", "ortalama", "girdi ort.", "ağırlıklı", "ilk KGÜP"];
+const NAMES =
+  SET === "phys"
+    ? ["temel", "fiziksel", "karma", "ilk KGÜP"]
+    : SET === "gbm"
+      ? ["temel", "temel+düzeltme", "ağırlıklı", "ağırlıklı+düzeltme", "ilk KGÜP"]
+      : ["temel", "ICON-EU", "GFS", "ortalama", "girdi ort.", "ağırlıklı", "ilk KGÜP"];
 const results: Array<{ id: number; name: string; recordedCap: boolean; notes: Record<string, number>; all: Record<string, CandidateResult>; exLoss: Record<string, CandidateResult> }> = [];
 const nf = (v: number, d = 1) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
 
@@ -59,15 +74,15 @@ for (const id of await listPoolPlants()) {
   const info = await readPoolPlantInfo(id);
   if (!info?.location || info.type !== "GES") continue;
   if (onlyProject && !projectIds.has(id)) continue;
-  const data = await loadSolarHours(id, Date.UTC(FIRST.y, FIRST.m - 5, 1), end);
+  const data = await loadSolarHours(id, SET === "gbm" ? Date.UTC(SERIES_FIRST.y, SERIES_FIRST.m - 5, 1) : Date.UTC(FIRST.y, FIRST.m - 5, 1), end);
   if (!data) continue;
   const tested: Hour[] = [];
   const notes: Record<string, number> = {};
   const nwp: NwpArchive = new Map();
-  if (SET === "nwp") {
+  if (SET !== "phys") {
     for (const m of NWP_MODELS) {
       const ys = new Map<number, NwpYear>();
-      for (let y = FIRST.y - 1; y <= ly; y++) {
+      for (let y = SERIES_FIRST.y; y <= ly; y++) {
         const d = await readNwpYear(id, m, y);
         if (d) ys.set(y, d);
       }
@@ -75,7 +90,7 @@ for (const id of await listPoolPlants()) {
     }
     if ([...nwp.values()].some((ys) => !ys.size)) continue;
   }
-  for (const { y, m } of months) {
+  for (const { y, m } of SET === "gbm" ? seriesMonths : months) {
     const from = Date.UTC(y, m - 1, 1);
     const to = Date.UTC(y, m, 1);
     const train = data.hours.filter((h) => h.t >= Date.UTC(y, m - 5, 1) && h.t < from);
@@ -100,13 +115,57 @@ for (const id of await listPoolPlants()) {
         notes[top] = (notes[top] ?? 0) + 1;
         predict = (h) => {
           const p = ens.predict(archiveVariants(h, nwp));
-          return { temel: p.sources[0], "ICON-EU": p.sources[1], GFS: p.sources[2], ortalama: p.mean, "girdi ort.": p.input, ağırlıklı: p.weighted };
+          return { temel: p.sources[0], "ICON-EU": p.sources[1], GFS: p.sources[2], ortalama: p.mean, "girdi ort.": p.input, ağırlıklı: p.weighted, _cap: ens.trainMaxMwh };
         };
       }
     } catch {
       continue;
     }
     for (const h of test) tested.push({ ...h, pred: predict(h) });
+  }
+  if (SET === "gbm") {
+    // Düzeltme katmanı: her test ayı için o aydan önceki en çok 12 ayın örneklem dışı hatası
+    const series = { temel: new Map<number, { pred: number; actual: number | null }>(), ağırlıklı: new Map<number, { pred: number; actual: number | null }>() };
+    for (const h of tested)
+      for (const k of ["temel", "ağırlıklı"] as const) {
+        const v = h.pred[k];
+        if (v !== null && v !== undefined) series[k].set(h.t, { pred: v, actual: h.uevm });
+      }
+    const ghisOf = (h: SolarHourV2) => archiveVariants(h, nwp).map((v) => v?.ghi ?? null);
+    const corrected: Hour[] = [];
+    for (const { y, m } of months) {
+      const from = Date.UTC(y, m - 1, 1);
+      const to = Date.UTC(y, m, 1);
+      const test = tested.filter((h) => h.t >= from && h.t < to);
+      if (!test.length) continue;
+      const hist = tested.filter((h) => h.t >= Date.UTC(y, m - 13, 1) && h.t < from);
+      const clean = trainingLossFilter(
+        hist.map((h) => ({ t: h.t, uevm: h.uevm, kgupFirst: h.kgupFirst, satGhi: h.satGhi ?? null, satDirect: h.satDirect ?? null, satDiffuse: h.satDiffuse ?? null })),
+        data.site,
+        from,
+        SATELLITE_DELAY_DAYS
+      );
+      const cap = test.find((h) => h.pred._cap)?.pred._cap ?? 0;
+      const fits = (["temel", "ağırlıklı"] as const).map((k) => {
+        const rows = hist
+          .filter((h) => h.uevm !== null && h.pred[k] !== null && h.pred[k] !== undefined && !clean.exclude(h) && !(h.ptf !== null && h.ptf <= TRAIN_ZERO_PRICE_MAX))
+          .map((h) => ({ h, pred: h.pred[k]!, actual: h.uevm!, ghis: ghisOf(h), recent: recentErrorFor(h.t, series[k], cap) }));
+        return fitCorrection(rows, data.site, cap);
+      });
+      fits.forEach((f, i) => {
+        if (f) notes[`düzeltme ay (${["temel", "ağırlıklı"][i]})`] = (notes[`düzeltme ay (${["temel", "ağırlıklı"][i]})`] ?? 0) + 1;
+      });
+      for (const h of test) {
+        const out = (k: "temel" | "ağırlıklı", f: (typeof fits)[number]) => {
+          const v = h.pred[k];
+          if (v === null || v === undefined) return null;
+          return f ? f.apply({ h, pred: v, ghis: ghisOf(h), recent: recentErrorFor(h.t, series[k], cap) }) : v;
+        };
+        corrected.push({ ...h, pred: { ...h.pred, "temel+düzeltme": out("temel", fits[0]), "ağırlıklı+düzeltme": out("ağırlıklı", fits[1]) } });
+      }
+    }
+    tested.length = 0;
+    tested.push(...corrected);
   }
   if (!tested.length) continue;
   const loss = detectLostHours(
