@@ -252,13 +252,17 @@ for (const id of await listPoolPlants()) {
         // Çeşitler: aynı ağırlıklı tahmin serisi, aynı süzgeç; yalnız çıkarılan özellik, tohum ya da pencere değişir
         const k = "ağırlıklı" as const;
         const base = hist.filter((h) => h.uevm !== null && h.pred[k] !== null && h.pred[k] !== undefined && !clean.exclude(h) && !(h.ptf !== null && h.ptf <= TRAIN_ZERO_PRICE_MAX));
-        const variants = Object.entries(ABLATIONS).map(([name, [drop, seed, months]]) => {
-          const rows = base.filter((h) => h.t >= Date.UTC(y, m - 1 - months, 1)).map((h) => ({ h, pred: h.pred[k]!, actual: h.uevm!, ghis: ghisOf(h), recent: recentErrorFor(h.t, series[k], cap) }));
-          return [name, fitCorrection(rows, data.site, cap, { ...CORRECTION_GBM, seed }, drop)] as const;
+        const variants = Object.entries(ABLATIONS).map(([name, [drop, seed, windowMonths]]) => {
+          const rows = base.filter((h) => h.t >= Date.UTC(y, m - 1 - windowMonths, 1)).map((h) => ({ h, pred: h.pred[k]!, actual: h.uevm!, ghis: ghisOf(h), recent: recentErrorFor(h.t, series[k], cap) }));
+          const f = fitCorrection(rows, data.site, cap, { ...CORRECTION_GBM, seed }, drop);
+          // Kurulamayan ayda çeşit düzeltilmemiş tahmine düşer: fark çeşidin etkisi sanılmasın diye sayılır
+          if (f) notes[`düzeltme ay (${name})`] = (notes[`düzeltme ay (${name})`] ?? 0) + 1;
+          return [name, f] as const;
         });
         const start = corrected.length - test.length;
         for (let j = 0; j < test.length; j++) {
           const h = test[j];
+          if (corrected[start + j].t !== h.t) throw new Error("Çeşit hizası bozuk");
           const v = h.pred[k];
           const extra: Record<string, number | null> = {};
           for (const [name, f] of variants) extra[name] = v === null || v === undefined ? null : f ? f.apply({ h, pred: v, ghis: ghisOf(h), recent: recentErrorFor(h.t, series[k], cap) }) : v;
