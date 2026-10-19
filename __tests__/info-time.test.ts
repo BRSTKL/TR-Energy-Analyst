@@ -8,7 +8,9 @@ import {
   productionFeature,
   weatherFeature,
   weatherLeadClean,
+  weatherAvailableAt,
   weatherRunInit,
+  weatherStampForHour,
 } from "@/lib/forecast/info-time";
 
 const H = 3_600_000;
@@ -55,5 +57,22 @@ describe("Bilgi zamanı (15.3)", () => {
       expect((e as Error).message).toMatch(/ghi_d1/);
       expect((e as Error).message).toMatch(/2026-06-20 12:30/);
     }
+  });
+
+  it("ek modeller (22.3): ICON-EU 3 saatlik çalışma, GFS 6 saatlik; d2 bütün saatlerde temiz, d1 gündüz kirli", () => {
+    // 24:00 damgası = 21 UTC; ICON-EU 21Z, 2 gün önce (TR 2026-06-20 00:00)
+    expect(weatherRunInit(at(24), 2, "icon_eu")).toBe(wall("2026-06-20T00:00"));
+    expect(weatherRunInit(at(24), 2, "gfs_global")).toBe(wall("2026-06-19T21:00"));
+    for (const src of ["icon_eu", "gfs_global"] as const) {
+      expect(Array.from({ length: 24 }, (_, h) => h).every((h) => weatherLeadClean(at(h), 2, src))).toBe(true);
+      expect(weatherLeadClean(at(12), 1, src)).toBe(false);
+    }
+    // ECMWF kuralı her saatte en geç (girdi ortalamasında kötümser model seçimi bunu kullanır)
+    for (let h = 0; h < 24; h++)
+      for (const k of ["mean", "instant"] as const) {
+        const st = weatherStampForHour(at(h), k);
+        expect(weatherAvailableAt(st, 2)).toBeGreaterThanOrEqual(weatherAvailableAt(st, 2, "icon_eu"));
+        expect(weatherAvailableAt(st, 2)).toBeGreaterThanOrEqual(weatherAvailableAt(st, 2, "gfs_global"));
+      }
   });
 });

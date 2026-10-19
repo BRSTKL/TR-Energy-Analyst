@@ -15,6 +15,10 @@
  * Işınım değeri damgadan önceki saatin ortalamasıdır: üretim saati i'nin ışınımı i+1 damgasıdır (weather-codec.ts).
  * `d0` (en yeni tahmin) geçerlilik saatine en yakın çalışmadır: hiçbir saat için kesimden önce değildir.
  *
+ * Ek hava modelleri (Aşama 22.3, lib/weather/nwp-models.ts): aynı kural, modelin çalışma aralığı ve yayım gecikmesiyle
+ * (`WEATHER_RUN_RULES`). ICON-EU 3 saatte bir (yayım ölçülen ≈ 3 sa, burada 6), GFS 6 saatte bir (ölçülen 0,13° ≈ 6 sa,
+ * 0,25° ≈ 7 sa; burada 9). Ölçüm: Open-Meteo meta.json, 19.10.2026 (veri-kaynagi-arastirmaci aynı gün).
+ *
  * Üretim (UEVM) gecikmesi: tahminde kullanılabilecek en yeni üretim D-2'dir (PLAN). Bir günün üretimi ertesi gün
  * 12:00'da elde sayılır: D-2 → D-1 12:00 ≤ kesim; D-1 sabahı → D 12:00 > kesim (yakalanır).
  */
@@ -31,6 +35,14 @@ export const ECMWF_PUBLISH_DELAY_MS = 9 * HOUR;
 export const PRODUCTION_KNOWN_NEXT_DAY_MINUTES = 12 * 60;
 
 export type WeatherLeadDays = 0 | 1 | 2;
+/** Hava modeli (Open-Meteo `models=` adı) */
+export type WeatherSource = "ecmwf_ifs025" | "icon_eu" | "gfs_global";
+/** Model başına çalışma aralığı ve kötümser yayım gecikmesi */
+export const WEATHER_RUN_RULES: Record<WeatherSource, { intervalHours: number; publishDelayMs: number }> = {
+  ecmwf_ifs025: { intervalHours: 6, publishDelayMs: ECMWF_PUBLISH_DELAY_MS },
+  icon_eu: { intervalHours: 3, publishDelayMs: 6 * HOUR },
+  gfs_global: { intervalHours: 6, publishDelayMs: 9 * HOUR },
+};
 export type FeatureSource = "weather" | "production" | "calendar";
 
 export interface FeatureInfo {
@@ -62,16 +74,18 @@ export function weatherStampForHour(productionHourWall: number, kind: "mean" | "
   return productionHourWall + (kind === "mean" ? HOUR : 0);
 }
 
-/** Bu damganın `lead` gün önceki tahmininin geldiği ECMWF çalışmasının başlangıcı (duvar saati ms) */
-export function weatherRunInit(stampWall: number, lead: WeatherLeadDays): number {
+/** Bu damganın `lead` gün önceki tahmininin geldiği çalışmanın başlangıcı (duvar saati ms): H+1, modelin çalışma aralığına
+ * aşağı yuvarlanır (ECMWF'de teyitli; 3 saatlik modelde aynı biçim en geç çalışmayı verir, kötümser) */
+export function weatherRunInit(stampWall: number, lead: WeatherLeadDays, source: WeatherSource = "ecmwf_ifs025"): number {
+  const step = WEATHER_RUN_RULES[source].intervalHours * HOUR;
   const utc = stampWall - TR_UTC_OFFSET_MS;
-  const init = Math.floor((utc + HOUR) / (6 * HOUR)) * 6 * HOUR - lead * DAY;
+  const init = Math.floor((utc + HOUR) / step) * step - lead * DAY;
   return init + TR_UTC_OFFSET_MS;
 }
 
 /** Hava değeri ne zaman elde: çalışma başlangıcı + yayım gecikmesi */
-export function weatherAvailableAt(stampWall: number, lead: WeatherLeadDays): number {
-  return weatherRunInit(stampWall, lead) + ECMWF_PUBLISH_DELAY_MS;
+export function weatherAvailableAt(stampWall: number, lead: WeatherLeadDays, source: WeatherSource = "ecmwf_ifs025"): number {
+  return weatherRunInit(stampWall, lead, source) + WEATHER_RUN_RULES[source].publishDelayMs;
 }
 
 /** Bir üretim saatinin değeri ne zaman elde: ertesi gün 12:00 */
@@ -80,8 +94,8 @@ export function productionAvailableAt(sourceHourWall: number): number {
 }
 
 /** Hava özelliği tanımı (üretim saatine göre) */
-export function weatherFeature(name: string, productionHourWall: number, kind: "mean" | "instant", lead: WeatherLeadDays): FeatureInfo {
-  return { name, source: "weather", availableAt: weatherAvailableAt(weatherStampForHour(productionHourWall, kind), lead) };
+export function weatherFeature(name: string, productionHourWall: number, kind: "mean" | "instant", lead: WeatherLeadDays, source: WeatherSource = "ecmwf_ifs025"): FeatureInfo {
+  return { name, source: "weather", availableAt: weatherAvailableAt(weatherStampForHour(productionHourWall, kind), lead, source) };
 }
 
 /** Geçmiş üretim özelliği (ör. D-2 kapasite faktörü): kaynak saat */
@@ -114,7 +128,7 @@ export function assertAvailable(features: FeatureInfo[], targetHourWall: number)
 }
 
 /** Bir hava sürümü bu hedef saat için kesimden önce mi (ortalama ve anlık değişkenlerin ikisi de) */
-export function weatherLeadClean(targetHourWall: number, lead: WeatherLeadDays): boolean {
+export function weatherLeadClean(targetHourWall: number, lead: WeatherLeadDays, source: WeatherSource = "ecmwf_ifs025"): boolean {
   const cutoff = decisionCutoff(targetHourWall);
-  return (["mean", "instant"] as const).every((k) => weatherAvailableAt(weatherStampForHour(targetHourWall, k), lead) <= cutoff);
+  return (["mean", "instant"] as const).every((k) => weatherAvailableAt(weatherStampForHour(targetHourWall, k), lead, source) <= cutoff);
 }

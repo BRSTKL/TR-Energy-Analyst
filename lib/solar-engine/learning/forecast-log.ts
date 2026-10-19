@@ -34,12 +34,14 @@ export interface ForecastLogPlant {
   modelId?: string;
   /** Günlük hata düzeltmesi uygulandıysa saat başı çarpanlar ve kaynağı */
   bias?: { factors: number[]; source: "kayıtlı tahmin" | "eğitimin son günleri"; days: number };
+  /** Üç hava modelli birleşimde saat başı modellerin ayrışması (en yüksek − en düşük tahmin, MWh; Aşama 22.3) */
+  modelSpread?: Array<number | null>;
 }
 
 /** Gölge sürüm: canlı olmayan adayın aynı gün, aynı kurallarla yaptığı tahmin (karne hepsini ölçer) */
 export interface ForecastLogShadow {
   modelId: string;
-  plants: Array<Pick<ForecastLogPlant, "epiasPlantId" | "status" | "message" | "hours" | "train" | "bias">>;
+  plants: Array<Pick<ForecastLogPlant, "epiasPlantId" | "status" | "message" | "hours" | "train" | "bias" | "modelSpread">>;
 }
 
 export interface ForecastLog {
@@ -55,7 +57,14 @@ export interface ForecastLog {
   onTime: boolean;
   model: { id: string; trainingMonths: number };
   /** runInit: tahminlerden önce okunan son çalışma; runInitAfter: sonra okunan, farklıysa (arada yeni çalışma çıktı) */
-  weather: { source: string; model: string; runInit: string | null; runInitAfter?: string | null };
+  weather: {
+    source: string;
+    model: string;
+    runInit: string | null;
+    runInitAfter?: string | null;
+    /** Ek hava modelleri (birleşim sürümleri; 20.10.2026'dan): tahminlerden önce okunan son çalışma ve yayım anı (ISO) */
+    extra?: Array<{ model: string; runInit: string | null; availableAt: string | null }>;
+  };
   /** Kodun sürümü (git commit), biliniyorsa */
   code: string | null;
   plants: ForecastLogPlant[];

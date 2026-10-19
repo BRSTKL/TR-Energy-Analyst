@@ -62,6 +62,14 @@ describe("üç hava modelli birleşim", () => {
     expect(r.input).toBe(r.sources[0]);
   });
 
+  it("ek model saatleri kendi bilgi zamanı kuralıyla etiketlenir; girdi ortalaması en geç modelinkiyle", async () => {
+    const { archiveVariants } = await import("@/lib/solar-engine/models/ensemble");
+    const noon = hours.find((h) => new Date(h.t).getUTCHours() === 12)!;
+    const v = archiveVariants(noon, nwp);
+    expect(v.map((h) => h?.weatherSource ?? "ecmwf_ifs025")).toEqual(["ecmwf_ifs025", "icon_eu", "gfs_global"]);
+    expect(meanInput(v)!.weatherSource).toBe("ecmwf_ifs025");
+  });
+
   it("canlı saat eğitime giremez", () => {
     expect(() => fitEnsemble([{ ...hours[0], live: true }, ...hours], nwp, site, () => false, valFrom)).toThrow();
   });

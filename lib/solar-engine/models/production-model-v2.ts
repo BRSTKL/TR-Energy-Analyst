@@ -21,7 +21,7 @@
  */
 
 import { fitRidge, predictRidge, type RidgeModel } from "@/lib/analysis/direction-model";
-import { assertAvailable, calendarFeature, productionFeature, weatherFeature, TR_UTC_OFFSET_MS, type FeatureInfo, type WeatherLeadDays } from "../../forecast/info-time";
+import { assertAvailable, calendarFeature, productionFeature, weatherFeature, TR_UTC_OFFSET_MS, type FeatureInfo, type WeatherLeadDays, type WeatherSource } from "../../forecast/info-time";
 import { clearSkyGhiHour, cosZenith, planeOfArray, type PanelMount } from "../physics/solar-geometry";
 import { DEFAULT_PRODUCTION_LAMBDA, steadyFrom, TRAIN_ZERO_PRICE_MAX, type SolarHour, type SolarSite } from "./production-model";
 
@@ -48,6 +48,9 @@ export interface SolarHourV2 extends SolarHour {
   diffuseLag48: number | null;
   /** Hava girdilerinin sürümü (gün önce); yoksa 2. 1 ve 0 kesimden sonradır: model yalnız `leakUpperBound` ile kabul eder */
   weatherLead?: WeatherLeadDays;
+  /** Hava girdilerinin modeli (yoksa ECMWF): bilgi zamanı o modelin çalışma kuralıyla denetlenir (Aşama 22.3). Birden çok
+   * modelin girdi ortalamasında en geç elde olan model (models/ensemble.ts) */
+  weatherSource?: WeatherSource;
   /** Gerçekleşen uydu ışınımı (satellite.ts): YALNIZ ETİKET (kısıntı tespiti); özelliklerde kullanılmaz */
   satGhi?: number | null;
   satDirect?: number | null;
@@ -74,15 +77,17 @@ function features(h: SolarHourV2, site: SolarSite, mount: PanelMount): { x: numb
   const p = poa / 1000;
   const x = [p, p * h.temp, p * kt, p * cz, (h.lag48 ?? 0) * ratio, h.lag48 === null ? 0 : 1];
   const L = h.weatherLead ?? 2;
+  const S = h.weatherSource ?? "ecmwf_ifs025";
+  const pre = S === "ecmwf_ifs025" ? "" : `${S}_`;
   const info: FeatureInfo[] = [
-    weatherFeature(`ghi_d${L}`, h.t, "mean", L),
-    weatherFeature(`direct_d${L}`, h.t, "mean", L),
-    weatherFeature(`diffuse_d${L}`, h.t, "mean", L),
-    weatherFeature(`temp_d${L}`, h.t, "instant", L),
-    weatherFeature(`cloud_d${L}`, h.t, "instant", L),
+    weatherFeature(`${pre}ghi_d${L}`, h.t, "mean", L, S),
+    weatherFeature(`${pre}direct_d${L}`, h.t, "mean", L, S),
+    weatherFeature(`${pre}diffuse_d${L}`, h.t, "mean", L, S),
+    weatherFeature(`${pre}temp_d${L}`, h.t, "instant", L, S),
+    weatherFeature(`${pre}cloud_d${L}`, h.t, "instant", L, S),
     calendarFeature("clear_sky_geometry"),
     productionFeature("uevm_lag48", h.t - 2 * DAY),
-    weatherFeature(`radiation_lag48_d${L}`, h.t - 2 * DAY, "mean", L),
+    weatherFeature(`${pre}radiation_lag48_d${L}`, h.t - 2 * DAY, "mean", L, S),
   ];
   return { x, info, poa, clearSky: cs };
 }

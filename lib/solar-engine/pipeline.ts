@@ -173,6 +173,23 @@ export async function runDailyForecast(opts: DailyForecastOptions = {}): Promise
     return 0;
   }
 
+  // Ek hava modellerinin son çalışması ve yayım anı (birleşim sürümleri; iz için). Open-Meteo veri adları: ICON-EU
+  // `dwd_icon_eu`, GFS `ncep_gfs013` ve `ncep_gfs025` (gfs_global ikisinden birleşir)
+  async function extraRuns(): Promise<Array<{ model: string; runInit: string | null; availableAt: string | null }>> {
+    const iso = (sec?: number) => (sec ? new Date(sec * 1000).toISOString() : null);
+    return Promise.all(
+      ["dwd_icon_eu", "ncep_gfs013", "ncep_gfs025"].map(async (model) => {
+        try {
+          const meta = (await (await fetch(`https://api.open-meteo.com/data/${model}/static/meta.json`, { signal: AbortSignal.timeout(15_000) })).json()) as { last_run_initialisation_time?: number; last_run_availability_time?: number };
+          return { model, runInit: iso(meta.last_run_initialisation_time), availableAt: iso(meta.last_run_availability_time) };
+        } catch {
+          return { model, runInit: null, availableAt: null };
+        }
+      })
+    );
+  }
+  const extra = await extraRuns();
+
   // Şampiyon değerlendirmesi (son 28 günün karnesi): canlı sürümler bu günün tahmininden önce belirlenir; kayıt defterine
   // yalnız günlük kayıt yazıldıktan sonra işlenir (kuru çalışmada ya da yazılmadan çıkışta değişmez)
   const review = await reviewChampions(Array.from(plants.keys()), started, { targetDate: target }).catch(async (e) => {
@@ -239,7 +256,7 @@ export async function runDailyForecast(opts: DailyForecastOptions = {}): Promise
       const sh = shadowByModel.get(modelId) ?? { modelId, plants: [] };
       shadowByModel.set(modelId, sh);
       sh.plants = sh.plants.filter((p) => p.epiasPlantId !== id);
-      sh.plants.push({ epiasPlantId: id, status: r.status, ...(r.message ? { message: r.message } : {}), ...(r.hours ? { hours: r.hours } : {}), ...(r.train ? { train: r.train } : {}), ...(r.bias ? { bias: r.bias } : {}) });
+      sh.plants.push({ epiasPlantId: id, status: r.status, ...(r.message ? { message: r.message } : {}), ...(r.hours ? { hours: r.hours } : {}), ...(r.train ? { train: r.train } : {}), ...(r.bias ? { bias: r.bias } : {}), ...(r.modelSpread ? { modelSpread: r.modelSpread } : {}) });
     }
     return { ...results.get(champ)!, modelId: champ };
   }
@@ -278,7 +295,7 @@ export async function runDailyForecast(opts: DailyForecastOptions = {}): Promise
     cutoff: new Date(forecastCutoff(target)).toISOString(),
     onTime: isOnTime(issuedAt, target),
     model: { id: SOLAR_MODEL_ID, trainingMonths: 4 },
-    weather: { source: "Open-Meteo Forecast API (CC BY 4.0)", model: WEATHER_MODEL, runInit, ...(runInitAfter !== runInit ? { runInitAfter } : {}) },
+    weather: { source: "Open-Meteo Forecast API (CC BY 4.0)", model: WEATHER_MODEL, runInit, ...(runInitAfter !== runInit ? { runInitAfter } : {}), extra },
     code,
     plants: out,
     shadow: Array.from(shadowByModel.values()),
@@ -296,6 +313,9 @@ export async function runDailyForecast(opts: DailyForecastOptions = {}): Promise
     console.log(`  canlı sürümler: ${Array.from(champs.entries()).map(([k, v]) => `${k} ${v}`).join(", ")}; gölge: ${log.shadow!.map((s) => `${s.modelId} (${s.plants.filter((p) => p.status === "ok").length})`).join(", ")}`);
     const bias = out.map((p) => log.shadow!.find((s) => s.modelId.endsWith("-bias"))?.plants.find((q) => q.epiasPlantId === p.epiasPlantId)?.bias).filter(Boolean);
     if (bias.length) console.log(`  hata düzeltmesi örnek: ${bias[0]!.source}, öğle çarpanı ${bias[0]!.factors[12]}`);
+    console.log(`  ek hava modelleri: ${extra.map((e) => `${e.model} ${e.runInit ?? "?"}`).join(", ")}`);
+    const spread = log.shadow!.find((s) => s.modelId.endsWith("-ens-mean"))?.plants.find((q) => q.modelSpread)?.modelSpread;
+    if (spread) console.log(`  modellerin ayrışması örnek (öğle, MWh): ${spread[12] ?? "?"}`);
     for (const p of out) if (p.status !== "ok") console.log(`  ${p.name}: ${p.message}`);
     return 0;
   }

@@ -3,9 +3,9 @@
  *
  * Kaynak Open-Meteo Previous Runs API, yalnız `_previous_day2` (2 gün önceki tahmin; bilgi anı kuralı weather-codec.ts
  * ile aynı: geçerlilik saati H için 48 saat önceki, H'yi çalışma aralığına aşağı yuvarlayan çalışma; en geç çalışma
- * D-2 18Z / 21Z, yayımı en geç D-1 ≈ 01:00 UTC, GÖP kesimi D-1 09:30 UTC'den önce → temiz). Bilgi zamanı denetimi
- * (lib/forecast/info-time.ts) ECMWF kuralını uygular (6 saatlik çalışma, 9 saat yayım): ICON-EU çalışması en çok 3 saat
- * geç olabilir ama yayımı ≈ 4 saat, GFS ≈ 5–6 saat; ikisinde de denetim kötümser kalır (sizinti-denetcisi 19.10.2026).
+ * D-2 18Z / 21Z, yayımı en geç D-1 ≈ 01:00 UTC, GÖP kesimi D-1 09:30 UTC'den önce → temiz). Bilgi zamanı denetimi model
+ * başına (lib/forecast/info-time.ts `WEATHER_RUN_RULES`: ICON-EU 3 saatlik çalışma, kötümser 6 saat yayım; GFS 6 saatlik,
+ * 9 saat; ölçülen ICON-EU ≈ 3, GFS ≈ 6–7 saat).
  * Kaynak doğrulaması
  * veri-kaynagi-arastirmaci 19.10.2026, yerinde sınama Konya:
  *   - `icon_eu`: DWD ICON-EU 7 km, Türkiye içinde (29,5–70,5°K, −23,5–62,5°D); 3 saatte bir çalışma, 78 saate kadar

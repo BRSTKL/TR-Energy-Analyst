@@ -19,6 +19,7 @@
 import { fitSolarModelV2, type SolarHourV2 } from "./production-model-v2";
 import type { SolarSite } from "./production-model";
 import { NWP_MODELS, nwpAt, type NwpModel, type NwpYear } from "../../weather/nwp-models";
+import { weatherAvailableAt, weatherStampForHour, type WeatherSource } from "../../forecast/info-time";
 
 export const ENSEMBLE_KINDS = ["mean", "input", "weighted"] as const;
 export type EnsembleKind = (typeof ENSEMBLE_KINDS)[number];
@@ -40,7 +41,14 @@ export function withNwp(h: SolarHourV2, docs: Map<number, NwpYear> | undefined):
   if (!doc) return null;
   const v = { ghi: nwpAt(doc, "ghi", h.t), direct: nwpAt(doc, "direct", h.t), diffuse: nwpAt(doc, "diffuse", h.t), temp: nwpAt(doc, "temp", h.t), cloud: nwpAt(doc, "cloud", h.t) };
   if (Object.values(v).some((x) => x === null)) return null;
-  return { ...noLag(h), ...v };
+  // Arşiv yalnız 2 gün önceki tahmin: sürüm ECMWF saatinden değil belgeden
+  return { ...noLag(h), ...v, weatherSource: doc.model, weatherLead: 2 };
+}
+
+/** Saat için en geç elde olan model (girdi ortalaması bu modelin kuralıyla denetlenir: kötümser) */
+function latestSource(h: SolarHourV2, sources: WeatherSource[]): WeatherSource {
+  const at = (s: WeatherSource) => Math.max(...(["mean", "instant"] as const).map((k) => weatherAvailableAt(weatherStampForHour(h.t, k), h.weatherLead ?? 2, s)));
+  return sources.reduce((a, b) => (at(b) > at(a) ? b : a));
 }
 
 /** Eğitim saatinin üç sürümü: [ECMWF, ICON-EU, GFS] */
@@ -52,7 +60,8 @@ const complete = (h: SolarHourV2 | null): h is SolarHourV2 => h !== null && h.gh
 export function meanInput(hs: Array<SolarHourV2 | null>): SolarHourV2 | null {
   if (!hs.every(complete)) return null;
   const avg = (k: "ghi" | "direct" | "diffuse" | "temp" | "cloud") => hs.reduce((s, h) => s + h![k]!, 0) / hs.length;
-  return { ...hs[0]!, ghi: avg("ghi"), direct: avg("direct"), diffuse: avg("diffuse"), temp: avg("temp"), cloud: avg("cloud") };
+  const weatherSource = latestSource(hs[0]!, hs.map((h) => h!.weatherSource ?? "ecmwf_ifs025"));
+  return { ...hs[0]!, ghi: avg("ghi"), direct: avg("direct"), diffuse: avg("diffuse"), temp: avg("temp"), cloud: avg("cloud"), weatherSource };
 }
 
 export interface EnsembleModel {

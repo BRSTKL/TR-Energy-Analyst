@@ -22,6 +22,7 @@ import { readPoolPlantInfo, readPoolYear, readProvisionalYear } from "@/lib/pool
 import { loadSolarHours } from "./data/production-data";
 import { ENSEMBLE_KINDS, fitEnsemble, type EnsembleKind, type NwpArchive } from "./models/ensemble";
 import { NWP_MODELS, type NwpYear } from "@/lib/weather/nwp-models";
+import type { WeatherSource } from "@/lib/forecast/info-time";
 import { readNwpYear } from "@/lib/weather/weather-store";
 import { projectWeatherPlants } from "../services/weather-preview";
 
@@ -174,6 +175,8 @@ export interface SolarPlantForecast {
   /** Hava tahmininin alındığı an (ISO) */
   weatherFetchedAt?: string;
   location?: { latitude: number; longitude: number; locationSource: string };
+  /** Üç hava modelli birleşimde saat başı modellerin ayrışması (en yüksek − en düşük tahmin, MWh) */
+  modelSpread?: Array<number | null>;
   /** `recentFitDays` istendiyse: eğitimin son günlerinde (kayıp saatler hariç) model tahmini ve gerçekleşen (günlük hata düzeltmesinin yedek kaynağı) */
   recentFit?: Array<{ t: number; forecast: number; actual: number }>;
 }
@@ -296,8 +299,11 @@ export async function forecastSolarEnsemble(
     const toHour = (wh: ReturnType<typeof liveWeatherHours>[number]): SolarHourV2 => ({ ...wh, uevm: null, kgupFirst: null, kgupFinal: null, ptf: null, lag48: null, ghiLag48: null, directLag48: null, diffuseLag48: null, live: true });
     const src = [liveWeatherHours(w.res, from, from + count * HOUR), ...NWP_MODELS.map((m) => liveWeatherHours(x.res, from, from + count * HOUR, `_${m}`))];
     // Bir ek modelin saati eksikse o saatte ECMWF tahmini (birleşim temel sürümle aynı saatlerde ölçülür)
-    const preds = src[0].map((_, i) => ens.predict(src.map((s) => toHour(s[i])), true));
     const round = (v: number | null) => (v === null ? null : Math.round(v * 1000) / 1000);
+    const sources: WeatherSource[] = ["ecmwf_ifs025", ...NWP_MODELS];
+    const preds = src[0].map((_, i) => ens.predict(src.map((s, k) => ({ ...toHour(s[i]), weatherSource: sources[k] })), true));
+    // Modellerin ayrışması: üç model tahmininin en yükseği − en düşüğü (MWh; belirsizlik ölçüsü, Aşama 22.5 için)
+    const modelSpread = preds.map((p) => (p.sources.every((v) => v !== null) ? round(Math.max(...(p.sources as number[])) - Math.min(...(p.sources as number[]))) : null));
     const train = {
       from: new Date(start).toISOString().slice(0, 10),
       to: new Date(end - DAY).toISOString().slice(0, 10),
@@ -312,6 +318,7 @@ export async function forecastSolarEnsemble(
         {
           status: "ok",
           hours: preds.map((p) => round(p[k])),
+          modelSpread,
           train,
           weatherFetchedAt: [w.fetchedAt, x.fetchedAt].sort()[0],
           location: { latitude: loc.latitude, longitude: loc.longitude, locationSource: loc.locationSource },
