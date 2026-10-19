@@ -25,6 +25,8 @@ export interface WindEngineHour extends WindFcHour {
   pressure?: ByLead;
   /** Deniz seviyesi basıncı (hPa), sürüm başına; yüzey basıncı yoksa */
   msl?: ByLead;
+  /** 10 m hız (m/s), sürüm başına; kesme üssü için (23.3) */
+  ws10?: ByLead;
 }
 
 export interface BaselineOptions {

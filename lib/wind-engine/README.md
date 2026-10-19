@@ -3,7 +3,7 @@
 Proje rüzgâr santralleri için ertesi günün saatlik üretim tahmini. Güneş motoruyla (`lib/solar-engine/`) aynı iskelet ve
 kurallar: her yeni yöntem önce geriye dönük testte, sonra gölge sürüm olarak sınanır; şampiyonu karne seçer. Plan: `PLAN.md` Aşama 23.
 
-Durum (19.10.2026): iskelet ve saf model kodu. Günlük akışa, kayda ve ekrana henüz bağlı değil (bağlama Mac'te sınanır).
+Durum (19.10.2026): saf model kodu ve geriye dönük test kümeleri (`scripts/wind-candidates-backtest.mts --set phys|prob|curt|corr|blend`). Günlük akışa, kayda ve ekrana henüz bağlı değil (bağlama Mac'te sınanır).
 
 ## Klasörler
 
@@ -12,7 +12,11 @@ Durum (19.10.2026): iskelet ve saf model kodu. Günlük akışa, kayda ve ekrana
 | `physics/air-density.ts` | Hava yoğunluğu (sıcaklık, basınç, rakım), yoğunluğa göre eşdeğer hız (IEC 61400-12-1), rüzgâr kesmesi üssü. |
 | `models/baseline.ts` | Temel sürüm (23.2): mevcut güç eğrisi (`lib/forecast/wind-forecast.ts`) + isteğe bağlı yoğunluk düzeltmesi. |
 | `models/ensemble.ts` | Birden çok hava modeli (23.4): ECMWF + ICON-EU + GFS, her biri kendi eğrisiyle; ortalama, hız ortalaması, ağırlıklı; modellerin hız ayrışması. |
-| `data/` | (23.2) Eğitim verisi: havuzdaki üretim, geçmiş hava tahmini. |
+| `models/physical-curve.ts` | Fiziksel güç eğrisi (23.3): parametreli eğri, yön çarpanı, göbek yüksekliği ve kesme üssü, durma histerezisi. |
+| `models/probabilistic.ts` | P10 / P50 / P90 (tahmin hızı dilimli hata) ve rampa olasılığı (23.6). |
+| `models/correction.ts` | Öğrenen düzeltme (23.5): ortak GBM (`lib/forecast/gbm.ts`) ile kararlılık, rampa ve son günlerin hatası. |
+| `models/blend.ts` | Şirket planıyla karışım ve zayıf tahminci listesi (23.8; yalnız analiz). |
+| `data/wind-hours.ts` | Eğitim ve sınama verisi: havuzdaki üretim + ECMWF / ICON-EU / GFS arşivleri + gerçekleşen rüzgâr (etiket). |
 | `learning/` | (23.1) Kayıt, karne, şampiyon: güneşteki parçalar `lib/forecast/` altına taşınınca buradan kullanılır. |
 | `pipeline.ts`, `registry.ts`, `forecast.ts` | (23.2 bağlama) Günlük akış, sürümler, tek santral tahmini. |
 

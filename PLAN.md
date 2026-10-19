@@ -873,7 +873,13 @@ Her maddenin sonunda "Mac'te sınama" yazılır (yönerge 2).
   - Günlük akış: rüzgâr santralleri aynı `launchd` çalışmasında, güneşten sonra; kayıt `data/pool/forecast-log/wind/`, onTime ve karne.
   - Mac'te sınama: `scripts/wind-forecast-backtest.mts` (yoğunluklu ve yoğunluksuz), kuru çalışma.
   - Mac'te sınama (19.10.2026 kodu): önce `npx tsx --env-file=.env --tsconfig tsconfig.json scripts/wind-forecast-sync.mts` (yeni alanlar için arşiv baştan; Open-Meteo sınırında durursa yeniden çalıştırılır), sonra `npx tsx --env-file=.env --tsconfig tsconfig.json scripts/wind-forecast-backtest.mts 2026-09`. Beklenen: "model + yoğunluk" satırı, rüzgâr modeline göre TL/MWh ve santral sayısı; rüzgâr modeli satırı eskisine yakın (233,6 TL/MWh; eşleştirme yüzünden küçük fark olabilir). Sonuçtan önce arşivde `temp.d2` ve `msl.d2` doluluk oranına bakılır (boşsa yoğunluklu aday yoğunluksuzla aynı çıkar; Open-Meteo yeni alanları reddederse senkron yalnız 100 m rüzgârla sürer). Yoğunluk kazandırırsa temel sürüm adayı yoğunluklu olur; seçim gölge sürümün karnesinde de doğrulanır (sızıntı denetimi notu).
-- [ ] **23.3 Fiziksel güç eğrisi.**
+- [~] **23.3 Fiziksel güç eğrisi.** 19.10.2026 (bulut): model ve geriye dönük test kodu yazıldı; sonuç Mac'te bekleniyor.
+  - Kod: `lib/wind-engine/models/physical-curve.ts` `fitPhysicalCurve`. Eğri: tavan × (v³ − v_ci³) / (v_r³ − v_ci³), 25 m/s'te durma.
+  - Tavan eğitimin %99'luk dilimi (kısmi kullanılabilirlik dahil). v_ci ve v_r ızgarada en küçük mutlak hatayla seçilir.
+  - Yön çarpanı 8 dilimde [0,7, 1,3]. Göbek yüksekliği 80 / 100 / 120 m'den en iyisi; 100 m hız aynı d2 çalışmasının 10 m ↔ 100 m kesme üssüyle taşınır.
+  - Durma histerezisi `predictSeries` ile (22 m/s'nin altına inene kadar 0). Yoğunluk isteğe bağlı.
+  - Geriye dönük test: yeni `scripts/wind-candidates-backtest.mts --set phys` (eski `wind-forecast-backtest.mts` çıktısı değişmedi). 4 test.
+  - **Mac'te sınama:** `npx tsx --env-file=.env --tsconfig tsconfig.json scripts/wind-candidates-backtest.mts 2026-09 --set phys`. Beklenen: "fiziksel eğri" ve "fiziksel + yoğunluk" satırları rüzgâr modeliyle eşleştirilmiş saatlerde, santral başına seçilen göbek yüksekliği notlarda. Fizik medyan eğriden ucuzsa aday olur (22.2'deki gibi kaybedebilir); sonuç buraya yazılır.
   - Santral başına düzgün güç eğrisi: başlama, nominal ve kesme hızları + yoğunluk + yöne göre (8–12 dilim) hız çarpanı. Arazi ve iz etkisi, en küçük mutlak hatayla.
   - Göbek yüksekliğine çıkarma: rüzgâr kesmesi üssü, 10 m / 100 m'den gün saati ve mevsime göre öğrenilir.
   - Kesme üstü durma (histerezis) ve kısmi kullanılabilirlik (kurulu güç / tavan).
@@ -888,7 +894,12 @@ Her maddenin sonunda "Mac'te sınama" yazılır (yönerge 2).
   - ECMWF 0,25° + ICON-EU + GFS (+ IFS 9 km Ekim 2025'ten) göbek yüksekliği rüzgârı.
   - Her model kendi güç eğrisiyle; birleşimler: ortalama, ağırlıklı, hız ortalamasıyla tek eğri (`lib/solar-engine/models/ensemble.ts` deseni, rüzgâr girdileriyle).
   - Modellerin hız ayrışması kayda yazılır (belirsizlik ölçüsü).
-- [ ] **23.5 Öğrenen düzeltme (kararlılık, yoğunluk, rampa).**
+- [~] **23.5 Öğrenen düzeltme (kararlılık, yoğunluk, rampa).** 19.10.2026 (bulut): model ve geriye dönük test kodu yazıldı; sonuç Mac'te bekleniyor.
+  - **Ortak GBM taşındı (dikkatli grup, ayrı commit):** `lib/solar-engine/models/gbm.ts` → `lib/forecast/gbm.ts`. Kod gövdesi birebir aynı, eski yolda yeniden dışa aktaran dosya kaldı; güneşin içe aktarmaları değişmedi.
+  - Kod: `lib/wind-engine/models/correction.ts` `fitWindCorrection`. Özellikler: saat, yılın günü, d2 10 m ↔ 100 m kesme üssü, 2 m sıcaklık, 100 m hız ve yön, model ayrışması, son 3 ve 6 saatteki tahmin değişimi, tahmin düzeyi, son günlerin hatası (D-9 … D-3, `productionFeature` denetimli). Hedef kurulu güce oranlı, sonuç [0, kurulu güç]. GBM ayarları güneşle aynı. 3 test.
+  - Geriye dönük test: `scripts/wind-candidates-backtest.mts --set corr`. Her test ayı önceki en çok 12 ayın örneklem dışı hatasıyla, değerlendirme Temmuz 2025'ten.
+  - **Mac'te sınama (taşıma):** `npm test` ve güneş kuru çalışması `npx tsx --env-file=.env --tsconfig tsconfig.json scripts/solar-forecast-daily.mts <yarın> --dry`. Beklenen: taşıma öncesiyle aynı çıktı (bütün santraller "ok", gölge sürümler listede). Düzeltme önbelleği yeniden doldurulmaz (model kodu değişmedi).
+  - **Mac'te sınama (model):** `npx tsx --env-file=.env --tsconfig tsconfig.json scripts/wind-candidates-backtest.mts 2026-09 --set corr`. Beklenen: "+düzeltme" rüzgâr modelinden ucuz, santral sayısı ve "düzeltme ay" notları. Güneşteki gibi (22.4) tasarım ve test dönemi aynı; kanıt gölge karnesinden gelir.
   - Ortak GBM ile örneklem dışı hatayı öğrenir (`learning/oos-series` deseni).
   - Özellikler:
     - gün saati, mevsim,
@@ -898,15 +909,28 @@ Her maddenin sonunda "Mac'te sınama" yazılır (yönerge 2).
     - son 3 ve 6 saatlik tahmin değişimi (rampa göstergesi),
     - son günlerin hatası.
   - Hedef kurulu güce oranlı. Güneşteki 22.4 ile aynı kurallar.
-- [ ] **23.6 Olasılıksal tahmin ve rampa uyarısı.**
+- [~] **23.6 Olasılıksal tahmin ve rampa uyarısı.** 19.10.2026 (bulut): model ve geriye dönük test kodu yazıldı; sonuç Mac'te bekleniyor.
+  - Kod: `lib/wind-engine/models/probabilistic.ts`. `fitWindQuantiles`: tahmin hızı dilimli (4 / 7 / 10 / 13 m/s) örneklem dışı hata çeyreklikleri, [0, kurulu güç].
+  - `fitRampModel`: lojistik regresyon. Özellikler: 3 saatlik tahmin değişimi, düzey, hız ve hız değişimi, model ayrışması, saat. Yalnız aynı gün içindeki çiftler. Rakip: saat başına iklim payı.
+  - Geriye dönük test: `--set prob`; her test ayı yalnız önceki ayların satırlarıyla, değerlendirme Temmuz 2025'ten. 4 test.
+  - **Mac'te sınama:** `npx tsx --env-file=.env --tsconfig tsconfig.json scripts/wind-candidates-backtest.mts 2026-09 --set prob`. Beklenen: P10–P90 kapsaması ≈ %80 (ay ay da yazılır) ve rampa Brier'inin iklimden düşük olması. Kapsama düşükse 22.5 (a2)'deki gibi genişlik çarpanı ayrı dönemde seçilir.
   - P10 / P50 / P90: hız dilimine göre koşullu hata dağılımı; rüzgârda hata hız dilimine göre çok değiştiği için dilim hız üstünden.
   - Rampa olasılığı: 3 saatte kurulu gücün %30'undan fazla değişim. Modellerin ayrışmasıyla kalibre edilir.
   - Kapsama hedefi %80, ölçülür.
-- [ ] **23.7 Kısıntı ve kullanılabilirlik.**
+- [~] **23.7 Kısıntı ve kullanılabilirlik.** 19.10.2026 (bulut): geriye dönük test kodu yazıldı; sonuç Mac'te bekleniyor.
+  - Sıfır fiyat olasılığı 22.6 ile ortak (`lib/forecast/zero-price.ts`; rüzgârda bütün saatler).
+  - Kısma oranı: gerçekleşen rüzgârla (IFS 9 km, yalnız etiket, 7 gün gecikme) `detectWindLoss` beklenen üretimine göre sıfır fiyatlı saatlerdeki kayıp.
+  - Veri: `lib/wind-engine/data/wind-hours.ts`. Geriye dönük test: `--set curt`; "üst sınır (SIZINTI)" yalnız kazancın tavanı, aday değil.
+  - TEİAŞ talimatı: 23.0(c)'ye göre santral bazında veri yok; sistem toplamı YAT ileride gösterge olabilir.
+  - Uzun arıza ve kapasite değişimi için `lib/forecast/change-detection.ts` `capacityChange` rüzgârda da kullanılabilir.
+  - **Mac'te sınama:** `npx tsx --env-file=.env --tsconfig tsconfig.json scripts/wind-candidates-backtest.mts 2026-09 --set curt`. Beklenen: sıfır fiyat Brier'i iklimden düşük; "+kısıntı" rüzgâr modelinden ucuz (özellikle sıfır fiyatlı bahar aylarında). Önce `npx tsx --env-file=.env --tsconfig tsconfig.json scripts/wind-sync.mts` ile gerçekleşen rüzgâr (IFS 9 km) arşivi güncellenir.
   - Sıfır fiyat olasılığı (22.6 ile ortak model) × santralin kısma davranışı.
   - TEİAŞ talimatı: 23.0(c)'de veri bulunursa.
   - Uzun arıza ve bakım: üretim / beklenen oranı ile ilk KGÜP'teki düşüş. Değişim algılama 22.7 ile ortak.
-- [ ] **23.8 Şirket planıyla karışım (analiz aracı).**
+- [~] **23.8 Şirket planıyla karışım (analiz aracı).** 19.10.2026 (bulut): kod yazıldı; sonuç Mac'te bekleniyor.
+  - Kod: `lib/wind-engine/models/blend.ts` (`fitBlendWeight`: w ∈ {0, 0,1, …, 1}, önceki ayların dönem kuralıyla TL maliyeti; eşitlikte küçük w). `weakForecasters`: w ≥ 0,5. 1 test.
+  - Geriye dönük test: `--set blend`; zayıf tahminci listesi `.cache/forecast/wind-candidates-blend.json`'a yazılır.
+  - **Mac'te sınama:** `npx tsx --env-file=.env --tsconfig tsconfig.json scripts/wind-candidates-backtest.mts 2026-09 --set blend`. Beklenen: karışım ilk KGÜP'ten ucuz; zayıf tahminci sayısı (eski karışım denemesinde 44 / 108). Liste aday taramasına bağlanırsa o iş ayrı (sayfa ve rapor, dikkatli grup).
   - Santral başına geçmiş aylarla öğrenilen ağırlık (`w × model + (1 − w) × ilk KGÜP`); güçlü tahmincide w → 0.
   - Çıktı: zayıf tahminci santraller listesi, aday taramasına bağlanır.
   - Sınır: ilk KGÜP canlıda bizim elimizde değil (şirketin kendi bildirimi). Bu yalnız geçmişe bakan analiz ve şirkete sunulacak "planınızı şöyle düzeltirdik" kanıtıdır.
@@ -961,6 +985,7 @@ Sıra: 23.0 → 23.1 → 23.2 (kayıt ve karne erken başlasın, kanıt birikir)
 ## 4. İlerleme kaydı
 | Tarih | Adım | Commit | Not |
 |---|---|---|---|
+| 19.10.2026 | Bulut oturumu 2: rüzgâr 23.3, 23.5–23.8 | 3073e22 (GBM taşıma), (bu commit) | Fiziksel güç eğrisi, olasılıksal tahmin ve rampa, kısıntı, öğrenen düzeltme, şirket planıyla karışım: saf model kodu ve `scripts/wind-candidates-backtest.mts --set phys|prob|curt|corr|blend` (eski rüzgâr betiğinin çıktısı değişmedi). GBM `lib/forecast/`'a taşındı (dikkatli grup, ayrı commit). Sızıntı denetimi (23.3, 23.6–23.8): sızıntı yok; sunum bulguları (ilk KGÜP'e karşı sayım, karışımın "canlıda yok" etiketi, girdi denetimi) düzeltildi. 643 test, tsc temiz. Sonuçlar Mac'te; her maddede "Mac'te sınama" notu. |
 | 19.10.2026 | Bulut oturumu: önerilen sıra (23.0 → 22.6 → 22.7 → 22.5 a2 → 23.1–23.4 → güneş 4 d, e) | dc7a00b, d1c7538, 87a9e7f, 8c3d620, 7e9f34f, (bu commit) | Yalnız kod ve birim testleri; hiçbiri sabah tahminine bağlanmadı, sonuçlar Mac'te. 22.6 sıfır fiyat olasılığı × kısma oranı (`lib/forecast/zero-price.ts`, tatil takvimi, `--set curt`); 22.7 değişim algılama fonksiyonları; 22.5 kapsama ölçümü ve genişlik kalibrasyonu (`--set prob`); 23.0 veri doğrulaması (Open-Meteo kaynak kodu); `lib/wind-engine/` iskeleti, yoğunluklu temel sürüm, rüzgâr ek model arşivi ve birleşimi (`--models`); düzeltme katmanı çeşitleri (`--set abl`). Her değişiklikten sonra `sizinti-denetcisi`: sızıntı yok; bulgular (iyimser "kayıp hariç" kapsama, "üst sınır" etiketi, Brier şartı) düzeltildi. 630+ test, tsc temiz. |
 | 15.10.2026 | Aşama 15: güneş kapısı kapandı (açık referans) + Aşama 20 taslağı | b3797cf … d50bce9, (bu commit) | Konum (OSM, 15 santral), hava verisi (Open-Meteo Previous Runs, `d2` temiz), bilgi zamanı koruması, sürüm 1–3 (2024'te tasarım, 2025-01 – 2026-08 sınama, dönemin kuralı + KÜPST). En iyi model adil kümede 101,5 TL/MWh, ilk KGÜP 78,3; 2 / 15 santral: kapı karşılanmadı, iyileştirme iddiası yok. Bilgi yaşı farkı açıklamıyor (en yeni tahminle bile 110,5). Uydu (SARAH3) ile kısıntı / arıza tespiti: YEKA 2026 potansiyelin %29–39'u kayıp, çoğu planlı. Ürün çıktısı Aşama 20 taslağında. |
 | 15.10.2026 | Aşama 19: sektör capture rate eğilimi | dce10d6, 6a029cb, 9b2a279, (bu commit) | Sektör karnesinin santralleri, 2025 → 2026 Ocak–Ağustos: güneş %84,8 → %66,2 (Mayıs %17; üretimin %16'sı sıfır fiyatlı saatte), rüzgâr %99,2 → %105,6, barajlı hidro %106,5 → %101,3, nehir tipi %100,8 → %95,1. Piyasa sayfasında kart, sonuç sayfasında santralin sektördeki yeri, raporun PPA kutusunda karışıma göre beklenenle kıyas (Gain %94,8, beklenen %102,0). Bağımsız doğrulama geçti. Metodoloji 1.22. 480 test, 56 rapor 0 hata. |
