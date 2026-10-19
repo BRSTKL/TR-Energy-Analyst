@@ -835,20 +835,40 @@ Kurallar:
 
 Her maddenin sonunda "Mac'te sınama" yazılır (yönerge 2).
 
-- [ ] **23.0 Veri doğrulaması (önce, `veri-kaynagi-arastirmaci`).**
+- [~] **23.0 Veri doğrulaması (önce, `veri-kaynagi-arastirmaci`).** 19.10.2026 (bulut): araştırma yapıldı. Open-Meteo sitesi bulut ortamından erişilemedi; Open-Meteo'nun GitHub kaynak kodu ve dokümanı birincil kaynak olarak okundu. Arşiv başlangıçları ve ham dosya başlıkları Mac'te ölçülecek.
+  - **(a) Previous Runs (`_previous_dayN`, doğrulandı):** N gün önceki değer, geçerlilik saatinden en az N × 24 saat önce başlamış en son çalışmadan gelir (`info-time.ts` kuralıyla uyumlu). Yalnız `storePreviousForecast` işaretli değişkenler saklanır.
+
+    | Model | Göbek rüzgârı (d2) | 10 m | Hamle | 2 m sıcaklık | Basınç | Adım | Çalışma | Türkiye |
+    |---|---|---|---|---|---|---|---|---|
+    | `ecmwf_ifs025` | 100 m | var | yok | var | msl (yüzey basıncı türetilmiş olabilir) | 3 sa (saatlik değer ara değer) | 6 sa | var |
+    | `ecmwf_ifs` (9 km) | 100 ve 200 m | var | yok | var | msl | saatlik (90 saate kadar) | 6 sa | var |
+    | `icon_eu` | 80 / 120 / 180 m | var | var | var | msl | saatlik | 3 sa (ara çalışmalar yalnız 0–30 sa: d2'de fiilen 6 sa) | var (29,5–70,5°K, −23,5–62,5°D) |
+    | `icon_global` | 80 / 120 / 180 m | var | var | var | msl | saatlik | 6 sa | var |
+    | `gfs_global` | 80 m; 100 m bileşenleri saklanıyor, adı belgede yok | var | var | var | msl | saatlik | 6 sa | var |
+
+    Sınır tabakası yüksekliği ve 850 hPa sıcaklığı hiçbir modelde geçmiş tahmin olarak saklanmıyor. Kararlılık bu yüzden 10 m / 100 m kesmesi ve 2 m sıcaklıkla ölçülür (23.5). Arşiv başlangıcı yalnız `ecmwf_ifs025` için ölçülmüş (2024-03-07); diğerleri Mac'te.
+  - `WEATHER_RUN_RULES` önerisi (eklenmesi 23.4 bağlamasında, dikkatli grup): `ecmwf_ifs` 6 / 9 sa, `icon_global` 6 / 6 sa. `icon_eu` 3 / 6 kalır (d2 için kötümser).
+  - **(b) Göbek yüksekliği / türbin:** GEM çıkarıcısının okuduğu sütunlarda ve EPDK dökümünün tanınan sütunlarında yok (ham dosya başlıkları Mac'te kontrol edilecek). Yedek yol geçerli: göbek yüksekliği üretimden kestirilir.
+  - **(c) YAL / YAT:** kamuya yalnız sistem toplamı açık (`order-summary-up/down`, 0 / 1 / 2 kodlu, saatlik) ve il bazında kısıt maliyeti; santral bazında talimat ya da ayrı bir RES kısıntı verisi bulunamadı (dolaylı; eptr2 şeması). 23.7'de sistem toplamı YAT ve il kısıt maliyeti gösterge olarak kullanılabilir.
+  - Mac'te sınama: bir Türkiye noktasında (ör. 39°K 35°D) her model ve değişken için 2024-01'den ilk dolu `*_previous_day2`; `gfs_global` `wind_speed_100m_previous_day2` dönüyor mu; `surface_pressure_previous_day2` dolu mu; `meta.json` ile `ecmwf_ifs` ve `icon_global` yayım gecikmesi; `kaynaklar/` GEM rüzgâr xlsx ve EPDK rüzgâr xls başlık satırları.
   - (a) Previous Runs `_previous_day2` ile hangi modellerde göbek yüksekliği rüzgârı var: ECMWF IFS 0,25° ve 9 km (100 m), ICON-EU ve ICON global (80 / 120 / 180 m?), GFS (80 / 100 m?). Ayrıca 10 m rüzgâr, hamle, 2 m sıcaklık, yüzey basıncı, sınır tabakası yüksekliği; ileride 850 hPa sıcaklık. Her biri için arşiv başlangıcı, zaman çözünürlüğü, çalışma aralığı ve yayım gecikmesi (`WEATHER_RUN_RULES`'a eklenir).
   - (b) Santral göbek yüksekliği ve türbin tipi için kaynak: GEM rüzgâr takipçisinde sütun var mı, EPDK lisansında türbin sayısı ve gücü var mı (`kaynaklar/`). Yoksa göbek yüksekliği üretimden kestirilir (80 / 100 / 120 m arasında en iyi uyan).
   - (c) TEİAŞ yük atma talimatı ve rüzgâr kısıntısı için kamu verisi (EPİAŞ şeffaflık; YAL / YAT talimat hacimleri santral bazında var mı).
   - Mac'te sınama: `scripts/wind-forecast-sync.mts`'in yeni değişkenlerle tek santralde denenmesi.
-- [ ] **23.1 İskelet.**
+- [~] **23.1 İskelet.** 19.10.2026 (bulut): yalnız yeni dosyalar. `lib/wind-engine/` (`README.md`, `index.ts`, `physics/`, `models/`). Ortak kod rüzgârda gerektikçe baştan `lib/forecast/` altına yazıldı: `zero-price.ts`, `change-detection.ts`, `tr-holidays.ts`. Güneşteki parçaların taşınması (gbm, karne, şampiyon, kayıt deposu) dikkatli grupta ve henüz yapılmadı; güneş davranışı değişmedi.
   - `lib/wind-engine/` (güneşle aynı düzen) ve `README.md`.
   - Ortak parçalar `lib/forecast/` altına taşınır: `gbm.ts`, karne çekirdeği (`scorecard`), şampiyon seçimi (`self-learning`, `champions`), kayıt deposu (`forecast-log-store`; teknoloji parametreli: `data/pool/forecast-log/wind/`). Güneş davranışı birebir aynı kalır: taşımadan önce ve sonra çıktı özeti karşılaştırılır (22.1'deki gibi).
   - Mac'te sınama: güneş kuru çalışma çıktısı taşıma öncesiyle aynı, `npm test`.
-- [ ] **23.2 Temel sürüm ve günlük kayıt.**
+- [~] **23.2 Temel sürüm ve günlük kayıt.** 19.10.2026 (bulut): model ve geriye dönük test kodu yazıldı; günlük akışa bağlanmadı.
+  - `lib/wind-engine/physics/air-density.ts`: hava yoğunluğu (ideal gaz; yüzey basıncı yoksa deniz seviyesi basıncı ve rakımla), eşdeğer hız v × (ρ / 1,225)^(1/3) (IEC 61400-12-1), kesme üssü (23.3 için).
+  - `lib/wind-engine/models/baseline.ts` `fitWindBaseline`: mevcut güç eğrisi (`lib/forecast/wind-forecast.ts`) ve `density: true` ile eşdeğer hız. `density: false` eski eğriyle birebir aynı (testle sabit). Sıcaklık ve basınç d2'den alınır, bilgi zamanı denetlenir.
+  - Arşiv (`lib/weather/wind-forecast-archive.ts`): d1 / d2 2 m sıcaklık, deniz seviyesi ve yüzey basıncı, 10 m hız ve Open-Meteo nokta rakımı (isteğe bağlı alanlar, eski dosyalar okunur). `scripts/wind-forecast-sync.mts` bu alanları taşımayan yılları bir kez baştan çeker.
+  - `scripts/wind-forecast-backtest.mts`'e "model + yoğunluk" adayı eklendi (eşleştirilmiş saatlerde). Testler: `__tests__/wind-engine-baseline.test.ts` (7 test).
   - Mevcut güç eğrisi (d2 IFS 100 m, hız × yön medyanı) + hava yoğunluğu düzeltmesi (güç ∝ yoğunluk; yoğunluk sıcaklık, basınç ve rakımdan).
   - Canlı girdi: Forecast API IFS 100 m. Eğitim son 4 ay, geçici üretim dahil (güneşteki `trainingWindow`).
   - Günlük akış: rüzgâr santralleri aynı `launchd` çalışmasında, güneşten sonra; kayıt `data/pool/forecast-log/wind/`, onTime ve karne.
   - Mac'te sınama: `scripts/wind-forecast-backtest.mts` (yoğunluklu ve yoğunluksuz), kuru çalışma.
+  - Mac'te sınama (19.10.2026 kodu): önce `npx tsx --env-file=.env --tsconfig tsconfig.json scripts/wind-forecast-sync.mts` (yeni alanlar için arşiv baştan; Open-Meteo sınırında durursa yeniden çalıştırılır), sonra `npx tsx --env-file=.env --tsconfig tsconfig.json scripts/wind-forecast-backtest.mts 2026-09`. Beklenen: "model + yoğunluk" satırı, rüzgâr modeline göre TL/MWh ve santral sayısı; rüzgâr modeli satırı eskisine yakın (233,6 TL/MWh; eşleştirme yüzünden küçük fark olabilir). Sonuçtan önce arşivde `temp.d2` ve `msl.d2` doluluk oranına bakılır (boşsa yoğunluklu aday yoğunluksuzla aynı çıkar; Open-Meteo yeni alanları reddederse senkron yalnız 100 m rüzgârla sürer). Yoğunluk kazandırırsa temel sürüm adayı yoğunluklu olur; seçim gölge sürümün karnesinde de doğrulanır (sızıntı denetimi notu).
 - [ ] **23.3 Fiziksel güç eğrisi.**
   - Santral başına düzgün güç eğrisi: başlama, nominal ve kesme hızları + yoğunluk + yöne göre (8–12 dilim) hız çarpanı. Arazi ve iz etkisi, en küçük mutlak hatayla.
   - Göbek yüksekliğine çıkarma: rüzgâr kesmesi üssü, 10 m / 100 m'den gün saati ve mevsime göre öğrenilir.

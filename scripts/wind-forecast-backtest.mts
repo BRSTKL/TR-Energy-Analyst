@@ -8,6 +8,9 @@
  * KÜPST). Saat kümeleri: tüm saatler, sıfır fiyat hariç, ve ADİL: kayıp saatleri (lib/services/wind-loss.ts; geçmiş
  * rüzgârla işaretlenen planlı kısıntı ve iki kaynaklı ≥ 6 saatlik plansız kayıp) bütün adaylardan çıkarılır.
  * Geçmiş tahminler önce `scripts/wind-forecast-sync.mts` ile çekilmiş olmalı. EPİAŞ'a gidilmez.
+ * Rüzgâr motoru adayı (Aşama 23.2): "model + yoğunluk" aynı güç eğrisini hava yoğunluğuna göre eşdeğer hızla kurar
+ * (lib/wind-engine/models/baseline.ts; d2 sıcaklık ve basınç, arşivde yoksa yoğunluksuzla aynı). Adaylar eşleştirilmiş
+ * saatlerde değerlendirilir: eski sonuçtan birkaç saat farklı olabilir.
  *
  *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/wind-forecast-backtest.mts [sonAy=karnedeki son tam ay]
  * Çıktı: .cache/forecast/wind-backtest.json
@@ -18,7 +21,8 @@ import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import type { MarketPriceRecord, SystemDirection } from "@/lib/calculations/types";
 import { evaluateForecasts, type CandidateResult } from "@/lib/forecast/production-backtest";
-import { fitWindForecast, type WindFcHour } from "@/lib/forecast/wind-forecast";
+import { fitWindForecast } from "@/lib/forecast/wind-forecast";
+import { fitWindBaseline, type WindEngineHour } from "@/lib/wind-engine/models/baseline";
 import { hourMeanWind } from "@/lib/forecast/wind-loss";
 import { readPoolPlantInfo, readPoolYear } from "@/lib/pool/pool-store";
 import { windLossStates } from "@/lib/services/wind-loss";
@@ -46,7 +50,7 @@ const market = new Map<number, MarketPriceRecord>(
   ])
 );
 
-type Hour = WindFcHour & { kgupFinal: number | null; lag48: number | null; fcD2: number | null; fcD1: number | null };
+type Hour = WindEngineHour & { kgupFinal: number | null; lag48: number | null; fcD2: number | null; fcD1: number | null; fcRho: number | null };
 type Sets = Record<string, Record<string, CandidateResult>>;
 const plants = new Map(
   (await prisma.powerPlant.findMany({ where: { type: "RES", projectId: { not: null }, epiasPlantId: { not: null }, latitude: { not: null } }, select: { epiasPlantId: true, name: true, capacityMw: true, capacitySource: true } })).map((r) => [
@@ -61,6 +65,9 @@ for (const [id, p] of plants) {
   if (!(await readPoolPlantInfo(id))?.location) continue;
   // Saatler: üretim, ilk / son KGÜP, PTF, 48 saat önceki üretim, d1 / d2 tahmin rüzgârı (saat ortalaması)
   const stamps = { d1: new Map<number, [number | null, number | null]>(), d2: new Map<number, [number | null, number | null]>() };
+  // Yoğunluk için damga başına sıcaklık, yüzey ve deniz seviyesi basıncı
+  const met = { d1: new Map<number, [number | null, number | null, number | null]>(), d2: new Map<number, [number | null, number | null, number | null]>() };
+  let elevation: number | null = null;
   const hours: Hour[] = [];
   const uevmAt = new Map<number, number | null>();
   for (let y = 2025; y <= ly; y++) {
@@ -68,6 +75,8 @@ for (const [id, p] of plants) {
     if (fc) {
       const s0 = Date.parse(fc.start);
       for (const l of ["d1", "d2"] as const) fc.ws[l].forEach((w, i) => stamps[l].set(s0 + i * HOUR, [w, fc.dir[l][i]]));
+      if (fc.temp) for (const l of ["d1", "d2"] as const) fc.temp[l].forEach((x, i) => met[l].set(s0 + i * HOUR, [x, fc.sp?.[l][i] ?? null, fc.msl?.[l][i] ?? null]));
+      if (typeof fc.elevation === "number") elevation = fc.elevation;
     }
   }
   if (!stamps.d2.size) continue;
@@ -76,6 +85,8 @@ for (const [id, p] of plants) {
     const b = stamps[l].get(t + HOUR);
     return hourMeanWind(a?.[0] ?? null, b?.[0] ?? null, a?.[1] ?? null, b?.[1] ?? null);
   };
+  const avg = (x: number | null | undefined, y: number | null | undefined) => (x == null || y == null ? (x ?? y ?? null) : (x + y) / 2);
+  const metMean = (l: "d1" | "d2", t: number, k: 0 | 1 | 2) => avg(met[l].get(t)?.[k], met[l].get(t + HOUR)?.[k]);
   for (let y = 2025; y <= ly; y++) {
     const d = await readPoolYear(id, y);
     if (!d) continue;
@@ -87,7 +98,7 @@ for (const [id, p] of plants) {
       uevmAt.set(t, u);
       const w1 = mean("d1", t);
       const w2 = mean("d2", t);
-      hours.push({ t, uevm: u, kgupFirst: d.kgupFirst[i], kgupFinal: d.kgupFinal?.[i] ?? null, ptf: market.get(t)?.ptf ?? null, ws: { d1: w1.ws, d2: w2.ws }, dir: { d1: w1.dir, d2: w2.dir }, lag48: null, fcD2: null, fcD1: null });
+      hours.push({ t, uevm: u, kgupFirst: d.kgupFirst[i], kgupFinal: d.kgupFinal?.[i] ?? null, ptf: market.get(t)?.ptf ?? null, ws: { d1: w1.ws, d2: w2.ws }, dir: { d1: w1.dir, d2: w2.dir }, temp: { d1: metMean("d1", t, 0), d2: metMean("d2", t, 0) }, pressure: { d1: metMean("d1", t, 1), d2: metMean("d2", t, 1) }, msl: { d1: metMean("d1", t, 2), d2: metMean("d2", t, 2) }, lag48: null, fcD2: null, fcD1: null, fcRho: null });
     }
   }
   for (const h of hours) h.lag48 = uevmAt.get(h.t - 48 * HOUR) ?? null;
@@ -100,22 +111,24 @@ for (const [id, p] of plants) {
     const train = hours.filter((h) => h.t < trainingEnd);
     let d2: ReturnType<typeof fitWindForecast>;
     let d1: ReturnType<typeof fitWindForecast>;
+    let rho: ReturnType<typeof fitWindBaseline>;
     try {
       d2 = fitWindForecast(train, p.capacityMw, { lead: "d2", trainingEnd });
+      rho = fitWindBaseline(train, p.capacityMw, { lead: "d2", trainingEnd, density: true, elevationM: elevation });
       d1 = fitWindForecast(train, p.capacityMw, { lead: "d1", trainingEnd, leak: true });
     } catch (e) {
       if ((e as Error).name === "LeakageError") throw e;
       continue; // eğitim verisi yetersiz (devreye alma öncesi)
     }
     used++;
-    for (const h of hours) if (h.t >= from && h.t < to) tested.push({ ...h, fcD2: d2.predict(h), fcD1: d1.predict(h) });
+    for (const h of hours) if (h.t >= from && h.t < to) tested.push({ ...h, fcD2: d2.predict(h), fcD1: d1.predict(h), fcRho: rho.predict(h) });
   }
   if (!tested.length) continue;
   const states = await windLossStates(id, p.capacityMw, p.capacitySource);
   const state = (h: Hour) => states?.get(h.t);
   // Ana adaylar; d1 (sızıntılı üst sınır) ayrı çağrıda, ana adayların saatleriyle (ana kümeyi daraltmasın; denetim 18.10)
-  const candidates = { "rüzgâr modeli": (h: Hour) => h.fcD2, "ilk KGÜP": (h: Hour) => h.kgupFirst, "D-2": (h: Hour) => h.lag48 };
-  const mainHours = (h: Hour) => h.fcD2 !== null && h.kgupFirst !== null && h.lag48 !== null;
+  const candidates = { "rüzgâr modeli": (h: Hour) => h.fcD2, "model + yoğunluk": (h: Hour) => h.fcRho, "ilk KGÜP": (h: Hour) => h.kgupFirst, "D-2": (h: Hour) => h.lag48 };
+  const mainHours = (h: Hour) => h.fcD2 !== null && h.fcRho !== null && h.kgupFirst !== null && h.lag48 !== null;
   const withUpper = (filter: (h: Hour) => boolean) => ({
     ...evaluateForecasts(tested, candidates, market, "RES", filter),
     "rüzgâr modeli d1 (üst sınır)": evaluateForecasts(tested, { d1: (h: Hour) => (mainHours(h) ? h.fcD1 : null) }, market, "RES", filter).d1,
@@ -155,9 +168,10 @@ const sum = (k: string, n: string, f: "totalTl" | "uevmMwh" | "hours") => result
 const maeW = (k: string, n: string) => results.reduce((s, r) => s + r.sets[k][n].maeMwh * r.sets[k][n].hours, 0) / Math.max(1, sum(k, n, "uevmMwh"));
 for (const k of Object.keys(SET_LABEL)) {
   console.log(`\n${SET_LABEL[k]} (${results.length} santral, ${sum(k, "ilk KGÜP", "hours")} saat):`);
-  for (const n of ["rüzgâr modeli", "ilk KGÜP", "D-2", "rüzgâr modeli d1 (üst sınır)"]) {
+  for (const n of ["rüzgâr modeli", "model + yoğunluk", "ilk KGÜP", "D-2", "rüzgâr modeli d1 (üst sınır)"]) {
     const wins = n === "ilk KGÜP" ? "" : `  ilk KGÜP'ten ucuz santral ${results.filter((r) => r.sets[k][n].totalTl < r.sets[k]["ilk KGÜP"].totalTl).length} / ${results.length}`;
-    console.log(`  ${n.padEnd(30)} ${nf(sum(k, n, "totalTl") / 1e6, 2)} M TL  (${nf(sum(k, n, "totalTl") / sum(k, n, "uevmMwh"))} TL/MWh, hata %${nf(maeW(k, n) * 100)})${wins}`);
+    const vsBase = n === "model + yoğunluk" ? `  rüzgâr modelinden ucuz santral ${results.filter((r) => r.sets[k][n].totalTl < r.sets[k]["rüzgâr modeli"].totalTl).length} / ${results.length}` : "";
+    console.log(`  ${n.padEnd(30)} ${nf(sum(k, n, "totalTl") / 1e6, 2)} M TL  (${nf(sum(k, n, "totalTl") / sum(k, n, "uevmMwh"))} TL/MWh, hata %${nf(maeW(k, n) * 100)})${wins}${vsBase}`);
   }
 }
 const fin = results.filter((r) => r.final["son KGÜP"].hours > 0);
