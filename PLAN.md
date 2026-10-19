@@ -656,7 +656,12 @@ Her yeni yöntem önce geriye dönük testte, sonra gölge sürüm olarak canlı
   - Geriye dönük test: `scripts/solar-candidates-backtest.mts --set curt`, ağırlıklı+düzeltme üstüne. Adaylar: "+kısıntı" (ortak model), "+kısıntı (hava)" (santral başına; santralin d2 tahmin düzeyi ek özellik), "üst sınır (SIZINTI)" (PTF bilinseydi; aday değil, yalnız kazancın tavanı). Kısıntı saatleri "kayıp hariç" kümesinden düştüğü için asıl ölçü "Tüm saatler".
   - Testler: `__tests__/zero-price.test.ts` (8 test). Sızıntı denetimi temiz; denetim bulgularından "üst sınır"ın aday gibi görünmesi, belgedeki Brier şartı (ay ay açıp kapatma yok, karar bütün dönemle), kalıcılık rakibi ve santral modelinin Brier'i düzeltildi.
   - Mac'te sınama: `npx tsx --env-file=.env --tsconfig tsconfig.json scripts/solar-candidates-backtest.mts 2026-09 --set curt`. Beklenen: Brier model < iklim ve kalıcılık; "Tüm saatler"de +kısıntı ağırlıklı+düzeltmeden ucuz (bahar aylarında). Değilse gölge sürüm yapılmaz.
-- [ ] **22.7 Değişim algılama ve arıza uyarısı.** Kapasite değişimi, uzun arıza, konum tutarsızlığı; kesime kadar kayıt yazılmadıysa bildirim.
+- [~] **22.7 Değişim algılama ve arıza uyarısı.** Kapasite değişimi, uzun arıza, konum tutarsızlığı; kesime kadar kayıt yazılmadıysa bildirim. 19.10.2026 (bulut): (a)–(c) tespit fonksiyonları `lib/forecast/change-detection.ts` (rüzgârla ortak; yalnız uyarı üretir, kayıt değiştirmez).
+  - (a) `capacityChange`: son 30 günün en yüksek üretimi kayıtlı gücün %10 üstünde ("over") ya da önceki 90 günün en yükseğinin %60 altında ("under").
+  - (b) `longOutage`: uydu ışınımına göre açık gökte (GHI ≥ açık gök × 0,6) üretim olağan açık gök gününün %5'inin altında, en az 2 gün; bulutlu gün diziyi bozmaz; "sürüyor" bilgisi.
+  - (c) `locationShift`: açık gök günlerinde üretim ağırlık merkezi ile koordinattaki açık gök ağırlık merkezi farkı; eşik 20 dk (≈ 5° boylam), yalnız kaba hatayı yakalar.
+  - Testler `__tests__/change-detection.test.ts` (5 test). Kalan: (d) ve bağlama (tahmin sayfasında uyarı satırı, günlük akış günlüğü): dikkatli grup.
+  - Mac'te sınama: yalnız `npm test` (henüz bağlı değil); bağlandığında kuru çalışmada uyarı listesi gerçek santrallerle gözden geçirilir.
 
 #### Geliştirme yönergeleri (19.10.2026, kullanıcı: "bulut oturumunda yalnız geliştirme yapacağım, test için Mac'te yaparım")
 
@@ -789,6 +794,7 @@ Kurallar:
    - (c) Konum tutarsızlığı: üretim profili güneş öğlesine göre kaymış (boylam hatası belirtisi).
    - (d) Kesime 30 dakika kala o günün kaydı yazılmadıysa bildirim.
    - Çıktı: tahmin sayfasında uyarı satırı ve günlük akış günlüğü.
+   - ✓ (a)(b)(c) fonksiyonları (19.10.2026, bulut). Kalan (d) ve bağlama.
 4. **Denetimlerden kalan küçük işler.**
    - (a) D-3 geçici üretiminin D-1 12:30'da hazır olduğunu ölç (yalnız Mac'te).
    - (b) Karne kartında gölge sürümlerin santral ve gün sayısını göster (grup toplamları eşleştirilmiş değil).
