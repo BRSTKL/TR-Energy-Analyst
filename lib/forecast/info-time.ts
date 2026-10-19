@@ -33,6 +33,8 @@ export const DECISION_CUTOFF_MINUTES = 12 * 60 + 30;
 export const ECMWF_PUBLISH_DELAY_MS = 9 * HOUR;
 /** Bir günün üretimi ertesi gün bu saatte elde sayılır (dakika, Türkiye saati) */
 export const PRODUCTION_KNOWN_NEXT_DAY_MINUTES = 12 * 60;
+/** Bir günün PTF'si bir önceki gün bu saatte elde sayılır (dakika, Türkiye saati; GÖP sonucu, kötümser) */
+export const PTF_KNOWN_PREV_DAY_MINUTES = 14 * 60;
 
 export type WeatherLeadDays = 0 | 1 | 2;
 /** Hava modeli (Open-Meteo `models=` adı) */
@@ -43,7 +45,7 @@ export const WEATHER_RUN_RULES: Record<WeatherSource, { intervalHours: number; p
   icon_eu: { intervalHours: 3, publishDelayMs: 6 * HOUR },
   gfs_global: { intervalHours: 6, publishDelayMs: 9 * HOUR },
 };
-export type FeatureSource = "weather" | "production" | "calendar";
+export type FeatureSource = "weather" | "production" | "calendar" | "market";
 
 export interface FeatureInfo {
   name: string;
@@ -91,6 +93,16 @@ export function weatherAvailableAt(stampWall: number, lead: WeatherLeadDays, sou
 /** Bir üretim saatinin değeri ne zaman elde: ertesi gün 12:00 */
 export function productionAvailableAt(sourceHourWall: number): number {
   return startOfDay(sourceHourWall) + DAY + PRODUCTION_KNOWN_NEXT_DAY_MINUTES * 60_000;
+}
+
+/** Bir saatin PTF'si ne zaman elde: bir önceki gün 14:00 */
+export function ptfAvailableAt(priceHourWall: number): number {
+  return startOfDay(priceHourWall) - DAY + PTF_KNOWN_PREV_DAY_MINUTES * 60_000;
+}
+
+/** Geçmiş PTF özelliği (ör. dünün aynı saatinin fiyatı): kaynak saat */
+export function marketFeature(name: string, priceHourWall: number): FeatureInfo {
+  return { name, source: "market", availableAt: ptfAvailableAt(priceHourWall) };
 }
 
 /** Hava özelliği tanımı (üretim saatine göre) */
