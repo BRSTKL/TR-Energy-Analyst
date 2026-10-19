@@ -1,7 +1,7 @@
 /**
  * Rüzgârda ek hava modellerinin geçmiş tahminleri (Aşama 23.4; lib/weather/wind-nwp-archive.ts): konumu olan proje rüzgâr
- * santralleri için ICON-EU ve GFS `d2` rüzgârı (80 / 100 / 120 m, 10 m, hamle), 2025-01-01'den dünkü güne. Aynı 0,1°
- * hücreye düşen santraller tek istek; ay sonundan 3 gün sonra çekilmiş ay kesin sayılır. ECMWF rüzgârı ayrı:
+ * santralleri için ICON-EU ve GFS `d2` rüzgârı (80 / 100 / 120 m, 10 m, hamle), 2025-01-01'den dünkü güne. Her santral
+ * kendi koordinatıyla istenir (aynı koordinattaki santraller tek istek); ay sonundan 3 gün sonra çekilmiş ay kesin sayılır. ECMWF rüzgârı ayrı:
  * scripts/wind-forecast-sync.mts.
  *
  *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/wind-models-sync.mts [epiasPlantId ...]
@@ -38,7 +38,7 @@ for (const id of ids) {
       const stale = months.filter((m) => !same || !final(year, m, doc0!.fetched[m]));
       if (!stale.length) continue;
       const from = `${year}-${stale[0]}-01`;
-      const key = `${model}|${Math.round(loc.latitude * 10) / 10},${Math.round(loc.longitude * 10) / 10}|${from}|${end}`;
+      const key = `${model}|${loc.latitude.toFixed(4)},${loc.longitude.toFixed(4)}|${from}|${end}`;
       if (!cache.has(key)) {
         try {
           cache.set(key, await fetchWindNwp(loc.latitude, loc.longitude, from, end, model));

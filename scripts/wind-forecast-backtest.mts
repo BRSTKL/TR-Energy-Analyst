@@ -181,14 +181,15 @@ for (const [id, p] of plants) {
         }
       : {}),
   };
+  const mainHours = (h: Hour) => Object.values(candidates).every((f) => f(h) !== null);
   if (MODELS)
     for (const h of tested) {
-      if (h.uevm === null || h.ens?.weighted == null || h.ens.spreadMs === null) continue;
+      // Ana tabloyla aynı saatler (eşleştirilmiş küme)
+      if (h.uevm === null || !mainHours(h) || h.ens?.weighted == null || h.ens.spreadMs === null) continue;
       const b = spreadErr[SPREAD_EDGES.filter((e) => h.ens!.spreadMs! >= e).length];
       b.hours++;
       b.abs += Math.abs(h.ens.weighted - h.uevm);
     }
-  const mainHours = (h: Hour) => Object.values(candidates).every((f) => f(h) !== null);
   const withUpper = (filter: (h: Hour) => boolean) => ({
     ...evaluateForecasts(tested, candidates, market, "RES", filter),
     "rüzgâr modeli d1 (üst sınır)": evaluateForecasts(tested, { d1: (h: Hour) => (mainHours(h) ? h.fcD1 : null) }, market, "RES", filter).d1,
@@ -214,7 +215,8 @@ for (const [id, p] of plants) {
 
 fs.mkdirSync(path.join(process.cwd(), ".cache", "forecast"), { recursive: true });
 fs.writeFileSync(
-  path.join(process.cwd(), ".cache", "forecast", "wind-backtest.json"),
+  // --models ortak saat kümesiyle ve daha az santralle: ayrı dosya, iki çalışmanın rakamları karşılaştırılmaz
+  path.join(process.cwd(), ".cache", "forecast", MODELS ? "wind-backtest-models.json" : "wind-backtest.json"),
   JSON.stringify({ generatedAt: new Date().toISOString(), period: { from: `${FIRST_TEST.y}-${String(FIRST_TEST.m).padStart(2, "0")}`, to: `${ly}-${String(lm).padStart(2, "0")}` }, plants: results })
 );
 
@@ -235,7 +237,7 @@ for (const k of Object.keys(SET_LABEL)) {
   }
 }
 if (MODELS) {
-  console.log("\nModellerin hız ayrışmasına göre ağırlıklı birleşimin saatlik mutlak hatası (tüm saatler):");
+  console.log("\nModellerin hız ayrışmasına göre ağırlıklı birleşimin saatlik mutlak hatası (ana tablonun saatleri):");
   const label = (i: number) => (i === 0 ? `< ${SPREAD_EDGES[0]}` : i === SPREAD_EDGES.length ? `≥ ${SPREAD_EDGES[i - 1]}` : `${SPREAD_EDGES[i - 1]}–${SPREAD_EDGES[i]}`);
   spreadErr.forEach((b, i) => console.log(`  ${label(i).padEnd(6)} m/s: ${b.hours} saat, ${nf(b.abs / Math.max(1, b.hours), 2)} MWh`));
 }
