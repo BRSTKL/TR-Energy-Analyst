@@ -11,7 +11,8 @@
  *   - düzey: tahmin / kurulu güç;
  *   - son günlerin hatası: hedef günden 9 ile 3 gün önceki saatlerin ortalama (gerçekleşen − tahmin) / kurulu güç (üretim
  *     en geç D-3; info-time `productionFeature` ile denetlenir).
- * Eğitim satırları: üretimi ve tahmini olan saatler; sıfır fiyatlı ve kayıp saatler çağıranın süzgecinde. Ayarlar güneşle
+ * Eğitim satırları: üretimi ve tahmini olan saatler; süzgeç çağıranda (geriye dönük testte yalnız sıfır / eksi fiyatlı saatler
+ * çıkar; kayıp saatler ve son günlerin hatasındaki kısıntı saatleri içeride kalır: düzeltme bunları da görür). Ayarlar güneşle
  * aynı (CORRECTION_GBM), baştan sabit. Tahminler örneklem dışı olmalı (her ay kendinden önceki pencereyle kurulan modelin
  * tahmini). SAF: I/O yok.
  */

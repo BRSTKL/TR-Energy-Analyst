@@ -49,5 +49,10 @@ describe("rüzgârda öğrenen düzeltme (23.5)", () => {
     const series = new Map<number, { pred: number; actual: number }>();
     for (let k = 1; k <= 12; k++) for (let h = 0; h < 24; h++) series.set(Math.floor(t / DAY) * DAY - k * DAY + h * HOUR, { pred: 10, actual: k <= 2 ? 50 : 15 });
     expect(windRecentError(t, series, CAP)).toBeCloseTo(0.1, 9); // D-1, D-2 (50) pencere dışında
+    // D-3 içeride, D-10 dışarıda
+    const d0 = Math.floor(t / DAY) * DAY;
+    const only = (k: number) => new Map(Array.from({ length: 24 }, (_, h) => [d0 - k * DAY + h * HOUR, { pred: 10, actual: 20 }] as const));
+    expect(windRecentError(t, only(3), CAP)).toBeCloseTo(0.2, 9);
+    expect(windRecentError(t, only(10), CAP)).toBeNull();
   });
 });
