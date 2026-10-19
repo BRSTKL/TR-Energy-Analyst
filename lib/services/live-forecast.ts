@@ -70,7 +70,8 @@ async function cachedLiveWeather(lat: number, lon: number, fresh = false): Promi
     } catch {
       /* önbellek yok */
     }
-  const r = await fetch(liveForecastUrl(lat, lon, LIVE_DAYS + 1), { headers: { "User-Agent": "TR-Energy-Analyst/1.0 (non-commercial research)" } });
+  // Süre sınırı: takılan istek günlük tahmin kaydını kesimden sonraya itmesin
+  const r = await fetch(liveForecastUrl(lat, lon, LIVE_DAYS + 1), { headers: { "User-Agent": "TR-Energy-Analyst/1.0 (non-commercial research)" }, signal: AbortSignal.timeout(30_000) });
   const body = await r.json();
   if (!r.ok || !body?.hourly?.time) throw new Error(`Open-Meteo: ${r.status} ${body?.reason ?? ""}`);
   const c = { res: body as OpenMeteoHourly, fetchedAt: new Date().toISOString() };
