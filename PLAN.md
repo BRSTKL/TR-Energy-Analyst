@@ -648,20 +648,177 @@ Her yeni yöntem önce geriye dönük testte, sonra gölge sürüm olarak canlı
 - [x] **22.2 Fiziksel zincir ve inverter sınırı.** ✅ 19.10.2026, canlıya alınmadı. Perez panel düzlemi, NOCT hücre sıcaklığı, DC güç, AC tavanı (kayıtlı kurulu güç ya da eğitimdeki en yüksek); kurulum (sabit 10/20/30° ya da takip) santral başına üretimden (`lib/solar-engine/physics/pv-chain.ts`, `models/physical.ts`). Geriye dönük test (`scripts/solar-candidates-backtest.mts`, 55 santral, Ocak 2025 – Eylül 2026, kayıp saatler hariç, TL/MWh): temel 107,0; saf fiziksel 136,2 (temeli 10/55 santralde yener); karma (fizik + bulut/açıklık ridge) 119,1 (9/55); ilk KGÜP 84,8. İkisi de temelden kötü: hava modelinin saatlik ışınım hatası panel geometrisinin inceliğinden büyük. Motora bağlanmadı; kod 22.4 düzeltme katmanının girdisi olarak duruyor. Sonuç: kazanç fizikte değil hava verisinde (22.3).
 - [~] **22.3 Birden çok hava modeli.** 19.10.2026: kaynak doğrulandı (veri-kaynagi-arastirmaci): ICON-EU ve GFS seçildi (2 gün önceki tahmin, Ocak 2024'ten, saatlik, doğrudan/dağınık ayrımı modelden); ARPEGE World (d2 ışınımı bozuk), ARPEGE Europe (42°D doğusu dışarıda), UKMO (d2 yok), AIFS ve GEM elendi; IFS 9 km arşivi Ekim 2025'ten (sonra). Arşiv: `lib/weather/nwp-models.ts`, `scripts/weather-models-sync.mts` (65 güneş santrali, 175 istek). Geriye dönük test (`scripts/solar-candidates-backtest.mts`, 54 santral, Ocak 2025 – Eylül 2026, üç modelin verisi olan saatler, kayıp hariç TL/MWh): temel (ECMWF) 104,8; ICON-EU 110,5; GFS 116,7; tahmin ortalaması 101,9 (49/54 santralde temelden iyi); girdi ortalaması 101,3 (49/54); ağırlıklı (1/hata², eğitimin son ayından, üç modelin ortak saatlerinde) 101,2 (50/54); ilk KGÜP 82,4. Tek başına hiçbir ek model ECMWF'yi geçmiyor; birleşim tutarlı ama küçük kazanç (≈ %3,5). Sızıntı denetimi temiz; üç birleşim aynı test üzerinde 0,8 TL/MWh içinde, seçim için gölge izleme gerekli. Canlıya gölge sürüm olarak eklendi (19.10.2026, kullanıcı kararı): `solar-v3-nolag-gzu-ens-mean` / `-ens-input` / `-ens-weighted` (`lib/solar-engine/models/ensemble.ts`, `forecastSolarEnsemble`); günlük akış ek model arşivini tazeler (yalnız tamamlanmamış ay) ve ICON-EU + GFS canlı tahminini çeker; ek modelin eksik saatinde ECMWF tahmini (karnede temel sürümle aynı saatler); kesime 20 dakikadan az kaldıysa gölge atlanır; şampiyonun tahmini düşerse temel gönderilir. Kuru çalışma 2026-10-21: 36 santralde üç sürüm. Terfi karne kanıtıyla (≥ 28 gün). Tamamlandı 19.10.2026: model bazında bilgi zamanı kuralı (`lib/forecast/info-time.ts` `WEATHER_RUN_RULES`: ICON-EU 3 saatlik çalışma / 6 sa yayım, GFS 6 / 9, ECMWF 6 / 9; ölçülen ICON-EU ≈ 3, GFS ≈ 6–7 sa; geriye dönük test yeni kuralla aynı); kayda ek modellerin son çalışması (`weather.extra`: dwd_icon_eu, ncep_gfs013, ncep_gfs025) ve birleşim satırlarına modellerin ayrışması (`modelSpread`: üç model tahmininin en yüksek − en düşüğü, MWh; 22.5'in belirsizlik girdisi, karneye girmez). Kalan yalnız karne kanıtı (≥ 28 gün; en erken Kasım ortası).
 - [~] **22.4 Öğrenen düzeltme katmanı.** Fiziksel modelin hatası karar ağaçlı modelle (gradient boosting): saat, mevsim, bulut, sıcaklık, modellerin ayrışması, son günlerin hatası. 19.10.2026 geriye dönük test: gradient boosting (`lib/solar-engine/models/gbm.ts`, dış kütüphane yok; Huber, 150 ağaç, derinlik 3, öğrenme 0,05, yaprak ≥ 40) ile düzeltme katmanı (`models/correction.ts`): hedef (gerçekleşen − tahmin)/tavan; özellikler saat, yılın günü, güneş yüksekliği, açıklık oranı, bulut, sıcaklık, tahmin/tavan, üç modelin GHI ayrışması, son günlerin hatası (hedef günden 9–3 gün önce). Fiziksel model kullanılmadığı (22.2) için temel ve ağırlıklı birleşimin üstüne. Eğitim: Temmuz 2024'ten aylık örneklem dışı tahmin serisi, her test ayı için önceki en çok 12 ay. Sonuç (`scripts/solar-candidates-backtest.mts --set gbm`, 54 santral, Ocak 2025 – Eylül 2026, kayıp hariç TL/MWh): temel 104,8 → temel+düzeltme 93,9 (43/54 santralde iyi); ağırlıklı 101,2 → ağırlıklı+düzeltme 91,4; tüm saatlerde 131,3 → 118,2 / 114,5; ilk KGÜP 82,4. Santral başına medyan −%4,6, en iyi −%16, en kötü +%8. Ayarlar baştan bir kez seçildi, sonuca göre değiştirilmedi (tek deneme), ama tasarım ve test dönemi aynı: kanıt gölge sürümün yeni aylardaki karnesi. Sızıntı denetimi temiz (geriye dönük testte son günlerin hatası UEVM ile, canlıda GZÜ ile; D-3 üretiminin D-1 12:30'da hazır olduğu ölçülmeli). Canlıya gölge sürüm olarak eklendi (19.10.2026, kullanıcı kararı): `solar-v3-nolag-gzu-corr` (temel + düzeltme) ve `-ens-weighted-corr` (ağırlıklı birleşim + düzeltme), birleşimle aynı çalışmada (`forecastSolarEnsemble`); eğitim verisi örneklem dışı seri (`lib/solar-engine/learning/oos-series.ts`, tamamlanmış aylar `.cache/forecast/oos/` önbelleğinde, model kodu değişince yenilenir; doldurma `scripts/solar-oos-backfill.mts`), her gün yeniden kurulur; eğitim sonunun kesimden önce olduğu denetlenir. Kuru çalışma 2026-10-21: 29/36 santralde (7 yeni santralde geçmiş yetersiz); düzeltme günlük toplamda ±%5 civarı. Bilinen fark: düzeltme 2 gün önceki tahminin hatasından öğrenir, canlıda en yeni tahmine uygulanır; gölge karne ölçer. Terfi karne kanıtıyla (≥ 28 gün).
-- [ ] **22.5 Olasılıksal tahmin ve maliyete göre teklif.** %10 / %50 / %90; dengesizlik fiyatlarının asimetrisine göre en ucuz teklif.
+- [~] **22.5 Olasılıksal tahmin ve maliyete göre teklif.** %10 / %50 / %90; dengesizlik fiyatlarının asimetrisine göre en ucuz teklif. 19.10.2026 geriye dönük test (`lib/solar-engine/models/quantiles.ts`: tahmin düzeyi dilimli örneklem dışı hata çeyreklikleri; `scripts/solar-candidates-backtest.mts --set prob`, ağırlıklı+düzeltme üstüne, 53 santral, Nisan 2025 – Eylül 2026, her test ayı önceki ≤ 12 ayın düzeltilmiş tahmin geçmişiyle; kayıp hariç TL/MWh): ağırlıklı+düzeltme 84,9; P50 86,3 (14/53 santralde iyi); maliyet teklifi (geçmişte en ucuz çeyreklik, çoğu ay 0,50–0,60) 88,1 (5/53); ilk KGÜP 79,3; tüm saatlerde 109,1 / 110,7 / 113,4 / 89,0. **Maliyet teklifi kaybediyor (+%3,8): canlıya alınmaz** (2026-09 bulgusuyla aynı: miktar ayarı örneklem dışında kazandırmıyor). P10–P90 kapsaması %73,6 (hedef %80; kayıp saatler dahil ölçüldü). Sızıntı denetimi temiz; kapsama ölçümü kendi aleyhine yanlı (kayıp / sıfır fiyat saatleri dahil, bahar aylarında tavan kırpması). Kalan: bantların kalibrasyonu ve canlıda gösterilmesi (güneş sıradaki işler 1).
 - [ ] **22.6 Planlı kısıntı tahmini.** Sıfır fiyat olasılığı (PTF kesimden sonra açıklanır) × santralin geçmiş kısıntı davranışı.
 - [ ] **22.7 Değişim algılama ve arıza uyarısı.** Kapasite değişimi, uzun arıza, konum tutarsızlığı; kesime kadar kayıt yazılmadıysa bildirim.
 
-#### Sıradaki işler, sırayla (19.10.2026; bulut oturumunda devam için)
+#### Geliştirme yönergeleri (19.10.2026, kullanıcı: "bulut oturumunda yalnız geliştirme yapacağım, test için Mac'te yaparım")
 
-**Önce oku: bulutta ne var, ne yok.** Depoda yalnız kod var. `data/` (EPİAŞ havuzu, hava arşivi, tahmin kayıtları), `.cache/`, `kaynaklar/`, `prisma/*.db` ve `.env` git dışı; EPİAŞ yalnız VPN ile erişilir. Bulutta: kod yazma, birim testleri (`npm test`), tip denetimi (`npx tsc --noEmit -p .`). Mac'te kalır: geriye dönük testler (`scripts/solar-candidates-backtest.mts`), `npm run check:reports`, duman testi, günlük akışın kuru çalışması (`scripts/solar-forecast-daily.mts <gün> --dry`), EPİAŞ eşitlemesi. Her model, özellik ya da geriye dönük test değişikliğinden sonra `sizinti-denetcisi`; yeni hava kaynağından önce `veri-kaynagi-arastirmaci` (CLAUDE.md). Yeni yöntem doğrudan canlıya girmez: geriye dönük test → gölge sürüm (`lib/solar-engine/registry.ts`) → karnede ≥ 28 gün kanıt. Kod düzeni: `lib/solar-engine/README.md`.
+Bu bölüm Aşama 22 (güneş) ve Aşama 23 (rüzgâr) için geçerli. CLAUDE.md kuralları her zaman önce gelir.
 
-1. **22.5'i bitir.** (a) Geriye dönük test sonucu (`--set prob`, Mac) bu maddeye yazılır: P10–P90 kapsaması (hedef %80) ve maliyet teklifinin ağırlıklı+düzeltmeye göre farkı. (b) Canlıda P10 / P50 / P90: `forecastSolarEnsemble` ağırlıklı+düzeltme tahmininin örneklem dışı geçmiş hatasından (`lib/solar-engine/models/quantiles.ts`, `learning/oos-series.ts`) bantları kurar; kayda yazılır (`ForecastLogPlant` / gölge satırına `bands: {p10, p50, p90}`, isteğe bağlı alan; eski kayıtlar okunur). (c) Maliyet teklifi yalnız geriye dönük testte temelden iyiyse gölge sürüm olur (`-ens-weighted-corr-bid`). (d) Üretim tahmini sayfasında santral grafiğine P10–P90 bandı (`components/`; sonra `npm run test:smoke -- --only forecast`, Mac).
-2. **22.6 Planlı kısıntı tahmini.** PTF D-1 13:00'te açıklanır, kesim 12:30: sıfır fiyat ancak olasılık olarak bilinir. (a) Sıfır / çok düşük PTF olasılığı modeli: geçmiş saatlik PTF (`MarketData`), saat, ay, hafta sonu / bayram, beklenen güneş + rüzgâr üretimi (gün öncesi bilinen); bilgi anı D-1 12:30 öncesi (info-time). (b) Santralin sıfır fiyatta kısma davranışı: geçmiş sıfır fiyat saatlerinde UEVM / uyduyla beklenen üretim (`lib/forecast/curtailment.ts`). (c) Beklenen kısıntı = olasılık × kısma oranı × tahmin; tahminden düşülür. Geriye dönük test → gölge sürüm.
-3. **22.7 Değişim algılama ve arıza uyarısı.** (a) Kapasite değişimi: son 30 günün en yüksek üretimi kayıtlı kurulu gücü %10'dan çok aşıyor ya da sürekli altında (CLAUDE.md kurulu güç kuralı; otomatik yazma yok, uyarı). (b) Uzun arıza: uyduya göre açık gökte ≥ 2 gün üretim sıfıra yakın. (c) Konum tutarsızlığı: üretim profilinin öğle kayması (boylam hatası belirtisi). (d) Kesime 30 dakika kala o günün kaydı yazılmadıysa bildirim (günlük akış; launchd 10:00 çalışması). Çıktı: tahmin sayfasında uyarı satırı ve günlük akış günlüğü.
-4. **Denetimlerden kalan küçük işler.** (a) D-3 geçici üretiminin (GZÜ) D-1 12:30'da hazır olduğunu ölç (Mac, VPN; `lib/pool/provisional.ts`). (b) Karne kartında gölge sürümlerin santral / gün sayısını göster (grup toplamları eşleştirilmiş değil; `components/forecast-scorecard-card.tsx`, `learning/scorecard.ts`). (c) Düzeltme katmanında tahmin ≈ 0 iken eğitim / uygulama uyumsuzluğu (sabah ve akşam saatleri; `models/correction.ts`). (d) Düzeltme kazancının kaynağı: "son günlerin hatası" ve "yılın günü" özellikleri ayrı ayrı çıkarılarak geriye dönük test (Mac). (e) Duyarlılık: GBM tohumu ve 12 aylık pencere (tasarım ve test dönemi aynı olduğu için).
-5. **Karne takibi (Mac).** Günlük kayıtlar `data/pool/forecast-log/solar/`; gölge sürümler (üç model birleşimi, düzeltme) için karne; ilk şampiyon kararı en erken Kasım 2026 ortası. Sonuç 22.3 ve 22.4 maddelerine yazılır, kanıtla kazanmayan gölge sürümler kayıt defterinden çıkarılır (kimlik silinmez, yalnız üretilmez).
-6. **Sonra:** rüzgâr motoru (Aşama 21'in rüzgâr tarafı) aynı düzende (`lib/wind-engine/`), güneşte kazananlar örnek alınarak.
+**1. Ortam: bulutta ne var, ne yok.**
+- Depoda yalnız kod var. `data/` (EPİAŞ havuzu, hava arşivi, tahmin kayıtları, şampiyonlar), `.cache/`, `kaynaklar/` (README dışında), `prisma/*.db` ve `.env` git dışında.
+- EPİAŞ'a yalnız Mac'te, Türkiye VPN'iyle erişilir.
+- Bulutta yapılabilenler: kod yazma, birim testleri (`npm test`), tip denetimi (`npx tsc --noEmit -p .`; gerekirse önce `npx prisma generate`).
+- Veri, ağ ya da tarayıcı isteyen her şey Mac'te: geriye dönük testler, `npm run check:reports`, duman testi, günlük akışın kuru çalışması, arşiv çekme betikleri.
+
+**2. Her iş birimi bir commit, ve commit mesajında Mac'te sınama bölümü.**
+- Bulut oturumu kendi dalında çalışır, `main`'e doğrudan yazmaz. Kullanıcı Mac'te dalı çeker, sınar, birleştirir.
+- Commit mesajının sonunda "Mac'te sınama:" başlığı altında çalıştırılacak komutlar ve beklenen sonuç yazılır. Örnek:
+  ```
+  Mac'te sınama:
+  npx tsx --env-file=.env --tsconfig tsconfig.json scripts/solar-candidates-backtest.mts 2026-09 --set prob
+  Beklenen: özet satırları ve P10–P90 kapsaması ≈ %80.
+  ```
+- Kullanıcı sonucu PLAN maddesine yazar ya da oturuma yapıştırır. Sonuç gelmeden madde `[x]` olmaz, en çok `[~]`.
+
+**3. Yeni yöntemin yolu, sırayla.**
+1. Saf model kodu `models/` altında: I/O yok, birim testli.
+2. Geriye dönük test kümesi (`--set <ad>`), Mac'te çalışır.
+3. Sonuç temelden iyiyse gölge sürüm: `registry.ts`'e yeni kimlik.
+4. Karnede en az 28 gün kanıt; şampiyon kararını kod verir, elle canlıya alınmaz.
+
+Kurallar:
+- Sürüm kimlikleri değiştirilmez ve silinmez; kullanılmayan sürüm yalnız üretilmez.
+- Kayıt biçimine yalnız isteğe bağlı alan eklenir, eski kayıtlar okunabilir kalır.
+
+**4. Bilgi zamanı: tahmin kesimden önce elde olan bilgiyle yapılır.**
+- Her özellik `lib/forecast/info-time.ts` ile tanımlanır: `weatherFeature` (modelin `WeatherSource` kuralıyla), `productionFeature`, `calendarFeature`.
+- Kesim D-1 12:30 (Türkiye saati).
+- Eğitimde hava verisi yalnız `d2` (Previous Runs `_previous_day2`). Canlıda kesimden önce alınan en yeni tahmin kullanılır.
+- Gerçekleşen üretim en geç D-3 (geçici üretim, GZÜ).
+- Canlı saat (`live: true`) eğitime giremez; her model bunu bir testle sınar.
+- Yeni hava kaynağı ya da değişken eklenmeden önce `veri-kaynagi-arastirmaci`; her model, özellik ya da geriye dönük test değişikliğinden sonra `sizinti-denetcisi` çağrılır. İkisi de depoda (`.claude/agents/`), bulutta da çalışır.
+
+**5. Birim testleri.**
+- Testler sentetik ve tohumlu verilerle yazılır (gerçek veri bulutta yok).
+- Her modelde en az şu testler olur:
+  - bilinen yapıyı geri bulur,
+  - aynı veriyle aynı sonucu verir,
+  - canlı saat eğitimde hata verir,
+  - sınırlar korunur (eksi tahmin yok, kurulu güç üstü yok).
+- Örnekler: `__tests__/gbm.test.ts`, `__tests__/solar-correction.test.ts`, `__tests__/solar-ensemble.test.ts`.
+
+**6. Kod düzeni ve biçim.**
+- Güneşe özgü kod `lib/solar-engine/`, rüzgâra özgü kod `lib/wind-engine/` altında, aynı iskeletle:
+  - `pipeline.ts`, `registry.ts`, `forecast.ts`, `README.md`
+  - `data/`, `physics/`, `models/`, `learning/`
+- İki motorun ortak kullandığı kod `lib/forecast/` altında (bilgi zamanı, maliyet fiyatlaması, kısıntı).
+- Bir parça (ör. `models/gbm.ts`, `learning/self-learning.ts`) ikinci motorda da gerekince kopyalanmaz, `lib/forecast/` altına taşınır; iki motor da oradan kullanır.
+- Yorumlar Türkçe, dosya başında ne yaptığı, kaynak ve bilgi anı yazılır.
+- `prettier` çalıştırılmaz. Dosyaların karakter kodlaması UTF-8.
+
+**7. Dürüst beklenti.**
+- Kazanç iddiası yalnız örneklem dışı geriye dönük testten ve karneden gelir.
+- Tasarım ve test dönemi aynıysa bu açıkça yazılır.
+- Dışarıya giden metin `iddia-denetcisi`'nden geçer.
+
+#### Güneş: sıradaki işler, sırayla
+
+1. **22.5'i bitir.**
+   - (a) ✓ Geriye dönük test yapıldı (22.5 satırı): maliyet teklifi kaybediyor, bantlar dar (%73,6 / %80).
+   - (a2) Kapsamayı doğru ölç: kayıp hariç ve ay bazında ayrıca (`--set prob` özetine; denetim bulgusu). Bantlar hâlâ darsa kalibrasyon: çeyreklik yerine genişlik çarpanı, AYRI dönemde seçilir (ör. Nisan–Aralık 2025'te seç, 2026'da sına; test üzerinde seçim yapılmaz). Tavan kırpması (`max(tavan, tahmin)`, bahar aylarında kış tavanı) kayıtlı kurulu güçle denenir.
+   - (b) Canlıda P10 / P50 / P90: `forecastSolarEnsemble` ağırlıklı+düzeltme tahmininin geçmiş örneklem dışı hatasından bantları kurar (`models/quantiles.ts`). Bunun için düzeltilmiş tahminin geçmişi gerekir: `learning/oos-series.ts`'e "düzeltilmiş" seri eklenir, aylık kurulan düzeltmeyle. Bantlar kayda yazılır (`bands: {p10, p50, p90}`, isteğe bağlı alan).
+   - (c) ✗ Maliyet teklifi geriye dönük testte kaybetti (+%3,8): gölge sürüm yapılmaz.
+   - (d) Üretim tahmini sayfasında santral grafiğine P10–P90 bandı (`components/`).
+   - Mac'te sınama: kuru çalışma ve `npm run test:smoke -- --only forecast`.
+2. **22.6 Planlı kısıntı tahmini.**
+   - PTF D-1 13:00'te açıklanır, kesim 12:30: sıfır fiyat ancak olasılık olarak bilinebilir.
+   - (a) Sıfır ya da çok düşük PTF olasılığı modeli: geçmiş saatlik PTF (`MarketData`), saat, ay, hafta sonu ve bayram, kesimden önce bilinen beklenen güneş ve rüzgâr üretimi.
+   - (b) Santralin sıfır fiyatta kısma oranı: geçmiş sıfır fiyatlı saatlerde UEVM'nin uyduyla beklenen üretime oranı (`lib/forecast/curtailment.ts`).
+   - (c) Beklenen kısıntı = olasılık × kısma oranı × tahmin; tahminden düşülür. Geriye dönük test, sonra gölge sürüm.
+3. **22.7 Değişim algılama ve arıza uyarısı.**
+   - (a) Kapasite değişimi: son 30 günün en yüksek üretimi kayıtlı kurulu gücü %10'dan fazla aşıyor ya da sürekli altında kalıyor. Yalnız uyarı verilir; kurulu güç otomatik yazılmaz (CLAUDE.md).
+   - (b) Uzun arıza: uyduya göre açık gökte en az 2 gün üretim sıfıra yakın.
+   - (c) Konum tutarsızlığı: üretim profili güneş öğlesine göre kaymış (boylam hatası belirtisi).
+   - (d) Kesime 30 dakika kala o günün kaydı yazılmadıysa bildirim.
+   - Çıktı: tahmin sayfasında uyarı satırı ve günlük akış günlüğü.
+4. **Denetimlerden kalan küçük işler.**
+   - (a) D-3 geçici üretiminin D-1 12:30'da hazır olduğunu ölç (yalnız Mac'te).
+   - (b) Karne kartında gölge sürümlerin santral ve gün sayısını göster (grup toplamları eşleştirilmiş değil).
+   - (c) Düzeltme katmanında tahmin ≈ 0 iken eğitim ile uygulama uyumsuz (sabah ve akşam saatleri).
+   - (d) Düzeltme kazancı nereden geliyor: "son günlerin hatası" ve "yılın günü" özellikleri ayrı ayrı çıkarılarak geriye dönük test (yeni `--set`).
+   - (e) Duyarlılık: GBM tohumu ve 12 aylık pencere.
+5. **Karne takibi (Mac).**
+   - Gölge sürümlerin (üç model birleşimi, düzeltme) karnesi izlenir; ilk şampiyon kararı en erken Kasım 2026 ortası.
+   - Sonuç 22.3 ve 22.4 maddelerine yazılır.
+
+### Aşama 23: Rüzgâr tahmin motoru (19.10.2026, kullanıcı: "rüzgâr için de bir tahmin motoru oluşturmak istiyorum … rüzgâr enerjisinin kimliğine uygun olarak")
+
+**Rüzgâr güneşten neden farklı (tasarımın dayanağı):**
+- **Güç hızın küpüyle değişir.** Hava modelindeki 1 m/s hız hatası, güç eğrisinin dik bölgesinde (≈ 5–11 m/s) kurulu gücün %15–25'i kadar hata demek. Hata girdinin kendisinde büyüyor: rüzgârda yöntemin özü güç eğrisi ve hız hatasının düzeltilmesi.
+- **Göbek yüksekliği ve arazi.** Türbin 80–140 m'de, hava modeli ızgarası 7–25 km. Tepe ve boğaz etkisi yöne bağlı; santral başına yöne göre düzeltme gerekir.
+- **Hava yoğunluğu.** Güç, yoğunlukla orantılı. Kışla yaz arasında ±%10 fark var; sıcaklık, basınç ve rakımdan hesaplanır.
+- **Kararlılık.** Gece ile gündüz arasında rüzgâr kesmesi (10 m ile 100 m arası fark) değişir. Model gece kararlı katmanda 100 m hızı sistematik olarak yanlış verir. Gün saati, sıcaklık farkı ve kesme özellik olur.
+- **Zamanlama hatası.** Cepheler ve rampalar saat kaymasıyla gelir: hız doğru ama saat yanlış. Bu yüzden olasılıksal tahmin ve modellerin ayrışması güneştekinden değerli.
+- **Kesme ve kullanılabilirlik.** Türbin ≈ 25 m/s üstünde durur; buzlanma, bakım ve kısıntı da var. TEİAŞ yük atma talimatı (YAT) ve sıfır fiyatlı saatler gibi rüzgârda kısıntı yaygın. Gerçekleşen etiket için uydu yok: kısıntı ilk KGÜP düşüşü ve kısa vadeli IFS yeniden analiziyle (`lib/forecast/wind-loss.ts`) yakalanır.
+- **Rakip güçlü.** Rüzgârda şirketlerin ilk KGÜP'ü iyi (150,9 TL/MWh; bizim güç eğrisi modelimiz 233,6, 0/108 santral). Kamu verisiyle toplamda geçmek güneşten zor.
+- **Değerin olduğu yerler:**
+  - zayıf tahminci santraller (karışım denemesinde 44/108),
+  - kendi tahmincisi olmayan küçük santraller,
+  - olasılıksal tahmin ve rampa uyarısı,
+  - bağımsız ikinci görüş ve karne.
+
+**Mevcut parçalar (yeniden kullanılır):**
+- `lib/forecast/wind-forecast.ts`: hız × yön medyanı güç eğrisi, bilgi zamanı denetimli.
+- `lib/forecast/wind-loss.ts`: kayıp ve kısıntı tespiti.
+- `lib/weather/wind-forecast-archive.ts` + `scripts/wind-forecast-sync.mts`: ECMWF IFS 0,25°, 100 m, d1 / d2; 118 santral.
+- `lib/weather/reanalysis-wind.ts`: ERA5 ve IFS 9 km gerçekleşen rüzgâr; yalnız etiket olarak kullanılır, tahmin girdisi olamaz.
+- `scripts/wind-forecast-backtest.mts`.
+- Rüzgâr konumları: projelerdeki 129 rüzgâr santralinin 118'i konumlu (99 GEM, 3 OSM, 16 tahmini ilçe merkezi); kurulu güç YEKDEM → EPDK (işletmedeki MWe).
+
+Her maddenin sonunda "Mac'te sınama" yazılır (yönerge 2).
+
+- [ ] **23.0 Veri doğrulaması (önce, `veri-kaynagi-arastirmaci`).**
+  - (a) Previous Runs `_previous_day2` ile hangi modellerde göbek yüksekliği rüzgârı var: ECMWF IFS 0,25° ve 9 km (100 m), ICON-EU ve ICON global (80 / 120 / 180 m?), GFS (80 / 100 m?). Ayrıca 10 m rüzgâr, hamle, 2 m sıcaklık, yüzey basıncı, sınır tabakası yüksekliği; ileride 850 hPa sıcaklık. Her biri için arşiv başlangıcı, zaman çözünürlüğü, çalışma aralığı ve yayım gecikmesi (`WEATHER_RUN_RULES`'a eklenir).
+  - (b) Santral göbek yüksekliği ve türbin tipi için kaynak: GEM rüzgâr takipçisinde sütun var mı, EPDK lisansında türbin sayısı ve gücü var mı (`kaynaklar/`). Yoksa göbek yüksekliği üretimden kestirilir (80 / 100 / 120 m arasında en iyi uyan).
+  - (c) TEİAŞ yük atma talimatı ve rüzgâr kısıntısı için kamu verisi (EPİAŞ şeffaflık; YAL / YAT talimat hacimleri santral bazında var mı).
+  - Mac'te sınama: `scripts/wind-forecast-sync.mts`'in yeni değişkenlerle tek santralde denenmesi.
+- [ ] **23.1 İskelet.**
+  - `lib/wind-engine/` (güneşle aynı düzen) ve `README.md`.
+  - Ortak parçalar `lib/forecast/` altına taşınır: `gbm.ts`, karne çekirdeği (`scorecard`), şampiyon seçimi (`self-learning`, `champions`), kayıt deposu (`forecast-log-store`; teknoloji parametreli: `data/pool/forecast-log/wind/`). Güneş davranışı birebir aynı kalır: taşımadan önce ve sonra çıktı özeti karşılaştırılır (22.1'deki gibi).
+  - Mac'te sınama: güneş kuru çalışma çıktısı taşıma öncesiyle aynı, `npm test`.
+- [ ] **23.2 Temel sürüm ve günlük kayıt.**
+  - Mevcut güç eğrisi (d2 IFS 100 m, hız × yön medyanı) + hava yoğunluğu düzeltmesi (güç ∝ yoğunluk; yoğunluk sıcaklık, basınç ve rakımdan).
+  - Canlı girdi: Forecast API IFS 100 m. Eğitim son 4 ay, geçici üretim dahil (güneşteki `trainingWindow`).
+  - Günlük akış: rüzgâr santralleri aynı `launchd` çalışmasında, güneşten sonra; kayıt `data/pool/forecast-log/wind/`, onTime ve karne.
+  - Mac'te sınama: `scripts/wind-forecast-backtest.mts` (yoğunluklu ve yoğunluksuz), kuru çalışma.
+- [ ] **23.3 Fiziksel güç eğrisi.**
+  - Santral başına düzgün güç eğrisi: başlama, nominal ve kesme hızları + yoğunluk + yöne göre (8–12 dilim) hız çarpanı. Arazi ve iz etkisi, en küçük mutlak hatayla.
+  - Göbek yüksekliğine çıkarma: rüzgâr kesmesi üssü, 10 m / 100 m'den gün saati ve mevsime göre öğrenilir.
+  - Kesme üstü durma (histerezis) ve kısmi kullanılabilirlik (kurulu güç / tavan).
+  - Medyan eğriyle karşılaştırma. 22.2'den ders: fizik tek başına kaybedebilir; sınanmadan aday olmaz.
+- [ ] **23.4 Birden çok hava modeli (rüzgârda güneşten daha değerli).**
+  - ECMWF 0,25° + ICON-EU + GFS (+ IFS 9 km Ekim 2025'ten) göbek yüksekliği rüzgârı.
+  - Her model kendi güç eğrisiyle; birleşimler: ortalama, ağırlıklı, hız ortalamasıyla tek eğri (`lib/solar-engine/models/ensemble.ts` deseni, rüzgâr girdileriyle).
+  - Modellerin hız ayrışması kayda yazılır (belirsizlik ölçüsü).
+- [ ] **23.5 Öğrenen düzeltme (kararlılık, yoğunluk, rampa).**
+  - Ortak GBM ile örneklem dışı hatayı öğrenir (`learning/oos-series` deseni).
+  - Özellikler:
+    - gün saati, mevsim,
+    - 10 m / 100 m kesme, 2 m sıcaklık, hamle / ortalama,
+    - yön,
+    - modellerin ayrışması,
+    - son 3 ve 6 saatlik tahmin değişimi (rampa göstergesi),
+    - son günlerin hatası.
+  - Hedef kurulu güce oranlı. Güneşteki 22.4 ile aynı kurallar.
+- [ ] **23.6 Olasılıksal tahmin ve rampa uyarısı.**
+  - P10 / P50 / P90: hız dilimine göre koşullu hata dağılımı; rüzgârda hata hız dilimine göre çok değiştiği için dilim hız üstünden.
+  - Rampa olasılığı: 3 saatte kurulu gücün %30'undan fazla değişim. Modellerin ayrışmasıyla kalibre edilir.
+  - Kapsama hedefi %80, ölçülür.
+- [ ] **23.7 Kısıntı ve kullanılabilirlik.**
+  - Sıfır fiyat olasılığı (22.6 ile ortak model) × santralin kısma davranışı.
+  - TEİAŞ talimatı: 23.0(c)'de veri bulunursa.
+  - Uzun arıza ve bakım: üretim / beklenen oranı ile ilk KGÜP'teki düşüş. Değişim algılama 22.7 ile ortak.
+- [ ] **23.8 Şirket planıyla karışım (analiz aracı).**
+  - Santral başına geçmiş aylarla öğrenilen ağırlık (`w × model + (1 − w) × ilk KGÜP`); güçlü tahmincide w → 0.
+  - Çıktı: zayıf tahminci santraller listesi, aday taramasına bağlanır.
+  - Sınır: ilk KGÜP canlıda bizim elimizde değil (şirketin kendi bildirimi). Bu yalnız geçmişe bakan analiz ve şirkete sunulacak "planınızı şöyle düzeltirdik" kanıtıdır.
+- [ ] **23.9 Ekran.**
+  - Üretim tahmini sayfasında rüzgâr sekmesi: santral grafiği, P10–P90 bandı, rampa uyarısı, karne.
+  - Mac'te sınama: `npm run test:smoke -- --only forecast`.
+
+Sıra: 23.0 → 23.1 → 23.2 (kayıt ve karne erken başlasın, kanıt birikir) → 23.4 → 23.3 → 23.5 → 23.6 → 23.7 → 23.8 → 23.9. Her yeni sürüm gölge olarak 28 gün karnede sınanır.
 
 ## 3. Karar noktaları (sizin onayınız gerekiyor)
 1. **Aşama sırası:** Önerim 1 → 2 → 3 → 5 → 4 → 6. Aşama 5 (başvuru paketi), 2 ve 3 bittiğinde en güçlü halindedir; 4 büyük bir veri işidir.

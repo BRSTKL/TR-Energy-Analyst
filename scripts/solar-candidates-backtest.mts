@@ -9,6 +9,10 @@
  *     4. aydaki hatasına göre, üç modelin ortak saatlerinde, ağırlık ∝ 1 / hata²; test ayı görülmez; lib/solar-engine/models/ensemble.ts).
  *     Bir modelin verisi olmayan saat bütün adaylardan düşer.
  *   - `phys` (22.2): fiziksel model ve karma (fizik + ridge).
+ *   - `prob` (22.5): `gbm` kümesinin üstüne, ağırlıklı+düzeltme tahmininden P10 / P50 / P90 (lib/solar-engine/models/quantiles.ts:
+ *     düzeltilmiş tahminin önceki aylardaki örneklem dışı hatası, en çok 12 ay) ve maliyete göre teklif (geçmiş aylarda en
+ *     ucuz çeyreklik, gerçek fiyatlarla). Test Nisan 2025'ten (en az 3 aylık düzeltilmiş geçmiş). Kapsama: [P10, P90] içinde
+ *     kalan saat oranı (hedef %80).
  *   - `gbm` (22.4): öğrenen düzeltme katmanı (lib/solar-engine/models/correction.ts) temel ve ağırlıklı birleşimin üstünde.
  *     Temel ve birleşim Temmuz 2024'ten her ay önceki 4 ayla kurulur (örneklem dışı tahmin serisi); her test ayının düzeltmesi
  *     o aydan önceki en çok 12 ayın örneklem dışı hatasıyla öğrenilir (sıfır fiyatlı ve uyduyla kayıp saatler hariç; son
@@ -34,12 +38,16 @@ import { NWP_MODELS, type NwpYear } from "@/lib/weather/nwp-models";
 import { archiveVariants, ENSEMBLE_SOURCES, fitEnsemble, noLag, type NwpArchive } from "@/lib/solar-engine/models/ensemble";
 import { readNwpYear } from "@/lib/weather/weather-store";
 import { fitCorrection, recentErrorFor } from "@/lib/solar-engine/models/correction";
+import { chooseBidQuantile, fitResidualQuantiles } from "@/lib/solar-engine/models/quantiles";
 import { TRAIN_ZERO_PRICE_MAX } from "@/lib/solar-engine/models/production-model";
 
 const endArg = process.argv.slice(2).find((a) => /^\d{4}-\d{2}$/.test(a)) ?? "2026-09";
 const onlyProject = process.argv.includes("--project");
 const setArg = process.argv[process.argv.indexOf("--set") + 1];
-const SET: "nwp" | "phys" | "gbm" = process.argv.includes("--set") && (setArg === "phys" || setArg === "gbm") ? setArg : "nwp";
+const SET: "nwp" | "phys" | "gbm" | "prob" = process.argv.includes("--set") && (setArg === "phys" || setArg === "gbm" || setArg === "prob") ? setArg : "nwp";
+const CORR = SET === "gbm" || SET === "prob";
+/** Olasılıksal kümenin ilk test ayı */
+const PROB_FIRST = Date.UTC(2025, 3, 1);
 const [ly, lm] = endArg.split("-").map(Number);
 const FIRST = { y: 2025, m: 1 };
 const months: Array<{ y: number; m: number }> = [];
@@ -66,6 +74,8 @@ const NAMES =
     ? ["temel", "fiziksel", "karma", "ilk KGÜP"]
     : SET === "gbm"
       ? ["temel", "temel+düzeltme", "ağırlıklı", "ağırlıklı+düzeltme", "ilk KGÜP"]
+      : SET === "prob"
+        ? ["ağırlıklı+düzeltme", "P50", "maliyet teklifi", "ilk KGÜP"]
       : ["temel", "ICON-EU", "GFS", "ortalama", "girdi ort.", "ağırlıklı", "ilk KGÜP"];
 const results: Array<{ id: number; name: string; recordedCap: boolean; notes: Record<string, number>; all: Record<string, CandidateResult>; exLoss: Record<string, CandidateResult> }> = [];
 const nf = (v: number, d = 1) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -74,7 +84,7 @@ for (const id of await listPoolPlants()) {
   const info = await readPoolPlantInfo(id);
   if (!info?.location || info.type !== "GES") continue;
   if (onlyProject && !projectIds.has(id)) continue;
-  const data = await loadSolarHours(id, SET === "gbm" ? Date.UTC(SERIES_FIRST.y, SERIES_FIRST.m - 5, 1) : Date.UTC(FIRST.y, FIRST.m - 5, 1), end);
+  const data = await loadSolarHours(id, CORR ? Date.UTC(SERIES_FIRST.y, SERIES_FIRST.m - 5, 1) : Date.UTC(FIRST.y, FIRST.m - 5, 1), end);
   if (!data) continue;
   const tested: Hour[] = [];
   const notes: Record<string, number> = {};
@@ -90,7 +100,7 @@ for (const id of await listPoolPlants()) {
     }
     if ([...nwp.values()].some((ys) => !ys.size)) continue;
   }
-  for (const { y, m } of SET === "gbm" ? seriesMonths : months) {
+  for (const { y, m } of CORR ? seriesMonths : months) {
     const from = Date.UTC(y, m - 1, 1);
     const to = Date.UTC(y, m, 1);
     const train = data.hours.filter((h) => h.t >= Date.UTC(y, m - 5, 1) && h.t < from);
@@ -123,7 +133,7 @@ for (const id of await listPoolPlants()) {
     }
     for (const h of test) tested.push({ ...h, pred: predict(h) });
   }
-  if (SET === "gbm") {
+  if (CORR) {
     // Düzeltme katmanı: her test ayı için o aydan önceki en çok 12 ayın örneklem dışı hatası
     const series = { temel: new Map<number, { pred: number; actual: number | null }>(), ağırlıklı: new Map<number, { pred: number; actual: number | null }>() };
     for (const h of tested)
@@ -167,6 +177,50 @@ for (const id of await listPoolPlants()) {
     tested.length = 0;
     tested.push(...corrected);
   }
+  if (SET === "prob") {
+    const K = "ağırlıklı+düzeltme";
+    const out: Hour[] = [];
+    let inBand = 0;
+    let bandN = 0;
+    for (const { y, m } of months) {
+      const from = Date.UTC(y, m - 1, 1);
+      if (from < PROB_FIRST) continue;
+      const test = tested.filter((h) => h.t >= from && h.t < Date.UTC(y, m, 1));
+      if (!test.length) continue;
+      const hist = tested.filter((h) => h.t >= Date.UTC(y, m - 13, 1) && h.t < from);
+      const clean = trainingLossFilter(
+        hist.map((h) => ({ t: h.t, uevm: h.uevm, kgupFirst: h.kgupFirst, satGhi: h.satGhi ?? null, satDirect: h.satDirect ?? null, satDiffuse: h.satDiffuse ?? null })),
+        data.site,
+        from,
+        SATELLITE_DELAY_DAYS
+      );
+      const usable = hist.filter((h) => h.uevm !== null && h.pred[K] !== null && h.pred[K] !== undefined && !clean.exclude(h) && !(h.ptf !== null && h.ptf <= TRAIN_ZERO_PRICE_MAX));
+      const cap = test.find((h) => h.pred._cap)?.pred._cap ?? 0;
+      const qm = fitResidualQuantiles(usable.map((h) => ({ pred: h.pred[K]!, actual: h.uevm! })), cap);
+      if (!qm) continue;
+      // Teklif çeyrekliği: geçmiş saatlerde gerçek fiyatlarla en ucuzu
+      const pick = chooseBidQuantile((qq) => evaluateForecasts(usable, { c: (h: Hour) => qm.quantile(h.pred[K]!, qq) }, market, "GES").c.totalTl);
+      notes[`teklif çeyrekliği ${pick.q.toFixed(2)}`] = (notes[`teklif çeyrekliği ${pick.q.toFixed(2)}`] ?? 0) + 1;
+      for (const h of test) {
+        const v = h.pred[K];
+        if (v === null || v === undefined) {
+          out.push({ ...h, pred: { ...h.pred, P50: null, "maliyet teklifi": null } });
+          continue;
+        }
+        const p10 = qm.quantile(v, 0.1);
+        const p90 = qm.quantile(v, 0.9);
+        if (h.uevm !== null && v > 0.01 * cap) {
+          bandN++;
+          if (h.uevm >= p10 && h.uevm <= p90) inBand++;
+        }
+        out.push({ ...h, pred: { ...h.pred, P50: qm.quantile(v, 0.5), "maliyet teklifi": qm.quantile(v, pick.q), P10: p10, P90: p90 } });
+      }
+    }
+    notes["kapsama saat"] = bandN;
+    notes["kapsama içinde"] = inBand;
+    tested.length = 0;
+    tested.push(...out);
+  }
   if (!tested.length) continue;
   const loss = detectLostHours(
     tested.map((h) => ({ t: h.t, uevm: h.uevm, kgupFirst: h.kgupFirst, satGhi: h.satGhi ?? null, satDirect: h.satDirect ?? null, satDiffuse: h.satDiffuse ?? null })),
@@ -181,12 +235,19 @@ for (const id of await listPoolPlants()) {
 }
 
 fs.mkdirSync(path.join(process.cwd(), ".cache", "forecast"), { recursive: true });
-fs.writeFileSync(path.join(process.cwd(), ".cache", "forecast", `solar-candidates-backtest-${SET}.json`), JSON.stringify({ generatedAt: new Date().toISOString(), period: { from: "2025-01", to: endArg }, set: SET, onlyProject, plants: results }));
+fs.writeFileSync(path.join(process.cwd(), ".cache", "forecast", `solar-candidates-backtest-${SET}.json`), JSON.stringify({ generatedAt: new Date().toISOString(), period: { from: SET === "prob" ? "2025-04" : "2025-01", to: endArg }, set: SET, onlyProject, plants: results }));
 const sum = (k: "all" | "exLoss", n: string, f: "totalTl" | "uevmMwh") => results.reduce((s, r) => s + r[k][n][f], 0);
+if (SET === "prob") {
+  const n = results.reduce((a, r) => a + (r.notes["kapsama saat"] ?? 0), 0);
+  const i = results.reduce((a, r) => a + (r.notes["kapsama içinde"] ?? 0), 0);
+  console.log(`\nP10–P90 kapsaması (gündüz, bütün saatler): %${nf((i / Math.max(1, n)) * 100)} (hedef %80; ${n} saat)`);
+}
 for (const k of ["all", "exLoss"] as const) {
   console.log(`\n${k === "all" ? "Tüm saatler" : "Kayıp saatler hariç"} (${results.length} santral):`);
   for (const n of NAMES) {
-    const wins = n === "temel" ? "" : `  temeli yendiği santral ${results.filter((r) => r[k][n].totalTl < r[k].temel.totalTl).length} / ${results.length}`;
+    // Kıyas: kümenin ilk adayı (temel; prob kümesinde ağırlıklı+düzeltme)
+    const ref = NAMES[0];
+    const wins = n === ref ? "" : `  ${ref} adayını yendiği santral ${results.filter((r) => r[k][n].totalTl < r[k][ref].totalTl).length} / ${results.length}`;
     console.log(`  ${n.padEnd(11)} ${nf(sum(k, n, "totalTl") / sum(k, n, "uevmMwh"))} TL/MWh, hata %${nf(results.reduce((s, r) => s + r[k][n].maeMwh * r[k][n].hours, 0) / Math.max(1, results.reduce((s, r) => s + r[k][n].uevmMwh, 0)) * 100)}${wins}`);
   }
 }
