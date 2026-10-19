@@ -1,5 +1,5 @@
 /**
- * TR-Energy Analyst - Tahmin karnesinin verisi (PLAN 21.4; kural lib/forecast/scorecard.ts)
+ * TR-Energy Analyst - Tahmin karnesinin verisi (PLAN 21.4; kural lib/solar-engine/learning/scorecard.ts)
  *
  * Günlük tahmin kayıtları (data/pool/forecast-log/solar), gerçekleşen üretim (UEVM, yoksa GZÜ:
  * lib/services/realized-production.ts), ilk KGÜP ve uydu ışınımı havuzdan; piyasa fiyatları MarketData'dan. Kaydı
@@ -12,15 +12,15 @@ import os from "node:os";
 import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import type { MarketPriceRecord, SystemDirection } from "@/lib/calculations/types";
-import type { ForecastLog } from "@/lib/forecast/forecast-log";
-import { buildScorecard, type Scorecard, type ScorecardPlantData } from "@/lib/forecast/scorecard";
+import type { ForecastLog } from "@/lib/solar-engine/learning/forecast-log";
+import { buildScorecard, type Scorecard, type ScorecardPlantData } from "@/lib/solar-engine/learning/scorecard";
 import { readPoolPlantInfo, readPoolYear, readProvisionalYear } from "@/lib/pool/pool-store";
 import { readSatelliteYear } from "@/lib/weather/weather-store";
 import { isUnlicensedName } from "@/lib/analysis/candidate-access";
-import { listForecastLogs, readForecastLog } from "./forecast-log";
-import { realizedHours } from "./realized-production";
-import { readRealtimeHistory } from "./realtime-history";
-import { projectWeatherPlants } from "./weather-preview";
+import { listForecastLogs, readForecastLog } from "./forecast-log-store";
+import { realizedHours } from "../../services/realized-production";
+import { readRealtimeHistory } from "../../services/realtime-history";
+import { projectWeatherPlants } from "../../services/weather-preview";
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;

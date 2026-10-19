@@ -4,7 +4,7 @@
  * Open-Meteo Forecast API, aynı model (ECMWF IFS 0,25°, `WEATHER_MODEL`) ve geçmiş arşivle aynı değişkenler; değer
  * isteğin yapıldığı andaki EN YENİ çalışmadandır (geçmiş arşivdeki `d2` değil: yarın için ≈ 1 gün, öbür gün için ≈ 2 gün
  * önceki tahmin). Hizalama weather-codec.ts ile aynı: ışınım damgadan önceki saatin ortalaması (bir saat geri alınır),
- * anlık değişkenler saat başı. SAF: I/O yok (istek open-meteo.ts, önbellek lib/services/live-forecast.ts).
+ * anlık değişkenler saat başı. SAF: I/O yok (istek open-meteo.ts, önbellek lib/solar-engine/forecast.ts).
  */
 
 import { WEATHER_MODEL, WEATHER_VARIABLES, type OpenMeteoHourly } from "./weather-codec";

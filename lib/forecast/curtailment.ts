@@ -12,9 +12,9 @@
  * uydu gecikmesinden önce elde olan saatlerle çağrılır.
  */
 
-import { PANEL_MOUNTS } from "./production-model-v2";
-import { planeOfArray, type PanelMount } from "./solar-geometry";
-import type { SolarSite } from "./production-model";
+import { PANEL_MOUNTS } from "../solar-engine/models/production-model-v2";
+import { planeOfArray, type PanelMount } from "../solar-engine/physics/solar-geometry";
+import type { SolarSite } from "../solar-engine/models/production-model";
 
 export const LOSS_POA_MIN = 200;
 export const LOSS_SHARE = 0.5;

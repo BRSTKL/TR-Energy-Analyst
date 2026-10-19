@@ -8,9 +8,9 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { fitSolarModel } from "@/lib/forecast/production-model";
-import { fitSolarModelV2, type SolarHourV2 } from "@/lib/forecast/production-model-v2";
-import { loadSolarHours } from "@/lib/services/production-data";
+import { fitSolarModel } from "@/lib/solar-engine/models/production-model";
+import { fitSolarModelV2, type SolarHourV2 } from "@/lib/solar-engine/models/production-model-v2";
+import { loadSolarHours } from "@/lib/solar-engine/data/production-data";
 import { trainingLossFilter } from "@/lib/forecast/curtailment";
 import { SATELLITE_DELAY_DAYS } from "@/lib/weather/satellite";
 

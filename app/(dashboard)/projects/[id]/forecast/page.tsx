@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ForecastReferenceCard } from "@/components/forecast-reference-card";
 import { ForecastScorecardCard } from "@/components/forecast-scorecard-card";
-import type { ProjectLiveForecast, LivePlantForecast } from "@/lib/services/live-forecast";
+import type { ProjectLiveForecast, LivePlantForecast } from "@/lib/solar-engine/forecast";
 import type { ReferenceRow, ReferenceSummary } from "@/lib/services/production-loss";
 
 interface ForecastResponse extends ProjectLiveForecast {

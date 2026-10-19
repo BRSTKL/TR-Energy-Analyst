@@ -6,8 +6,8 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { fitSolarModel } from "@/lib/forecast/production-model";
-import { loadSolarHours } from "@/lib/services/production-data";
+import { fitSolarModel } from "@/lib/solar-engine/models/production-model";
+import { loadSolarHours } from "@/lib/solar-engine/data/production-data";
 
 const [idArg, ...months] = process.argv.slice(2);
 const id = Number(idArg);

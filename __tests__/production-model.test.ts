@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { clearSkyGhiHour, solarElevation } from "@/lib/forecast/solar-geometry";
-import { fitSolarModel, solarFeatures, steadyFrom, type SolarHour } from "@/lib/forecast/production-model";
+import { clearSkyGhiHour, solarElevation } from "@/lib/solar-engine/physics/solar-geometry";
+import { fitSolarModel, solarFeatures, steadyFrom, type SolarHour } from "@/lib/solar-engine/models/production-model";
 import { leakingFeatures, TR_UTC_OFFSET_MS } from "@/lib/forecast/info-time";
 
 const H = 3_600_000;

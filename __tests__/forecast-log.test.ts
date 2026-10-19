@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { FORECAST_LOG_SCHEMA, forecastCutoff, isOnTime, nextTargetDate, type ForecastLog } from "@/lib/forecast/forecast-log";
+import { FORECAST_LOG_SCHEMA, forecastCutoff, isOnTime, nextTargetDate, type ForecastLog } from "@/lib/solar-engine/learning/forecast-log";
 
 describe("günlük tahmin kaydı: kesim", () => {
   it("D günü için kesim D-1 12:30 Türkiye (09:30 UTC)", () => {
@@ -46,14 +46,14 @@ describe("günlük tahmin kaydı: dosya bir kez yazılır", () => {
   });
 
   it("ikinci yazım ilk kaydı değiştirmez", async () => {
-    const { readForecastLog, writeForecastLog, listForecastLogs } = await import("@/lib/services/forecast-log");
+    const { readForecastLog, writeForecastLog, listForecastLogs } = await import("@/lib/solar-engine/learning/forecast-log-store");
     expect(await writeForecastLog(log(1))).toBe(true);
     expect(await writeForecastLog(log(2))).toBe(false);
     expect((await readForecastLog("2026-10-20"))?.plants[0].hours?.[0]).toBe(1);
     expect(await listForecastLogs()).toEqual(["2026-10-20"]);
     expect(await readForecastLog("2026-10-21")).toBeNull();
     // Geçici dosya kalmaz, kayıt salt okunur
-    const { forecastLogPath } = await import("@/lib/services/forecast-log");
+    const { forecastLogPath } = await import("@/lib/solar-engine/learning/forecast-log-store");
     const file = forecastLogPath("2026-10-20");
     expect(fs.readdirSync(path.dirname(file))).toEqual(["2026-10-20.json.gz"]);
     expect(fs.statSync(file).mode & 0o222).toBe(0);

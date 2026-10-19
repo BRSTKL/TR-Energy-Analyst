@@ -640,6 +640,18 @@ Sızıntı denetimi (sizinti-denetcisi): bilgi zamanı sızıntısı yok; bulgul
 
 Değerin olduğu yer (dürüst beklenti): santral içi veri olmadan büyük şirketlerin ticari tahminini toplamda geçmek zor; değer (a) tahmini zayıf santrallerde şirket planını düzeltmek, (b) kendi tahmincisi olmayan küçük bağımsız santraller (toplayıcıların hedefi) için birincil tahmin, (c) bağımsız ikinci görüş ve karne.
 
+### Aşama 22: Gelişmiş güneş tahmin motoru (19.10.2026, kullanıcı: "en gelişmiş şekilde geliştirir misin … modelin daha düzenli olmasını istiyorum")
+
+Her yeni yöntem önce geriye dönük testte, sonra gölge sürüm olarak canlıda sınanır; ancak karnede kanıtla kazanırsa santralin canlı sürümü olur (Aşama 21 kendi kendine öğrenme). Daha iyi sonuç için gereken veriler: santral kurulumu (panel eğimi, yönü, takip, DC / AC gücü; şirket dokümanı, ÇED), 6 santralin kesin konumu, ticari kullanıma açık hava verisi (ürün aşamasında), 2024 üretimi (EPİAŞ, VPN).
+
+- [x] **22.1 Düzenleme.** Güneşe özgü kod lib/solar-engine/ altında: pipeline.ts (günlük akış; betik yalnız çağırır), registry.ts (sürümler), forecast.ts, data/, physics/, models/, learning/; index.ts ve README.md. Ortak kod (bilgi zamanı, uyduyla kayıp, maliyet fiyatlaması, geçici üretim, canlı hava) yerinde. Davranış aynı: eğitim ve tahmin değerleri 3 santralde sha256 ile birebir (önce / sonra), 579 test, 60 rapor 0 hata, duman testi forecast + losses 12 sayfa 0 hata. sizinti-denetcisi tanımı lib/solar-engine/'i kapsar.
+- [ ] **22.2 Fiziksel zincir ve inverter sınırı.** Panel düzlemi ışınımı (Perez), hücre sıcaklığı, DC güç, inverter kırpılması (DC / AC); kurulum santral başına üretimden kestirilir. Aday sürüm.
+- [ ] **22.3 Birden çok hava modeli.** ECMWF + ICON + GFS + ARPEGE (önce veri kaynağı doğrulaması, veri-kaynagi-arastirmaci); santral ve koşul başına ağırlık; modellerin ayrışması belirsizlik ölçüsü.
+- [ ] **22.4 Öğrenen düzeltme katmanı.** Fiziksel modelin hatası karar ağaçlı modelle (gradient boosting): saat, mevsim, bulut, sıcaklık, modellerin ayrışması, son günlerin hatası.
+- [ ] **22.5 Olasılıksal tahmin ve maliyete göre teklif.** %10 / %50 / %90; dengesizlik fiyatlarının asimetrisine göre en ucuz teklif.
+- [ ] **22.6 Planlı kısıntı tahmini.** Sıfır fiyat olasılığı (PTF kesimden sonra açıklanır) × santralin geçmiş kısıntı davranışı.
+- [ ] **22.7 Değişim algılama ve arıza uyarısı.** Kapasite değişimi, uzun arıza, konum tutarsızlığı; kesime kadar kayıt yazılmadıysa bildirim.
+
 ## 3. Karar noktaları (sizin onayınız gerekiyor)
 1. **Aşama sırası:** Önerim 1 → 2 → 3 → 5 → 4 → 6. Aşama 5 (başvuru paketi), 2 ve 3 bittiğinde en güçlü halindedir; 4 büyük bir veri işidir.
 2. **Hidro (4.3):** ✅ Dahil edildi; 2026 karnesi hidroyu kapsıyor (598 HES).

@@ -10,7 +10,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { detectLostHours, monthlyLoss, type LossInput, type LossKind, type MonthlyLoss } from "@/lib/forecast/curtailment";
-import type { SolarSite } from "@/lib/forecast/production-model";
+import type { SolarSite } from "@/lib/solar-engine/models/production-model";
 import { prisma } from "@/lib/prisma";
 import { readPoolPlantInfo, readPoolYear } from "@/lib/pool/pool-store";
 import { readSatelliteYear } from "@/lib/weather/weather-store";

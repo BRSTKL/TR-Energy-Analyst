@@ -1,6 +1,6 @@
 ---
 name: sizinti-denetcisi
-description: Üretim tahmin modeli ve backtest kodunu bilgi sızıntısına karşı denetler. lib/forecast/ veya lib/weather/ altında her model, özellik ya da backtest değişikliğinden sonra çağrılır.
+description: Üretim tahmin modeli ve backtest kodunu bilgi sızıntısına karşı denetler. lib/forecast/, lib/solar-engine/ veya lib/weather/ altında her model, özellik ya da backtest değişikliğinden sonra çağrılır.
 tools: Read, Grep, Glob, Bash
 ---
 

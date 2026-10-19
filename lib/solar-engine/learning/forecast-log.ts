@@ -5,16 +5,16 @@
  * yazılır ve bir daha değişmez. Geriye dönük testten güçlü kanıttır: "o gün bunu tahmin ettik". Karne (21.4) yalnız
  * kesimden önce yazılmış (`onTime`) kayıtları sayar; kesimden sonra yazılan kayıt saklanır ama işaretlidir.
  * Kayıt model sürümünü, eğitim penceresini ve hava girdisinin ne zaman alındığını taşır (sürüm yarışı, 21.5).
- * SAF: I/O yok (dosya lib/services/forecast-log.ts).
+ * SAF: I/O yok (dosya lib/solar-engine/learning/forecast-log-store.ts).
  */
 
-import { decisionCutoff, TR_UTC_OFFSET_MS } from "./info-time";
+import { decisionCutoff, TR_UTC_OFFSET_MS } from "../../forecast/info-time";
 
 /** Kayıt biçimi sürümü (alan eklenirse artar; eski kayıtlar olduğu gibi okunur) */
 export const FORECAST_LOG_SCHEMA = 1;
 
 /**
- * Güneş modelinin kayıt adı: donmuş sürüm 3, kalıcılıksız (lib/services/live-forecast.ts); "-gzu": eğitim geçici üretimle
+ * Güneş modelinin kayıt adı: donmuş sürüm 3, kalıcılıksız (lib/solar-engine/forecast.ts); "-gzu": eğitim geçici üretimle
  * (EPİAŞ gerçek zamanlı üretimi) son tam güne kadar (18.10.2026)
  */
 export const SOLAR_MODEL_ID = "solar-v3-nolag-gzu";
@@ -30,7 +30,7 @@ export interface ForecastLogPlant {
   train?: { from: string; to: string; hours: number; mount: string; maxMwh: number; provisionalHours?: number; provisionalThrough?: string };
   weatherFetchedAt?: string;
   location?: { latitude: number; longitude: number; locationSource: string };
-  /** Bu santralin canlı (şampiyon) sürümü; yoksa kaydın `model.id`'si (kendi kendine öğrenme, lib/forecast/self-learning.ts) */
+  /** Bu santralin canlı (şampiyon) sürümü; yoksa kaydın `model.id`'si (kendi kendine öğrenme, lib/solar-engine/learning/self-learning.ts) */
   modelId?: string;
   /** Günlük hata düzeltmesi uygulandıysa saat başı çarpanlar ve kaynağı */
   bias?: { factors: number[]; source: "kayıtlı tahmin" | "eğitimin son günleri"; days: number };

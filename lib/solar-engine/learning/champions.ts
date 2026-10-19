@@ -1,5 +1,5 @@
 /**
- * TR-Energy Analyst - Kendi kendine öğrenen motorun verisi (kural lib/forecast/self-learning.ts)
+ * TR-Energy Analyst - Kendi kendine öğrenen motorun verisi (kural lib/solar-engine/learning/self-learning.ts)
  *
  * - Şampiyon kayıt defteri: data/pool/forecast-log/solar/champions.json (santral → canlı sürüm, geçmişiyle). Yoksa her
  *   santralin canlı sürümü temel sürüm.
@@ -13,9 +13,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { poolDir } from "@/lib/pool/pool-store";
 import { detectLostHours } from "@/lib/forecast/curtailment";
-import { BASE_MODEL, BIAS_LOOKBACK_DAYS, COOLDOWN_DAYS, REVIEW_DAYS, reviewChampion, type BiasSample, type ChampionDecision, type ChampionState } from "@/lib/forecast/self-learning";
-import { readForecastLog } from "./forecast-log";
-import { scorecard, scorecardPlantData } from "./forecast-scorecard";
+import { BASE_MODEL, BIAS_LOOKBACK_DAYS, COOLDOWN_DAYS, REVIEW_DAYS, reviewChampion, type BiasSample, type ChampionDecision, type ChampionState } from "@/lib/solar-engine/learning/self-learning";
+import { readForecastLog } from "./forecast-log-store";
+import { scorecard, scorecardPlantData } from "./scorecard-data";
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;

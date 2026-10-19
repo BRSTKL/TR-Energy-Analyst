@@ -1,5 +1,5 @@
 /**
- * TR-Energy Analyst - Günlük tahmin kaydının dosyası (kural: lib/forecast/forecast-log.ts)
+ * TR-Energy Analyst - Günlük tahmin kaydının dosyası (kural: lib/solar-engine/learning/forecast-log.ts)
  *
  * data/pool/forecast-log/solar/<YYYY-MM>/<YYYY-MM-DD>.json.gz: hedef gün başına bir dosya. Yalnız yoksa yazılır: kayıt
  * bir daha değişmez. Aynı gün ikinci çalışma dokunmaz.
@@ -9,7 +9,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { poolDir } from "@/lib/pool/pool-store";
-import type { ForecastLog } from "@/lib/forecast/forecast-log";
+import type { ForecastLog } from "@/lib/solar-engine/learning/forecast-log";
 
 export const forecastLogPath = (targetDate: string) => path.join(poolDir(), "forecast-log", "solar", targetDate.slice(0, 7), `${targetDate}.json.gz`);
 

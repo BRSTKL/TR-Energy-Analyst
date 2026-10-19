@@ -12,8 +12,8 @@ import { readPoolPlantInfo, readPoolYear, readProvisionalYear } from "@/lib/pool
 import { readSatelliteYear, readWeatherYear } from "@/lib/weather/weather-store";
 import type { WeatherLead } from "@/lib/weather/weather-codec";
 import type { WeatherLeadDays } from "@/lib/forecast/info-time";
-import type { SolarSite } from "@/lib/forecast/production-model";
-import type { SolarHourV2 } from "@/lib/forecast/production-model-v2";
+import type { SolarSite } from "@/lib/solar-engine/models/production-model";
+import type { SolarHourV2 } from "@/lib/solar-engine/models/production-model-v2";
 
 const HOUR = 3_600_000;
 

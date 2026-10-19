@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { buildScorecard, dailyClearness, skyClass, type ScorecardPlantData } from "@/lib/forecast/scorecard";
+import { buildScorecard, dailyClearness, skyClass, type ScorecardPlantData } from "@/lib/solar-engine/learning/scorecard";
 import { evaluateForecasts } from "@/lib/forecast/production-backtest";
-import { FORECAST_LOG_SCHEMA, type ForecastLog } from "@/lib/forecast/forecast-log";
-import { clearSkyGhiHour } from "@/lib/forecast/solar-geometry";
+import { FORECAST_LOG_SCHEMA, type ForecastLog } from "@/lib/solar-engine/learning/forecast-log";
+import { clearSkyGhiHour } from "@/lib/solar-engine/physics/solar-geometry";
 import type { MarketPriceRecord } from "@/lib/calculations/types";
 
 const H = 3_600_000;

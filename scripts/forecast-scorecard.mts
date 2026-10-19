@@ -1,5 +1,5 @@
 /**
- * Tahmin karnesi (PLAN 21.4; kural lib/forecast/scorecard.ts): günlük tahmin kayıtları gerçekleşen üretimle.
+ * Tahmin karnesi (PLAN 21.4; kural lib/solar-engine/learning/scorecard.ts): günlük tahmin kayıtları gerçekleşen üretimle.
  *
  *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/forecast-scorecard.mts [YYYY-MM] [--simulate] [--provisional-only] [--drop YYYY-MM-DD ...]
  *
@@ -18,15 +18,15 @@ import path from "node:path";
 import { gzipSync } from "node:zlib";
 import { prisma } from "@/lib/prisma";
 import { isUnlicensedName } from "@/lib/analysis/candidate-access";
-import { fitSolarModelV2 } from "@/lib/forecast/production-model-v2";
+import { fitSolarModelV2 } from "@/lib/solar-engine/models/production-model-v2";
 import { trainingLossFilter } from "@/lib/forecast/curtailment";
 import { SATELLITE_DELAY_DAYS } from "@/lib/weather/satellite";
-import { FORECAST_LOG_SCHEMA, forecastCutoff, type ForecastLog, type ForecastLogPlant } from "@/lib/forecast/forecast-log";
-import { tlPerMwh, SKY_CLASSES, type ScorePair } from "@/lib/forecast/scorecard";
+import { FORECAST_LOG_SCHEMA, forecastCutoff, type ForecastLog, type ForecastLogPlant } from "@/lib/solar-engine/learning/forecast-log";
+import { tlPerMwh, SKY_CLASSES, type ScorePair } from "@/lib/solar-engine/learning/scorecard";
 import { readPoolPlantInfo } from "@/lib/pool/pool-store";
-import { loadSolarHours } from "@/lib/services/production-data";
-import { listForecastLogs, readForecastLog } from "@/lib/services/forecast-log";
-import { scorecard } from "@/lib/services/forecast-scorecard";
+import { loadSolarHours } from "@/lib/solar-engine/data/production-data";
+import { listForecastLogs, readForecastLog } from "@/lib/solar-engine/learning/forecast-log-store";
+import { scorecard } from "@/lib/solar-engine/learning/scorecard-data";
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;

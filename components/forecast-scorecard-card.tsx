@@ -5,16 +5,16 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { ProjectScorecard } from "@/lib/services/forecast-scorecard";
-import type { ScorePair, SkyClass } from "@/lib/forecast/scorecard";
-import { BASE_MODEL, BIAS_INSAMPLE_MODEL, LIVE_SERIES } from "@/lib/forecast/self-learning";
+import type { ProjectScorecard } from "@/lib/solar-engine/learning/scorecard-data";
+import type { ScorePair, SkyClass } from "@/lib/solar-engine/learning/scorecard";
+import { BASE_MODEL, BIAS_INSAMPLE_MODEL, LIVE_SERIES } from "@/lib/solar-engine/learning/self-learning";
 
 const nf = (v: number, d = 1) => (Number.isFinite(v) ? v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d }) : "–");
 const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
 const ym = (s: string) => `${MONTHS[Number(s.slice(5, 7)) - 1]} ${s.slice(0, 4)}`;
 const dm = (s: string) => `${Number(s.slice(8, 10))} ${MONTHS[Number(s.slice(5, 7)) - 1]}`;
 const unit = (r: ScorePair["model"]) => (r.uevmMwh > 0 ? r.totalTl / r.uevmMwh : NaN);
-/** Sürüm adları (kendi kendine öğrenme, lib/forecast/self-learning.ts) */
+/** Sürüm adları (kendi kendine öğrenme, lib/solar-engine/learning/self-learning.ts) */
 const MODEL_LABEL: Record<string, string> = {
   [LIVE_SERIES]: "Gönderilen tahmin (her santralin o günkü canlı sürümü)",
   [BASE_MODEL]: "Temel (4 ay eğitim)",

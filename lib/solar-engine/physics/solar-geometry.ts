@@ -7,7 +7,7 @@
  * Zaman duvar saatidir (Türkiye, UTC+3; info-time.ts).
  */
 
-import { TR_UTC_OFFSET_MS } from "./info-time";
+import { TR_UTC_OFFSET_MS } from "../../forecast/info-time";
 
 const RAD = Math.PI / 180;
 const HOUR = 3_600_000;

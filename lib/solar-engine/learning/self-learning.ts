@@ -19,25 +19,11 @@
  * kümesi arasında seçimdir, rastgele model denenmez.
  */
 
-import { SOLAR_MODEL_ID } from "./forecast-log";
+import { BASE_MODEL, BIAS_INSAMPLE_MODEL, LIVE_SERIES } from "../registry";
 
-/** Temel (ilk canlı) sürüm ve adaylar; kimlikler kayıtta ve karnede sürüm adı olarak kullanılır */
-export const BASE_MODEL = SOLAR_MODEL_ID;
-export const MODEL_VARIANTS = [
-  { id: BASE_MODEL, trainingMonths: 4, bias: false },
-  { id: `${BASE_MODEL}-w2`, trainingMonths: 2, bias: false },
-  { id: `${BASE_MODEL}-w6`, trainingMonths: 6, bias: false },
-  { id: `${BASE_MODEL}-bias`, trainingMonths: 4, bias: true },
-] as const;
-/**
- * Kayıtlı gün BIAS_MIN_LOGGED_DAYS'ten azken hata düzeltmesi eğitimin son günlerinden (örneklem içi) kurulur ve bu ayrı
- * kimlikle yazılır: iki yöntem tek sürüm gibi değerlendirilmez; terfi edemez (sızıntı denetimi 19.10.2026).
- */
-export const BIAS_INSAMPLE_MODEL = `${BASE_MODEL}-bias-insample`;
-/** Karnede gerçekte gönderilen tahmin (o günün şampiyonu, sürümden bağımsız): seçim yanlılığı taşımaz */
-export const LIVE_SERIES = "canlı";
+// Sürüm tanımları lib/solar-engine/registry.ts'te; eski içe aktarmalar için buradan da
+export { BASE_MODEL, BIAS_INSAMPLE_MODEL, LIVE_SERIES, MODEL_VARIANTS, type ModelVariant } from "../registry";
 const promotable = (id: string) => id !== BIAS_INSAMPLE_MODEL && id !== LIVE_SERIES;
-export type ModelVariant = (typeof MODEL_VARIANTS)[number];
 
 // --- 2. Günlük hata düzeltmesi ---
 

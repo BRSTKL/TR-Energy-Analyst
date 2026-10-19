@@ -21,8 +21,8 @@
  */
 
 import { fitRidge, predictRidge, type RidgeModel } from "@/lib/analysis/direction-model";
-import { assertAvailable, calendarFeature, productionFeature, weatherFeature, TR_UTC_OFFSET_MS, type FeatureInfo, type WeatherLeadDays } from "./info-time";
-import { clearSkyGhiHour, cosZenith, planeOfArray, type PanelMount } from "./solar-geometry";
+import { assertAvailable, calendarFeature, productionFeature, weatherFeature, TR_UTC_OFFSET_MS, type FeatureInfo, type WeatherLeadDays } from "../../forecast/info-time";
+import { clearSkyGhiHour, cosZenith, planeOfArray, type PanelMount } from "../physics/solar-geometry";
 import { DEFAULT_PRODUCTION_LAMBDA, steadyFrom, TRAIN_ZERO_PRICE_MAX, type SolarHour, type SolarSite } from "./production-model";
 
 const HOUR = 3_600_000;
@@ -53,7 +53,7 @@ export interface SolarHourV2 extends SolarHour {
   satDirect?: number | null;
   satDiffuse?: number | null;
   /**
-   * Canlı tahmin saati (ileriye dönük tahmin sayfası; lib/services/live-forecast.ts): girdiler sayfanın açıldığı andaki en
+   * Canlı tahmin saati (ileriye dönük tahmin sayfası; lib/solar-engine/forecast.ts): girdiler sayfanın açıldığı andaki en
    * yeni hava tahminidir, geriye dönük testin parçası değildir. Bilgi zamanı denetimi yalnız bu saatlerin TAHMİNİNDE
    * atlanır; eğitimde canlı saat kabul edilmez.
    */

@@ -1,6 +1,6 @@
 /**
  * Canlı eğitim penceresinin geriye dönük testi (PLAN 21.4; kullanıcı kararı 18.10.2026: karne ile birlikte): model
- * solar-v3-nolag-gzu (lib/services/live-forecast.ts), her gün son tam güne kadar 4 ayla, geçici üretimle (EPİAŞ gerçek
+ * solar-v3-nolag-gzu (lib/solar-engine/forecast.ts), her gün son tam güne kadar 4 ayla, geçici üretimle (EPİAŞ gerçek
  * zamanlı üretimi, GZÜ) eğitilir. Karşılaştırma aynı saatlerde: "sürüm 3 kalıcılıksız" (scripts/forecast-backtest.mts:
  * her test ayı önceki 4 ayın UEVM'siyle, ay başında bir kez) ve şirketin ilk KGÜP'ü.
  *
@@ -40,12 +40,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import type { MarketPriceRecord, SystemDirection } from "@/lib/calculations/types";
-import { fitSolarModelV2, type SolarHourV2 } from "@/lib/forecast/production-model-v2";
+import { fitSolarModelV2, type SolarHourV2 } from "@/lib/solar-engine/models/production-model-v2";
 import { evaluateForecasts, type CandidateResult } from "@/lib/forecast/production-backtest";
 import { detectLostHours, trainingLossFilter, type LossKind } from "@/lib/forecast/curtailment";
 import { SATELLITE_DELAY_DAYS } from "@/lib/weather/satellite";
 import { listPoolPlants, readPoolPlantInfo } from "@/lib/pool/pool-store";
-import { loadSolarHours } from "@/lib/services/production-data";
+import { loadSolarHours } from "@/lib/solar-engine/data/production-data";
 import { readRealtimeHistory } from "@/lib/services/realtime-history";
 
 const HOUR = 3_600_000;

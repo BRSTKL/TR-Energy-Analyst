@@ -9,7 +9,7 @@
 import { prisma } from "@/lib/prisma";
 import { detectLostHours, monthlyLoss } from "@/lib/forecast/curtailment";
 import { listPoolPlants, readPoolPlantInfo } from "@/lib/pool/pool-store";
-import { loadSolarHours } from "@/lib/services/production-data";
+import { loadSolarHours } from "@/lib/solar-engine/data/production-data";
 
 const [showId, showDay] = process.argv.slice(2);
 const nf = (v: number, d = 1) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });

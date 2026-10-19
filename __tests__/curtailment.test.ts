@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { detectLostHours, monthlyLoss, type LossInput } from "@/lib/forecast/curtailment";
-import { clearSkyGhiHour, planeOfArray } from "@/lib/forecast/solar-geometry";
+import { clearSkyGhiHour, planeOfArray } from "@/lib/solar-engine/physics/solar-geometry";
 
 const H = 3_600_000;
 const site = { latitude: 37.8, longitude: 33.6 };

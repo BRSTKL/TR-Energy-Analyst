@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fitSolarModelV2, type SolarHourV2 } from "@/lib/forecast/production-model-v2";
+import { fitSolarModelV2, type SolarHourV2 } from "@/lib/solar-engine/models/production-model-v2";
 import { LeakageError } from "@/lib/forecast/info-time";
 
 const HOUR = 3_600_000;

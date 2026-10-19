@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { clearSkyGhiHour } from "@/lib/forecast/solar-geometry";
-import { fitSolarModelV2, type SolarHourV2 } from "@/lib/forecast/production-model-v2";
+import { clearSkyGhiHour } from "@/lib/solar-engine/physics/solar-geometry";
+import { fitSolarModelV2, type SolarHourV2 } from "@/lib/solar-engine/models/production-model-v2";
 import { LeakageError } from "@/lib/forecast/info-time";
 
 const H = 3_600_000;

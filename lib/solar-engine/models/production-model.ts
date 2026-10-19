@@ -21,8 +21,8 @@
  */
 
 import { fitRidge, predictRidge, type RidgeModel } from "@/lib/analysis/direction-model";
-import { assertAvailable, calendarFeature, productionFeature, weatherFeature, type FeatureInfo } from "./info-time";
-import { clearSkyGhiHour } from "./solar-geometry";
+import { assertAvailable, calendarFeature, productionFeature, weatherFeature, type FeatureInfo } from "../../forecast/info-time";
+import { clearSkyGhiHour } from "../physics/solar-geometry";
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;

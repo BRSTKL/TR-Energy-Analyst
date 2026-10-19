@@ -13,14 +13,14 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { fitSolarModelV2, type SolarHourV2 } from "@/lib/forecast/production-model-v2";
+import { fitSolarModelV2, type SolarHourV2 } from "@/lib/solar-engine/models/production-model-v2";
 import { trainingLossFilter } from "@/lib/forecast/curtailment";
 import { liveForecastUrl, liveWeatherHours } from "@/lib/weather/live-forecast";
 import type { OpenMeteoHourly } from "@/lib/weather/weather-codec";
 import { SATELLITE_DELAY_DAYS } from "@/lib/weather/satellite";
 import { readPoolPlantInfo, readPoolYear, readProvisionalYear } from "@/lib/pool/pool-store";
-import { loadSolarHours } from "./production-data";
-import { projectWeatherPlants } from "./weather-preview";
+import { loadSolarHours } from "./data/production-data";
+import { projectWeatherPlants } from "../services/weather-preview";
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;

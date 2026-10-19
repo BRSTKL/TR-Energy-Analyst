@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BASE_MODEL, BIAS_INSAMPLE_MODEL, BIAS_MAX, BIAS_MIN, LIVE_SERIES, MIN_COMMON_DAYS, applyBias, biasFactors, comparePair, reviewChampion } from "@/lib/forecast/self-learning";
+import { BASE_MODEL, BIAS_INSAMPLE_MODEL, BIAS_MAX, BIAS_MIN, LIVE_SERIES, MIN_COMMON_DAYS, applyBias, biasFactors, comparePair, reviewChampion } from "@/lib/solar-engine/learning/self-learning";
 
 const T = (d: number, h: number) => Date.UTC(2026, 9, d, h);
 const days = (n: number, f: (i: number) => number) => Object.fromEntries(Array.from({ length: n }, (_, i) => [`2026-10-${String(i + 1).padStart(2, "0")}`, f(i)]));

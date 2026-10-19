@@ -11,19 +11,19 @@
  * merkezi). Ölçüm maskesi: uyduyla kayıp saatler (kısıntı, arıza; curtailment.ts) iki taraftan da çıkarılmış ayrı küme.
  * Eksik kayıt günleri ve santral boşlukları listelenir. Sürüm: santral satırının `modelId`'si (santralin o günkü canlı
  * sürümü) ya da kaydın `model.id`'si; gölge sürümler (`shadow`) de aynı saatlerle ölçülür (kendi kendine öğrenme,
- * lib/forecast/self-learning.ts). Gölgesi olan kayıtlarda ayrıca "canlı" serisi: o gün gerçekte gönderilen tahmin
+ * lib/solar-engine/learning/self-learning.ts). Gölgesi olan kayıtlarda ayrıca "canlı" serisi: o gün gerçekte gönderilen tahmin
  * (santralin şampiyonu); sürüm satırları seçim içidir (terfi eden sürüm kendisini seçtiren günleri de içerir), "canlı"
  * değildir. Boşluk listesi yalnız canlı tahmin için. Sınır: sürümler gün içinde kendi null olmayan saatleriyle ölçülür
  * (hava ortak olduğu için pratikte aynı saatler); grup toplamları eşleştirilmiş değildir.
- * SAF: I/O yok (veri lib/services/forecast-scorecard.ts).
+ * SAF: I/O yok (veri lib/solar-engine/learning/scorecard-data.ts).
  */
 
 import type { MarketPriceRecord } from "@/lib/calculations/types";
 import type { ProductionSource } from "@/lib/pool/provisional";
-import { evaluateForecasts, type CandidateResult } from "./production-backtest";
-import { detectLostHours } from "./curtailment";
-import { clearSkyGhiHour } from "./solar-geometry";
-import type { SolarSite } from "./production-model";
+import { evaluateForecasts, type CandidateResult } from "../../forecast/production-backtest";
+import { detectLostHours } from "../../forecast/curtailment";
+import { clearSkyGhiHour } from "../physics/solar-geometry";
+import type { SolarSite } from "../models/production-model";
 import type { ForecastLog } from "./forecast-log";
 import { LIVE_SERIES } from "./self-learning";
 

@@ -11,10 +11,10 @@
 
 import { prisma } from "@/lib/prisma";
 import type { MarketPriceRecord, SystemDirection } from "@/lib/calculations/types";
-import { fitSolarModelV2, type SolarHourV2 } from "@/lib/forecast/production-model-v2";
+import { fitSolarModelV2, type SolarHourV2 } from "@/lib/solar-engine/models/production-model-v2";
 import { evaluateForecasts, type CandidateResult } from "@/lib/forecast/production-backtest";
 import { listPoolPlants, readPoolPlantInfo } from "@/lib/pool/pool-store";
-import { loadSolarHours } from "@/lib/services/production-data";
+import { loadSolarHours } from "@/lib/solar-engine/data/production-data";
 
 const [ly, lm] = (process.argv[2] ?? "2026-08").split("-").map(Number);
 const months: Array<{ y: number; m: number }> = [];

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { projectScorecard } from "@/lib/services/forecast-scorecard";
+import { projectScorecard } from "@/lib/solar-engine/learning/scorecard-data";
 
 export const dynamic = "force-dynamic";
 
