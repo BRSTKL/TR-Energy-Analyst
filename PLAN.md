@@ -713,6 +713,55 @@ Kurallar:
 - Tasarım ve test dönemi aynıysa bu açıkça yazılır.
 - Dışarıya giden metin `iddia-denetcisi`'nden geçer.
 
+**8. Bulutta neye dokunulur (19.10.2026).** Ölçüt: dokunulan kod her sabah çalışan tahmini (Mac'teki `launchd`, saat 08:30 ve 10:00) değiştiriyor mu?
+
+- **Güvenli: bulutta serbest.** Yeni dosyalar, saf model kodu, birim testleri, geriye dönük test kümeleri ve betikleri. Sabah tahminini değiştirmez.
+  - 23.0 (a)(c): araştırma, kod yok.
+  - 22.6 (a)(b)(c): saf modül ve yeni `--set`.
+  - 22.7 (a)(b)(c): tespit fonksiyonları.
+  - 22.5 (a2): yalnız test betiği.
+  - Güneş sıradaki işler 4 (d)(e).
+  - 23.1: yalnız iskelet, yeni dosyalar.
+  - 23.2–23.6: model kodu ve test betiği.
+  - 23.8.
+- **Dikkatli: bulutta yazılır, Mac'te sınanmadan `main`'e girmez.** Bunlar sabah tahminine, kayda ya da ekrana dokunur. Her biri ayrı bir "bağlama" commit'i olur.
+  - `lib/solar-engine/pipeline.ts`, `registry.ts` (yeni sürüm o andan itibaren her sabah üretilir), `forecast.ts`'teki canlı fonksiyonlar.
+  - `learning/forecast-log*.ts` (kayıt biçimi), `lib/forecast/info-time.ts`.
+  - Ortak kodun `lib/forecast/` altına taşınması (23.1): öncesi ve sonrası güneş kuru çalışma çıktısı karşılaştırılır.
+  - `components/` ve `app/` (ekran; duman testi gerekir).
+  - Maddeler: 22.5 (b)(d), 22.7 (d), güneş sıradaki işler 4 (b)(c), 23.2'nin günlük akışa bağlanması, 23.9.
+- **Bulutta dokunulmaz.**
+  - `scripts/launchd/`
+  - `CLAUDE.md` ve `.claude/agents/` (kullanıcı kararı olmadan)
+  - `prisma/schema.prisma` (veritabanı Mac'te; şema değişikliği gerekirse kullanıcıya sorulur)
+  - `data/` ve `.cache/` yolları (bulutta yok; kod yazabilir ama içerik üretilmez)
+  - Mevcut sürüm kimlikleri ve eski kayıtları okuyan kod (geriye uyumluluk)
+- **Yalnız Mac'te.**
+  - Güneş sıradaki işler 4 (a): GZÜ'nün 12:30'da hazır olması, VPN.
+  - 5: karne takibi.
+  - 23.0 (b): `kaynaklar/` dosyaları.
+  - Bütün geriye dönük testlerin, arşiv çekme betiklerinin ve kuru çalışmanın çalıştırılması.
+- **Önerilen bulut sırası:** 23.0 araştırması → 22.6 modeli → 22.7 tespit fonksiyonları → 22.5 (a2) → 23.1 iskeleti ve 23.2–23.4 rüzgâr model kodu → güneş sıradaki işler 4 (d)(e). Bunların hepsi güvenli grupta. Dikkatli gruptakiler toplanır, Mac'te bir kerede sınanıp birleştirilir.
+
+**9. Bulut dalını Mac'te birleştirme (sırayla; sabah 08:30 ve 10:00 çalışmalarına yakın yapılmaz).**
+1. Mac klasöründe commit edilmemiş değişiklik varsa önce commit edilir ya da bitirilir (`PLAN.md`'de çakışma olmasın).
+2. Bulut dalı çekilir ve `main`'e almadan sınanır:
+   - `npm test`
+   - `npx tsc --noEmit -p .`
+   - `npm run check:reports` (0 hata)
+3. Günlük akışın kuru çalışması (bir şey yazmaz):
+   ```bash
+   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/solar-forecast-daily.mts <yarın> --dry
+   ```
+   Beklenen: bütün santraller "ok", gölge sürümler listede, "kesimden önce: evet".
+4. Ekran değiştiyse duman testi: `npm run test:smoke -- --only forecast`.
+5. Commit mesajlarındaki "Mac'te sınama" komutları çalıştırılır; sonuçlar PLAN maddelerine yazılır.
+6. Hepsi temizse `main`'e birleştirilir. Model kodu değiştiyse düzeltme önbelleği yeniden doldurulur:
+   ```bash
+   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/solar-oos-backfill.mts
+   ```
+7. Ertesi sabah günlük akış günlüğüne ve kaydın yazıldığına bakılır.
+
 #### Güneş: sıradaki işler, sırayla
 
 1. **22.5'i bitir.**
