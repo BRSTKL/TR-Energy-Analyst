@@ -24,6 +24,8 @@ const MODEL_LABEL: Record<string, string> = {
   [`${BASE_MODEL}-ens-mean`]: "Üç hava modeli: tahmin ortalaması (ECMWF, ICON-EU, GFS)",
   [`${BASE_MODEL}-ens-input`]: "Üç hava modeli: hava girdisi ortalaması",
   [`${BASE_MODEL}-ens-weighted`]: "Üç hava modeli: santrale göre ağırlıklı",
+  [`${BASE_MODEL}-corr`]: "Temel + öğrenen düzeltme",
+  [`${BASE_MODEL}-ens-weighted-corr`]: "Ağırlıklı üç model + öğrenen düzeltme",
   [BIAS_INSAMPLE_MODEL]: "Hata düzeltmeli (eğitim içi, deneme; terfi etmez)",
 };
 const modelLabel = (id: string) => MODEL_LABEL[id] ?? id;

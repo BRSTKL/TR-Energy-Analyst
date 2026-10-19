@@ -12,7 +12,8 @@ import { SOLAR_MODEL_ID } from "./learning/forecast-log";
 export const BASE_MODEL = SOLAR_MODEL_ID;
 
 /** Adaylar. trainingMonths: eğitim penceresi; bias: temel tahmine günlük hata düzeltmesi; ensemble: üç hava modelli
- * birleşim (models/ensemble.ts, Aşama 22.3: ECMWF + ICON-EU + GFS; tek eğitimle üçü birden) */
+ * birleşim (models/ensemble.ts, Aşama 22.3: ECMWF + ICON-EU + GFS; tek eğitimle üçü birden) ya da onunla aynı çalışmada öğrenen
+ * düzeltme katmanı (models/correction.ts, Aşama 22.4: "base-corr" temel, "weighted-corr" ağırlıklı birleşim üstüne) */
 export const MODEL_VARIANTS = [
   { id: BASE_MODEL, trainingMonths: 4, bias: false, ensemble: null },
   { id: `${BASE_MODEL}-w2`, trainingMonths: 2, bias: false, ensemble: null },
@@ -21,6 +22,8 @@ export const MODEL_VARIANTS = [
   { id: `${BASE_MODEL}-ens-mean`, trainingMonths: 4, bias: false, ensemble: "mean" },
   { id: `${BASE_MODEL}-ens-input`, trainingMonths: 4, bias: false, ensemble: "input" },
   { id: `${BASE_MODEL}-ens-weighted`, trainingMonths: 4, bias: false, ensemble: "weighted" },
+  { id: `${BASE_MODEL}-corr`, trainingMonths: 4, bias: false, ensemble: "base-corr" },
+  { id: `${BASE_MODEL}-ens-weighted-corr`, trainingMonths: 4, bias: false, ensemble: "weighted-corr" },
 ] as const;
 /**
  * Kayıtlı gün BIAS_MIN_LOGGED_DAYS'ten azken hata düzeltmesi eğitimin son günlerinden (örneklem içi) kurulur ve bu ayrı

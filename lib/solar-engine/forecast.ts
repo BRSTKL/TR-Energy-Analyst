@@ -20,9 +20,12 @@ import type { OpenMeteoHourly } from "@/lib/weather/weather-codec";
 import { SATELLITE_DELAY_DAYS } from "@/lib/weather/satellite";
 import { readPoolPlantInfo, readPoolYear, readProvisionalYear } from "@/lib/pool/pool-store";
 import { loadSolarHours } from "./data/production-data";
-import { ENSEMBLE_KINDS, fitEnsemble, type EnsembleKind, type NwpArchive } from "./models/ensemble";
+import { archiveVariants, ENSEMBLE_KINDS, fitEnsemble, type EnsembleKind, type NwpArchive } from "./models/ensemble";
+import { fitCorrection, recentErrorFor } from "./models/correction";
+import { monthsBefore, oosSeries } from "./learning/oos-series";
+import { TRAIN_ZERO_PRICE_MAX } from "./models/production-model";
 import { NWP_MODELS, type NwpYear } from "@/lib/weather/nwp-models";
-import type { WeatherSource } from "@/lib/forecast/info-time";
+import { assertAvailable, productionFeature, type WeatherSource } from "@/lib/forecast/info-time";
 import { readNwpYear } from "@/lib/weather/weather-store";
 import { projectWeatherPlants } from "../services/weather-preview";
 
@@ -252,19 +255,30 @@ export async function forecastSolarPlant(
   }
 }
 
+/** Öğrenen düzeltme katmanının (Aşama 22.4) sürümleri: temel ve ağırlıklı birleşim, düzeltilmiş */
+export const CORRECTION_KINDS = ["base-corr", "weighted-corr"] as const;
+export type CorrectionKind = (typeof CORRECTION_KINDS)[number];
+/** Düzeltme eğitiminin geçmişi (ay; içinde bulunulan ay dahil) */
+const CORRECTION_MONTHS = 13;
+
 /**
  * Üç hava modelli birleşim (Aşama 22.3, models/ensemble.ts): `forecastSolarPlant` ile aynı eğitim penceresi ve temizlik;
  * ICON-EU ve GFS eğitimde arşivdeki 2 gün önceki tahminle, canlıda isteğin yapıldığı andaki en yeni tahminle. Ağırlıkların
  * doğrulama dönemi eğitimin son 30 günü. Üç birleşim tek eğitimle döner.
+ * Ayrıca öğrenen düzeltme katmanı (Aşama 22.4, models/correction.ts): temel ve ağırlıklı birleşimin geçmiş 12 aydaki
+ * örneklem dışı hatası (learning/oos-series.ts) gradient boosting ile öğrenilir, yeni tahmine eklenir. Eğitim satırları
+ * eğitim penceresinin sonuna kadar (geçici üretim dahil; trainingLossFilter son günleri ve uyduyla kayıp saatleri çıkarır),
+ * son günlerin hatası hedef günden 9–3 gün önce. Geçmiş yetersizse düzeltme sürümleri "no-data".
  */
 export async function forecastSolarEnsemble(
   epiasPlantId: number,
   from: number,
   count: number,
   opts: { now?: number; fresh?: boolean } = {}
-): Promise<Record<EnsembleKind, SolarPlantForecast>> {
+): Promise<Record<EnsembleKind | CorrectionKind, SolarPlantForecast>> {
   const now = opts.now ?? Date.now();
-  const all = (f: SolarPlantForecast) => Object.fromEntries(ENSEMBLE_KINDS.map((k) => [k, f])) as Record<EnsembleKind, SolarPlantForecast>;
+  const KINDS = [...ENSEMBLE_KINDS, ...CORRECTION_KINDS];
+  const all = (f: SolarPlantForecast) => Object.fromEntries(KINDS.map((k) => [k, f])) as Record<EnsembleKind | CorrectionKind, SolarPlantForecast>;
   try {
     const loc = (await readPoolPlantInfo(epiasPlantId))?.location;
     if (!loc) throw new Error("Havuzda konum yok");
@@ -273,10 +287,13 @@ export async function forecastSolarEnsemble(
     const { start, end } = win;
     const data = await loadSolarHours(epiasPlantId, start, end, { provisional: win.provisional });
     if (!data) throw new Error("Eğitim verisi okunamadı");
+    // Düzeltme geçmişi için ek model arşivi daha geriden (13 ay + 4 ay eğitim)
+    const histMonths = monthsBefore(end, CORRECTION_MONTHS);
+    const histStart = Date.UTC(histMonths[0].y, histMonths[0].m - 5, 1);
     const nwp: NwpArchive = new Map();
     for (const m of NWP_MODELS) {
       const ys = new Map<number, NwpYear>();
-      for (let y = new Date(start).getUTCFullYear(); y <= new Date(end - 1).getUTCFullYear(); y++) {
+      for (let y = new Date(histStart).getUTCFullYear(); y <= new Date(end - 1).getUTCFullYear(); y++) {
         const d = await readNwpYear(epiasPlantId, m, y);
         if (d) ys.set(y, d);
       }
@@ -312,19 +329,56 @@ export async function forecastSolarEnsemble(
       maxMwh: ens.trainMaxMwh,
       ...(win.provisional ? { provisionalHours: data.provisionalHours ?? 0, provisionalThrough: new Date(end - DAY).toISOString().slice(0, 10) } : {}),
     };
-    return Object.fromEntries(
-      ENSEMBLE_KINDS.map((k) => [
-        k,
-        {
-          status: "ok",
-          hours: preds.map((p) => round(p[k])),
-          modelSpread,
-          train,
-          weatherFetchedAt: [w.fetchedAt, x.fetchedAt].sort()[0],
-          location: { latitude: loc.latitude, longitude: loc.longitude, locationSource: loc.locationSource },
-        } satisfies SolarPlantForecast,
-      ])
-    ) as Record<EnsembleKind, SolarPlantForecast>;
+    const common = { modelSpread, train, weatherFetchedAt: [w.fetchedAt, x.fetchedAt].sort()[0], location: { latitude: loc.latitude, longitude: loc.longitude, locationSource: loc.locationSource } };
+    const out = Object.fromEntries(ENSEMBLE_KINDS.map((k) => [k, { status: "ok", hours: preds.map((p) => round(p[k])), ...common } satisfies SolarPlantForecast])) as Record<
+      EnsembleKind | CorrectionKind,
+      SolarPlantForecast
+    >;
+
+    // Öğrenen düzeltme katmanı: hata birleşimi bozmasın (ayrı try)
+    try {
+      // Düzeltmenin eğitim verisi (gerçekleşen üretim) hedef günün kesiminden önce elde olmalı
+      assertAvailable([productionFeature("correction_train_end", end - HOUR)], from);
+      const hist = await loadSolarHours(epiasPlantId, histStart, end, { provisional: win.provisional });
+      if (!hist) throw new Error("Düzeltme geçmişi okunamadı");
+      const series = oosSeries(hist, nwp, histMonths, end);
+      const cap = ens.trainMaxMwh;
+      const histFrom = end - 365 * DAY;
+      const rowsAll = hist.hours.filter((h) => h.t >= histFrom && h.t < end);
+      const histClean = trainingLossFilter(
+        rowsAll.map((h) => ({ t: h.t, uevm: h.uevm, kgupFirst: h.kgupFirst, satGhi: h.satGhi ?? null, satDirect: h.satDirect ?? null, satDiffuse: h.satDiffuse ?? null })),
+        hist.site,
+        end,
+        SATELLITE_DELAY_DAYS
+      );
+      const actual = new Map(hist.hours.map((h) => [h.t, h.uevm]));
+      const ghisOf = (h: SolarHourV2) => archiveVariants(h, nwp).map((v) => v?.ghi ?? null);
+      for (const [kind, key] of [
+        ["base-corr", "base"],
+        ["weighted-corr", "weighted"],
+      ] as const) {
+        const map = new Map<number, { pred: number; actual: number | null }>();
+        for (const [t, v] of series) if (v[key] !== null) map.set(t, { pred: v[key]!, actual: actual.get(t) ?? null });
+        const rows = rowsAll
+          .filter((h) => h.uevm !== null && map.has(h.t) && !histClean.exclude(h) && !(h.ptf !== null && h.ptf <= TRAIN_ZERO_PRICE_MAX))
+          .map((h) => ({ h, pred: map.get(h.t)!.pred, actual: h.uevm!, ghis: ghisOf(h), recent: recentErrorFor(h.t, map, cap) }));
+        const corr = fitCorrection(rows, hist.site, cap);
+        if (!corr) {
+          out[kind] = { status: "no-data", message: `Düzeltme için yeterli geçmiş yok (${rows.length} saat)` };
+          continue;
+        }
+        const hours = preds.map((p, i) => {
+          const pred = key === "base" ? p.sources[0] : p.weighted;
+          if (pred === null) return null;
+          const h = { ...toHour(src[0][i]), weatherSource: sources[0] };
+          return round(corr.apply({ h, pred, ghis: src.map((s) => s[i].ghi), recent: recentErrorFor(h.t, map, cap) }));
+        });
+        out[kind] = { status: "ok", hours, ...common, train: { ...train, mount: `${train.mount}; düzeltme ${corr.rows} saat` } };
+      }
+    } catch (e) {
+      for (const k of CORRECTION_KINDS) out[k] = { status: "error", message: `Düzeltme katmanı: ${e instanceof Error ? e.message : String(e)}` };
+    }
+    return out;
   } catch (e) {
     return all({ status: "error", message: e instanceof Error ? e.message : String(e) });
   }
