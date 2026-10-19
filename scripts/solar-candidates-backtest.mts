@@ -25,6 +25,9 @@
  *     önceki saatler). "üst sınır (SIZINTI)" PTF'nin bilindiğini varsayar (aday değil, yalnız kazancın tavanı). Kısıntı
  *     saatleri "kayıp hariç" kümesinden düştüğü için asıl ölçü "Tüm saatler". Olasılık modelinin Brier skoru iklim
  *     rakibiyle (ay × saat payı) karşılaştırılır.
+ *   - `abl` (güneş sıradaki işler 4 d, e): `gbm` kümesinin ağırlıklı+düzeltmesi ve aynı düzeltmenin çeşitleri: "son günlerin
+ *     hatası" çıkarılmış, "yılın günü" çıkarılmış (kazanç nereden geliyor), GBM tohumu 2 ve 3, 6 aylık eğitim penceresi
+ *     (duyarlılık). Ayarlar baştan sabit; sonuç yalnız açıklama içindir, en iyi çeşit seçilip canlıya alınmaz.
  *   - `gbm` (22.4): öğrenen düzeltme katmanı (lib/solar-engine/models/correction.ts) temel ve ağırlıklı birleşimin üstünde.
  *     Temel ve birleşim Temmuz 2024'ten her ay önceki 4 ayla kurulur (örneklem dışı tahmin serisi); her test ayının düzeltmesi
  *     o aydan önceki en çok 12 ayın örneklem dışı hatasıyla öğrenilir (sıfır fiyatlı ve uyduyla kayıp saatler hariç; son
@@ -49,7 +52,7 @@ import { isRecordedCapacity } from "@/lib/epias-plant/installed-capacity";
 import { NWP_MODELS, type NwpYear } from "@/lib/weather/nwp-models";
 import { archiveVariants, ENSEMBLE_SOURCES, fitEnsemble, noLag, type NwpArchive } from "@/lib/solar-engine/models/ensemble";
 import { readNwpYear } from "@/lib/weather/weather-store";
-import { fitCorrection, recentErrorFor } from "@/lib/solar-engine/models/correction";
+import { CORRECTION_GBM, fitCorrection, recentErrorFor, type CorrectionDrop } from "@/lib/solar-engine/models/correction";
 import { chooseBidQuantile, chooseWidth, fitResidualQuantiles, WIDTHS } from "@/lib/solar-engine/models/quantiles";
 import { TRAIN_ZERO_PRICE_MAX } from "@/lib/solar-engine/models/production-model";
 import { brier, buildZeroPriceRows, curtailedForecast, curtailmentRate, fitZeroPrice, zeroPriceClimatology, zeroPricePersistence, type ZeroPriceRow } from "@/lib/forecast/zero-price";
@@ -57,9 +60,17 @@ import { brier, buildZeroPriceRows, curtailedForecast, curtailmentRate, fitZeroP
 const endArg = process.argv.slice(2).find((a) => /^\d{4}-\d{2}$/.test(a)) ?? "2026-09";
 const onlyProject = process.argv.includes("--project");
 const setArg = process.argv[process.argv.indexOf("--set") + 1];
-const SET: "nwp" | "phys" | "gbm" | "prob" | "curt" =
-  process.argv.includes("--set") && (setArg === "phys" || setArg === "gbm" || setArg === "prob" || setArg === "curt") ? setArg : "nwp";
-const CORR = SET === "gbm" || SET === "prob" || SET === "curt";
+const SET: "nwp" | "phys" | "gbm" | "prob" | "curt" | "abl" =
+  process.argv.includes("--set") && (setArg === "phys" || setArg === "gbm" || setArg === "prob" || setArg === "curt" || setArg === "abl") ? setArg : "nwp";
+const CORR = SET === "gbm" || SET === "prob" || SET === "curt" || SET === "abl";
+/** Düzeltme çeşitleri (`abl`): ad → [çıkarılan özellikler, GBM tohumu, pencere ayı] */
+const ABLATIONS: Record<string, [CorrectionDrop[], number, number]> = {
+  "-son günler": [["recent"], 1, 12],
+  "-yılın günü": [["doy"], 1, 12],
+  "tohum 2": [[], 2, 12],
+  "tohum 3": [[], 3, 12],
+  "pencere 6 ay": [[], 1, 6],
+};
 /** Olasılıksal kümenin ilk test ayı */
 const PROB_FIRST = Date.UTC(2025, 3, 1);
 /** Genişlik çarpanının sınama dönemi başı: öncesi (Nisan–Aralık 2025) seçim dönemi */
@@ -102,6 +113,8 @@ const NAMES =
         ? ["ağırlıklı+düzeltme", "P50", "maliyet teklifi", "ilk KGÜP"]
       : SET === "curt"
         ? ["ağırlıklı+düzeltme", "+kısıntı", "+kısıntı (hava)", "üst sınır (SIZINTI)", "ilk KGÜP"]
+      : SET === "abl"
+        ? ["ağırlıklı", "ağırlıklı+düzeltme", ...Object.keys(ABLATIONS), "ilk KGÜP"]
       : ["temel", "ICON-EU", "GFS", "ortalama", "girdi ort.", "ağırlıklı", "ilk KGÜP"];
 const results: Array<{ id: number; name: string; recordedCap: boolean; notes: Record<string, number>; all: Record<string, CandidateResult>; exLoss: Record<string, CandidateResult> }> = [];
 const nf = (v: number, d = 1) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -234,6 +247,23 @@ for (const id of await listPoolPlants()) {
           return f ? f.apply({ h, pred: v, ghis: ghisOf(h), recent: recentErrorFor(h.t, series[k], cap) }) : v;
         };
         corrected.push({ ...h, pred: { ...h.pred, "temel+düzeltme": out("temel", fits[0]), "ağırlıklı+düzeltme": out("ağırlıklı", fits[1]) } });
+      }
+      if (SET === "abl") {
+        // Çeşitler: aynı ağırlıklı tahmin serisi, aynı süzgeç; yalnız çıkarılan özellik, tohum ya da pencere değişir
+        const k = "ağırlıklı" as const;
+        const base = hist.filter((h) => h.uevm !== null && h.pred[k] !== null && h.pred[k] !== undefined && !clean.exclude(h) && !(h.ptf !== null && h.ptf <= TRAIN_ZERO_PRICE_MAX));
+        const variants = Object.entries(ABLATIONS).map(([name, [drop, seed, months]]) => {
+          const rows = base.filter((h) => h.t >= Date.UTC(y, m - 1 - months, 1)).map((h) => ({ h, pred: h.pred[k]!, actual: h.uevm!, ghis: ghisOf(h), recent: recentErrorFor(h.t, series[k], cap) }));
+          return [name, fitCorrection(rows, data.site, cap, { ...CORRECTION_GBM, seed }, drop)] as const;
+        });
+        const start = corrected.length - test.length;
+        for (let j = 0; j < test.length; j++) {
+          const h = test[j];
+          const v = h.pred[k];
+          const extra: Record<string, number | null> = {};
+          for (const [name, f] of variants) extra[name] = v === null || v === undefined ? null : f ? f.apply({ h, pred: v, ghis: ghisOf(h), recent: recentErrorFor(h.t, series[k], cap) }) : v;
+          corrected[start + j] = { ...corrected[start + j], pred: { ...corrected[start + j].pred, ...extra } };
+        }
       }
     }
     tested.length = 0;

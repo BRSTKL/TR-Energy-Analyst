@@ -805,6 +805,10 @@ Kurallar:
    - (c) Düzeltme katmanında tahmin ≈ 0 iken eğitim ile uygulama uyumsuz (sabah ve akşam saatleri).
    - (d) Düzeltme kazancı nereden geliyor: "son günlerin hatası" ve "yılın günü" özellikleri ayrı ayrı çıkarılarak geriye dönük test (yeni `--set`).
    - (e) Duyarlılık: GBM tohumu ve 12 aylık pencere.
+   - ✓ (d)(e) kod (19.10.2026, bulut; sonuç Mac'te). `models/correction.ts` `fitCorrection`'a isteğe bağlı `drop` ("recent", "doy") eklendi (varsayılan boş, canlı aynı; 1 test).
+     - `scripts/solar-candidates-backtest.mts --set abl`: ağırlıklı, ağırlıklı+düzeltme ve çeşitleri ("-son günler", "-yılın günü", "tohum 2", "tohum 3", "pencere 6 ay"); aynı seri ve süzgeç.
+     - Sonuç yalnız açıklama içindir; en iyi çeşit seçilip canlıya alınmaz (test dönemi aynı).
+     - Mac'te sınama: `npx tsx --env-file=.env --tsconfig tsconfig.json scripts/solar-candidates-backtest.mts 2026-09 --set abl`. Beklenen: ağırlıklı+düzeltme ≈ 91,4 (22.4 ile aynı). Çeşitlerin farkı kazancın kaynağını söyler; tohum ve pencere farkı küçükse (≈ ±1 TL/MWh) sonuç sağlam.
 5. **Karne takibi (Mac).**
    - Gölge sürümlerin (üç model birleşimi, düzeltme) karnesi izlenir; ilk şampiyon kararı en erken Kasım 2026 ortası.
    - Sonuç 22.3 ve 22.4 maddelerine yazılır.
@@ -874,7 +878,13 @@ Her maddenin sonunda "Mac'te sınama" yazılır (yönerge 2).
   - Göbek yüksekliğine çıkarma: rüzgâr kesmesi üssü, 10 m / 100 m'den gün saati ve mevsime göre öğrenilir.
   - Kesme üstü durma (histerezis) ve kısmi kullanılabilirlik (kurulu güç / tavan).
   - Medyan eğriyle karşılaştırma. 22.2'den ders: fizik tek başına kaybedebilir; sınanmadan aday olmaz.
-- [ ] **23.4 Birden çok hava modeli (rüzgârda güneşten daha değerli).**
+- [~] **23.4 Birden çok hava modeli (rüzgârda güneşten daha değerli).** 19.10.2026 (bulut): saf model kodu `lib/wind-engine/models/ensemble.ts` `fitWindEnsemble`.
+  - Her hava modeli kendi güç eğrisiyle (`fitWindBaseline`, isteğe bağlı yoğunluk). Birleşimler: `mean` (tahmin ortalaması), `speed` (hız ortalaması ve vektör yön ortalamasıyla tek eğri), `weighted` (1 / hata²; hata eğitimin son ayında, ortak saatlerde, doğrulama öncesi eğitim bir gün önce biter). Ayrıca `spreadMs`: modellerin hız ayrışması.
+  - Eksik model: geriye dönük testte null, canlıda (`fallback`) kalan modellerle. Her kaynağın özelliği kendi `WEATHER_RUN_RULES` kuralıyla denetlenir.
+  - Testler `__tests__/wind-engine-ensemble.test.ts` (5 test). Bilgi zamanı koruması yazım sırasında ağırlık doğrulamasındaki bir günlük sızıntıyı yakaladı, düzeltildi.
+  - Arşiv: `lib/weather/wind-nwp-archive.ts` (ICON-EU 80 / 120 m, GFS 80 / 100 m, ikisinde de 10 m hız ve hamle; yalnız `_previous_day2`). `hubWind` 100 m'ye taşır: ICON-EU'da 80–120 m kesme üssüyle, GFS'te 100 m varsa doğrudan, yoksa 10 → 80 m üssüyle. Okuma ve yazma `weather-store.ts`'te (`windnwp-<model>-<yıl>.json.gz`), senkron `scripts/wind-models-sync.mts`. Güneşin ek model arşivine dokunulmadı.
+  - Geriye dönük test: `scripts/wind-forecast-backtest.mts --models`. ICON-EU, GFS ve üç birleşim, üç modelin ortak saatlerinde. Hız ayrışması dilimine göre birleşimin hatası da yazılır. Seçenek verilmezse eski çalışma aynı. Testler `__tests__/wind-nwp-archive.test.ts` (3).
+  - Mac'te sınama: `npx tsx --env-file=.env --tsconfig tsconfig.json scripts/wind-models-sync.mts` (her santralin bir çıktı satırı; "HATA" varsa değişken adı reddedilmiştir, ör. GFS `wind_speed_100m`), sonra `npx tsx --env-file=.env --tsconfig tsconfig.json scripts/wind-forecast-backtest.mts 2026-09 --models`. Beklenen: birleşim satırları; ağırlıklı birleşim rüzgâr modelinden ucuz, hata ayrışma dilimiyle artan. Kazandırırsa gölge sürüm (bağlama commit'i, dikkatli grup).
   - ECMWF 0,25° + ICON-EU + GFS (+ IFS 9 km Ekim 2025'ten) göbek yüksekliği rüzgârı.
   - Her model kendi güç eğrisiyle; birleşimler: ortalama, ağırlıklı, hız ortalamasıyla tek eğri (`lib/solar-engine/models/ensemble.ts` deseni, rüzgâr girdileriyle).
   - Modellerin hız ayrışması kayda yazılır (belirsizlik ölçüsü).
@@ -951,6 +961,7 @@ Sıra: 23.0 → 23.1 → 23.2 (kayıt ve karne erken başlasın, kanıt birikir)
 ## 4. İlerleme kaydı
 | Tarih | Adım | Commit | Not |
 |---|---|---|---|
+| 19.10.2026 | Bulut oturumu: önerilen sıra (23.0 → 22.6 → 22.7 → 22.5 a2 → 23.1–23.4 → güneş 4 d, e) | dc7a00b, d1c7538, 87a9e7f, 8c3d620, 7e9f34f, (bu commit) | Yalnız kod ve birim testleri; hiçbiri sabah tahminine bağlanmadı, sonuçlar Mac'te. 22.6 sıfır fiyat olasılığı × kısma oranı (`lib/forecast/zero-price.ts`, tatil takvimi, `--set curt`); 22.7 değişim algılama fonksiyonları; 22.5 kapsama ölçümü ve genişlik kalibrasyonu (`--set prob`); 23.0 veri doğrulaması (Open-Meteo kaynak kodu); `lib/wind-engine/` iskeleti, yoğunluklu temel sürüm, rüzgâr ek model arşivi ve birleşimi (`--models`); düzeltme katmanı çeşitleri (`--set abl`). Her değişiklikten sonra `sizinti-denetcisi`: sızıntı yok; bulgular (iyimser "kayıp hariç" kapsama, "üst sınır" etiketi, Brier şartı) düzeltildi. 630+ test, tsc temiz. |
 | 15.10.2026 | Aşama 15: güneş kapısı kapandı (açık referans) + Aşama 20 taslağı | b3797cf … d50bce9, (bu commit) | Konum (OSM, 15 santral), hava verisi (Open-Meteo Previous Runs, `d2` temiz), bilgi zamanı koruması, sürüm 1–3 (2024'te tasarım, 2025-01 – 2026-08 sınama, dönemin kuralı + KÜPST). En iyi model adil kümede 101,5 TL/MWh, ilk KGÜP 78,3; 2 / 15 santral: kapı karşılanmadı, iyileştirme iddiası yok. Bilgi yaşı farkı açıklamıyor (en yeni tahminle bile 110,5). Uydu (SARAH3) ile kısıntı / arıza tespiti: YEKA 2026 potansiyelin %29–39'u kayıp, çoğu planlı. Ürün çıktısı Aşama 20 taslağında. |
 | 15.10.2026 | Aşama 19: sektör capture rate eğilimi | dce10d6, 6a029cb, 9b2a279, (bu commit) | Sektör karnesinin santralleri, 2025 → 2026 Ocak–Ağustos: güneş %84,8 → %66,2 (Mayıs %17; üretimin %16'sı sıfır fiyatlı saatte), rüzgâr %99,2 → %105,6, barajlı hidro %106,5 → %101,3, nehir tipi %100,8 → %95,1. Piyasa sayfasında kart, sonuç sayfasında santralin sektördeki yeri, raporun PPA kutusunda karışıma göre beklenenle kıyas (Gain %94,8, beklenen %102,0). Bağımsız doğrulama geçti. Metodoloji 1.22. 480 test, 56 rapor 0 hata. |
 | 15.10.2026 | Aşama 18: GİP likiditesi ve işlem sınırı | 03c7f91, 7797332, 7e05feb, e4fb508, (bu commit) | Toplayıcıların gerçekleşen katılımı (Aksa / Pure P99 %12,5 / %13,7, büyük 12'nin P90 medyanı %2,0); %10 sınırı ihtiyatlı alt olarak korundu, ortak `capTradeMwh` ile yön tahminiyle gün içi plan ayarına da uygulandı (önce sınırsızdı). Etki: 13 portföyün 10'unda yok, Doğuş kalıcılık 115 → 83 M. Piyasa sayfasında GİP likiditesi kartı, geriye dönük testte portföydeki etki. Taslaktaki "santral başına sınır" iddiası yanlıştı, düzeltildi. Metodoloji 1.21. 476 test, 56 rapor 0 hata. |

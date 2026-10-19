@@ -47,4 +47,18 @@ describe("öğrenen düzeltme katmanı", () => {
     // D-1 ve D-2'deki büyük hata girmez; D-3…D-9: (8 − 10) / 50
     expect(recentErrorFor(t0, series, 50)).toBeCloseTo(-0.04, 6);
   });
+
+  it("özellik çıkarma: varsayılan aynı; 'son günler' çıkarılınca o özelliğin taşıdığı hatayı öğrenemez", () => {
+    // Hata yalnız son günlerin hatasına bağlı: gerçekleşen = tahmin × (1 + 4 × recent)
+    const rr = rows.map((r, i) => {
+      const recent = ((i * 7919) % 100) / 1000 - 0.05;
+      return { ...r, recent, actual: Math.max(0, r.pred * (1 + 4 * recent)) };
+    });
+    const full = fitCorrection(rr, site, cap)!;
+    const same = fitCorrection(rr, site, cap, undefined, [])!;
+    const noRecent = fitCorrection(rr, site, cap, undefined, ["recent"])!;
+    const e = (m: typeof full) => rr.reduce((s2, r) => s2 + Math.abs(m.apply(r) - r.actual), 0);
+    expect(e(same)).toBe(e(full));
+    expect(e(full)).toBeLessThan(e(noRecent) * 0.7);
+  });
 });
