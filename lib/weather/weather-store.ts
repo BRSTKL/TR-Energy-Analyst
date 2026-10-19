@@ -13,6 +13,7 @@ import type { WeatherYear } from "./weather-codec";
 import type { SatelliteYear } from "./satellite";
 import type { WindModel, WindYear } from "./reanalysis-wind";
 import type { WindForecastYear } from "./wind-forecast-archive";
+import type { NwpModel, NwpYear } from "./nwp-models";
 
 export const weatherDir = (): string => path.join(poolDir(), "weather");
 const yearFile = (epiasPlantId: number, year: number) => path.join(weatherDir(), String(epiasPlantId), `${year}.json.gz`);
@@ -88,6 +89,30 @@ export async function readWindForecastYear(epiasPlantId: number, year: number): 
 
 export async function writeWindForecastYear(doc: WindForecastYear): Promise<void> {
   const file = windFcFile(doc.epiasPlantId, doc.year);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  await fs.writeFile(tmp, gzipSync(JSON.stringify(doc)));
+  await fs.rename(tmp, file);
+}
+
+const nwpFile = (epiasPlantId: number, model: NwpModel, year: number) => path.join(weatherDir(), String(epiasPlantId), `nwp-${model}-${year}.json.gz`);
+
+/** Ek hava modelleri (nwp-models.ts, Aşama 22.3): aynı klasörde `nwp-<model>-<yıl>.json.gz` */
+export async function readNwpYear(epiasPlantId: number, model: NwpModel, year: number): Promise<NwpYear | null> {
+  let doc: NwpYear;
+  try {
+    doc = JSON.parse(gunzipSync(await fs.readFile(nwpFile(epiasPlantId, model, year))).toString("utf8"));
+  } catch (e: any) {
+    if (e?.code === "ENOENT") return null;
+    throw e;
+  }
+  // Yalnız 2 gün önceki sürüm temiz (bilgi anı): başka sürüm d2 diye kullanılmasın
+  if (doc.lead !== "d2") throw new Error(`#${epiasPlantId} ${model} ${year}: beklenmeyen sürüm ${doc.lead}`);
+  return doc;
+}
+
+export async function writeNwpYear(doc: NwpYear): Promise<void> {
+  const file = nwpFile(doc.epiasPlantId, doc.model, doc.year);
   await fs.mkdir(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tmp, gzipSync(JSON.stringify(doc)));
