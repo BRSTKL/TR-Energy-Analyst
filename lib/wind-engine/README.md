@@ -11,6 +11,7 @@ Durum (19.10.2026): iskelet ve saf model kodu. Günlük akışa, kayda ve ekrana
 |---|---|
 | `physics/air-density.ts` | Hava yoğunluğu (sıcaklık, basınç, rakım), yoğunluğa göre eşdeğer hız (IEC 61400-12-1), rüzgâr kesmesi üssü. |
 | `models/baseline.ts` | Temel sürüm (23.2): mevcut güç eğrisi (`lib/forecast/wind-forecast.ts`) + isteğe bağlı yoğunluk düzeltmesi. |
+| `models/ensemble.ts` | Birden çok hava modeli (23.4): ECMWF + ICON-EU + GFS, her biri kendi eğrisiyle; ortalama, hız ortalaması, ağırlıklı; modellerin hız ayrışması. |
 | `data/` | (23.2) Eğitim verisi: havuzdaki üretim, geçmiş hava tahmini. |
 | `learning/` | (23.1) Kayıt, karne, şampiyon: güneşteki parçalar `lib/forecast/` altına taşınınca buradan kullanılır. |
 | `pipeline.ts`, `registry.ts`, `forecast.ts` | (23.2 bağlama) Günlük akış, sürümler, tek santral tahmini. |
