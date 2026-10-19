@@ -33,7 +33,7 @@ import { execSync, spawn } from "node:child_process";
 import { prisma } from "@/lib/prisma";
 import { isUnlicensedName } from "@/lib/analysis/candidate-access";
 import { readPoolPlantInfo } from "@/lib/pool/pool-store";
-import { forecastSolarPlant } from "@/lib/solar-engine/forecast";
+import { forecastSolarEnsemble, forecastSolarPlant } from "@/lib/solar-engine/forecast";
 import { readForecastLog, writeForecastLog, forecastLogPath } from "@/lib/solar-engine/learning/forecast-log-store";
 import { FORECAST_LOG_SCHEMA, SOLAR_MODEL_ID, forecastCutoff, isOnTime, nextTargetDate, targetDayWall, type ForecastLog, type ForecastLogPlant, type ForecastLogShadow } from "@/lib/solar-engine/learning/forecast-log";
 import { BIAS_INSAMPLE_MODEL, BIAS_MIN_LOGGED_DAYS, MODEL_VARIANTS, applyBias, biasFactors } from "@/lib/solar-engine/learning/self-learning";
@@ -139,6 +139,7 @@ export async function runDailyForecast(opts: DailyForecastOptions = {}): Promise
     for (const [label, args] of [
       ["gerçek zamanlı üretim", ["scripts/realtime-sync.mts", ...ids]],
       ["hava tahmini arşivi", ["scripts/weather-sync.mts", ...ids]],
+      ["ek hava modelleri arşivi", ["scripts/weather-models-sync.mts", ...ids]],
       ["uydu ışınımı", ["scripts/satellite-sync.mts", ...ids]],
     ] as const) {
       if (left() < 16 * MIN) {
@@ -195,8 +196,19 @@ export async function runDailyForecast(opts: DailyForecastOptions = {}): Promise
     const base = await forecastSolarPlant(id, day0, 24, { now: started, fresh: true, trainingMonths: 4, recentFitDays: 14 });
     if (base.status === "ok" && empty(base.hours)) return { epiasPlantId: id, name, status: "error", message: "Hava tahmininde hedef günün saatleri yok" };
     const { recentFit, ...baseRest } = base;
+    // Üç hava modelli birleşim: üç sürüm tek eğitimle (ilk istenince)
+    let ens: Awaited<ReturnType<typeof forecastSolarEnsemble>> | null = null;
     for (const v of MODEL_VARIANTS) {
-      if (v.bias) {
+      if (v.ensemble) {
+        // Ek hava isteği gölge sürüm için kaydı kesime itmesin: kesime 20 dakikadan az kaldıysa atlanır
+        if (!ens && left() < 20 * MIN) {
+          results.set(v.id, { epiasPlantId: id, name, status: "error", message: "Kesime az kaldı: ek hava modelleri atlandı" });
+          continue;
+        }
+        ens ??= await forecastSolarEnsemble(id, day0, 24, { now: started, fresh: true });
+        const r = ens[v.ensemble];
+        results.set(v.id, { epiasPlantId: id, name, ...(r.status === "ok" && empty(r.hours) ? { status: "error", message: "Hava tahmininde hedef günün saatleri yok" } : r) });
+      } else if (v.bias) {
         if (base.status !== "ok") {
           results.set(v.id, { epiasPlantId: id, name, status: base.status, message: base.message });
           continue;
@@ -220,7 +232,8 @@ export async function runDailyForecast(opts: DailyForecastOptions = {}): Promise
         results.set(v.id, { epiasPlantId: id, name, ...rest });
       }
     }
-    const champ = results.has(championOf(champions, id)) ? championOf(champions, id) : SOLAR_MODEL_ID;
+    // Şampiyonun tahmini yoksa ya da düştüyse temel sürüm gönderilir
+    const champ = results.get(championOf(champions, id))?.status === "ok" ? championOf(champions, id) : SOLAR_MODEL_ID;
     for (const [modelId, r] of results) {
       if (modelId === champ) continue;
       const sh = shadowByModel.get(modelId) ?? { modelId, plants: [] };

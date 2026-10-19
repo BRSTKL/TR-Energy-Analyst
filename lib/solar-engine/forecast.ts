@@ -20,6 +20,9 @@ import type { OpenMeteoHourly } from "@/lib/weather/weather-codec";
 import { SATELLITE_DELAY_DAYS } from "@/lib/weather/satellite";
 import { readPoolPlantInfo, readPoolYear, readProvisionalYear } from "@/lib/pool/pool-store";
 import { loadSolarHours } from "./data/production-data";
+import { ENSEMBLE_KINDS, fitEnsemble, type EnsembleKind, type NwpArchive } from "./models/ensemble";
+import { NWP_MODELS, type NwpYear } from "@/lib/weather/nwp-models";
+import { readNwpYear } from "@/lib/weather/weather-store";
 import { projectWeatherPlants } from "../services/weather-preview";
 
 const HOUR = 3_600_000;
@@ -74,6 +77,41 @@ async function cachedLiveWeather(lat: number, lon: number, fresh = false): Promi
   const r = await fetch(liveForecastUrl(lat, lon, LIVE_DAYS + 1), { headers: { "User-Agent": "TR-Energy-Analyst/1.0 (non-commercial research)" }, signal: AbortSignal.timeout(30_000) });
   const body = await r.json();
   if (!r.ok || !body?.hourly?.time) throw new Error(`Open-Meteo: ${r.status} ${body?.reason ?? ""}`);
+  const c = { res: body as OpenMeteoHourly, fetchedAt: new Date().toISOString() };
+  fs.mkdirSync(CACHE_DIR, { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(c));
+  return c;
+}
+
+/** Ek hava modellerinin (ICON-EU, GFS) canlı tahmini: tek istek, aynı önbellek kuralı (Aşama 22.3) */
+async function cachedLiveNwp(lat: number, lon: number, fresh = false): Promise<{ res: OpenMeteoHourly; fetchedAt: string }> {
+  const file = path.join(CACHE_DIR, `nwp_${lat.toFixed(4)}_${lon.toFixed(4)}.json`);
+  if (!fresh)
+    try {
+      const c = JSON.parse(fs.readFileSync(file, "utf8")) as { res: OpenMeteoHourly; fetchedAt: string };
+      if (Date.now() - Date.parse(c.fetchedAt) < CACHE_TTL_MS) return c;
+    } catch {
+      /* önbellek yok */
+    }
+  // Gölge sürümler günlük akışın yeniden deneme turuna girmez: düşen istek burada iki kez yeniden denenir (15 sn arayla)
+  let body: any = null;
+  let last = "";
+  for (const wait of [0, 15_000, 15_000]) {
+    if (wait) await new Promise((r) => setTimeout(r, wait));
+    try {
+      const r = await fetch(liveForecastUrl(lat, lon, LIVE_DAYS + 1, NWP_MODELS), { headers: { "User-Agent": "TR-Energy-Analyst/1.0 (non-commercial research)" }, signal: AbortSignal.timeout(30_000) });
+      const b = await r.json();
+      if (r.ok && b?.hourly?.time) {
+        body = b;
+        break;
+      }
+      last = `${r.status} ${b?.reason ?? ""}`;
+      if (r.status === 400) break;
+    } catch (e) {
+      last = e instanceof Error ? e.message : String(e);
+    }
+  }
+  if (!body) throw new Error(`Open-Meteo: ${last}`);
   const c = { res: body as OpenMeteoHourly, fetchedAt: new Date().toISOString() };
   fs.mkdirSync(CACHE_DIR, { recursive: true });
   fs.writeFileSync(file, JSON.stringify(c));
@@ -208,6 +246,80 @@ export async function forecastSolarPlant(
     };
   } catch (e) {
     return { status: "error", message: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * Üç hava modelli birleşim (Aşama 22.3, models/ensemble.ts): `forecastSolarPlant` ile aynı eğitim penceresi ve temizlik;
+ * ICON-EU ve GFS eğitimde arşivdeki 2 gün önceki tahminle, canlıda isteğin yapıldığı andaki en yeni tahminle. Ağırlıkların
+ * doğrulama dönemi eğitimin son 30 günü. Üç birleşim tek eğitimle döner.
+ */
+export async function forecastSolarEnsemble(
+  epiasPlantId: number,
+  from: number,
+  count: number,
+  opts: { now?: number; fresh?: boolean } = {}
+): Promise<Record<EnsembleKind, SolarPlantForecast>> {
+  const now = opts.now ?? Date.now();
+  const all = (f: SolarPlantForecast) => Object.fromEntries(ENSEMBLE_KINDS.map((k) => [k, f])) as Record<EnsembleKind, SolarPlantForecast>;
+  try {
+    const loc = (await readPoolPlantInfo(epiasPlantId))?.location;
+    if (!loc) throw new Error("Havuzda konum yok");
+    const win = await trainingWindow(epiasPlantId, now, 4);
+    if (win === null) return all({ status: "no-data", message: "Havuzda üretim verisi yok" });
+    const { start, end } = win;
+    const data = await loadSolarHours(epiasPlantId, start, end, { provisional: win.provisional });
+    if (!data) throw new Error("Eğitim verisi okunamadı");
+    const nwp: NwpArchive = new Map();
+    for (const m of NWP_MODELS) {
+      const ys = new Map<number, NwpYear>();
+      for (let y = new Date(start).getUTCFullYear(); y <= new Date(end - 1).getUTCFullYear(); y++) {
+        const d = await readNwpYear(epiasPlantId, m, y);
+        if (d) ys.set(y, d);
+      }
+      if (!ys.size) return all({ status: "no-data", message: `Ek hava modeli arşivi yok (${m}; scripts/weather-models-sync.mts)` });
+      nwp.set(m, ys);
+    }
+    const clean = trainingLossFilter(
+      data.hours.map((h) => ({ t: h.t, uevm: h.uevm, kgupFirst: h.kgupFirst, satGhi: h.satGhi ?? null, satDirect: h.satDirect ?? null, satDiffuse: h.satDiffuse ?? null })),
+      data.site,
+      end,
+      SATELLITE_DELAY_DAYS
+    );
+    let ens;
+    try {
+      ens = fitEnsemble(data.hours, nwp, data.site, clean.exclude, end - 30 * DAY);
+    } catch {
+      return all({ status: "no-data", message: "Son 4 ayda eğitim için yeterli üretim saati yok (yeni santral?)" });
+    }
+    const [w, x] = await Promise.all([cachedLiveWeather(loc.latitude, loc.longitude, opts.fresh), cachedLiveNwp(loc.latitude, loc.longitude, opts.fresh)]);
+    const toHour = (wh: ReturnType<typeof liveWeatherHours>[number]): SolarHourV2 => ({ ...wh, uevm: null, kgupFirst: null, kgupFinal: null, ptf: null, lag48: null, ghiLag48: null, directLag48: null, diffuseLag48: null, live: true });
+    const src = [liveWeatherHours(w.res, from, from + count * HOUR), ...NWP_MODELS.map((m) => liveWeatherHours(x.res, from, from + count * HOUR, `_${m}`))];
+    // Bir ek modelin saati eksikse o saatte ECMWF tahmini (birleşim temel sürümle aynı saatlerde ölçülür)
+    const preds = src[0].map((_, i) => ens.predict(src.map((s) => toHour(s[i])), true));
+    const round = (v: number | null) => (v === null ? null : Math.round(v * 1000) / 1000);
+    const train = {
+      from: new Date(start).toISOString().slice(0, 10),
+      to: new Date(end - DAY).toISOString().slice(0, 10),
+      hours: ens.trainHours,
+      mount: `${ens.mount}; ağırlık ECMWF/ICON-EU/GFS ${ens.weights.map((v) => v.toFixed(2)).join("/")}`,
+      maxMwh: ens.trainMaxMwh,
+      ...(win.provisional ? { provisionalHours: data.provisionalHours ?? 0, provisionalThrough: new Date(end - DAY).toISOString().slice(0, 10) } : {}),
+    };
+    return Object.fromEntries(
+      ENSEMBLE_KINDS.map((k) => [
+        k,
+        {
+          status: "ok",
+          hours: preds.map((p) => round(p[k])),
+          train,
+          weatherFetchedAt: [w.fetchedAt, x.fetchedAt].sort()[0],
+          location: { latitude: loc.latitude, longitude: loc.longitude, locationSource: loc.locationSource },
+        } satisfies SolarPlantForecast,
+      ])
+    ) as Record<EnsembleKind, SolarPlantForecast>;
+  } catch (e) {
+    return all({ status: "error", message: e instanceof Error ? e.message : String(e) });
   }
 }
 

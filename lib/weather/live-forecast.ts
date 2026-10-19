@@ -25,22 +25,25 @@ export interface LiveWeatherHour {
   cloud: number | null;
 }
 
-export function liveForecastUrl(latitude: number, longitude: number, days: number): string {
+/** `models`: varsayılan ECMWF; birden çok model istenince Open-Meteo sütun adına `_<model>` ekler (liveWeatherHours `suffix`).
+ * Ek modeller (lib/weather/nwp-models.ts, Aşama 22.3) aynı değişkenlerle */
+export function liveForecastUrl(latitude: number, longitude: number, days: number, models: readonly string[] = [WEATHER_MODEL]): string {
   const q = new URLSearchParams({
     latitude: latitude.toFixed(4),
     longitude: longitude.toFixed(4),
     hourly: LIVE_VARIABLES.join(","),
     forecast_days: String(days),
     timezone: "Europe/Istanbul",
-    models: WEATHER_MODEL,
+    models: models.join(","),
   });
   return `https://api.open-meteo.com/v1/forecast?${q}`;
 }
 
 const wallMs = (t: string) => Date.parse(`${t}:00Z`);
 
-/** Yanıtı üretim saatlerine çevirir: [from, to) aralığındaki saatler, sırayla; değeri olmayan alan null */
-export function liveWeatherHours(res: OpenMeteoHourly, from: number, to: number): LiveWeatherHour[] {
+/** Yanıtı üretim saatlerine çevirir: [from, to) aralığındaki saatler, sırayla; değeri olmayan alan null. `suffix`: çok modelli
+ * yanıtta modelin sütun soneki (ör. "_icon_eu") */
+export function liveWeatherHours(res: OpenMeteoHourly, from: number, to: number, suffix = ""): LiveWeatherHour[] {
   const byHour = new Map<number, LiveWeatherHour>();
   const get = (t: number) => {
     if (!byHour.has(t)) byHour.set(t, { t, ghi: null, direct: null, diffuse: null, temp: null, cloud: null });
@@ -55,7 +58,7 @@ export function liveWeatherHours(res: OpenMeteoHourly, from: number, to: number)
   };
   const time = res.hourly.time;
   for (const v of LIVE_VARIABLES) {
-    const values = res.hourly[v] as Array<number | null> | undefined;
+    const values = res.hourly[v + suffix] as Array<number | null> | undefined;
     if (!values) continue;
     const shift = WEATHER_VARIABLES[v] === "mean" ? 1 : 0;
     for (let k = 0; k < time.length; k++) {

@@ -1,12 +1,13 @@
 /**
  * Ek hava modelleri arşivi (Aşama 22.3): konumlu güneş santralleri için ICON-EU ve GFS'in 2 gün önceki tahmini
  * (lib/weather/nwp-models.ts). scripts/weather-sync.mts ile aynı düzen: dönem 2024-03-08 → dün, takvim yılı başına bir
- * belge, ay bitişinden 3 gün sonra çekildiyse tamam; iki model tek istekte; aynı koordinat için tek istek.
+ * belge, ay bitişinden 3 gün sonra çekildiyse tamam; yalnız tamamlanmamış ilk aydan dünkü güne istenir (günlük akışta
+ * birkaç haftalık istek: kısa sürer); iki model tek istekte; aynı koordinat için tek istek.
  *
  *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/weather-models-sync.mts [epiasPlantId ...]
  *
  * Çağrı sınırı (ücretsiz katman: dakikada 600, saatte 5.000, günde 10.000; 2 haftadan uzun dönem birden çok çağrı
- * sayılır): bir yıllık istek ≈ 26 çağrı, istekler arası 4 sn bekleme (≈ dakikada 390). Çıktı:
+ * sayılır): bir yıllık istek ≈ 26 çağrı, istekler arası 1,5 sn bekleme (ilk dolumda ≈ dakikada 400). Çıktı:
  * data/pool/weather/<id>/nwp-<model>-<yıl>.json.gz
  */
 
@@ -49,12 +50,14 @@ for (const p of plants) {
       parts.push(`${year} güncel`);
       continue;
     }
-    const key = `${p.lat},${p.lon},${year}`;
+    // Yalnız tamamlanmamış ilk aydan (ışınım bir saat geri kaydığından bir önceki günün son damgası da gerekir)
+    const reqFrom = stale[0] === months[0] ? from : iso(Date.UTC(year, Number(stale[0]) - 1, 1) - DAY);
+    const key = `${p.lat},${p.lon},${year},${reqFrom}`;
     let res = responses.get(key);
     if (!res) {
       try {
-        if (requests) await new Promise((r) => setTimeout(r, 4_000));
-        res = await fetchNwp(p.lat, p.lon, from, to, NWP_MODELS);
+        if (requests) await new Promise((r) => setTimeout(r, 1_500));
+        res = await fetchNwp(p.lat, p.lon, reqFrom, to, NWP_MODELS);
         responses.set(key, res);
         requests++;
       } catch (e) {
@@ -66,7 +69,7 @@ for (const p of plants) {
     const filled: string[] = [];
     for (const [k, m] of NWP_MODELS.entries()) {
       const doc = fresh(docs[k]) ? docs[k]! : emptyNwpYear(p.id, year, m, p.lat, p.lon);
-      mergeNwp(doc, res, NWP_MODELS.length > 1, months, new Date().toISOString());
+      mergeNwp(doc, res, NWP_MODELS.length > 1, stale, new Date().toISOString());
       await writeNwpYear(doc);
       filled.push(`${m} ${doc.series.ghi.filter((v) => v !== null).length}`);
     }

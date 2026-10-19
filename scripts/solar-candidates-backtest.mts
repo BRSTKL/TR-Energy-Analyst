@@ -6,7 +6,8 @@
  *   - `nwp` (varsayılan, 22.3): aynı sürüm 3 modeli ICON-EU ve GFS'in 2 gün önceki tahminiyle (lib/weather/nwp-models.ts;
  *     scripts/weather-models-sync.mts ile çekilir); üç modelin tahmin ortalaması; girdi ortalaması (üç modelin ışınım,
  *     sıcaklık ve bulut ortalamasıyla tek model); ağırlıklı (santral başına ağırlık: eğitimin ilk 3 ayıyla kurulan modellerin
- *     4. aydaki hatasına göre, ağırlık ∝ 1 / hata²; test ayı görülmez). Bir modelin verisi olmayan saat bütün adaylardan düşer.
+ *     4. aydaki hatasına göre, üç modelin ortak saatlerinde, ağırlık ∝ 1 / hata²; test ayı görülmez; lib/solar-engine/models/ensemble.ts).
+ *     Bir modelin verisi olmayan saat bütün adaylardan düşer.
  *   - `phys` (22.2): fiziksel model ve karma (fizik + ridge).
  *
  *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/solar-candidates-backtest.mts [sonAy=YYYY-AA] [--project] [--set nwp|phys]
@@ -25,7 +26,8 @@ import { loadSolarHours } from "@/lib/solar-engine/data/production-data";
 import { detectLostHours, trainingLossFilter } from "@/lib/forecast/curtailment";
 import { SATELLITE_DELAY_DAYS } from "@/lib/weather/satellite";
 import { isRecordedCapacity } from "@/lib/epias-plant/installed-capacity";
-import { NWP_MODELS, nwpAt, type NwpModel, type NwpYear } from "@/lib/weather/nwp-models";
+import { NWP_MODELS, type NwpYear } from "@/lib/weather/nwp-models";
+import { archiveVariants, ENSEMBLE_SOURCES, fitEnsemble, noLag, type NwpArchive } from "@/lib/solar-engine/models/ensemble";
 import { readNwpYear } from "@/lib/weather/weather-store";
 
 const endArg = process.argv.slice(2).find((a) => /^\d{4}-\d{2}$/.test(a)) ?? "2026-09";
@@ -50,23 +52,6 @@ await prisma.$disconnect();
 
 type Hour = SolarHourV2 & { pred: Record<string, number | null> };
 const NAMES = SET === "phys" ? ["temel", "fiziksel", "karma", "ilk KGÜP"] : ["temel", "ICON-EU", "GFS", "ortalama", "girdi ort.", "ağırlıklı", "ilk KGÜP"];
-type Model = { predict: (h: SolarHourV2) => number | null };
-const v3 = (train: SolarHourV2[], site: Parameters<typeof fitSolarModelV2>[1], exclude: (h: SolarHourV2) => boolean): Model => fitSolarModelV2(train, site, { exclude, noLag: true });
-const noLag = (h: SolarHourV2): SolarHourV2 => ({ ...h, lag48: null, ghiLag48: null, directLag48: null, diffuseLag48: null });
-/** Saatin hava girdilerini bir ek modelinkiyle değiştirir (bilgi anı aynı: d2); verisi yoksa null */
-function withNwp(h: SolarHourV2, docs: Map<number, NwpYear>): SolarHourV2 | null {
-  const doc = docs.get(new Date(h.t).getUTCFullYear());
-  if (!doc) return null;
-  const v = { ghi: nwpAt(doc, "ghi", h.t), direct: nwpAt(doc, "direct", h.t), diffuse: nwpAt(doc, "diffuse", h.t), temp: nwpAt(doc, "temp", h.t), cloud: nwpAt(doc, "cloud", h.t) };
-  if (Object.values(v).some((x) => x === null)) return null;
-  return { ...noLag(h), ...v };
-}
-/** Üç modelin girdi ortalaması */
-function meanInput(hs: Array<SolarHourV2 | null>): SolarHourV2 | null {
-  if (hs.some((h) => h === null || h.ghi === null || h.direct === null || h.diffuse === null || h.temp === null || h.cloud === null)) return null;
-  const avg = (k: "ghi" | "direct" | "diffuse" | "temp" | "cloud") => hs.reduce((s, h) => s + h![k]!, 0) / hs.length;
-  return { ...hs[0]!, ghi: avg("ghi"), direct: avg("direct"), diffuse: avg("diffuse"), temp: avg("temp"), cloud: avg("cloud") };
-}
 const results: Array<{ id: number; name: string; recordedCap: boolean; notes: Record<string, number>; all: Record<string, CandidateResult>; exLoss: Record<string, CandidateResult> }> = [];
 const nf = (v: number, d = 1) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
 
@@ -78,7 +63,7 @@ for (const id of await listPoolPlants()) {
   if (!data) continue;
   const tested: Hour[] = [];
   const notes: Record<string, number> = {};
-  const nwp = new Map<NwpModel, Map<number, NwpYear>>();
+  const nwp: NwpArchive = new Map();
   if (SET === "nwp") {
     for (const m of NWP_MODELS) {
       const ys = new Map<number, NwpYear>();
@@ -90,8 +75,6 @@ for (const id of await listPoolPlants()) {
     }
     if ([...nwp.values()].some((ys) => !ys.size)) continue;
   }
-  // Saat başına üç hava sürümü: [ECMWF, ICON-EU, GFS]
-  const variants = (h: SolarHourV2): Array<SolarHourV2 | null> => [noLag(h), ...NWP_MODELS.map((m) => withNwp(h, nwp.get(m)!))];
   for (const { y, m } of months) {
     const from = Date.UTC(y, m - 1, 1);
     const to = Date.UTC(y, m, 1);
@@ -105,45 +88,19 @@ for (const id of await listPoolPlants()) {
         from,
         SATELLITE_DELAY_DAYS
       );
-      const base = v3(train, data.site, clean.exclude);
       if (SET === "phys") {
+        const base = fitSolarModelV2(train, data.site, { exclude: clean.exclude, noLag: true });
         const phys = fitPhysicalModel(train, data.site, { exclude: clean.exclude, recordedCapacityMw: recorded.get(id) ?? null });
         const hyb = fitPhysicalModel(train, data.site, { exclude: clean.exclude, recordedCapacityMw: recorded.get(id) ?? null, hybrid: true });
         notes[phys.mount] = (notes[phys.mount] ?? 0) + 1;
         predict = (h) => ({ temel: base.predict(noLag(h)), fiziksel: phys.predict(h), karma: hyb.predict(h) });
       } else {
-        // Her ek model için aynı eğitim saatleri, o modelin havasıyla (verisi olmayan saat eğitime girmez)
-        const trainOf = (k: number) => train.map((h) => variants(h)[k]).filter((h): h is SolarHourV2 => h !== null);
-        const models = [base, ...NWP_MODELS.map((_, j) => v3(trainOf(j + 1), data.site, clean.exclude))];
-        const meanTrain = train.map((h) => meanInput(variants(h))).filter((h): h is SolarHourV2 => h !== null);
-        const meanModel = v3(meanTrain, data.site, clean.exclude);
-        // Ağırlık: ilk 3 ayla kurulan modellerin 4. aydaki (eğitimin son ayı) hatası; test ayı görülmez
-        const valFrom = Date.UTC(y, m - 2, 1);
-        const errs = [0, 1, 2].map((k) => {
-          const rows = trainOf(k);
-          const inner = v3(rows.filter((h) => h.t < valFrom), data.site, clean.exclude);
-          const val = rows.filter((h) => h.t >= valFrom && h.uevm !== null && !clean.exclude(h));
-          const e = val.reduce((s, h) => s + Math.abs((inner.predict(h) ?? 0) - h.uevm!), 0) / Math.max(1, val.length);
-          return Math.max(e, 1e-6);
-        });
-        const w = errs.map((e) => 1 / (e * e));
-        const ws = w.reduce((a, b) => a + b, 0);
-        // En büyük ağırlığı alan model (ECMWF / ICON-EU / GFS), ay sayısı
-        const top = `ağırlık en büyük: ${["ECMWF", "ICON-EU", "GFS"][w.indexOf(Math.max(...w))]}`;
+        const ens = fitEnsemble(train, nwp, data.site, clean.exclude, Date.UTC(y, m - 2, 1));
+        const top = `ağırlık en büyük: ${ENSEMBLE_SOURCES[ens.weights.indexOf(Math.max(...ens.weights))]}`;
         notes[top] = (notes[top] ?? 0) + 1;
         predict = (h) => {
-          const vs = variants(h);
-          const ps = vs.map((v, k) => (v ? models[k].predict(v) : null));
-          const ok = ps.every((p) => p !== null);
-          const mi = meanInput(vs);
-          return {
-            temel: ps[0],
-            "ICON-EU": ps[1],
-            GFS: ps[2],
-            ortalama: ok ? ps.reduce((s, p) => s! + p!, 0)! / ps.length : null,
-            "girdi ort.": mi ? meanModel.predict(mi) : null,
-            ağırlıklı: ok ? ps.reduce((s, p, k) => s! + (p! * w[k]) / ws, 0) : null,
-          };
+          const p = ens.predict(archiveVariants(h, nwp));
+          return { temel: p.sources[0], "ICON-EU": p.sources[1], GFS: p.sources[2], ortalama: p.mean, "girdi ort.": p.input, ağırlıklı: p.weighted };
         };
       }
     } catch {

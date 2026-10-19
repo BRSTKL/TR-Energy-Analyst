@@ -11,12 +11,16 @@ import { SOLAR_MODEL_ID } from "./learning/forecast-log";
 /** Temel (ilk canlı) sürüm: donmuş sürüm 3, kalıcılıksız, geçici üretimle 4 ay eğitim */
 export const BASE_MODEL = SOLAR_MODEL_ID;
 
-/** Adaylar. trainingMonths: eğitim penceresi; bias: temel tahmine günlük hata düzeltmesi */
+/** Adaylar. trainingMonths: eğitim penceresi; bias: temel tahmine günlük hata düzeltmesi; ensemble: üç hava modelli
+ * birleşim (models/ensemble.ts, Aşama 22.3: ECMWF + ICON-EU + GFS; tek eğitimle üçü birden) */
 export const MODEL_VARIANTS = [
-  { id: BASE_MODEL, trainingMonths: 4, bias: false },
-  { id: `${BASE_MODEL}-w2`, trainingMonths: 2, bias: false },
-  { id: `${BASE_MODEL}-w6`, trainingMonths: 6, bias: false },
-  { id: `${BASE_MODEL}-bias`, trainingMonths: 4, bias: true },
+  { id: BASE_MODEL, trainingMonths: 4, bias: false, ensemble: null },
+  { id: `${BASE_MODEL}-w2`, trainingMonths: 2, bias: false, ensemble: null },
+  { id: `${BASE_MODEL}-w6`, trainingMonths: 6, bias: false, ensemble: null },
+  { id: `${BASE_MODEL}-bias`, trainingMonths: 4, bias: true, ensemble: null },
+  { id: `${BASE_MODEL}-ens-mean`, trainingMonths: 4, bias: false, ensemble: "mean" },
+  { id: `${BASE_MODEL}-ens-input`, trainingMonths: 4, bias: false, ensemble: "input" },
+  { id: `${BASE_MODEL}-ens-weighted`, trainingMonths: 4, bias: false, ensemble: "weighted" },
 ] as const;
 /**
  * Kayıtlı gün BIAS_MIN_LOGGED_DAYS'ten azken hata düzeltmesi eğitimin son günlerinden (örneklem içi) kurulur ve bu ayrı

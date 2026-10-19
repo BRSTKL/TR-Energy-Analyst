@@ -21,6 +21,9 @@ const MODEL_LABEL: Record<string, string> = {
   [`${BASE_MODEL}-w2`]: "2 ay eğitim",
   [`${BASE_MODEL}-w6`]: "6 ay eğitim",
   [`${BASE_MODEL}-bias`]: "Günlük hata düzeltmeli",
+  [`${BASE_MODEL}-ens-mean`]: "Üç hava modeli: tahmin ortalaması (ECMWF, ICON-EU, GFS)",
+  [`${BASE_MODEL}-ens-input`]: "Üç hava modeli: hava girdisi ortalaması",
+  [`${BASE_MODEL}-ens-weighted`]: "Üç hava modeli: santrale göre ağırlıklı",
   [BIAS_INSAMPLE_MODEL]: "Hata düzeltmeli (eğitim içi, deneme; terfi etmez)",
 };
 const modelLabel = (id: string) => MODEL_LABEL[id] ?? id;
