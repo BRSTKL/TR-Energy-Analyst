@@ -68,10 +68,10 @@ Rapor, hesaplama ya da veri koduna dokunduktan sonra `npm run check:reports` (0 
 
 ## Ekran ve dışarıya giden metin
 
-- Sayfa, API ya da bileşen değişikliğinden sonra, geliştirme sunucusu açıkken `npm run test:smoke` çalıştırılır (`scripts/smoke-test.mts`).
-  - Sistemdeki Chrome ile bütün sayfaları gezer: 3 proje, uç durumlar ve telefon genişliği.
-  - Hata sayar: konsol hatası, 400 ve üstü yanıt, ekranda NaN / undefined, yatay taşma.
-  - Yalnız okur. Yaklaşık 5 dakika sürer. Bütün projeler için `-- --all` eklenir.
+- Duman testi (`scripts/smoke-test.mts`, geliştirme sunucusu açıkken) sayfaları sistemdeki Chrome ile gezer ve hata sayar: konsol hatası, 400 ve üstü yanıt, ekranda NaN / undefined, yatay taşma. Yalnız okur. Ne zaman hangisi (kullanıcı kararı 19.10.2026):
+  - Tek bir sayfanın kendi dosyasındaki değişiklikten sonra yalnız o sayfa: `npm run test:smoke -- --only <adres parçası>` (ör. `--only forecast`; masaüstü ve telefon genişliği; 30–60 sn).
+  - Ortak bileşen, servis, API ya da birden çok sayfayı etkileyen değişiklikte tam tur: `npm run test:smoke` (3 proje, uç durumlar, telefon genişliği; 5–10 dk). Aynı oturumdaki birkaç değişiklik için commit'ten önce bir kez yeterli.
+  - Bütün projeler için `-- --all`.
 - LinkedIn yazısı, şirket raporu, demo metni gibi dışarıya giden her metin, yayımlanmadan önce `iddia-denetcisi` agent'ına verilir.
   - Her sayıyı verinin bugünkü hâliyle karşılaştırır.
   - PLAN ve commit mesajları kaynak sayılmaz.

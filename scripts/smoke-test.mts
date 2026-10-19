@@ -5,6 +5,8 @@
  *   npm run test:smoke                       # sunucu http://localhost:3000'de açık olmalı
  *   SMOKE_BASE=http://localhost:3001 npm run test:smoke
  *   npm run test:smoke -- --all              # bütün projeler (varsayılan: en büyük, en küçük, güneşsiz)
+ *   npm run test:smoke -- --only forecast    # yalnız adresinde ya da adında "forecast" geçen sayfalar, masaüstü ve 375 px
+ *                                            # (virgülle birden çok: --only forecast,losses)
  *
  * Her sayfada: konsol hatası, yakalanmamış sayfa hatası, 400 ve üstü yanıt (beklenen 404 sayfaları hariç), ekranda
  * NaN / undefined / Infinity / [object Object] / Invalid Date, yatay taşma (masaüstü ve 375 px), 10 sn'den uzun API (uyarı).
@@ -17,6 +19,13 @@ import { chromium, type Page } from "playwright-core";
 
 const BASE = (process.env.SMOKE_BASE ?? "http://localhost:3000").replace(/\/$/, "");
 const ALL = process.argv.includes("--all");
+// Yalnız etkilenen sayfalar (kullanıcı kararı 19.10.2026): tek sayfa değişikliğinde tam tur yerine
+const ONLY = process.argv.includes("--only")
+  ? (process.argv[process.argv.indexOf("--only") + 1] ?? "")
+      .split(",")
+      .map((x) => x.trim().toLocaleLowerCase("tr-TR"))
+      .filter(Boolean)
+  : null;
 const LOAD_TIMEOUT_MS = 120_000;
 const SLOW_API_MS = 10_000;
 const BAD_TEXT = /.{0,40}(NaN|undefined|Infinity|\[object Object\]|Invalid Date).{0,40}/g;
@@ -138,6 +147,18 @@ for (const [url, label] of [
   [`/projects/${bySize[0].id}/forecast`, "Üretim tahmini"],
 ] as const)
   checks.push({ url, label: `📱 ${label}`, mobile: true });
+
+if (ONLY) {
+  const hit = (c: Check) => ONLY.some((o) => c.url.toLocaleLowerCase("tr-TR").includes(o) || c.label.toLocaleLowerCase("tr-TR").includes(o));
+  const kept = checks.filter(hit);
+  // Seçilen her sayfanın telefon genişliği de denenir
+  for (const c of kept.filter((c) => !c.mobile && !c.expect404)) if (!kept.some((k) => k.mobile && k.url === c.url)) kept.push({ ...c, label: `📱 ${c.label}`, mobile: true });
+  if (!kept.length) {
+    console.error(`--only ${ONLY.join(",")}: eşleşen sayfa yok`);
+    process.exit(2);
+  }
+  checks.splice(0, checks.length, ...kept);
+}
 
 // --- Çalıştır ---
 const browser = await chromium.launch({ channel: "chrome", headless: true });
