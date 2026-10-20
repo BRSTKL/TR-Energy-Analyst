@@ -910,6 +910,52 @@ Sıra: 23.0 → 23.1 → 23.2 (kayıt ve karne erken başlasın, kanıt birikir)
   - **Önce deneme:** Gain ve Inavitas'ın ~20 hidro santrali için 2021–2025 UEVM; soru: bir sonraki yılın üretimini "geçen yıl" mı "çok yıllık ortalama" mı daha iyi tahmin ediyor, fark ne kadar? Ortalama belirgin iyiyse bütün projelerin hidroları, ardından KGÜP ve piyasa verisi (MarketData 2021–2023) çekilir; değilse büyük çekim yapılmaz, ekranda kurak / yağışlı senaryo yeterli.
   - **Riskler:** veri hacmi (~300 santral × 4 yıl × 3 seri; EPİAŞ VPN kopuyor, sektör turu 22 saat sürmüştü; yalnız hidro UEVM ile küçülür); 2021–2023'te santral bazında verinin biçimi ve tamlığı önce kontrol edilmeli (santral yoktu ya da başka uzlaştırma birimindeydi). Eski yılların farklı kuralı sorun değil: hesap her günü seçilen kuralla yeniden fiyatlar.
   - VPN açıkken yapılır.
+- [ ] **EPDK lisans kurulu gücü: ikinci resmî kaynak (TASLAK, 15.10.2026, onay bekliyor).** Kural ve veritabanı değişmedi. Analiz: `scripts/epdk-capacity-compare.mts` (yalnız okur; EPDK dışa aktarımı `.cache/epdk/solar-licenses.json`, 196 güneş lisansı, "Ana Kaynak = Güneş"; YEKDEM önbelleği; havuzdaki 2025–2026 en yüksek saatlik UEVM). Hedef: 65 lisanslı güneş santrali (35 proje, 30 yalnız sektör karnesi 2025/2026); mevcut kaynak: 24 `EPIAS_YEKDEM`, 41 `PEAK_ESTIMATE` (2.600 MW). Ad eşleşmesi location-autofill `--epdk` ile aynı (`nameTokens`, `plantNumbers`): 59 santral eşleşti (58 tek tesis, 1 belirsiz: ARTUKLU-1), 6 eşleşmedi.
+  - **Bulgu 1: EPDK MWe = YEKDEM kurulu gücü.** YEKDEM'li ve EPDK'da eşleşen 20 santralin 20'sinde lisans MWe, YEKDEM MW ile birebir aynı (YEKDEM listesi elektriksel güç, MWe). En yüksek üretim / MWe 0,91–1,09. Yani EPDK, YEKDEM'i doğruluyor; yeni bilgi yalnız YEKDEM'e girmemiş santrallerde.
+  - **Bulgu 2: işletmedeki MWe ek bilgi vermiyor.** Yürürlükteki 150 lisansın 67'sinde işletmedeki MWe > 0 ve hepsinde lisans MWe'ye eşit; kısmi işletme (0 < işletmede < MWe) yok. Fark yalnız 2 sonlandırılmış lisansta (FERNAS-4 8,42 / 20; OZE 27,71 / 29). Pratikte "işletmede mi" bayrağı; kurulu güç için lisans MWe ile aynı sayı. MWm (DC, panel gücü) / MWe medyan 1,30 (1,00–1,75).
+  - **Bulgu 3: 41 tahminin 25'i EPDK ile çözülür** (en yüksek üretim ≤ MWe × 1,10, kuralın mevcut eşiği; düşük üretim kontrolü de geçer). Hepsi YEKDEM'e hiç girmemiş santraller: YEKA G3 / G4 (Viranşehir 1–10, Erzin 1–2, Gaziantep 1-1/2-1/3-1, Ağrı 1-2/2-2, Bor-1), Karapınar YEKA-1, yeni lisanslılar (Aliağa-1, G24-Kütahya, Iğdır DGES, Nepsun Hadim, Tozor, Yeni GES). Toplam tahmin 2.131,7 MW → EPDK 2.120,0 MW (−%0,5); en büyük farklar Viranşehir-1 44,8 → 50 (tahmin %10 düşük), Ağrı 1-2 / 2-2 14,2 → 15, Tozor 9,4 → 10 (96 saat veri), Gaziantep-3-1 10,7 → 10 (üretim MWe'yi %6 aşıyor). Eşleştirme düzeltmesiyle 2 tane daha: G4-BOR2 / G4-BOR3 (EPDK adı "G4-BOR-2 / -3 GES", 100 MWe; "bor2" kelimesi ayrılmadığı için eşleşmedi) ve ARTUKLU-1 (yürürlükte "ARTUKLU-1 DEPOLAMALI GES" 40 MWe ile numara uyuşuyor; "ARTUKLU MÜSTAKİL DGES" 60 MWe numarasız, henüz işletmede değil) → **28 / 41**.
+  - **Bulgu 4: 13 tahmin EPDK ile de çözülmez.** 12'sinde YEKDEM kaydı zaten var ve EPDK MWe aynı sayı; üretim bunu %10–32 aşıyor (Alages Adilcevaz 1,17; Alibeyhöyüğü 1,10; Fernas-4 1,32; Gitaş-1 1,20; Kıvanç-2 1,13; Küçükköy 1,18; Metges Burdur 1,20; Serra 1,11; Silopi 1,17; Özgüçlü 1,17; Özmen-1 1,22; Solana Konya 1,30). Lisans bugün de eski MWe'yi gösterdiği için "YEKDEM'den sonra kapasite artışı" açıklaması lisansa yansımamış: üretim MWe'yi aşıyor ama 10'unda MWm'nin altında (0,68–0,85). Alibeyhöyüğü (MWm = MWe = 18; 19,86) ve Solana Konya (2,24; 2,9) MWm'yi de aşıyor: aynı ölçüm noktasında başka birim olabilir. 13. OZE DEPOLAMALI GES: 40,67 / 29 MWe (1,40); depolamalı tesis, depolama birimi bu dışa aktarımda yok. Bunlarda mevcut alt sınır (en yüksek üretim) doğru kalır; EPDK yalnız kaynak notuna "lisans MWe X, MWm Y" olarak eklenebilir.
+  - **Eşleşmeyen 6:** MT GES, ME-SE GES (ad kelimesi 3 harften kısa, `nameTokens` atıyor; ikisi de YEKDEM'li, EPDK 9,98 / 9,9 MWe aynı), BÜGET GES (ULUDER) / (KAROMAD) (EPDK'da iki "BÜGET GES", Afşin, 10 ve 7 MWe; ad tek başına ayırt etmiyor, YEKDEM şirketle çözüyor), G4-BOR2 / BOR3 (yukarıda).
+  - **Karşılaştırma tablosu (PEAK_ESTIMATE, 41):**
+
+    | Santral | Kapsam | Mevcut (tahmin) MW | En yüksek üretim | EPDK MWm / MWe | Üretim / MWe | EPDK ile |
+    |---|---|---|---|---|---|---|
+    | G4-VİRANŞEHİR-1 … 10 (10 santral) | proje 2, sektör 8 | 44,8–51,2 | 47,5–51,2 | 53–65 / 50 | 0,95–1,02 | çözülür |
+    | G4-ERZİN-1 / -2 | sektör | 99,9 / 100,1 | 99,8 / 100,0 | 140 ve 135,7 / 100 | 1,00 | çözülür |
+    | G4-BOR-1 | proje | 99,9 | 99,85 | 130,5 / 100 | 1,00 | çözülür |
+    | G4-BOR2 / G4-BOR3 | proje / sektör | 100 / 100 | 100 / 99,97 | 130,2 / 100 | 1,00 | eşleştirme düzeltilirse |
+    | G3-GAZİANTEP-1-1 / 2-1 / 3-1 | sektör | 20,5 / 20,9 / 10,7 | 20,5 / 20,9 / 10,6 | 26 / 20; 13 / 10 | 1,02–1,06 | çözülür |
+    | G3-AĞRI-1-2 / 2-2 | proje | 14,2 / 14,2 | 14,2 / 14,2 | 18 / 15 | 0,94 | çözülür |
+    | KARAPINAR YEKA-1 | sektör | 1.015,7 | 1.015,6 | 1.350 / 1.000 | 1,02 | çözülür |
+    | G24-KÜTAHYA | proje | 39,5 | 39,4 | 55 / 40 | 0,99 | çözülür |
+    | IĞDIR DGES | proje | 95 | 95 | 132 / 95 | 1,00 | çözülür |
+    | ALİAĞA-1 | proje | 20 | 20 | 28,1 / 20 | 1,00 | çözülür |
+    | NEPSUN HADİM | proje | 24,7 | 24,65 | 35 / 25 | 0,99 | çözülür |
+    | YENİ GES | proje | 50 | 50 | 72 / 50 | 1,00 | çözülür |
+    | TOZOR | proje | 9,4 | 9,3 | 11,6 / 10 | 0,93 | çözülür |
+    | ARTUKLU-1 | proje | 38,2 | 38,2 | 54 / 40 | 0,95 | numara kuralıyla |
+    | ALAGES ADİLCEVAZ | proje | 18,7 | 18,7 | 24,2 / 16 | 1,17 | aşar (YEKDEM = EPDK) |
+    | ALİBEYHÖYÜĞÜ | proje | 19,9 | 19,9 | 18 / 18 | 1,10 | aşar |
+    | GİTAŞ-1 | proje | 9,6 | 9,6 | 14 / 8 | 1,20 | aşar |
+    | METGES BURDUR | proje | 7,2 | 7,2 | 10,5 / 6 | 1,20 | aşar |
+    | SERRA | proje | 6,3 | 6,2 | 8,1 / 5,6 | 1,11 | aşar |
+    | SİLOPİ | proje | 8,2 | 8,2 | 10,4 / 7 | 1,17 | aşar |
+    | ÖZGÜÇLÜ | proje | 11,8 | 11,7 | 14 / 9,99 | 1,17 | aşar |
+    | ÖZMEN-1 | proje | 17,2 | 17,1 | 20,2 / 14 | 1,22 | aşar |
+    | FERNAS-4 | sektör | 26,5 | 26,5 | 35 / 20 | 1,32 | aşar |
+    | KIVANÇ-2 | sektör | 39,5 | 39,4 | 52,5 / 35 | 1,13 | aşar |
+    | KÜÇÜKKÖY | sektör | 21,9 | 21,9 | 31,2 / 18,61 | 1,18 | aşar |
+    | SOLANA KONYA | sektör | 2,9 | 2,9 | 2,24 / 2,24 | 1,30 | aşar (MWm'yi de) |
+    | OZE DEPOLAMALI | sektör | 40,7 | 40,7 | 49,2 / 29 | 1,40 | aşar (depolama) |
+
+    Proje santralleri: 21 tahminin 11'i çözülür (+ ARTUKLU-1, G4-BOR2 eşleştirme düzeltmesiyle 13); sektör: 20 tahminin 14'ü (+ G4-BOR3 ile 15).
+  - **Değerlendirme:** EPDK lisansı YEKDEM kadar resmî ve ondan geniş (YEKDEM'e girmemiş YEKA ve yeni santralleri de kapsar); lisans MWe, YEKDEM'in kullandığı sayının aynısı. İşletmedeki MWe bu dışa aktarımda lisans MWe'den daha doğru değil (aynı sayı ya da 0). Zayıf yanları: (1) dışa aktarım elle ve tek seferlik (sorgu ekranı reCAPTCHA istiyor, otomatik güncellenemez; yalnız güneş, yalnız 196 lisans), (2) lisansta şirket adı yok (ad + il / ilçe ile eşleşir; aynı adlı lisanslar BÜGET gibi ayrılamaz), (3) MWe'yi aşan üretimi (Bulgu 4) açıklamıyor.
+  - **Öneri (onay gerekir):**
+    1. `CapacitySource`'a `EPDK_LICENSE` eklenir; sıra: `USER` > `EPIAS_YEKDEM` > `EPDK_LICENSE` > `PEAK_ESTIMATE`. EPDK yalnız YEKDEM kaydı bulunamayan santralde kullanılır; aynı %10 aşım ve %30 düşük üretim kuralları geçerli. Kurulu güç = yürürlükteki lisansın MWe'si; `capacityRef`: "EPDK lisans EÜ/…, <tesis>, <il>/<ilçe>, MWe X (MWm Y); EPDK dışa aktarımı 2026-10-15".
+    2. Eşleştirme: location-autofill `--epdk` ile aynı ad kuralı + yürürlükteki lisans önce + numaralı adda numarası uyan lisans önce (ARTUKLU-1) + "bor2" gibi harf-sayı bitişik kelimeler ayrılır. Aynı ada birden çok farklı MWe'li yürürlükte lisans düşerse eşleşme yapılmaz (BÜGET).
+    3. Etki: 28 tahmin (proje 13, sektör 15) resmî kayda geçer; Ek A'daki `~` ve `npm run check:reports` `capacity-estimate` hataları bu santrallerde kalkar. 13 santral alt sınırda kalır; kaynak notlarına EPDK MWe / MWm eklenir ("lisans MWe X, üretim aşıyor").
+    4. Kod: kural `lib/epias-plant/installed-capacity.ts`'e (saf eşleştirme), dosya okuma `lib/services/installed-capacity.ts`'e; CLAUDE.md "Kurulu güç" bölümü güncellenir; backfill betiği EPDK kaynağını da raporlar. Rüzgâr / hidro için ayrı EPDK dışa aktarımı gerekir (kullanıcı yapar).
+    5. Açık soru (kullanıcı): Bulgu 4'teki 12 santralde üretim neden lisans MWe'sini aşıyor? EPDK ekranında 1–2 tanesi için "Yardımcı Kaynak" satırı ve tadil geçmişine bakılabilir; dışa aktarım yalnız "Ana Kaynak" satırlarını içeriyor.
 
 ## 4. İlerleme kaydı
 | Tarih | Adım | Commit | Not |
