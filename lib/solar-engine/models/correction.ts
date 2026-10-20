@@ -11,7 +11,9 @@
  *   (üretim en geç D-3: gerçek zamanlı üretim iki gün gecikir, kesim D-1 12:30; info-time productionFeature ile denetlenir).
  * Eğitim satırları: üretimi ve tahmini olan gündüz saatleri; sıfır fiyatlı ve uyduyla kayıp saatler çağıranın süzgecinde.
  * Tahminler örneklem dışı olmalı (her ay kendinden önceki pencereyle kurulan modelin tahmini): örneklem içi artık
- * küçük ve yanlıdır. SAF: I/O yok.
+ * küçük ve yanlıdır.
+ * Kazancın kaynağı (güneş sıradaki işler 4 d): `drop` ile "son günlerin hatası" ya da "yılın günü" özellikleri sabitlenir
+ * (ağaç onları kullanamaz); yalnız geriye dönük test içindir, canlı varsayılan boş. SAF: I/O yok.
  */
 
 import { fitGbm, type GbmModel, type GbmOptions } from "./gbm";
@@ -28,6 +30,8 @@ export const RECENT_TO_DAYS = 3;
 /** Bundan az eğitim satırında düzeltme kurulmaz (≈ 4 ayın gündüz saatleri) */
 export const MIN_CORRECTION_ROWS = 1500;
 export const CORRECTION_GBM: GbmOptions = { trees: 150, depth: 3, learningRate: 0.05, minLeaf: 40, subsample: 0.8, bins: 32, seed: 1 };
+/** Çıkarılabilen özellik grupları (geriye dönük test) */
+export type CorrectionDrop = "recent" | "doy";
 
 export interface CorrectionInput {
   h: SolarHourV2;
@@ -41,7 +45,7 @@ export interface CorrectionInput {
 
 const dayOf = (t: number) => Math.floor(t / DAY) * DAY;
 
-function features(r: CorrectionInput, site: SolarSite, cap: number): number[] | null {
+function features(r: CorrectionInput, site: SolarSite, cap: number, drop: CorrectionDrop[] = []): number[] | null {
   const h = r.h;
   if (h.ghi === null || h.temp === null || h.cloud === null) return null;
   const cs = clearSkyGhiHour(site.latitude, site.longitude, h.t);
@@ -51,7 +55,19 @@ function features(r: CorrectionInput, site: SolarSite, cap: number): number[] | 
   const doy = (dayOf(h.t) - Date.UTC(d.getUTCFullYear(), 0, 1)) / DAY;
   const g = (r.ghis ?? []).filter((v): v is number => v !== null);
   const spread = g.length >= 2 && cs > 20 ? (Math.max(...g) - Math.min(...g)) / cs : 0;
-  return [d.getUTCHours(), Math.sin((2 * Math.PI * doy) / 365.25), Math.cos((2 * Math.PI * doy) / 365.25), cz, kt, h.cloud / 100, h.temp, r.pred / cap, spread, r.recent ?? 0];
+  const noDoy = drop.includes("doy");
+  return [
+    d.getUTCHours(),
+    noDoy ? 0 : Math.sin((2 * Math.PI * doy) / 365.25),
+    noDoy ? 0 : Math.cos((2 * Math.PI * doy) / 365.25),
+    cz,
+    kt,
+    h.cloud / 100,
+    h.temp,
+    r.pred / cap,
+    spread,
+    drop.includes("recent") ? 0 : (r.recent ?? 0),
+  ];
 }
 
 /** Hedef günün "son günlerin hatası": tahmin serisinden (saat → tahmin, gerçekleşen) gündüz saatlerinin ortalaması */
@@ -80,7 +96,13 @@ export interface CorrectionModel {
 }
 
 /** Örneklem dışı tahminlerin geçmişinden düzeltme modeli; satır azsa null (tahmin olduğu gibi kalır) */
-export function fitCorrection(rows: Array<CorrectionInput & { actual: number }>, site: SolarSite, cap: number, opts: GbmOptions = CORRECTION_GBM): CorrectionModel | null {
+export function fitCorrection(
+  rows: Array<CorrectionInput & { actual: number }>,
+  site: SolarSite,
+  cap: number,
+  opts: GbmOptions = CORRECTION_GBM,
+  drop: CorrectionDrop[] = []
+): CorrectionModel | null {
   if (cap <= 0) return null;
   const X: number[][] = [];
   const y: number[] = [];
@@ -88,7 +110,7 @@ export function fitCorrection(rows: Array<CorrectionInput & { actual: number }>,
     if (r.h.live) throw new Error("Canlı tahmin saati eğitime giremez");
     if (r.pred <= 0.01 * cap && r.actual <= 0.01 * cap) continue; // gece ve sıfır saatler
     assertRecentAvailable(r.h.t);
-    const x = features(r, site, cap);
+    const x = features(r, site, cap, drop);
     if (!x) continue;
     X.push(x);
     y.push((r.actual - r.pred) / cap);
@@ -101,7 +123,7 @@ export function fitCorrection(rows: Array<CorrectionInput & { actual: number }>,
     apply: (r) => {
       if (!r.h.live) assertRecentAvailable(r.h.t);
       if (r.pred <= 0) return r.pred;
-      const x = features(r, site, cap);
+      const x = features(r, site, cap, drop);
       if (!x) return r.pred;
       return Math.min(Math.max(cap, r.pred), Math.max(0, r.pred + cap * gbm.predict(x)));
     },

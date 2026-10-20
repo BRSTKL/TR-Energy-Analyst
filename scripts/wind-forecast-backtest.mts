@@ -8,8 +8,15 @@
  * KÜPST). Saat kümeleri: tüm saatler, sıfır fiyat hariç, ve ADİL: kayıp saatleri (lib/services/wind-loss.ts; geçmiş
  * rüzgârla işaretlenen planlı kısıntı ve iki kaynaklı ≥ 6 saatlik plansız kayıp) bütün adaylardan çıkarılır.
  * Geçmiş tahminler önce `scripts/wind-forecast-sync.mts` ile çekilmiş olmalı. EPİAŞ'a gidilmez.
+ * Rüzgâr motoru adayı (Aşama 23.2): "model + yoğunluk" aynı güç eğrisini hava yoğunluğuna göre eşdeğer hızla kurar
+ * (lib/wind-engine/models/baseline.ts; d2 sıcaklık ve basınç, arşivde yoksa yoğunluksuzla aynı). Adaylar eşleştirilmiş
+ * saatlerde değerlendirilir: eski sonuçtan birkaç saat farklı olabilir.
+ * `--models` (Aşama 23.4): ICON-EU ve GFS rüzgârıyla (scripts/wind-models-sync.mts) her model kendi eğrisiyle ve üç
+ * birleşim (lib/wind-engine/models/ensemble.ts: ortalama, hız ortalaması, ağırlıklı; ağırlık eğitimin son ayından). Bu
+ * seçenekte bütün adaylar üç modelin de verisi olan ortak saatlerde değerlendirilir; modellerin hız ayrışması dilimine göre
+ * hata ayrıca yazılır.
  *
- *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/wind-forecast-backtest.mts [sonAy=karnedeki son tam ay]
+ *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/wind-forecast-backtest.mts [sonAy=karnedeki son tam ay] [--models]
  * Çıktı: .cache/forecast/wind-backtest.json
  */
 
@@ -18,7 +25,11 @@ import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import type { MarketPriceRecord, SystemDirection } from "@/lib/calculations/types";
 import { evaluateForecasts, type CandidateResult } from "@/lib/forecast/production-backtest";
-import { fitWindForecast, type WindFcHour } from "@/lib/forecast/wind-forecast";
+import { fitWindForecast } from "@/lib/forecast/wind-forecast";
+import { fitWindBaseline, type WindEngineHour } from "@/lib/wind-engine/models/baseline";
+import { fitWindEnsemble, type WindEnsembleModel, type WindEnsemblePrediction } from "@/lib/wind-engine/models/ensemble";
+import { hubWind, WIND_NWP_MODELS, type WindNwpYear } from "@/lib/weather/wind-nwp-archive";
+import { readWindNwpYear } from "@/lib/weather/weather-store";
 import { hourMeanWind } from "@/lib/forecast/wind-loss";
 import { readPoolPlantInfo, readPoolYear } from "@/lib/pool/pool-store";
 import { windLossStates } from "@/lib/services/wind-loss";
@@ -32,7 +43,8 @@ const defaultEnd = (() => {
   const e = karnePeriodEnd(y);
   return e ? `${y}-${String(lastFullMonth(e)).padStart(2, "0")}` : `${y}-08`;
 })();
-const [ly, lm] = (process.argv[2] ?? defaultEnd).split("-").map(Number);
+const MODELS = process.argv.includes("--models");
+const [ly, lm] = (process.argv.slice(2).find((a) => /^\d{4}-\d{2}$/.test(a)) ?? defaultEnd).split("-").map(Number);
 const TRAIN_FROM = Date.UTC(2025, 0, 1);
 const FIRST_TEST = { y: 2025, m: 4 };
 const months: Array<{ y: number; m: number }> = [];
@@ -46,7 +58,18 @@ const market = new Map<number, MarketPriceRecord>(
   ])
 );
 
-type Hour = WindFcHour & { kgupFinal: number | null; lag48: number | null; fcD2: number | null; fcD1: number | null };
+type Hour = WindEngineHour & {
+  kgupFinal: number | null;
+  lag48: number | null;
+  fcD2: number | null;
+  fcD1: number | null;
+  fcRho: number | null;
+  src: Partial<Record<"ecmwf_ifs025" | "icon_eu" | "gfs_global", { ws: number | null; dir: number | null }>>;
+  ens: WindEnsemblePrediction | null;
+};
+/** Hız ayrışması dilimleri (m/s) ve dilime göre MWh mutlak hata (ağırlıklı birleşim) */
+const SPREAD_EDGES = [1, 2, 3];
+const spreadErr = SPREAD_EDGES.concat(Infinity).map(() => ({ hours: 0, abs: 0 }));
 type Sets = Record<string, Record<string, CandidateResult>>;
 const plants = new Map(
   (await prisma.powerPlant.findMany({ where: { type: "RES", projectId: { not: null }, epiasPlantId: { not: null }, latitude: { not: null } }, select: { epiasPlantId: true, name: true, capacityMw: true, capacitySource: true } })).map((r) => [
@@ -61,6 +84,9 @@ for (const [id, p] of plants) {
   if (!(await readPoolPlantInfo(id))?.location) continue;
   // Saatler: üretim, ilk / son KGÜP, PTF, 48 saat önceki üretim, d1 / d2 tahmin rüzgârı (saat ortalaması)
   const stamps = { d1: new Map<number, [number | null, number | null]>(), d2: new Map<number, [number | null, number | null]>() };
+  // Yoğunluk için damga başına sıcaklık, yüzey ve deniz seviyesi basıncı
+  const met = { d1: new Map<number, [number | null, number | null, number | null]>(), d2: new Map<number, [number | null, number | null, number | null]>() };
+  let elevation: number | null = null;
   const hours: Hour[] = [];
   const uevmAt = new Map<number, number | null>();
   for (let y = 2025; y <= ly; y++) {
@@ -68,14 +94,36 @@ for (const [id, p] of plants) {
     if (fc) {
       const s0 = Date.parse(fc.start);
       for (const l of ["d1", "d2"] as const) fc.ws[l].forEach((w, i) => stamps[l].set(s0 + i * HOUR, [w, fc.dir[l][i]]));
+      if (fc.temp) for (const l of ["d1", "d2"] as const) fc.temp[l].forEach((x, i) => met[l].set(s0 + i * HOUR, [x, fc.sp?.[l][i] ?? null, fc.msl?.[l][i] ?? null]));
+      if (typeof fc.elevation === "number") elevation = fc.elevation;
     }
   }
   if (!stamps.d2.size) continue;
+  // Ek modeller (--models): yıl → belge
+  const nwp = new Map<string, Map<number, WindNwpYear>>();
+  if (MODELS) {
+    for (const m of WIND_NWP_MODELS) {
+      const ys = new Map<number, WindNwpYear>();
+      for (let y = 2025; y <= ly; y++) {
+        const d = await readWindNwpYear(id, m, y);
+        if (d) ys.set(y, d);
+      }
+      nwp.set(m, ys);
+    }
+    if ([...nwp.values()].some((ys) => !ys.size)) continue;
+  }
+  const nwpWind = (m: string, t: number) => {
+    const y = new Date(t).getUTCFullYear();
+    const d = nwp.get(m)?.get(y);
+    return d ? hubWind(d, t, nwp.get(m)?.get(y + 1)) : { ws: null, dir: null };
+  };
   const mean = (l: "d1" | "d2", t: number) => {
     const a = stamps[l].get(t);
     const b = stamps[l].get(t + HOUR);
     return hourMeanWind(a?.[0] ?? null, b?.[0] ?? null, a?.[1] ?? null, b?.[1] ?? null);
   };
+  const avg = (x: number | null | undefined, y: number | null | undefined) => (x == null || y == null ? (x ?? y ?? null) : (x + y) / 2);
+  const metMean = (l: "d1" | "d2", t: number, k: 0 | 1 | 2) => avg(met[l].get(t)?.[k], met[l].get(t + HOUR)?.[k]);
   for (let y = 2025; y <= ly; y++) {
     const d = await readPoolYear(id, y);
     if (!d) continue;
@@ -87,7 +135,7 @@ for (const [id, p] of plants) {
       uevmAt.set(t, u);
       const w1 = mean("d1", t);
       const w2 = mean("d2", t);
-      hours.push({ t, uevm: u, kgupFirst: d.kgupFirst[i], kgupFinal: d.kgupFinal?.[i] ?? null, ptf: market.get(t)?.ptf ?? null, ws: { d1: w1.ws, d2: w2.ws }, dir: { d1: w1.dir, d2: w2.dir }, lag48: null, fcD2: null, fcD1: null });
+      hours.push({ t, uevm: u, kgupFirst: d.kgupFirst[i], kgupFinal: d.kgupFinal?.[i] ?? null, ptf: market.get(t)?.ptf ?? null, ws: { d1: w1.ws, d2: w2.ws }, dir: { d1: w1.dir, d2: w2.dir }, temp: { d1: metMean("d1", t, 0), d2: metMean("d2", t, 0) }, pressure: { d1: metMean("d1", t, 1), d2: metMean("d2", t, 1) }, msl: { d1: metMean("d1", t, 2), d2: metMean("d2", t, 2) }, lag48: null, fcD2: null, fcD1: null, fcRho: null, src: MODELS ? { ecmwf_ifs025: w2, icon_eu: nwpWind("icon_eu", t), gfs_global: nwpWind("gfs_global", t) } : {}, ens: null });
     }
   }
   for (const h of hours) h.lag48 = uevmAt.get(h.t - 48 * HOUR) ?? null;
@@ -100,22 +148,48 @@ for (const [id, p] of plants) {
     const train = hours.filter((h) => h.t < trainingEnd);
     let d2: ReturnType<typeof fitWindForecast>;
     let d1: ReturnType<typeof fitWindForecast>;
+    let rho: ReturnType<typeof fitWindBaseline>;
+    let ens: WindEnsembleModel | null = null;
     try {
+      if (MODELS) ens = fitWindEnsemble(train, p.capacityMw, { trainingEnd, validationFrom: Date.UTC(y, m - 2, 1) });
       d2 = fitWindForecast(train, p.capacityMw, { lead: "d2", trainingEnd });
+      rho = fitWindBaseline(train, p.capacityMw, { lead: "d2", trainingEnd, density: true, elevationM: elevation });
       d1 = fitWindForecast(train, p.capacityMw, { lead: "d1", trainingEnd, leak: true });
     } catch (e) {
       if ((e as Error).name === "LeakageError") throw e;
       continue; // eğitim verisi yetersiz (devreye alma öncesi)
     }
     used++;
-    for (const h of hours) if (h.t >= from && h.t < to) tested.push({ ...h, fcD2: d2.predict(h), fcD1: d1.predict(h) });
+    for (const h of hours) if (h.t >= from && h.t < to) tested.push({ ...h, fcD2: d2.predict(h), fcD1: d1.predict(h), fcRho: rho.predict(h), ens: ens ? ens.predict(h) : null });
   }
   if (!tested.length) continue;
   const states = await windLossStates(id, p.capacityMw, p.capacitySource);
   const state = (h: Hour) => states?.get(h.t);
   // Ana adaylar; d1 (sızıntılı üst sınır) ayrı çağrıda, ana adayların saatleriyle (ana kümeyi daraltmasın; denetim 18.10)
-  const candidates = { "rüzgâr modeli": (h: Hour) => h.fcD2, "ilk KGÜP": (h: Hour) => h.kgupFirst, "D-2": (h: Hour) => h.lag48 };
-  const mainHours = (h: Hour) => h.fcD2 !== null && h.kgupFirst !== null && h.lag48 !== null;
+  const candidates: Record<string, (h: Hour) => number | null> = {
+    "rüzgâr modeli": (h: Hour) => h.fcD2,
+    "model + yoğunluk": (h: Hour) => h.fcRho,
+    "ilk KGÜP": (h: Hour) => h.kgupFirst,
+    "D-2": (h: Hour) => h.lag48,
+    ...(MODELS
+      ? {
+          "ICON-EU": (h: Hour) => h.ens?.sources[1] ?? null,
+          GFS: (h: Hour) => h.ens?.sources[2] ?? null,
+          "birleşim ort.": (h: Hour) => h.ens?.mean ?? null,
+          "birleşim hız": (h: Hour) => h.ens?.speed ?? null,
+          "birleşim ağırlıklı": (h: Hour) => h.ens?.weighted ?? null,
+        }
+      : {}),
+  };
+  const mainHours = (h: Hour) => Object.values(candidates).every((f) => f(h) !== null);
+  if (MODELS)
+    for (const h of tested) {
+      // Ana tabloyla aynı saatler (eşleştirilmiş küme)
+      if (h.uevm === null || !mainHours(h) || h.ens?.weighted == null || h.ens.spreadMs === null) continue;
+      const b = spreadErr[SPREAD_EDGES.filter((e) => h.ens!.spreadMs! >= e).length];
+      b.hours++;
+      b.abs += Math.abs(h.ens.weighted - h.uevm);
+    }
   const withUpper = (filter: (h: Hour) => boolean) => ({
     ...evaluateForecasts(tested, candidates, market, "RES", filter),
     "rüzgâr modeli d1 (üst sınır)": evaluateForecasts(tested, { d1: (h: Hour) => (mainHours(h) ? h.fcD1 : null) }, market, "RES", filter).d1,
@@ -141,7 +215,8 @@ for (const [id, p] of plants) {
 
 fs.mkdirSync(path.join(process.cwd(), ".cache", "forecast"), { recursive: true });
 fs.writeFileSync(
-  path.join(process.cwd(), ".cache", "forecast", "wind-backtest.json"),
+  // --models ortak saat kümesiyle ve daha az santralle: ayrı dosya, iki çalışmanın rakamları karşılaştırılmaz
+  path.join(process.cwd(), ".cache", "forecast", MODELS ? "wind-backtest-models.json" : "wind-backtest.json"),
   JSON.stringify({ generatedAt: new Date().toISOString(), period: { from: `${FIRST_TEST.y}-${String(FIRST_TEST.m).padStart(2, "0")}`, to: `${ly}-${String(lm).padStart(2, "0")}` }, plants: results })
 );
 
@@ -155,10 +230,16 @@ const sum = (k: string, n: string, f: "totalTl" | "uevmMwh" | "hours") => result
 const maeW = (k: string, n: string) => results.reduce((s, r) => s + r.sets[k][n].maeMwh * r.sets[k][n].hours, 0) / Math.max(1, sum(k, n, "uevmMwh"));
 for (const k of Object.keys(SET_LABEL)) {
   console.log(`\n${SET_LABEL[k]} (${results.length} santral, ${sum(k, "ilk KGÜP", "hours")} saat):`);
-  for (const n of ["rüzgâr modeli", "ilk KGÜP", "D-2", "rüzgâr modeli d1 (üst sınır)"]) {
+  for (const n of ["rüzgâr modeli", "model + yoğunluk", ...(MODELS ? ["ICON-EU", "GFS", "birleşim ort.", "birleşim hız", "birleşim ağırlıklı"] : []), "ilk KGÜP", "D-2", "rüzgâr modeli d1 (üst sınır)"]) {
     const wins = n === "ilk KGÜP" ? "" : `  ilk KGÜP'ten ucuz santral ${results.filter((r) => r.sets[k][n].totalTl < r.sets[k]["ilk KGÜP"].totalTl).length} / ${results.length}`;
-    console.log(`  ${n.padEnd(30)} ${nf(sum(k, n, "totalTl") / 1e6, 2)} M TL  (${nf(sum(k, n, "totalTl") / sum(k, n, "uevmMwh"))} TL/MWh, hata %${nf(maeW(k, n) * 100)})${wins}`);
+    const vsBase = n !== "rüzgâr modeli" && n !== "ilk KGÜP" && n !== "D-2" && !n.includes("üst sınır") ? `  rüzgâr modelinden ucuz santral ${results.filter((r) => r.sets[k][n].totalTl < r.sets[k]["rüzgâr modeli"].totalTl).length} / ${results.length}` : "";
+    console.log(`  ${n.padEnd(30)} ${nf(sum(k, n, "totalTl") / 1e6, 2)} M TL  (${nf(sum(k, n, "totalTl") / sum(k, n, "uevmMwh"))} TL/MWh, hata %${nf(maeW(k, n) * 100)})${wins}${vsBase}`);
   }
+}
+if (MODELS) {
+  console.log("\nModellerin hız ayrışmasına göre ağırlıklı birleşimin saatlik mutlak hatası (ana tablonun saatleri):");
+  const label = (i: number) => (i === 0 ? `< ${SPREAD_EDGES[0]}` : i === SPREAD_EDGES.length ? `≥ ${SPREAD_EDGES[i - 1]}` : `${SPREAD_EDGES[i - 1]}–${SPREAD_EDGES[i]}`);
+  spreadErr.forEach((b, i) => console.log(`  ${label(i).padEnd(6)} m/s: ${b.hours} saat, ${nf(b.abs / Math.max(1, b.hours), 2)} MWh`));
 }
 const fin = results.filter((r) => r.final["son KGÜP"].hours > 0);
 console.log(`\nReferans (son planı olan saatler, ${fin.length} santral): rüzgâr modeli ${nf(fin.reduce((s, r) => s + r.final["rüzgâr modeli"].totalTl, 0) / 1e6, 2)} M TL, son KGÜP ${nf(fin.reduce((s, r) => s + r.final["son KGÜP"].totalTl, 0) / 1e6, 2)} M TL`);

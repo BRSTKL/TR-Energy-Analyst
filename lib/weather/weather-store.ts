@@ -14,6 +14,7 @@ import type { SatelliteYear } from "./satellite";
 import type { WindModel, WindYear } from "./reanalysis-wind";
 import type { WindForecastYear } from "./wind-forecast-archive";
 import type { NwpModel, NwpYear } from "./nwp-models";
+import type { WindNwpModel, WindNwpYear } from "./wind-nwp-archive";
 
 export const weatherDir = (): string => path.join(poolDir(), "weather");
 const yearFile = (epiasPlantId: number, year: number) => path.join(weatherDir(), String(epiasPlantId), `${year}.json.gz`);
@@ -113,6 +114,30 @@ export async function readNwpYear(epiasPlantId: number, model: NwpModel, year: n
 
 export async function writeNwpYear(doc: NwpYear): Promise<void> {
   const file = nwpFile(doc.epiasPlantId, doc.model, doc.year);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  await fs.writeFile(tmp, gzipSync(JSON.stringify(doc)));
+  await fs.rename(tmp, file);
+}
+
+const windNwpFile = (epiasPlantId: number, model: WindNwpModel, year: number) => path.join(weatherDir(), String(epiasPlantId), `windnwp-${model}-${year}.json.gz`);
+
+/** Rüzgârda ek hava modelleri (wind-nwp-archive.ts, Aşama 23.4): aynı klasörde `windnwp-<model>-<yıl>.json.gz` */
+export async function readWindNwpYear(epiasPlantId: number, model: WindNwpModel, year: number): Promise<WindNwpYear | null> {
+  let doc: WindNwpYear;
+  try {
+    doc = JSON.parse(gunzipSync(await fs.readFile(windNwpFile(epiasPlantId, model, year))).toString("utf8"));
+  } catch (e: any) {
+    if (e?.code === "ENOENT") return null;
+    throw e;
+  }
+  // Yalnız 2 gün önceki sürüm temiz (bilgi anı)
+  if (doc.lead !== "d2") throw new Error(`#${epiasPlantId} ${model} ${year}: beklenmeyen sürüm ${doc.lead}`);
+  return doc;
+}
+
+export async function writeWindNwpYear(doc: WindNwpYear): Promise<void> {
+  const file = windNwpFile(doc.epiasPlantId, doc.model, doc.year);
   await fs.mkdir(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tmp, gzipSync(JSON.stringify(doc)));

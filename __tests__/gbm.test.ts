@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fitGbm } from "@/lib/solar-engine/models/gbm";
+import { fitGbm } from "@/lib/forecast/gbm";
 
 // Tohumlu veri: y = 2·[x0 > 0,5] + x1² + gürültü; x2 ilgisiz
 let s = 7;

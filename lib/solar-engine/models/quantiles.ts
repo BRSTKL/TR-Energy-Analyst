@@ -8,16 +8,21 @@
  * Maliyete göre teklif (`chooseBidQuantile`): dengesizlik fiyatları asimetrik (eksik üretim pozitif fiyattan, fazla üretim
  * negatif fiyattan; dönemin kuralı ve KÜPST lib/forecast/production-backtest.ts): geçmiş saatlerde aday çeyrekliklerin
  * gerçek maliyeti hesaplanır, en ucuzu seçilir. Önceki bulgu (2026-09 geriye dönük testi): miktar ayarı küçük kazanç verir,
- * 2026 katsayılarıyla daha da az; sonuç bu yüzden yalnız örneklem dışı ölçülür. SAF: I/O yok.
+ * 2026 katsayılarıyla daha da az; sonuç bu yüzden yalnız örneklem dışı ölçülür.
+ * Kalibrasyon (22.5 a2): `width` bandı medyan çevresinde genişletir (q = P50 + width × (ham q − P50); 1 = ham). Çarpan
+ * test döneminden AYRI bir dönemde seçilir (`chooseWidth`). `ceiling`: kırpma tavanı (ör. kayıtlı kurulu güç; varsayılan
+ * eğitim tavanı); tavan kırpması bahar aylarında kış tavanının altında kalan üretimi bandın dışına itiyordu. SAF: I/O yok.
  */
 
 export const LEVEL_EDGES = [0.2, 0.4, 0.6, 0.8];
 export const MIN_BIN_ROWS = 150;
 export const BID_QUANTILES = [0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7];
+/** Kalibrasyonda denenen genişlik çarpanları */
+export const WIDTHS = [1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.8, 2];
 
 export interface QuantileModel {
-  /** q ∈ (0, 1) çeyrekliği (MWh) */
-  quantile: (pred: number, q: number) => number;
+  /** q ∈ (0, 1) çeyrekliği (MWh); `width` bant çarpanı (varsayılan 1, ham) */
+  quantile: (pred: number, q: number, width?: number) => number;
   rows: number;
 }
 
@@ -32,7 +37,7 @@ function q(sorted: number[], p: number): number {
 }
 
 /** Geçmiş örneklem dışı (tahmin, gerçekleşen) çiftlerinden; satır azsa null */
-export function fitResidualQuantiles(rows: Array<{ pred: number; actual: number }>, cap: number): QuantileModel | null {
+export function fitResidualQuantiles(rows: Array<{ pred: number; actual: number }>, cap: number, opts: { ceiling?: number } = {}): QuantileModel | null {
   if (cap <= 0) return null;
   const bins: number[][] = Array.from({ length: LEVEL_EDGES.length + 1 }, () => []);
   const pooled: number[] = [];
@@ -47,11 +52,12 @@ export function fitResidualQuantiles(rows: Array<{ pred: number; actual: number 
   pooled.sort((a, c) => a - c);
   return {
     rows: pooled.length,
-    quantile: (pred, p) => {
+    quantile: (pred, p, width = 1) => {
       if (pred <= 0.01 * cap) return pred;
       const b = bins[binOf(pred / cap)];
-      const r = q(b.length >= MIN_BIN_ROWS ? b : pooled, p);
-      return Math.min(Math.max(cap, pred), Math.max(0, pred + cap * r));
+      const src = b.length >= MIN_BIN_ROWS ? b : pooled;
+      const r = width === 1 ? q(src, p) : q(src, 0.5) + width * (q(src, p) - q(src, 0.5));
+      return Math.min(Math.max(opts.ceiling ?? cap, pred), Math.max(0, pred + cap * r));
     },
   };
 }
@@ -70,4 +76,16 @@ export function chooseBidQuantile(cost: (q: number) => number, candidates: numbe
     }
   }
   return { q: best, costs };
+}
+
+/** Kapsaması hedefe (varsayılan %80) en yakın genişlik çarpanı; `coverage`: çarpan → [bant içi, saat] (seçim dönemi) */
+export function chooseWidth(coverage: (width: number) => [number, number], target = 0.8, widths: number[] = WIDTHS): { width: number; coverage: number } {
+  let best = { width: 1, coverage: NaN, gap: Infinity };
+  for (const w of widths) {
+    const [i, n] = coverage(w);
+    if (!n) continue;
+    const c = i / n;
+    if (Math.abs(c - target) < best.gap - 1e-12) best = { width: w, coverage: c, gap: Math.abs(c - target) };
+  }
+  return { width: best.width, coverage: best.coverage };
 }
