@@ -28,6 +28,12 @@ const STATUS: Record<LivePlantForecast["status"], string> = {
   "no-data": "eğitim verisi yok",
   error: "hata",
 };
+/** Değişim uyarıları (Aşama 22.7; lib/services/plant-change-warnings.ts) */
+const ALERT_LABEL: Record<string, string> = {
+  capacity_over: "Üretim kurulu gücü aşıyor",
+  capacity_under: "Üretim düştü",
+  long_outage: "Uzun arıza",
+};
 
 function HourlyChart({ hours, days }: { hours: Array<number | null>; days: string[] }) {
   const rows = Array.from({ length: 24 }, (_, h) => ({
@@ -212,6 +218,11 @@ export default function ForecastPage() {
                             </span>
                           )}
                           {p.warning && <div className="text-[11px] font-normal text-amber-700">Eğitim verisi az: tahmin kaba</div>}
+                          {p.alerts?.map((a) => (
+                            <div key={a.kind} className="max-w-xs whitespace-normal break-words text-[11px] font-normal text-red-700">
+                              {ALERT_LABEL[a.kind] ?? "Değişim uyarısı"}: {a.message}
+                            </div>
+                          ))}
                         </TableCell>
                         <TableCell className="text-right font-medium tabular-nums">{nf(p.daily![0])}</TableCell>
                         {data.days[1] && <TableCell className="text-right tabular-nums text-slate-600">{nf(p.daily![1])}</TableCell>}

@@ -14,7 +14,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fitSolarModelV2, type SolarHourV2 } from "@/lib/solar-engine/models/production-model-v2";
-import { trainingLossFilter } from "@/lib/forecast/curtailment";
+import { detectLostHours, trainingLossFilter } from "@/lib/forecast/curtailment";
+import { curtailedForecast, curtailmentRate } from "@/lib/forecast/zero-price";
 import { liveForecastUrl, liveWeatherHours } from "@/lib/weather/live-forecast";
 import type { OpenMeteoHourly } from "@/lib/weather/weather-codec";
 import { SATELLITE_DELAY_DAYS } from "@/lib/weather/satellite";
@@ -28,6 +29,7 @@ import { NWP_MODELS, type NwpYear } from "@/lib/weather/nwp-models";
 import { assertAvailable, productionFeature, type WeatherSource } from "@/lib/forecast/info-time";
 import { readNwpYear } from "@/lib/weather/weather-store";
 import { projectWeatherPlants } from "../services/weather-preview";
+import { readChangeWarnings } from "../services/plant-change-warnings";
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -49,6 +51,8 @@ export interface LivePlantForecast {
   message?: string;
   /** Eğitim saati azsa (yeni santral) uyarı */
   warning?: string;
+  /** Değişim uyarıları (Aşama 22.7; günlük akışın son hesabı, lib/services/plant-change-warnings.ts) */
+  alerts?: Array<{ kind: string; message: string }>;
   /** Saat başına MWh, yarın 00:00'dan (LIVE_DAYS × 24) */
   hours?: Array<number | null>;
   daily?: number[];
@@ -258,6 +262,12 @@ export async function forecastSolarPlant(
 /** Öğrenen düzeltme katmanının (Aşama 22.4) sürümleri: temel ve ağırlıklı birleşim, düzeltilmiş */
 export const CORRECTION_KINDS = ["base-corr", "weighted-corr"] as const;
 export type CorrectionKind = (typeof CORRECTION_KINDS)[number];
+/** Planlı kısıntı (Aşama 22.6): ağırlıklı+düzeltme tahmininden beklenen kısıntı düşülür */
+export const CURTAIL_KINDS = ["weighted-corr-curt"] as const;
+export type CurtailKind = (typeof CURTAIL_KINDS)[number];
+export type SolarEnsembleKind = EnsembleKind | CorrectionKind | CurtailKind;
+/** Kısma oranının geçmişi (gün; geriye dönük testte test ayından önceki 13 ay) */
+const CURTAIL_HISTORY_DAYS = 395;
 /** Düzeltme eğitiminin geçmişi (ay; içinde bulunulan ay dahil) */
 const CORRECTION_MONTHS = 13;
 
@@ -269,16 +279,20 @@ const CORRECTION_MONTHS = 13;
  * örneklem dışı hatası (learning/oos-series.ts) gradient boosting ile öğrenilir, yeni tahmine eklenir. Eğitim satırları
  * eğitim penceresinin sonuna kadar (geçici üretim dahil; trainingLossFilter son günleri ve uyduyla kayıp saatleri çıkarır),
  * son günlerin hatası hedef günden 9–3 gün önce. Geçmiş yetersizse düzeltme sürümleri "no-data".
+ * Planlı kısıntı (Aşama 22.6, lib/forecast/zero-price.ts): `opts.zeroPrice` (günlük akışın bütün santraller için bir kez
+ * kurduğu hedef günün saatlik sıfır fiyat olasılığı; gündüz saatleri) × santralin kısma oranı (son 13 ayın sıfır fiyatlı
+ * saatlerinde uyduyla beklenen üretime göre kayıp; yalnız uydu etiket gecikmesinden önceki ve eğitim sonundan önceki saatler)
+ * ağırlıklı+düzeltme tahmininden düşülür. Olasılık verilmezse (D-1 PTF'si yok, model kurulamadı) sürüm "no-data".
  */
 export async function forecastSolarEnsemble(
   epiasPlantId: number,
   from: number,
   count: number,
-  opts: { now?: number; fresh?: boolean } = {}
-): Promise<Record<EnsembleKind | CorrectionKind, SolarPlantForecast>> {
+  opts: { now?: number; fresh?: boolean; zeroPrice?: Map<number, number> | null } = {}
+): Promise<Record<SolarEnsembleKind, SolarPlantForecast>> {
   const now = opts.now ?? Date.now();
-  const KINDS = [...ENSEMBLE_KINDS, ...CORRECTION_KINDS];
-  const all = (f: SolarPlantForecast) => Object.fromEntries(KINDS.map((k) => [k, f])) as Record<EnsembleKind | CorrectionKind, SolarPlantForecast>;
+  const KINDS = [...ENSEMBLE_KINDS, ...CORRECTION_KINDS, ...CURTAIL_KINDS];
+  const all = (f: SolarPlantForecast) => Object.fromEntries(KINDS.map((k) => [k, f])) as Record<SolarEnsembleKind, SolarPlantForecast>;
   try {
     const loc = (await readPoolPlantInfo(epiasPlantId))?.location;
     if (!loc) throw new Error("Havuzda konum yok");
@@ -331,7 +345,7 @@ export async function forecastSolarEnsemble(
     };
     const common = { modelSpread, train, weatherFetchedAt: [w.fetchedAt, x.fetchedAt].sort()[0], location: { latitude: loc.latitude, longitude: loc.longitude, locationSource: loc.locationSource } };
     const out = Object.fromEntries(ENSEMBLE_KINDS.map((k) => [k, { status: "ok", hours: preds.map((p) => round(p[k])), ...common } satisfies SolarPlantForecast])) as Record<
-      EnsembleKind | CorrectionKind,
+      SolarEnsembleKind,
       SolarPlantForecast
     >;
 
@@ -375,8 +389,30 @@ export async function forecastSolarEnsemble(
         });
         out[kind] = { status: "ok", hours, ...common, train: { ...train, mount: `${train.mount}; düzeltme ${corr.rows} saat` } };
       }
+
+      // Planlı kısıntı: ağırlıklı+düzeltme × (1 − P(sıfır fiyat) × kısma oranı)
+      const wc = out["weighted-corr"];
+      if (wc.status !== "ok") out["weighted-corr-curt"] = { status: wc.status, message: wc.message };
+      else if (!opts.zeroPrice) out["weighted-corr-curt"] = { status: "no-data", message: "Sıfır fiyat olasılığı yok (D-1 PTF'si eksik ya da model kurulamadı)" };
+      else {
+        // Etiket (uydu) gecikmesinden önceki saatler; gerçekleşen üretim eğitim sonundan önce
+        const labelCutoff = Math.min(end, from - (SATELLITE_DELAY_DAYS + 1) * DAY);
+        const rateHours = hist.hours.filter((h) => h.t >= from - CURTAIL_HISTORY_DAYS * DAY && h.t < labelCutoff);
+        assertAvailable([productionFeature("curtail_rate_end", labelCutoff - HOUR)], from);
+        const loss = detectLostHours(
+          rateHours.map((h) => ({ t: h.t, uevm: h.uevm, kgupFirst: h.kgupFirst, satGhi: h.satGhi ?? null, satDirect: h.satDirect ?? null, satDiffuse: h.satDiffuse ?? null })),
+          hist.site
+        );
+        const rate = curtailmentRate(rateHours.map((h) => ({ t: h.t, ptf: h.ptf, uevm: h.uevm, expected: loss.expected.get(h.t) ?? null })));
+        const zp = opts.zeroPrice;
+        out["weighted-corr-curt"] = {
+          ...wc,
+          hours: wc.hours!.map((v, i) => (v === null ? null : round(curtailedForecast(v, zp.get(from + i * HOUR) ?? 0, rate.rate)))),
+          train: { ...wc.train!, mount: `${wc.train!.mount}; kısma oranı ${rate.rate.toFixed(3)} (${rate.hours} sıfır fiyatlı saat)` },
+        };
+      }
     } catch (e) {
-      for (const k of CORRECTION_KINDS) out[k] = { status: "error", message: `Düzeltme katmanı: ${e instanceof Error ? e.message : String(e)}` };
+      for (const k of [...CORRECTION_KINDS, ...CURTAIL_KINDS]) out[k] = { status: "error", message: `Düzeltme katmanı: ${e instanceof Error ? e.message : String(e)}` };
     }
     return out;
   } catch (e) {
@@ -394,6 +430,7 @@ export async function projectLiveForecast(projectId: string, now = Date.now()): 
   const total: Array<number | null> = Array(n).fill(null);
   const fetchedTimes: string[] = [];
   const plants: LivePlantForecast[] = [];
+  const changes = readChangeWarnings();
   for (const p of list.plants) {
     const base = { epiasPlantId: p.epiasPlantId, name: p.name, organizationName: p.organizationName, locationText: p.locationText, locationSource: p.locationSource };
     if (p.epiasPlantId === null || !p.locationSource) {
@@ -411,7 +448,8 @@ export async function projectLiveForecast(projectId: string, now = Date.now()): 
       if (v !== null) total[i] = (total[i] ?? 0) + v;
     });
     const daily = days.map((_, d) => hours.slice(d * 24, d * 24 + 24).reduce((a: number, v) => a + (v ?? 0), 0));
-    plants.push({ ...base, status: "ok", ...(f.warning ? { warning: f.warning } : {}), hours, daily, peakMwh: Math.max(0, ...hours.map((v) => v ?? 0)), train: f.train });
+    const alerts = changes.byPlant.get(p.epiasPlantId)?.warnings.map((w) => ({ kind: w.kind, message: w.message })) ?? [];
+    plants.push({ ...base, status: "ok", ...(f.warning ? { warning: f.warning } : {}), ...(alerts.length ? { alerts } : {}), hours, daily, peakMwh: Math.max(0, ...hours.map((v) => v ?? 0)), train: f.train });
   }
   // En eski önbellek anı: sayfadaki "hava tahmini şu andan" notu için kötümser değer
   const weatherFetchedAt = fetchedTimes.length ? fetchedTimes.sort()[0] : null;

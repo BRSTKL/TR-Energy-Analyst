@@ -9,6 +9,8 @@ import {
   ZERO_PRICE_FEATURES,
   zeroPriceClimatology,
   zeroPricePersistence,
+  zeroPriceForDay,
+  ZERO_PRICE_HOURS,
 } from "@/lib/forecast/zero-price";
 import { dayKind, hasReligiousCalendar, isHolidayHour } from "@/lib/forecast/tr-holidays";
 import { decisionCutoff, marketFeature, ptfAvailableAt } from "@/lib/forecast/info-time";
@@ -152,5 +154,34 @@ describe("kısma oranı ve beklenen kısıntı (22.6 b, c)", () => {
     expect(curtailedForecast(10, 2, 2)).toBe(0);
     expect(curtailedForecast(10, -1, 0.5)).toBe(10);
     expect(curtailedForecast(0, 0.9, 0.9)).toBe(0);
+  });
+});
+
+describe("zeroPriceForDay (canlı, 22.6 gölge sürümü)", () => {
+  const day0 = Date.UTC(2026, 4, 9); // cumartesi, bahar: sıfır fiyat olası
+  it("gündüz saatlerinde olasılık verir; aynı veriyle aynı sonuç", () => {
+    const a = zeroPriceForDay(ptf, day0)!;
+    const b = zeroPriceForDay(ptf, day0)!;
+    expect(a).not.toBeNull();
+    expect(a.p.size).toBe(ZERO_PRICE_HOURS[1] - ZERO_PRICE_HOURS[0] + 1);
+    for (const [t, v] of a.p) {
+      expect(v).toBe(b.p.get(t));
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThanOrEqual(1);
+    }
+    // Öğle (bahar hafta sonu) gece kenarından olası
+    expect(a.p.get(day0 + 12 * HOUR)!).toBeGreaterThan(a.p.get(day0 + 6 * HOUR)!);
+  });
+  it("hedef günün ve sonrasının fiyatını kullanmaz (bilgi zamanı)", () => {
+    const base = zeroPriceForDay(ptf, day0)!;
+    const changed = new Map(ptf);
+    for (let t = day0; t < day0 + 3 * DAY; t += HOUR) changed.set(t, changed.get(t) === 0 ? 3000 : 0);
+    const after = zeroPriceForDay(changed, day0)!;
+    for (const [t, v] of base.p) expect(after.p.get(t)).toBe(v);
+  });
+  it("D-1 fiyatı yoksa null (sıfır kabul edilmez)", () => {
+    const missing = new Map(ptf);
+    for (let t = day0 - DAY; t < day0; t += HOUR) missing.delete(t);
+    expect(zeroPriceForDay(missing, day0)).toBeNull();
   });
 });

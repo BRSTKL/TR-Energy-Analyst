@@ -243,6 +243,35 @@ export function curtailmentRate(hours: CurtailmentHour[], opts: { zeroMax?: numb
   return { rate: Math.min(1, Math.max(0, lost / (exp + CURTAIL_PSEUDO_HOURS * mean))), hours: n, raw: lost / exp };
 }
 
+/** Sıfır fiyat modelinin saatleri (gündüz, duvar saati; geriye dönük testteki `ZP_HOURS` ile aynı). Dışındaki saatte p = 0. */
+export const ZERO_PRICE_HOURS = [6, 19] as const;
+/** Canlı modelin eğitim geçmişi (ay; geriye dönük testte her test ayı önceki 13 ayla) */
+export const ZERO_PRICE_TRAIN_MONTHS = 13;
+
+/**
+ * Bir günün saatlik sıfır fiyat olasılığı (canlı; Aşama 22.6 gölge sürümü). Eğitim: `day0`'dan önceki 13 takvim ayının gündüz
+ * saatleri (`day0`'dan önceki her saatin PTF'si kesimden önce bilinir: D-1'inki D-2 14:00'te yayımlanır). Hedef günün
+ * satırları canlı (`liveFrom`), özellikleri D-1 … D-7 fiyatından. Model kurulamazsa ya da D-1 PTF'si yoksa null (çağıran
+ * sürümü "no-data" yazar; sıfır kabul edilmez, karne yanıltmasın). Dönen harita yalnız gündüz saatlerini taşır.
+ */
+export function zeroPriceForDay(ptf: Map<number, number>, day0: number, opts: { zeroMax?: number } = {}): { p: Map<number, number>; rows: number; events: number } | null {
+  const inHours = (t: number) => {
+    const h = new Date(t).getUTCHours();
+    return h >= ZERO_PRICE_HOURS[0] && h <= ZERO_PRICE_HOURS[1];
+  };
+  const d = new Date(day0);
+  const trainFrom = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - ZERO_PRICE_TRAIN_MONTHS, d.getUTCDate());
+  const trainT = Array.from(ptf.keys()).filter((t) => t >= trainFrom && t < day0 && inHours(t)).sort((a, b) => a - b);
+  // Etiketler (eğitim saatlerinin kendi PTF'si) hedef günün kesiminden önce yayımlanmış olmalı
+  if (trainT.length) assertAvailable([marketFeature("zp_label_end", trainT[trainT.length - 1])], day0);
+  const zm = fitZeroPrice(buildZeroPriceRows(trainT, ptf, { zeroMax: opts.zeroMax }), ZERO_PRICE_LAMBDA);
+  if (!zm) return null;
+  const dayT = Array.from({ length: 24 }, (_, h) => day0 + h * HOUR).filter(inHours);
+  const live = buildZeroPriceRows(dayT, ptf, { zeroMax: opts.zeroMax, liveFrom: day0 });
+  if (live.length !== dayT.length) return null;
+  return { p: new Map(live.map((r) => [r.t, zm.predict(r)])), rows: zm.rows, events: zm.events };
+}
+
 /** Beklenen kısıntı düşülmüş tahmin: tahmin × (1 − p × oran); [0, tahmin] */
 export function curtailedForecast(pred: number, pZero: number, rate: number): number {
   const p = Math.min(1, Math.max(0, pZero));

@@ -19,7 +19,11 @@
  * çok 10 dakika. Sonra eğitim verisi tazelenir: EPİAŞ gerçek zamanlı üretimi (scripts/realtime-sync.mts; VPN kapalıysa
  * atlanır), hava tahmini arşivi ve uydu ışınımı (Open-Meteo). Her adım kendi süreç grubunda, en çok 6 dakika (kesime 15
  * dakikadan az kalacaksa kısalır; süre dolunca alt süreçleriyle birlikte kapatılır: tsx betiği ayrı süreçte çalıştırır,
- * yalnız dış süreç kapatılınca adım 29 dakika sürmüştü). Hatası kaydı durdurmaz.
+ * yalnız dış süreç kapatılınca adım 29 dakika sürmüştü). Hatası kaydı durdurmaz. Ayrıca son günlerin PTF'si
+ * (scripts/ptf-recent-sync.mts; D-1'in fiyatı MarketData'da henüz yok): planlı kısıntı gölge sürümünün (Aşama 22.6) sıfır
+ * fiyat olasılığı bütün santraller için bir kez kurulur; kurulamazsa yalnız o sürüm "no-data".
+ * Kayıt yazıldıktan sonra (kesimi geciktirmesin) değişim uyarıları (Aşama 22.7: kapasite değişimi, uzun arıza;
+ * lib/services/plant-change-warnings.ts) günlüğe ve Üretim tahmini sayfasının okuduğu dosyaya yazılır; kuru çalışmada yalnız günlüğe.
  * Kendi kendine öğrenme (lib/solar-engine/learning/self-learning.ts, 19.10.2026): önce şampiyon değerlendirmesi (son 28 günün karnesi;
  * değişiklik bildirimle); sonra her santral için bütün sürümler (4 / 2 / 6 ay eğitim, günlük hata düzeltmeli) tahmin
  * yapar; santralin şampiyonu canlı tahmin (`modelId`), diğerleri gölge (`shadow`) olarak yazılır.
@@ -34,6 +38,9 @@ import { prisma } from "@/lib/prisma";
 import { isUnlicensedName } from "@/lib/analysis/candidate-access";
 import { readPoolPlantInfo } from "@/lib/pool/pool-store";
 import { forecastSolarEnsemble, forecastSolarPlant } from "@/lib/solar-engine/forecast";
+import { ZERO_PRICE_TRAIN_MONTHS, zeroPriceForDay } from "@/lib/forecast/zero-price";
+import { readPtfMap } from "@/lib/services/ptf-recent";
+import { solarChangeWarnings, writeChangeWarnings, type PlantChangeWarnings } from "@/lib/services/plant-change-warnings";
 import { readForecastLog, writeForecastLog, forecastLogPath } from "@/lib/solar-engine/learning/forecast-log-store";
 import { FORECAST_LOG_SCHEMA, SOLAR_MODEL_ID, forecastCutoff, isOnTime, nextTargetDate, targetDayWall, type ForecastLog, type ForecastLogPlant, type ForecastLogShadow } from "@/lib/solar-engine/learning/forecast-log";
 import { BIAS_INSAMPLE_MODEL, BIAS_MIN_LOGGED_DAYS, MODEL_VARIANTS, applyBias, biasFactors } from "@/lib/solar-engine/learning/self-learning";
@@ -77,10 +84,25 @@ export async function runDailyForecast(opts: DailyForecastOptions = {}): Promise
   }
 
   // Proje güneş santralleri: lisanslı, konumu havuzda (lisanssız toplamlar tek koordinatla temsil edilmez)
-  const rows = await prisma.powerPlant.findMany({ where: { projectId: { not: null }, type: "GES", epiasPlantId: { not: null } }, select: { epiasPlantId: true, name: true } });
+  const rows = await prisma.powerPlant.findMany({ where: { projectId: { not: null }, type: "GES", epiasPlantId: { not: null } }, select: { epiasPlantId: true, name: true, capacityMw: true, capacitySource: true } });
   await prisma.$disconnect();
   const plants = new Map<number, string>();
   for (const r of rows) if (!isUnlicensedName(r.name)) plants.set(r.epiasPlantId!, r.name);
+  const capacity = new Map(rows.map((r) => [r.epiasPlantId!, { capacityMw: r.capacityMw, capacitySource: r.capacitySource }]));
+
+  /** Değişim uyarıları (Aşama 22.7): günlüğe yazar; `write` ise sayfanın okuduğu dosyaya da. Hatası akışı durdurmaz. */
+  async function changeWarnings(write: boolean): Promise<void> {
+    try {
+      const list: PlantChangeWarnings[] = [];
+      for (const id of plants.keys()) list.push(await solarChangeWarnings({ epiasPlantId: id, ...(capacity.get(id) ?? { capacityMw: null, capacitySource: null }) }));
+      const flagged = list.filter((p) => p.warnings.length);
+      console.log(`${stamp()} ${target}: değişim uyarıları: ${flagged.length ? `${flagged.length} santral` : "yok"}`);
+      for (const p of flagged) for (const w of p.warnings) console.log(`  ${plants.get(p.epiasPlantId)}: ${w.message}`);
+      if (write) writeChangeWarnings(list);
+    } catch (e) {
+      console.log(`${stamp()} ${target}: değişim uyarıları hesaplanamadı (${e instanceof Error ? e.message.slice(0, 120) : e})`);
+    }
+  }
 
   const MIN = 60_000;
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -138,6 +160,7 @@ export async function runDailyForecast(opts: DailyForecastOptions = {}): Promise
     const ids = Array.from(plants.keys()).map(String);
     for (const [label, args] of [
       ["gerçek zamanlı üretim", ["scripts/realtime-sync.mts", ...ids]],
+      ["gün öncesi fiyatı", ["scripts/ptf-recent-sync.mts"]],
       ["hava tahmini arşivi", ["scripts/weather-sync.mts", ...ids]],
       ["ek hava modelleri arşivi", ["scripts/weather-models-sync.mts", ...ids]],
       ["uydu ışınımı", ["scripts/satellite-sync.mts", ...ids]],
@@ -147,7 +170,7 @@ export async function runDailyForecast(opts: DailyForecastOptions = {}): Promise
         continue;
       }
       const r = await runStep(args, Math.min(6 * MIN, left() - 15 * MIN));
-      const last = r.out.trim().split("\n").filter((l) => /santral|istek|erişil|Gerçek zamanlı|429|503/i.test(l)).slice(-1)[0] ?? "";
+      const last = r.out.trim().split("\n").filter((l) => /santral|istek|erişil|Gerçek zamanlı|PTF|429|503/i.test(l)).slice(-1)[0] ?? "";
       console.log(`${stamp()} ${target}: ${label}: ${r.code === 0 ? "tamam" : r.timedOut ? "zaman aşımı" : "atlandı"}${last ? ` (${last.slice(0, 160)})` : ""}`);
     }
   }
@@ -190,6 +213,20 @@ export async function runDailyForecast(opts: DailyForecastOptions = {}): Promise
   }
   const extra = await extraRuns();
 
+  // Planlı kısıntı gölge sürümü (Aşama 22.6): hedef günün sıfır fiyat olasılığı, bütün santraller için bir kez
+  let zeroPrice: Map<number, number> | null = null;
+  try {
+    const day0 = targetDayWall(target);
+    const d = new Date(day0);
+    const ptf = await readPtfMap(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - ZERO_PRICE_TRAIN_MONTHS, d.getUTCDate() - 8), day0);
+    const zp = zeroPriceForDay(ptf, day0);
+    zeroPrice = zp?.p ?? null;
+    const top = zp ? Math.max(...zp.p.values()) : null;
+    console.log(`${stamp()} ${target}: sıfır fiyat olasılığı: ${zp ? `en yüksek ${(top! * 100).toFixed(1)}% (${zp.rows} saat, ${zp.events} sıfır fiyatlı ile eğitildi)` : "kurulamadı (D-1 PTF'si yok ya da az olay); kısıntı sürümü no-data"}`);
+  } catch (e) {
+    console.log(`${stamp()} ${target}: sıfır fiyat olasılığı kurulamadı (${e instanceof Error ? e.message.slice(0, 120) : e})`);
+  }
+
   // Şampiyon değerlendirmesi (son 28 günün karnesi): canlı sürümler bu günün tahmininden önce belirlenir; kayıt defterine
   // yalnız günlük kayıt yazıldıktan sonra işlenir (kuru çalışmada ya da yazılmadan çıkışta değişmez)
   const review = await reviewChampions(Array.from(plants.keys()), started, { targetDate: target }).catch(async (e) => {
@@ -222,7 +259,7 @@ export async function runDailyForecast(opts: DailyForecastOptions = {}): Promise
           results.set(v.id, { epiasPlantId: id, name, status: "error", message: "Kesime az kaldı: ek hava modelleri atlandı" });
           continue;
         }
-        ens ??= await forecastSolarEnsemble(id, day0, 24, { now: started, fresh: true });
+        ens ??= await forecastSolarEnsemble(id, day0, 24, { now: started, fresh: true, zeroPrice });
         const r = ens[v.ensemble];
         results.set(v.id, { epiasPlantId: id, name, ...(r.status === "ok" && empty(r.hours) ? { status: "error", message: "Hava tahmininde hedef günün saatleri yok" } : r) });
       } else if (v.bias) {
@@ -317,6 +354,7 @@ export async function runDailyForecast(opts: DailyForecastOptions = {}): Promise
     const spread = log.shadow!.find((s) => s.modelId.endsWith("-ens-mean"))?.plants.find((q) => q.modelSpread)?.modelSpread;
     if (spread) console.log(`  modellerin ayrışması örnek (öğle, MWh): ${spread[12] ?? "?"}`);
     for (const p of out) if (p.status !== "ok") console.log(`  ${p.name}: ${p.message}`);
+    await changeWarnings(false);
     return 0;
   }
   const written = await writeForecastLog(log);
@@ -331,5 +369,6 @@ export async function runDailyForecast(opts: DailyForecastOptions = {}): Promise
     `${stamp()} ${target}: ${written ? "yazıldı" : "başka bir çalışma önce yazmış, dokunulmadı"}; ${ok.length}/${out.length} santral, toplam ${mwh.toFixed(1)} MWh; kesimden önce: ${log.onTime ? "evet" : "HAYIR"}; hava çalışması ${runInit ?? "?"}`
   );
   for (const p of out) if (p.status !== "ok" || p.warning) console.log(`  ${p.name}: ${p.message ?? p.warning}`);
+  await changeWarnings(true);
   return 0;
 }
