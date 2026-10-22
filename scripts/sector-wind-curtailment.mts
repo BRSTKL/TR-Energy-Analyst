@@ -9,7 +9,8 @@
  * EPİAŞ'a gidilmez (YEKDEM önbelleği yeterli; içinde bulunulan yılın listesi günlükse alınmaya çalışılır).
  *
  *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/sector-wind-curtailment.mts [sonAy=karnedeki son tam ay]
- * Çıktı: .cache/epias/sector-curtailment-wind.json
+ * Çıktı: .cache/epias/sector-curtailment-wind.json ve saatlik plansız kayıp .cache/epias/sector-loss-hourly-RES.json (aynı
+ * santraller; arıza / bakım bildirimiyle çakışan olaylar hariç; lib/analysis/hourly-loss.ts)
  */
 
 import fs from "node:fs";
@@ -19,7 +20,8 @@ import { isUnlicensedName } from "@/lib/analysis/candidate-access";
 import { sectorLoss, type SectorLossPlant } from "@/lib/analysis/sector-loss";
 import { readPoolPlantInfo, readPoolYear } from "@/lib/pool/pool-store";
 import { resolveInstalledCapacities } from "@/lib/services/installed-capacity";
-import { windPlantLoss } from "@/lib/services/wind-loss";
+import { windHourlyLoss, windPlantLoss } from "@/lib/services/wind-loss";
+import { hourlyLossAccumulator, isOutageCause } from "@/lib/analysis/hourly-loss";
 import { karnePeriodEnd, lastFullMonth } from "@/lib/sector/period";
 
 const lastMonth = Number(process.argv[2] ?? lastFullMonth(karnePeriodEnd(new Date().getUTCFullYear()) ?? "2026-08-31"));
@@ -68,6 +70,7 @@ for (const [id, r] of db) capacity.set(id, { mw: r.capacityMw, source: r.capacit
 missing.forEach((id, i) => capacity.set(id, { mw: resolved.matches[i].mw, source: resolved.matches[i].source }));
 
 const plants: SectorLossPlant[] = [];
+const hourly = hourlyLossAccumulator("RES", YEARS);
 const bySource: Record<string, number> = {};
 const unreliable: Array<{ epiasPlantId: number; name: string; dailyR: number | null }> = [];
 let located = 0;
@@ -88,7 +91,17 @@ for (const [id, p] of list) {
   }
   plants.push({ epiasPlantId: id, name: p.name, organizationName: p.organizationName, locationSource: loc.locationSource, months: l.months });
   bySource[loc.locationSource] = (bySource[loc.locationSource] ?? 0) + 1;
+  const h = await windHourlyLoss(id, cap.mw, cap.source);
+  if (h) {
+    hourly.addPlant();
+    for (const [t, x] of h.long) {
+      if (isOutageCause(x.notice as string | null)) hourly.exclude(x.mwh);
+      else hourly.add(t, x.mwh, "long");
+    }
+    for (const [t, mwh] of h.short) hourly.add(t, mwh, "short");
+  }
 }
+fs.writeFileSync(path.join(CACHE, "sector-loss-hourly-RES.json"), JSON.stringify(hourly.toFile()));
 
 const result = sectorLoss(plants, YEARS, lastMonth);
 const out = {

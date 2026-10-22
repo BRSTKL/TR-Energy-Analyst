@@ -63,9 +63,10 @@ export function SectorLossCard() {
 const KIND_LABEL: Record<HydroKindKey, string> = { RESERVOIR: "Barajlı", RUN_OF_RIVER: "Nehir tipi", unclassified: "Sınıflanmamış" };
 const CAUSE_LABEL: Record<string, string> = { fault: "arıza", maintenance: "bakım", curtailment: "talimat", economic: "ekonomik", other: "diğer" };
 
-type HydroMetric = "rorUnplannedMwh" | "rorPlannedMwh" | "reservoirPct";
+type HydroMetric = "rorUnplannedMwh" | "rorLongStopMwh" | "rorPlannedMwh" | "reservoirPct";
 const HYDRO_METRIC: Record<HydroMetric, string> = {
   rorUnplannedMwh: "Nehir tipi · plansız düşüş",
+  rorLongStopMwh: "Nehir tipi · bildirimsiz uzun duruş",
   rorPlannedMwh: "Nehir tipi · planlı duruş",
   reservoirPct: "Barajlı · arızadaki kapasite %",
 };
@@ -128,7 +129,7 @@ function HydroLossBody({ data, tabs }: { data: SectorHydroLoss; tabs: React.Reac
   });
   const value = (p: SectorHydroLoss["plants"][number]) => {
     const c = p.years[cur.year];
-    return kind === "RUN_OF_RIVER" ? (c.drops?.unplannedMwh ?? 0) : c.reportedLossMwh;
+    return kind === "RUN_OF_RIVER" ? (c.drops?.unplannedMwh ?? 0) + (c.drops?.longStopMwh ?? 0) : c.reportedLossMwh;
   };
   const top = data.plants
     .filter((p) => p.kind === kind && p.years[cur.year] && value(p) > 0)
@@ -140,6 +141,7 @@ function HydroLossBody({ data, tabs }: { data: SectorHydroLoss; tabs: React.Reac
   };
   const rows: Array<{ label: string; cur: number; prev?: number; pct?: boolean }> = [
     { label: "Nehir tipi · plansız düşüş, GWh", cur: ror.unplannedMwh, prev: rorPrev?.unplannedMwh },
+    { label: "Nehir tipi · bildirimsiz uzun duruş, GWh", cur: ror.longStopMwh ?? 0, prev: rorPrev?.longStopMwh },
     { label: "Nehir tipi · planlı duruş, GWh", cur: ror.plannedMwh, prev: rorPrev?.plannedMwh },
     { label: "Barajlı · arızadaki kapasite, GWh", cur: res.reportedLossMwh, prev: resPrev?.reportedLossMwh },
     { label: "Barajlı · arızadaki kapasite, %", cur: res.reportedPct, prev: resPrev?.reportedPct, pct: true },
@@ -155,7 +157,13 @@ function HydroLossBody({ data, tabs }: { data: SectorHydroLoss; tabs: React.Reac
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <StatBox
+            label="Nehir tipi · bildirimsiz uzun duruş"
+            value={`${gwh(ror.longStopMwh ?? 0)} GWh`}
+            pct={pctOf(ror.longStopMwh ?? 0, ror.actualMwh)}
+            prev={rorPrev?.longStopMwh !== undefined ? `${prev.year}: ${gwh(rorPrev.longStopMwh)} GWh · ${change(ror.longStopMwh ?? 0, rorPrev.longStopMwh)}` : undefined}
+          />
           <StatBox
             label="Nehir tipi · plansız düşüş"
             value={`${gwh(ror.unplannedMwh)} GWh`}
@@ -177,7 +185,9 @@ function HydroLossBody({ data, tabs }: { data: SectorHydroLoss; tabs: React.Reac
         </div>
 
         <p className="text-sm text-slate-800">
-          Nehir tipi santrallerde beklenmedik duruşlar {rorPrev ? trend(ror.unplannedMwh, rorPrev.unplannedMwh) : "ölçüldü"}; planlı öğle
+          Nehir tipi santrallerde bildirimsiz uzun duruşlar {rorPrev?.longStopMwh ? trend(ror.longStopMwh ?? 0, rorPrev.longStopMwh) : "ölçüldü"} (
+          {ror.longStopPlants ?? 0} santral; büyük olasılıkla bölgesel iletim kısıtı nedeniyle kısıntı), kısa beklenmedik düşüşler{" "}
+          {rorPrev ? trend(ror.unplannedMwh, rorPrev.unplannedMwh) : "ölçüldü"}; planlı öğle
           duruşları {rorPrev ? trend(ror.plannedMwh, rorPrev.plannedMwh) : "ölçüldü"}{" "}
           (güneşin fiyatı düşürdüğü saatlerde su akşama kaydırılıyor; kayıp değil). Barajlıda arızadaki kapasite kayıp sayılmaz: su saklanıp sonra kullanılabilir.
         </p>
@@ -274,6 +284,7 @@ function HydroLossBody({ data, tabs }: { data: SectorHydroLoss; tabs: React.Reac
                 <TableHead>Santral</TableHead>
                 {kind === "RUN_OF_RIVER" ? (
                   <>
+                    <TableHead className="text-right">Uzun duruş, GWh</TableHead>
                     <TableHead className="text-right">Plansız düşüş, GWh</TableHead>
                     <TableHead className="text-right">Olay</TableHead>
                     <TableHead className="text-right">Planlı duruş, GWh</TableHead>
@@ -295,6 +306,7 @@ function HydroLossBody({ data, tabs }: { data: SectorHydroLoss; tabs: React.Reac
                     <TableCell className="font-medium">{p.name}</TableCell>
                     {kind === "RUN_OF_RIVER" ? (
                       <>
+                        <TableCell className="text-right font-medium tabular-nums">{gwh(c.drops?.longStopMwh ?? 0)}</TableCell>
                         <TableCell className="text-right font-medium tabular-nums">{gwh(c.drops?.unplannedMwh ?? 0)}</TableCell>
                         <TableCell className="text-right tabular-nums text-slate-500">{c.drops?.unplannedEvents ?? 0}</TableCell>
                         <TableCell className="text-right tabular-nums text-slate-500">{gwh(c.drops?.plannedMwh ?? 0)}</TableCell>
@@ -323,8 +335,15 @@ function HydroLossBody({ data, tabs }: { data: SectorHydroLoss; tabs: React.Reac
             <p>
               <b>Nehir tipi, ani düşüş:</b> saatin çevresindeki 72 saatin (önce ve sonra) üretim medyanı kurulu gücün %30&apos;unun üstünde iken üretim bunun
               %20&apos;sinin altına düşüp en az 6 saat kalırsa olay; kayıp = medyan − üretim. İlk KGÜP&apos;te önceden sıfırlanmışsa planlı (kayıp sayılmaz).
-              3 günden uzun duruşlar medyanı da düşürdüğü için görünmez: alt sınır. {cur.year}&apos;da {ror.unplannedEvents} plansız olay, {ror.unplannedWithNotice}
+              3 günden uzun duruşlar medyanı da düşürdüğü için bu kuralla görünmez. {cur.year}&apos;da {ror.unplannedEvents} plansız olay, {ror.unplannedWithNotice}
               &apos;i EPİAŞ bildirimiyle çakışıyor; {ror.plannedEvents.toLocaleString("tr-TR")} planlı duruş. Yüzdeler gerçekleşen üretime oran.
+            </p>
+            <p>
+              <b>Nehir tipi, bildirimsiz uzun duruş</b> (20.10.2026): ilk KGÜP en az 1 MW iken üretim planın %5&apos;inin altında, en az 6 saat sürüyor, arıza ya da
+              bakım bildirimi yok ve ani düşüş olayına girmemiş saatler; kayıp = plan − üretim. Haftalarca süren duruşları yakalar (ani düşüş kuralının göremediği
+              kısım). {cur.year}&apos;da {ror.longStopPlants ?? 0} santral, çoğu Nisan–Haziran; büyük olasılıkla bölgesel iletim kısıtı nedeniyle TEİAŞ talimatı
+              (kaynak türüne göre talimat açık veride yok), bildirilmemiş uzun arıza ya da sel duruşu da olabilir. Planı tutturamayan şirket için gerçek bir sapmadır;
+              kısmi kısıntıyı yakalamaz.
             </p>
             <p>
               <b>Barajlı, arızadaki kapasite:</b> santrallerin EPİAŞ piyasa mesaj sistemine bildirdiği arıza / bakım; saat başına normal güç − olay sırasındaki güç
@@ -375,6 +394,7 @@ function SectorLossBody({ data, tech, tabs }: { data: SectorCurtailment; tech: T
     { label: "Toplam kayıp, GWh", cur: lost(all)!, prev: lost(allPrev) },
     { label: "Planlı kısıntı, GWh", cur: all.plannedLossMwh, prev: allPrev?.plannedLossMwh },
     { label: "Plansız kayıp, GWh", cur: all.unplannedLossMwh, prev: allPrev?.unplannedLossMwh },
+    ...(!wind && data.coverage.withSnow ? [{ label: "  içinde: karlı saatlerde (kar olası), GWh", cur: all.snowLossMwh ?? 0, prev: allPrev?.snowLossMwh }] : []),
     { label: "Kayıp oranı, %", cur: all.lossPct, prev: allPrev?.lossPct, pct: true },
     ...(wind
       ? []
@@ -417,6 +437,17 @@ function SectorLossBody({ data, tech, tabs }: { data: SectorCurtailment; tech: T
             prev={allPrev ? `${dPrev(allPrev.unplannedLossMwh)} · ${change(all.unplannedLossMwh, allPrev.unplannedLossMwh)}` : undefined}
           />
         </div>
+        {!wind &&
+          (data.coverage.withSnow ? (
+            <p className="text-xs text-slate-600">
+              Plansız kaybın {gwh(all.snowLossMwh ?? 0)} GWh&apos;i ({share(all.snowLossMwh ?? 0, all.unplannedLossMwh) ?? "%0"}) yerde kar olan saatlerde (ERA5 kar
+              derinliği ≥ 1 cm; {data.coverage.withSnow} santral): panel karla örtülmüş olabilir, kısıntı ya da arıza değildir. Izgara kaba (0,25°), bir işarettir.
+            </p>
+          ) : (
+            <p className="text-xs text-amber-800">
+              Kar verisi henüz yok: kışın plansız kaybın bir kısmı karla örtülü panelden olabilir (scripts/snow-sync.mts ile çekilince ayrılır).
+            </p>
+          ))}
 
         {allPrev && (
           <p className="text-sm text-slate-800">

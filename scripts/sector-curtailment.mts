@@ -5,7 +5,8 @@
  * `scripts/satellite-sync.mts` ile çekilmiş olmalı. EPİAŞ'a gidilmez.
  *
  *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/sector-curtailment.mts [sonAy=karnedeki son tam ay]
- * Çıktı: .cache/epias/sector-curtailment.json
+ * Çıktı: .cache/epias/sector-curtailment.json ve saatlik plansız kayıp .cache/epias/sector-loss-hourly-GES.json (aynı
+ * santraller; arıza / bakım bildirimiyle çakışan saatler hariç; lib/analysis/hourly-loss.ts)
  */
 
 import fs from "node:fs";
@@ -17,6 +18,9 @@ import { LOSS_GROUP_LABEL, sectorLoss, type SectorLossPlant } from "@/lib/analys
 import { readPoolPlantInfo } from "@/lib/pool/pool-store";
 import { lossInputs } from "@/lib/services/production-loss";
 import { karnePeriodEnd, lastFullMonth } from "@/lib/sector/period";
+import { hourlyLossAccumulator, isOutageCause } from "@/lib/analysis/hourly-loss";
+import { loadOutageNotices } from "@/lib/services/outage-notices";
+import { readSnowYear, snowHours } from "@/lib/weather/snow";
 
 // Varsayılan: içinde bulunulan yılın karnesindeki son tam ay (lib/sector/period.ts)
 const lastMonth = Number(process.argv[2] ?? lastFullMonth(karnePeriodEnd(new Date().getUTCFullYear()) ?? "2026-08-31"));
@@ -39,6 +43,9 @@ const ptf = new Map((await prisma.marketData.findMany({ where: { timestamp: { gt
 const plants: SectorLossPlant[] = [];
 const bySource: Record<string, number> = {};
 let noSat = 0;
+let withSnow = 0;
+const hourly = hourlyLossAccumulator("GES", YEARS);
+const notices = await loadOutageNotices(Array.from(list.keys())).catch(() => null);
 for (const [id, p] of list) {
   const loc = (await readPoolPlantInfo(id))?.location;
   if (!loc) continue;
@@ -48,7 +55,20 @@ for (const [id, p] of list) {
     continue;
   }
   const r = detectLostHours(data.hours, data.site, { commissioning: true });
-  plants.push({ epiasPlantId: id, name: p.name, organizationName: p.organizationName, locationSource: loc.locationSource, months: monthlyLoss(data.hours, r) });
+  // Kar (scripts/snow-sync.mts): plansız kaybın kar olan saatlere düşen kısmı ayrıca yazılır; o saatler kısıntı sayılmaz
+  const snow = snowHours(await Promise.all(YEARS.map((y) => readSnowYear(id, y))));
+  if (snow.size) withSnow++;
+  plants.push({ epiasPlantId: id, name: p.name, organizationName: p.organizationName, locationSource: loc.locationSource, months: monthlyLoss(data.hours, r, { snow }) });
+  // Saatlik plansız kayıp; arıza / bakım bildirimiyle çakışan saat kısıntı sayılmaz
+  hourly.addPlant();
+  const outages = (notices?.byPlant.get(id) ?? []).filter((n) => isOutageCause(n.cause));
+  for (const h of data.hours) {
+    if (r.lost.get(h.t) !== "unplanned") continue;
+    const mwh = Math.max(0, (r.expected.get(h.t) ?? 0) - (h.uevm ?? 0));
+    if (outages.some((n) => n.start <= h.t && n.end > h.t)) hourly.exclude(mwh);
+    else if (snow.has(h.t)) hourly.excludeSnow(mwh);
+    else hourly.add(h.t, mwh, "long");
+  }
   bySource[loc.locationSource] = (bySource[loc.locationSource] ?? 0) + 1;
 }
 
@@ -56,10 +76,11 @@ const result = sectorLoss(plants, YEARS, lastMonth);
 const out = {
   generatedAt: new Date().toISOString(),
   lastMonth,
-  coverage: { licensedSolar: list.size, located: plants.length, bySource, withoutSatellite: noSat },
+  coverage: { licensedSolar: list.size, located: plants.length, bySource, withoutSatellite: noSat, withSnow },
   ...result,
 };
 fs.writeFileSync(path.join(CACHE, "sector-curtailment.json"), JSON.stringify(out));
+fs.writeFileSync(path.join(CACHE, "sector-loss-hourly-GES.json"), JSON.stringify(hourly.toFile()));
 
 console.log(`Lisanslı güneş ${list.size}, konumlu ve uydulu ${plants.length} (${JSON.stringify(bySource)}), uydu verisi yok ${noSat}\n`);
 for (const y of result.years) {

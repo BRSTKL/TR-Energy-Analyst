@@ -15,7 +15,7 @@ export interface SectorCurtailment {
   generatedAt: string;
   lastMonth: number;
   /** Güneş: licensedSolar, withoutSatellite; rüzgâr: licensed, withoutWind, unreliable (kalite eşiği altı), included */
-  coverage: { licensedSolar?: number; licensed?: number; located: number; bySource: Record<string, number>; withoutSatellite?: number; withoutWind?: number; unreliable?: number; included?: number };
+  coverage: { licensedSolar?: number; licensed?: number; located: number; bySource: Record<string, number>; withoutSatellite?: number; withoutWind?: number; unreliable?: number; included?: number; withSnow?: number };
   /** Rüzgâr: kalite eşiğini geçmeyen santraller */
   unreliable?: Array<{ epiasPlantId: number; name: string; dailyR: number | null }>;
   years: SectorLossYear[];
@@ -43,6 +43,9 @@ export interface HydroLossTotals {
   unplannedWithNotice: number;
   plannedEvents: number;
   plannedMwh: number;
+  /** Nehir tipi bildirimsiz uzun duruş (20.10.2026'dan; eski dosyada yok), MWh ve santral sayısı */
+  longStopMwh?: number;
+  longStopPlants?: number;
 }
 export interface SectorHydroLoss {
   generatedAt: string;
@@ -56,6 +59,7 @@ export interface SectorHydroLoss {
       reservoirLostMwh?: number;
       rorUnplannedMwh?: number;
       rorPlannedMwh?: number;
+      rorLongStopMwh?: number;
     }>;
   }>;
   plants: Array<{
@@ -73,7 +77,15 @@ export interface SectorHydroLoss {
         byCause: Causes;
         valueTl: number;
         noticeHours: number;
-        drops: { unplannedEvents: number; unplannedMwh: number; unplannedWithNotice: number; plannedEvents: number; plannedMwh: number } | null;
+        drops: {
+          unplannedEvents: number;
+          unplannedMwh: number;
+          unplannedWithNotice: number;
+          plannedEvents: number;
+          plannedMwh: number;
+          longStopMwh?: number;
+          longStopHours?: number;
+        } | null;
       }
     >;
   }>;

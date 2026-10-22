@@ -7,6 +7,11 @@
  * karnelerinin (2025, 2026) lisanslı hidro santralleri; yıllar aynı aylarla (Ocak – sonAy); alt tür karnedeki kayıttan
  * (lib/sector/hydro-kind.ts). Kurulu güç (düşüş eşiği için): projede kayıtlıysa veritabanı, değilse kurulu güç kuralı.
  * Bildirimler havuzdan (data/pool/umm; scripts/umm-sync.mts). EPİAŞ'a gidilmez.
+ * Nehir tipinde ayrıca BİLDİRİMSİZ UZUN DURUŞ (20.10.2026; lib/analysis/river-curtailment.ts kuralı, plan = ilk KGÜP): ilk
+ * KGÜP'te üretim varken en az 6 saat sıfıra yakın üretim, arıza / bakım bildirimi yok, plansız düşüş olayına girmemiş saatler.
+ * Ani düşüş kuralı ±72 saatin ortancasına baktığı için haftalarca süren duruşu göremiyordu (ortanca da sıfıra iner): bahar
+ * 2026'da ayda 11–32 GWh plansız düşüşe karşı bu kural 105–182 GWh buldu. Büyük olasılıkla bölgesel iletim kısıtı talimatı;
+ * bildirilmemiş uzun arıza ya da sel duruşu da olabilir.
  *
  *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/sector-hydro-curtailment.mts [sonAy=karnedeki son tam ay]
  * Çıktı: .cache/epias/sector-curtailment-hydro.json
@@ -20,6 +25,8 @@ import { detectHydroDrops, reportedUnavailable } from "@/lib/analysis/hydro-loss
 import type { NoticeCause } from "@/lib/analysis/outage-validation";
 import { readPoolYear } from "@/lib/pool/pool-store";
 import { resolveInstalledCapacities } from "@/lib/services/installed-capacity";
+import { detectRiverCurtailment } from "@/lib/analysis/river-curtailment";
+import { isOutageCause } from "@/lib/analysis/hourly-loss";
 import { loadOutageNotices } from "@/lib/services/outage-notices";
 import { karnePeriodEnd, lastFullMonth } from "@/lib/sector/period";
 
@@ -76,7 +83,16 @@ interface YearRow {
   /** Su / kaynak durumu bildirimleri (kaynak yetersizliği, düşük göl seviyesi; kayıp değil), MWh */
   resourceMwh: number;
   /** Nehir tipi: plansız ani düşüş (olası kayıp, alt sınır; bildirimle çakışan olay sayısı) ve planlı duruş (kayıp değil) */
-  drops: { unplannedEvents: number; unplannedMwh: number; unplannedWithNotice: number; plannedEvents: number; plannedMwh: number } | null;
+  drops: {
+    unplannedEvents: number;
+    unplannedMwh: number;
+    unplannedWithNotice: number;
+    plannedEvents: number;
+    plannedMwh: number;
+    /** Bildirimsiz uzun duruş (plansız düşüşle çakışmayan), MWh ve saat */
+    longStopMwh: number;
+    longStopHours: number;
+  } | null;
 }
 const emptyCauses = () => Object.fromEntries(CAUSES.map((c) => [c, 0])) as Record<NoticeCause, number>;
 const rows: Array<{ epiasPlantId: number; name: string; organizationName: string | null; kind: Kind; capacityMw: number; years: Record<number, YearRow> }> = [];
@@ -87,12 +103,13 @@ interface MonthAcc {
   byKind: Record<Kind, { actual: number; lost: number }>;
   rorUnplannedMwh: number;
   rorPlannedMwh: number;
+  rorLongStopMwh: number;
 }
 const monthly: Record<number, Map<string, MonthAcc>> = Object.fromEntries(YEARS.map((y) => [y, new Map()]));
 const monthAcc = (y: number, mo: string): MonthAcc => {
   let m = monthly[y].get(mo);
   if (!m) {
-    m = { actual: 0, lost: 0, byKind: { RESERVOIR: { actual: 0, lost: 0 }, RUN_OF_RIVER: { actual: 0, lost: 0 }, unclassified: { actual: 0, lost: 0 } }, rorUnplannedMwh: 0, rorPlannedMwh: 0 };
+    m = { actual: 0, lost: 0, byKind: { RESERVOIR: { actual: 0, lost: 0 }, RUN_OF_RIVER: { actual: 0, lost: 0 }, unclassified: { actual: 0, lost: 0 } }, rorUnplannedMwh: 0, rorPlannedMwh: 0, rorLongStopMwh: 0 };
     monthly[y].set(mo, m);
   }
   return m;
@@ -147,7 +164,21 @@ for (const [id, p] of list) {
         if (e.planned) m.rorPlannedMwh += e.lostMwh;
         else m.rorUnplannedMwh += e.lostMwh;
       }
+      // Bildirimsiz uzun duruş: plansız düşüş olaylarının saatleri hariç, dönem içinde
+      const inDrop = new Set(un.flatMap((e) => Array.from({ length: e.hours }, (_, k) => e.start + k * HOUR)));
+      const outages = notes.filter((n) => isOutageCause(n.cause));
+      let longStopMwh = 0;
+      let longStopHours = 0;
+      for (const [i, mwh] of detectRiverCurtailment({ start: doc.start, kgup: doc.kgupFirst, uevm: doc.uevm }, outages)) {
+        const t = s0 + i * HOUR;
+        if (t < a || t >= b || inDrop.has(t)) continue;
+        longStopMwh += mwh;
+        longStopHours++;
+        monthAcc(y, new Date(t).toISOString().slice(0, 7)).rorLongStopMwh += mwh;
+      }
       drops = {
+        longStopMwh,
+        longStopHours,
         unplannedEvents: un.length,
         unplannedMwh: un.reduce((s, e) => s + e.lostMwh, 0),
         unplannedWithNotice: un.filter((e) => Array.from({ length: e.hours }, (_, k) => e.start + k * HOUR).some((t) => unav.has(t))).length,
@@ -164,7 +195,23 @@ const groupOf = (r: (typeof rows)[number]): Group[] => ["all", r.kind];
 const years = YEARS.map((y) => {
   const groups = {} as Record<
     Group,
-    { plants: number; plantsWithNotice: number; actualMwh: number; reportedLossMwh: number; reportedPct: number; byCause: Record<NoticeCause, number>; valueTl: number; resourceMwh: number; unplannedEvents: number; unplannedMwh: number; unplannedWithNotice: number; plannedEvents: number; plannedMwh: number }
+    {
+      plants: number;
+      plantsWithNotice: number;
+      actualMwh: number;
+      reportedLossMwh: number;
+      reportedPct: number;
+      byCause: Record<NoticeCause, number>;
+      valueTl: number;
+      resourceMwh: number;
+      unplannedEvents: number;
+      unplannedMwh: number;
+      unplannedWithNotice: number;
+      plannedEvents: number;
+      plannedMwh: number;
+      longStopMwh: number;
+      longStopPlants: number;
+    }
   >;
   for (const g of ["all", "RESERVOIR", "RUN_OF_RIVER", "unclassified"] as const) {
     const ms = rows.filter((r) => groupOf(r).includes(g) && r.years[y]);
@@ -186,6 +233,8 @@ const years = YEARS.map((y) => {
       unplannedWithNotice: ms.reduce((s, r) => s + (r.years[y].drops?.unplannedWithNotice ?? 0), 0),
       plannedEvents: ms.reduce((s, r) => s + (r.years[y].drops?.plannedEvents ?? 0), 0),
       plannedMwh: ms.reduce((s, r) => s + (r.years[y].drops?.plannedMwh ?? 0), 0),
+      longStopMwh: ms.reduce((s, r) => s + (r.years[y].drops?.longStopMwh ?? 0), 0),
+      longStopPlants: ms.filter((r) => (r.years[y].drops?.longStopMwh ?? 0) > 0).length,
     };
   }
   const mon = Array.from(monthly[y].entries())
@@ -198,6 +247,7 @@ const years = YEARS.map((y) => {
         reservoirPct: pct(m.byKind.RESERVOIR.actual, m.byKind.RESERVOIR.lost),
         reservoirLostMwh: m.byKind.RESERVOIR.lost,
         rorUnplannedMwh: m.rorUnplannedMwh,
+        rorLongStopMwh: m.rorLongStopMwh,
         rorPlannedMwh: m.rorPlannedMwh,
       };
     });
@@ -223,7 +273,7 @@ for (const y of years) {
       `  ${g.padEnd(14)} ${String(t.plants).padStart(3)} santral (bildirimli ${t.plantsWithNotice})  bildirilen kullanılamaz kapasite %${nf(t.reportedPct)} = ${nf(t.reportedLossMwh / 1000)} GWh, ${nf(t.valueTl / 1e6)} M TL  ` +
         `[su durumu ayrı ${nf(t.resourceMwh / 1000)} · arıza ${nf(t.byCause.fault / 1000)} · bakım ${nf(t.byCause.maintenance / 1000)} · talimat ${nf(t.byCause.curtailment / 1000)} · diğer ${nf((t.byCause.other + t.byCause.economic) / 1000)} GWh]` +
         (t.unplannedEvents + t.plannedEvents
-          ? `  plansız düşüş ${t.unplannedEvents} olay ${nf(t.unplannedMwh / 1000)} GWh (bildirimli ${t.unplannedWithNotice}) · planlı duruş ${t.plannedEvents} olay ${nf(t.plannedMwh / 1000)} GWh`
+          ? `  plansız düşüş ${t.unplannedEvents} olay ${nf(t.unplannedMwh / 1000)} GWh (bildirimli ${t.unplannedWithNotice}) · bildirimsiz uzun duruş ${t.longStopPlants} santral ${nf(t.longStopMwh / 1000)} GWh · planlı duruş ${t.plannedEvents} olay ${nf(t.plannedMwh / 1000)} GWh`
           : "")
     );
   }

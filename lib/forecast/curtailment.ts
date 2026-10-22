@@ -192,10 +192,18 @@ export interface MonthlyLoss {
   unplannedValueTl: number;
   /** Ayın tamamı ya da bir kısmı devreye alma döneminde (kayıp sayılmadı) */
   commissioning: boolean;
+  /** Plansız kaybın yerde kar olan saatlere düşen kısmı (lib/weather/snow.ts; yalnız kar verisi verilince), MWh ve saat */
+  snowLossMwh?: number;
+  snowHours?: number;
 }
 
 /** Santral × ay kayıp özeti (Aşama 20.1): `detectLostHours` (güneş) ya da `detectWindLoss` (rüzgâr) sonucundan */
-export function monthlyLoss(hours: Array<Pick<LossInput, "t" | "uevm" | "ptf">>, r: Pick<LossResult, "lost" | "expected" | "steadyFrom">): MonthlyLoss[] {
+export function monthlyLoss(
+  hours: Array<Pick<LossInput, "t" | "uevm" | "ptf">>,
+  r: Pick<LossResult, "lost" | "expected" | "steadyFrom">,
+  /** Yerde kar olan saatler (duvar saati ms): plansız kaybın o saatlere düşen kısmı ayrıca yazılır ("kar olası") */
+  opts: { snow?: Set<number> } = {}
+): MonthlyLoss[] {
   const byMonth = new Map<string, MonthlyLoss>();
   for (const h of hours) {
     if (h.uevm === null) continue;
@@ -219,6 +227,10 @@ export function monthlyLoss(hours: Array<Pick<LossInput, "t" | "uevm" | "ptf">>,
       m.unplannedLossMwh += lost;
       m.unplannedHours++;
       m.unplannedValueTl += value;
+      if (opts.snow?.has(h.t)) {
+        m.snowLossMwh = (m.snowLossMwh ?? 0) + lost;
+        m.snowHours = (m.snowHours ?? 0) + 1;
+      }
     }
   }
   const out = Array.from(byMonth.values()).sort((a, b) => a.month.localeCompare(b.month));

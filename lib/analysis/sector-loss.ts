@@ -31,13 +31,15 @@ export interface LossTotals {
   plannedSharePct: number;
   plannedValueTl: number;
   unplannedValueTl: number;
+  /** Plansız kaybın yerde kar olan saatlere düşen kısmı (güneş, kar verisi varsa), MWh */
+  snowLossMwh: number;
 }
 
 export interface SectorLossYear {
   year: number;
   groups: Record<LossGroupKey, LossTotals>;
   /** Grup → ay ("YYYY-MM") → oran ve planlı / plansız MWh */
-  monthly: Record<LossGroupKey, Array<{ month: string; lossPct: number; plannedLossMwh: number; unplannedLossMwh: number }>>;
+  monthly: Record<LossGroupKey, Array<{ month: string; lossPct: number; plannedLossMwh: number; unplannedLossMwh: number; snowLossMwh?: number }>>;
 }
 
 export interface SectorLossPlantRow {
@@ -64,6 +66,7 @@ function totals(ms: MonthlyLoss[], plants: number): LossTotals {
     plannedSharePct: lost > 0 ? (planned / lost) * 100 : 0,
     plannedValueTl: ms.reduce((a, m) => a + m.plannedValueTl, 0),
     unplannedValueTl: ms.reduce((a, m) => a + m.unplannedValueTl, 0),
+    snowLossMwh: ms.reduce((a, m) => a + (m.snowLossMwh ?? 0), 0),
   };
 }
 
@@ -86,7 +89,7 @@ export function sectorLoss(plants: SectorLossPlant[], years: number[], lastMonth
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([month, xs]) => {
           const t = totals(xs, 0);
-          return { month, lossPct: t.lossPct, plannedLossMwh: t.plannedLossMwh, unplannedLossMwh: t.unplannedLossMwh };
+          return { month, lossPct: t.lossPct, plannedLossMwh: t.plannedLossMwh, unplannedLossMwh: t.unplannedLossMwh, snowLossMwh: t.snowLossMwh };
         });
     }
     out.push({ year: y, groups, monthly });

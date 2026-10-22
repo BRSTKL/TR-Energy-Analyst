@@ -106,6 +106,10 @@ interface Cached {
   hours: Map<number, { uevm: number | null; kgup: number | null; expected: number | null; ws1: number | null; ws2: number | null; state: HourLossState }>;
   firstDate: string;
   lastDate: string;
+  /** Saat → plansız kayıp, MWh (beklenen − gerçekleşen): uzun olaylar (iki kaynak, ≥ 6 saat; olayla çakışan bildirimin nedeniyle) */
+  unplannedLong: Map<number, { mwh: number; notice: WindEvent["notice"] }>;
+  /** Saat → yalnız ana kaynağın bulduğu ya da 6 saatten kısa plansız kayıp, MWh (sayılmayan kısım; kısa kısıntılar burada) */
+  unplannedShort: Map<number, number>;
 }
 const cache = new Map<number, Cached>();
 
@@ -231,6 +235,7 @@ async function compute(epiasPlantId: number, capacityMw: number, capacitySource:
   const notices = await loadOutageNotices([epiasPlantId]).catch(() => null);
   const plantNotices = notices?.byPlant.get(epiasPlantId) ?? null;
   const events: WindEvent[] = [];
+  const unplannedLong: Cached["unplannedLong"] = new Map();
   for (const run of runs(both)) {
     if (run.length < WIND_MIN_EVENT_HOURS) continue;
     for (const t of run) lost.set(t, "unplanned");
@@ -239,7 +244,10 @@ async function compute(epiasPlantId: number, capacityMw: number, capacitySource:
     let notice: WindEvent["notice"] = "uncovered";
     if (notices && plantNotices && a >= notices.coveredFrom && b <= notices.coveredTo) notice = plantNotices.find((n) => n.start < b && n.end > a)?.cause ?? null;
     events.push({ start: new Date(a).toISOString().slice(0, 13), hours: run.length, lostMwh: run.reduce((s, t) => s + lostMwhAt(t), 0), notice });
+    for (const t of run) unplannedLong.set(t, { mwh: lostMwhAt(t), notice });
   }
+  const unplannedShort = new Map<number, number>();
+  for (const [t, k] of primary.lost) if (k === "unplanned" && !lost.has(t)) unplannedShort.set(t, lostMwhAt(t));
   const excludedUnplannedMwh = Array.from(primary.lost)
     .filter(([t, k]) => k === "unplanned" && !lost.has(t))
     .reduce((s, [t]) => s + lostMwhAt(t), 0);
@@ -276,6 +284,8 @@ async function compute(epiasPlantId: number, capacityMw: number, capacitySource:
     hours,
     firstDate,
     lastDate,
+    unplannedLong,
+    unplannedShort,
     loss: {
       epiasPlantId,
       capacityMw,
@@ -316,6 +326,19 @@ async function cached(epiasPlantId: number, capacityMw: number, capacitySource: 
 
 export async function windPlantLoss(epiasPlantId: number, capacityMw: number, capacitySource: string | null = null): Promise<WindPlantLoss | null> {
   return (await cached(epiasPlantId, capacityMw, capacitySource))?.loss ?? null;
+}
+
+/**
+ * Saatlik plansız kayıp (sistem yönü sekmesinin kısıntı düzeltmesi): uzun olaylar (iki kaynak, ≥ 6 saat) ve sayılmayan kısa
+ * kayıplar ayrı, MWh. Kalite eşiği altı santral için de döner; süzme çağırana kalır.
+ */
+export async function windHourlyLoss(
+  epiasPlantId: number,
+  capacityMw: number,
+  capacitySource: string | null = null
+): Promise<{ long: Map<number, { mwh: number; notice: WindEvent["notice"] }>; short: Map<number, number> } | null> {
+  const c = await cached(epiasPlantId, capacityMw, capacitySource);
+  return c ? { long: c.unplannedLong, short: c.unplannedShort } : null;
 }
 
 /** Saat → kayıp durumu (geriye dönük testte değerlendirme maskesi; bütün adaylara aynı uygulanır) */
