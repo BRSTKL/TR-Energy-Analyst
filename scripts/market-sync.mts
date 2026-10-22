@@ -46,4 +46,8 @@ if (!r.success) {
   console.error(`Piyasa verisi ${start} – ${end}: ${r.error}`);
   process.exit(1);
 }
-console.log(`Piyasa verisi ${start} – ${end}: ${r.totalMarketRecords} saat; resmî dengesizlik fiyatı ${JSON.stringify(r.officialImbalance)}`);
+// EPİAŞ resmî dengesizlik tutarını ay kapanınca (uzlaştırmayla) yayımlar: içinde bulunulan ayda 0 satır olağandır
+const oi = r.officialImbalance;
+const official =
+  oi && "error" in oi ? `alınamadı (${oi.error})` : oi?.written ? `${oi.written} saat` : "henüz yayımlanmadı (ay kapanınca aylık eşitleme yazar)";
+console.log(`Piyasa verisi ${start} – ${end}: ${r.totalMarketRecords} saat; resmî dengesizlik fiyatı ${official}`);

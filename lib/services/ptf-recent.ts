@@ -37,9 +37,15 @@ function readCache(): PtfCache | null {
 /** Son `days` gün ve bugünün (Türkiye) PTF'sini EPİAŞ'tan çeker, önbelleğe yazar. EPİAŞ'a erişilemezse hata fırlatır. */
 export async function syncRecentPtf(now = Date.now(), days = 3): Promise<{ hours: number; last: string | null }> {
   const todayWall = Math.floor((now + TR_OFFSET) / DAY) * DAY;
-  const json = await epiasRequest<{ items?: Array<{ date: string; price: number }> }>("/markets/dam/data/mcp", {
-    startDate: formatToEpiasIso(new Date(todayWall - days * DAY), false),
-    endDate: formatToEpiasIso(new Date(todayWall), true),
+  const startDate = formatToEpiasIso(new Date(todayWall - days * DAY), false);
+  // Bitiş gün olarak okunur ("bugün 00:00" bugünün 24 saatini döndürür). "Bugün 23:00" bitişi 14:00'ten önce
+  // reddediliyordu (HTTP 400, "... tarihli veri saat 14 öncesinde"; 21–22.10.2026 sabah kayıtları), bu yüzden gün başı.
+  // Yine reddedilirse düne kadar çekilir: D-1 fiyatı yoksa sıfır fiyat olasılığı kurulmaz, ama önceki günler önbellekte kalır.
+  const request = (end: number) =>
+    epiasRequest<{ items?: Array<{ date: string; price: number }> }>("/markets/dam/data/mcp", { startDate, endDate: formatToEpiasIso(new Date(end), false) });
+  const json = await request(todayWall).catch((e) => {
+    console.warn(`PTF bugün dahil alınamadı, düne kadar deneniyor: ${e instanceof Error ? e.message.slice(0, 160) : e}`);
+    return request(todayWall - DAY);
   });
   const hours: Record<string, number> = {};
   for (const it of json.items ?? []) if (Number.isFinite(Number(it.price))) hours[epiasDateToWallClock(it.date).toISOString()] = Number(it.price);
