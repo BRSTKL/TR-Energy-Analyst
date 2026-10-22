@@ -654,11 +654,11 @@ export default function PlanningEfficiencyPage() {
 
         {/* TAB SWITCHER: Planlama Verimliliği vs GİP Arbitraj Analizi */}
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200">
-          <div className="flex gap-2">
+          <div className="flex max-w-full gap-2 overflow-x-auto">
             <button
               type="button"
               onClick={() => setActiveSectionTab("efficiency")}
-              className={`inline-flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition-all ${
+              className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition-all ${
                 activeSectionTab === "efficiency"
                   ? "border-sky-600 bg-sky-50/60 text-sky-800 shadow-sm"
                   : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800"
@@ -670,7 +670,7 @@ export default function PlanningEfficiencyPage() {
             <button
               type="button"
               onClick={() => setActiveSectionTab("arbitrage")}
-              className={`inline-flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition-all ${
+              className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition-all ${
                 activeSectionTab === "arbitrage"
                   ? "border-amber-600 bg-amber-50/60 text-amber-900 shadow-sm"
                   : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800"
@@ -691,7 +691,7 @@ export default function PlanningEfficiencyPage() {
             <button
               type="button"
               onClick={() => setActiveSectionTab("budget")}
-              className={`inline-flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition-all ${
+              className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition-all ${
                 activeSectionTab === "budget"
                   ? "border-indigo-600 bg-indigo-50/60 text-indigo-900 shadow-sm"
                   : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800"
@@ -1063,7 +1063,7 @@ export default function PlanningEfficiencyPage() {
         </section>
 
         {/* 3. BÖLÜM: AYLIK VERİMLİLİK TRENDİ & GÜN x SAAT ISI HARİTASI */}
-        <section className="grid gap-6 lg:grid-cols-2">
+        <section className="grid gap-6 lg:grid-cols-2 [&>*]:min-w-0">
           {/* Sol: Aylık Verimlilik Trendi */}
           <Card className="border-slate-200 shadow-sm">
             <CardHeader className="pb-2">
@@ -1460,7 +1460,7 @@ export default function PlanningEfficiencyPage() {
                   const tl = (v: number) => `${v < 0 ? "−" : ""}${Math.abs(Math.round(v)).toLocaleString("tr-TR")} ₺`;
                   return (
                     <>
-                      <section className="grid gap-4 lg:grid-cols-3">
+                      <section className="grid gap-4 lg:grid-cols-3 [&>*]:min-w-0">
                         {/* KPI 1: Gerçekçi GİP senaryosu (hacim sınırı + zor saatte fiyat kayması) */}
                         <GipScenarioPanel projectId={projectId} scope={selectedScope} />
 
@@ -1485,7 +1485,7 @@ export default function PlanningEfficiencyPage() {
                         </Card>
                       </section>
 
-                      <section className="grid gap-4 sm:grid-cols-3">
+                      <section className="grid gap-4 sm:grid-cols-3 [&>*]:min-w-0">
                         <Card className="border-slate-200 shadow-sm">
                           <CardContent className="p-4">
                             <div className="text-xs font-medium uppercase tracking-wider text-slate-500">
@@ -1539,7 +1539,7 @@ export default function PlanningEfficiencyPage() {
                 })()}
 
                 {/* 2. GRAFİKLER BÖLÜMÜ (AYLIK TREND & FİYAT AYRIŞMASI) */}
-                <section className="grid gap-6 lg:grid-cols-2">
+                <section className="grid gap-6 lg:grid-cols-2 [&>*]:min-w-0">
                   {/* Grafik 1: Aylık net etki ve teorik tavan */}
                   <Card className="border-slate-200 shadow-sm">
                     <CardHeader className="pb-2">
