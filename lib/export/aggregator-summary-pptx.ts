@@ -7,6 +7,7 @@
  */
 
 import pptxgen from "pptxgenjs";
+import { ownerShort } from "@/lib/format";
 import { peerGroup, type AggregatorBenchmarkRow } from "@/lib/analysis/aggregator-benchmark";
 import type { AggregatorDetailResult } from "@/lib/services/aggregator-data";
 import type { ReportAuthor } from "@/lib/export/plant-report-pptx";
@@ -107,12 +108,8 @@ export function aggregatorSummaryFacts(d: AggregatorDetailResult): AggregatorSum
   };
 }
 
-const clip = (v: string, n: number) => (v.length > n ? `${v.slice(0, n - 1)}…` : v);
-/** Üretici adı: unvanın ilk kısmı ("KOVANLIK ENERJİ ÜRETİM SAN. VE TİC. A.Ş." → "KOVANLIK ENERJİ ÜRETİM"); kelime ortasında kesilmez */
-export const ownerShort = (name: string) => {
-  const head = name.split(/\s+(?:SAN\.?|SANAYİ|VE|TİC\.?|TİCARET|A\.?\s?Ş\.?|ANONİM|LTD\.?|LİMİTED)(?=\s|$|\.)/i)[0].trim();
-  return clip(head.length >= 5 ? head : name, 38);
-};
+/** Üretici adı kısaltması lib/format.ts'te (ekranda da kullanılır) */
+export { ownerShort };
 
 export async function exportAggregatorSummaryPptx(d: AggregatorDetailResult, author: ReportAuthor = {}): Promise<Buffer> {
   const f = aggregatorSummaryFacts(d);

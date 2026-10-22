@@ -2,8 +2,11 @@
  * Aylık EPİAŞ eşitlemesi, kendiliğinden (güneş motoru yol haritası 2. adım; kullanıcı 18.10.2026: "1. yolu yapalım").
  *
  * Mac'te saatte bir çalışır (scripts/launchd/com.tr-energy.epias-monthly.plist). Hedef ay: geçen ay (Türkiye saati).
+ * Her çalışmada önce iki küçük günlük iş: geçici üretim (12 saatte bir) ve piyasa fiyatları (`market-sync.mts --recent`,
+ * veri dünü içerene kadar her saat; içeriyorsa bir saniyede çıkar). Piyasa sayfası böylece her gün dünün verisini gösterir.
  *   1. Ay tamamlandıysa ya da başka bir çalışma sürüyorsa hiçbir şey yapmaz.
- *   2. EPİAŞ veri uç noktasına erişilemiyorsa (VPN kapalı) yapmaz; ayın 5'inden sonra günde bir kez "VPN'i aç" bildirimi.
+ *   2. EPİAŞ veri uç noktasına erişilemiyorsa yapmaz; ayın 5'inden sonra günde bir kez bildirim (20.10.2026'dan beri VPN
+ *      gerekmiyor, erişim yoksa internet bağlantısı ya da EPİAŞ kesintisi).
  *   3. Hedef ayın üretimi (UEVM) henüz yayımlanmamışsa (en büyük üç karne santralinde ayın son günü boş) yapmaz.
  *   4. Adımlar sırayla, her biri ayrı süreçte; biten adım bir sonraki çalışmada atlanır (kaldığı yerden sürer). Santral
  *      toplamasında üç HTTP 403 (EPİAŞ güvenlik duvarı) gelirse durdurulur; bir saat sonraki çalışma sürdürür.
@@ -88,7 +91,7 @@ if (fs.existsSync(LOCK_FILE)) {
   fs.rmSync(LOCK_FILE, { force: true });
 }
 
-// Geçici üretim (EPİAŞ gerçek zamanlı üretimi): son başarıdan 12 saat geçtiyse dene (VPN kapalıysa birkaç saniyede düşer).
+// Geçici üretim (EPİAŞ gerçek zamanlı üretimi): son başarıdan 12 saat geçtiyse dene (EPİAŞ'a erişim yoksa birkaç saniyede düşer).
 // Aylık eşitleme sürerken çalışmaz (kilit yukarıda): EPİAŞ dakikada 80 istek sınırı.
 {
   let lastOk = 0;
@@ -112,6 +115,23 @@ if (fs.existsSync(LOCK_FILE)) {
     });
     void r;
   }
+}
+
+// Piyasa fiyatları (PTF, SMF, sistem yönü, GİP): dünü içermiyorsa son üç günle birlikte çek. Aynı kilit altında.
+if (!dry) {
+  await new Promise<void>((resolve) => {
+    const c = spawn(process.execPath, ["--env-file=.env", "node_modules/.bin/tsx", "--tsconfig", "tsconfig.json", "scripts/market-sync.mts", "--recent"], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    c.stdout.on("data", (b) => (out += b));
+    c.stderr.on("data", (b) => (out += b));
+    const timer = setTimeout(() => c.kill("SIGTERM"), 10 * 60_000);
+    c.on("close", () => {
+      clearTimeout(timer);
+      const line = out.trim().split("\n").pop() ?? "";
+      if (!line.startsWith("Piyasa verisi güncel")) console.log(`${stamp()} günlük piyasa: ${line}`);
+      resolve();
+    });
+  });
 }
 
 if (state.status === "done") process.exit(0);
@@ -150,10 +170,10 @@ async function published(): Promise<"yes" | "no" | "unreachable"> {
 const pub = await published();
 if (pub !== "yes") {
   if (pub === "unreachable" && wallNow.getUTCDate() >= 5 && state.lastNotice !== today) {
-    notify("EPİAŞ eşitlemesi bekliyor", `${month} verisi için EPİAŞ'a erişilemiyor. VPN'i (Türkiye çıkışı) açarsan bir saat içinde kendiliğinden başlar.`);
+    notify("EPİAŞ eşitlemesi bekliyor", `${month} verisi için EPİAŞ'a erişilemiyor. VPN gerekmez: internet bağlantını kontrol et; erişim gelince bir saat içinde kendiliğinden başlar.`);
     state.lastNotice = today;
   }
-  log(pub === "unreachable" ? "EPİAŞ'a erişilemiyor (VPN kapalı?)" : "hedef ayın üretimi (UEVM) henüz yayımlanmamış");
+  log(pub === "unreachable" ? "EPİAŞ'a erişilemiyor (internet bağlantısı ya da EPİAŞ kesintisi?)" : "hedef ayın üretimi (UEVM) henüz yayımlanmamış");
   if (!dry) saveState();
   process.exit(0);
 }
@@ -209,6 +229,7 @@ interface Step {
 }
 const steps: Step[] = [
   { name: "piyasa", args: ["scripts/market-sync.mts", monthStart] },
+  { name: "sistem geneli (sistem yönü)", args: ["scripts/system-sync.mts"] },
   { name: "arıza bildirimleri", args: ["scripts/umm-sync.mts", month] },
   { name: "YEKDEM listeleri", args: ["scripts/yekdem-exit-sync.mts"] },
   { name: "toplayıcı portföyleri", args: ["scripts/aggregator-collect.mts"] },
@@ -234,9 +255,11 @@ const steps: Step[] = [
   { name: "hava tahmini arşivi (güneş)", args: ["scripts/weather-sync.mts"] },
   { name: "hava tahmini arşivi (rüzgâr)", args: ["scripts/wind-forecast-sync.mts"] },
   { name: "yakalama oranı", args: ["scripts/sector-capture.mts"] },
+  { name: "kar derinliği (güneş kaybı için)", args: ["scripts/snow-sync.mts"] },
   { name: "güneş kaybı", args: ["scripts/sector-curtailment.mts"] },
   { name: "rüzgâr kaybı", args: ["scripts/sector-wind-curtailment.mts"] },
   { name: "hidro kaybı", args: ["scripts/sector-hydro-curtailment.mts"] },
+  { name: "sistem yönü santral payları", args: ["scripts/system-attribution.mts"] },
   { name: "geçmişle sınama", args: ["scripts/sector-backtest.mts"] },
   { name: "toplayıcı kıyası", args: ["scripts/aggregator-benchmark.mts", String(Y)] },
   { name: "GİP katılımı", args: ["scripts/gip-participation.mts", String(Y), String(M)] },

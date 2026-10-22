@@ -464,6 +464,84 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
             </p>
           </Section>
 
+          <Section id="sistem-yonu" n={next()} title="Sistem yönünü ne belirledi?">
+            <p>
+              Türkiye toplamında, her saat ve her kaynak türü için <b>sapma = UEVM − son KGÜP</b> (EPİAŞ, kaynak türüne göre uzlaştırma üretimi
+              ve kesinleşmiş günlük üretim planı); tüketim için <b>sapma = yük tahmini − gerçek zamanlı tüketim</b>, ayın ortanca farkı
+              çıkarılarak. Artı sapma sistemi fazlaya, eksi sapma açığa iter. Saatin yönü EPİAŞ sistem yönüdür. Gerçek zamanlı üretim
+              kullanılmaz: Eylül 2026 denemesinde güneşte KGÜP&apos;ten saatte ortalama yaklaşık 4.400 MW düşük çıktı, lisanssız güneşi kapsamadığı
+              anlaşılıyor. UEVM ile KGÜP aynı santralleri kapsar (Eylül 2026 aylık ortalamaları ana kaynaklarda %3 içinde; akarsu %2,6,
+              öbürleri %2 içinde).
+            </p>
+            <p>
+              <b>Sürükleyenler</b> (rüzgâr, güneş, akarsu, tüketim) havaya ve talebe bağlıdır. <b>Açığı kim yarattı</b>: her açık saatte
+              sürükleyenlerin açık yöndeki sapması (tüketim fazlası, rüzgâr / güneş / akarsu eksiği; ters yöndeki sapma sıfır sayılır)
+              ortalanır; <b>tüketim payı</b> tüketimin bu toplamdaki payıdır. Fazla saatlerde aynı hesap ters yönde. <b>Kapatanlar</b>:
+              EPİAŞ&apos;ın o saatlerde teslim edilen yukarı (YAL) ya da aşağı (YAT) talimat toplamı. <Tag kind="exact" /> (talimat)
+            </p>
+            <p>
+              <b>Tüketim serisi zayıf halkadır.</b> Yük tahmini ile kamuya açık iki tüketim serisi aynı temelde değil: gerçek zamanlı
+              tüketimle aylık ortalama fark −1,9 ile +0,8 GW, uzlaştırma tüketimiyle (UEÇM) 0 ile +2,3 GW arasında (çoğu ayda +1,4 GW&apos;ın
+              üstünde) gidip geliyor. Bu yüzden tahmin
+              hatasının seviyesi ölçülemez; yalnız ay içindeki saatlik sapma okunur (ilk sürüm farkı çıkarmıyordu ve Temmuz 2025&apos;te tüketim
+              tahmininin ortalama 1.856 MW aşıldığını gösteriyordu; UEÇM ile o ayın farkı −18 MW). UEÇM saatlik sinyalde daha zayıf (dengeli isabet %59 /
+              %61; muhtemelen saatlik sayacı olmayan tüketimin profille dağıtılmasından), bu yüzden gerçek zamanlı tüketim kullanılır. Tüketim sapması saatten
+              saate büyük oynadığı için payı yüksek çıkar (2026 Ocak–Eylül açık saatlerde %62), ama yönü az açıklar: tüketim hiç katılmasa da
+              isabet neredeyse aynıdır (2025: %64, 2026: %63; 2025&apos;te tüketimsiz isabet biraz daha yüksek). <b>Tüketim payını üst sınır olarak okuyun.</b> <Tag kind="estimate" />
+            </p>
+            <p>
+              <b>İsabet</b>: sürükleyenlerin toplam sapmasının saatin yönünü doğru gösterdiği saatlerin payı, açık ve fazla saatlerde ayrı
+              ayrı, ikisinin ortalaması (dengeli isabet). Rastgele ya da hep aynı yönü diyen tahmin %50 tutturur; ham isabet yanıltır (2025&apos;te
+              analize giren saatlerin %67&apos;si açıktı, &quot;hep açık&quot; demek %67 tutturuyordu). 2025 Mart–Aralık&apos;ta %63, 2026 Ocak–Eylül&apos;de %64 (kısıntı düzeltmeleriyle).
+              Kıyas için: önceki saatin yönünü tekrarlamak %81–84 tutturur; yöntem tahmin aracı değil, ayrıştırmadır. Bütün kaynakların
+              sapması (dengeleyenler dahil) toplanınca dengeli isabet %42 / %47&apos;ye, rastgelenin altına düşer: KGÜP gün öncesi planıdır, gün içi alım satım ve talimatlar
+              sonrası pozisyonlar bu veride yok. Sayfa &quot;kim planından saptı&quot; sorusunu cevaplar, &quot;dengesizliği kim yarattı&quot;
+              sorusunu ancak yaklaşık olarak.
+            </p>
+            <p>
+              <b>Plan eksik günler dışarıda:</b> bir sürükleyenin günlük UEVM&apos;si KGÜP&apos;ünün 1,5 katını aşan gün hesaba katılmaz.
+              Güneşin KGÜP toplamı Ocak–Şubat 2025&apos;in tamamında, Mart 2025&apos;in 10 gününde, Haziran 2025&apos;in 2 gününde ve 1–21 Mayıs
+              2026&apos;da eksik kayıtlı (Ocak 2025: plan ortalama 369 MW, üretim 2.147 MW): 2025&apos;te 71, 2026&apos;da 21 gün. Günlük oranın
+              %99&apos;luk değeri rüzgârda 1,16, akarsuda 1,14; kural gerçek tahmin hatasını silmez. Yıllar arası kıyas yalnız iki yılda da
+              verisi olan aylarla yapılır.
+            </p>
+            <p>
+              <b>Kısıntı düzeltmesi:</b> TEİAŞ&apos;ın kıstığı santral planından az üretmiş görünür; bu tahmin hatası değildir. Rüzgâr ve
+              güneş sapmasına, sektör karnesinin &quot;Kayıp üretim&quot; modellerinin (rüzgârda geçmiş rüzgâr, güneşte uydu) saat saat ölçtüğü
+              plansız kayıp geri eklenir (243 lisanslı RES, 58 lisanslı GES; arıza ya da bakım bildirimiyle çakışan saatler gerçek üretim
+              eksiği sayılıp eklenmez; rüzgârda iki hava kaynağının birlikte bulduğu en az 6 saatlik olaylar). Tabloda &quot;ayrılan
+              kısıntı&quot; sütunu. Kısa olayları da saymak denendi; isabeti değiştirmedi, model gürültüsünü de içerdiği için kullanılmaz.
+              <b>Akarsu</b> için kayıp modeli yok; kaba kural: planı (son KGÜP) en az 1 MW iken üretimin planın %5&apos;inin altında kaldığı, en
+              az 6 saat süren ve arıza ya da bakım bildirimiyle çakışmayan saatler olası kısıntı sayılır (kayıp = plan − üretim). 2026&apos;da 473
+              GWh; Nisan–Haziran&apos;da yoğun, kaybın %44&apos;ü Doğu Karadeniz, %33&apos;ü Akdeniz (açık saatler, il EPDK lisansından). O saatlerde
+              PTF dönem ortalamasından farksız (ekonomik durdurma değil) ve bir kısmı sistem açıkken (sistem geneli fazla değil): büyük
+              olasılıkla bölgesel iletim kısıtı talimatı; bildirilmemiş uzun arıza ya da sel duruşu da olabilir. Akarsunun açık saatlerdeki
+              itmesi düzeltmeyle 61 MW&apos;tan 21 MW&apos;a iner. 2025&apos;te ayrılamaz (havuzda son KGÜP eksik). Düzeltmelerle isabet
+              %63,7 → %64,4 (2026). Fazla saatlerdeki YAT&apos;ın olağan ayın (bütün ayların ortancası)
+              iki katını aştığı aylar ⚠ ile işaretlenir: Haziran 2025, Nisan–Haziran 2026. Mayıs 2026&apos;da fazla saatlerde YAT 5.372 MW (yalnız
+              22–31 Mayıs, ayın kalanı plan eksik), ayrılan kısıntı (rüzgâr, güneş, akarsu) 371 MW, yani YAT&apos;ın %7&apos;si; 2026 baharında %7–8,
+              Haziran 2025&apos;te %22. Sebebi: karnede Nisan–Haziran 2026 rüzgâr kaybının %91–97&apos;si planlı (Haziran 2025&apos;te %26), yani bir gün önceden plana (KGÜP) yansıtılmış;
+              plandaki düşüş sapma yaratmaz, tabloyu bozmaz. Ölçülemeyen kısım: 6 saatten kısa ve kısmi kısıntılar. Kaynak türüne göre
+              talimat EPİAŞ açık verisinde yok; geri kalan YAT büyük olasılıkla baraj ve termik santrallere gitti. Kayıp oranları
+              (Mayıs 2026 rüzgâr %14,8, güneş %30,7) yalnız lisanslı santraller, lisanssız güneş dahil değil; plansız kayıp model hatasını
+              da içerebilir. Veri <code>data/pool/system/</code> (<code>scripts/system-sync.mts</code>) ve
+              <code>.cache/epias/sector-loss-hourly-*.json</code> (kayıp betikleri); ikisi de aylık eşitlemede. UEVM ay bitince
+              yayımlandığı için bölüm son tam aya kadardır. <Tag kind="estimate" /> (kısıntı)
+            </p>
+            <p>
+              <b>Kimden geldi?</b> Kaynağın bir saatteki itmesi (örneğin açıkta rüzgârın plan altı toplamı), o saatte o yönde sapan
+              santrallere sapmaları oranında paylaştırılır; paylar toplanınca o rakamı verir (2026 açık saatlerinde rüzgâr 189 / 190 MW, güneş
+              209 / 212 MW, akarsu kısıntı ayrıldıktan sonra 21 / 21 MW; fark havuz kapsamı). Düzeyler: şirket, toplayıcı, bölge (il EPDK
+              lisansından; lisanssız güneş dağıtım bölgesine göre), santral; ay seçilebilir. Veri havuzdaki santral serileri (son KGÜP ve UEVM); santralin kaynağı
+              EPİAŞ&apos;ın santral bazında kaynak kırılımından, sistem toplamıyla aynı sınıflandırma. Şirket projenin sahip dizininden,
+              toplayıcı güncel üyelik listesinden (toplayıcılar arası kıyasla aynı), lisanssız toplam kayıtları dağıtım bölgesine göre.
+              <b> Planına göre</b> oran (payın santralin KGÜP&apos;üne oranı) büyüklükten bağımsız ölçüdür; üretime oran kullanılmaz, neredeyse hiç üretmeyen santralde anlamsız büyüyor. Yalnız 2026: havuzda 2025&apos;in son KGÜP&apos;ü santrallerin çoğunda yok (sektör karnesi ilk KGÜP&apos;le çalışır), santral
+              toplamı sistemi tutmaz. Kısıntı düzeltmesi akarsuda santral bazında yapılır, rüzgâr ve güneşte yapılmaz (kayıp yalnız toplam olarak tutulur). Tek santral ve tek saat düzeyi gürültülüdür; şirket,
+              toplayıcı ya da bölge düzeyinde okunmalı (<code>scripts/system-attribution.mts</code>; aylık eşitlemede). <Tag kind="exact" />
+              (paylaştırma)
+            </p>
+          </Section>
+
           <Section id="toplayici-kiyas" n={next()} title="Toplayıcılar arası kıyas">
             <p>
               EPİAŞ&apos;taki her toplayıcının santral listesindeki lisanslı rüzgâr, güneş ve hidro santralleri için aynı yöntem: saatlik sapma (UEVM − ilk KGÜP),
@@ -700,7 +778,12 @@ Rüzgâr: beklenen = santralin güç eğrisi (100 m hız 0,5 m/s × 8 yön hücr
               Sınırlar: kurulu güç kayıttan (YEKDEM, EPDK lisansı) ya da en yüksek üretimden alt sınır (129 rüzgâr santralinin 35'inde alt sınır; kayıp eşiği buna
               bağlı); kapasite artışı eğriyi dönem içinde değiştirebilir; talimatla kısma ilk KGÜP&apos;te görünmüyorsa plansız sayılır. Gecikme: IFS ≈ 1
               gün, ERA5 ≈ 5–6 gün; plansız kayıp ERA5 kadar gecikir. Kaynaklar: Open-Meteo.com (CC BY 4.0); ERA5: Copernicus Climate Change Service;
-              SARAH3: EUMETSAT CM SAF. Güneşte plansız kayıp kar örtüsünü de içerebilir.
+              SARAH3: EUMETSAT CM SAF. Güneşte plansız kayıp kar örtüsünü de içerebilir: santral konumunda ERA5 kar derinliği (Open-Meteo, 0,25°)
+              en az 1 cm olan saatlerdeki plansız kayıp &quot;kar olası&quot; diye ayrılır ve sistem yönündeki kısıntı düzeltmesine girmez (karla
+              örtülü panel kısılmış değildir; <code>scripts/snow-sync.mts</code>, aylık eşitlemede; ızgara kaba, bir işarettir). Hidroda nehir tipi
+              santrallerin ani düşüş kuralı (±72 saatin ortancası) haftalarca süren duruşları göremez; bunlar ayrıca &quot;bildirimsiz uzun
+              duruş&quot; olarak sayılır (ilk KGÜP en az 1 MW iken en az 6 saat sıfıra yakın üretim, arıza / bakım bildirimi yok): 2026
+              Ocak–Eylül 150 santral, 291 GWh (2025: 19 GWh), çoğu Nisan–Haziran; büyük olasılıkla bölgesel iletim kısıtı talimatı.
             </p>
           </Section>
 

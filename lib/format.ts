@@ -68,3 +68,9 @@ export function yearAblative(year: number): string {
   return `${year}'${yearSuffix(year)}n`;
 }
 
+const clip = (v: string, n: number) => (v.length > n ? `${v.slice(0, n - 1)}…` : v);
+/** Üretici adı: unvanın ilk kısmı ("KOVANLIK ENERJİ ÜRETİM SAN. VE TİC. A.Ş." → "KOVANLIK ENERJİ ÜRETİM"); kelime ortasında kesilmez */
+export const ownerShort = (name: string) => {
+  const head = name.split(/\s+(?:SAN\.?|SANAYİ|VE|TİC\.?|TİCARET|A\.?\s?Ş\.?|ANONİM|LTD\.?|LİMİTED)(?=\s|$|\.)/i)[0].trim();
+  return clip(head.length >= 5 ? head : name, 38);
+};

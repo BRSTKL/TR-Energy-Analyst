@@ -12,6 +12,7 @@ import type { SectorPlant } from "@/lib/services/sector";
 import { MethodLink } from "@/components/method-link";
 import { AggregatorBenchmarkTab } from "@/components/aggregator-benchmark-tab";
 import { SectorLossCard } from "@/components/sector-loss-card";
+import { SystemDriversCard } from "@/components/system-drivers-card";
 type Tech = SectorTech;
 type HydroFilter = "all" | HydroKind | "unknown";
 
@@ -209,8 +210,8 @@ export default function SectorPage() {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: "unitTl", asc: true });
   const [selected, setSelected] = useState<string[]>([]);
-  /** Santraller (karne), Toplayıcılar (toplayıcılar arası kıyas; PLAN 9.1) ya da Kayıp üretim (uyduyla; PLAN 20.4) */
-  const [tab, setTab] = useState<"plants" | "aggregators" | "loss">("plants");
+  /** Santraller (karne), Toplayıcılar (toplayıcılar arası kıyas; PLAN 9.1), Kayıp üretim (uyduyla; PLAN 20.4) ya da Sistem yönü (20.10.2026) */
+  const [tab, setTab] = useState<"plants" | "aggregators" | "loss" | "system">("plants");
 
   useEffect(() => {
     setError(null);
@@ -340,12 +341,13 @@ export default function SectorPage() {
       </header>
 
       <main className="mx-auto max-w-7xl space-y-6 px-4 pt-6 sm:px-6 lg:px-8">
-        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
+        <div className="inline-flex max-w-full flex-wrap rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
           {(
             [
               ["plants", "Santraller"],
               ["aggregators", "Toplayıcılar"],
               ["loss", "Kayıp üretim"],
+              ["system", "Sistem yönü"],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -362,6 +364,8 @@ export default function SectorPage() {
           <AggregatorBenchmarkTab year={data.year} />
         ) : tab === "loss" ? (
           <SectorLossCard />
+        ) : tab === "system" ? (
+          <SystemDriversCard />
         ) : (
         <>
         <div className="flex flex-wrap items-center gap-2">
