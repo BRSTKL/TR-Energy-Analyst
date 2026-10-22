@@ -1,0 +1,11 @@
+[Unit]
+Description=Gunluk veritabani yedegi
+OnFailure=tr-energy-failed@%n.service
+[Service]
+Type=oneshot
+User=tre
+WorkingDirectory=/srv/tr-energy
+ExecStart=/usr/bin/node --env-file=.env node_modules/.bin/tsx --tsconfig tsconfig.json scripts/backup-db.mts daily
+TimeoutStartSec=10min
+StandardOutput=append:/var/log/tr-energy/tr-energy-db-backup.log
+StandardError=append:/var/log/tr-energy/tr-energy-db-backup.log

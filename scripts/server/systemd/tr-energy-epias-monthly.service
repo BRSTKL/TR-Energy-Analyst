@@ -1,0 +1,11 @@
+[Unit]
+Description=Saatlik EPIAS esitlemesi
+OnFailure=tr-energy-failed@%n.service
+[Service]
+Type=oneshot
+User=tre
+WorkingDirectory=/srv/tr-energy
+ExecStart=/usr/bin/node --env-file=.env node_modules/.bin/tsx --tsconfig tsconfig.json scripts/epias-monthly-sync.mts
+TimeoutStartSec=12h
+StandardOutput=append:/var/log/tr-energy/tr-energy-epias-monthly.log
+StandardError=append:/var/log/tr-energy/tr-energy-epias-monthly.log

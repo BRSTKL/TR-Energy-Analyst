@@ -1,0 +1,5 @@
+[Unit]
+Description=Gunluk ozet bildirimi
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/tr-energy-daily-summary

@@ -1055,12 +1055,13 @@ Sıra: 23.0 → 23.1 → 23.2 (kayıt ve karne erken başlasın, kanıt birikir)
   - ✅ Erişim testi (sunucudan): EPİAŞ biletsiz 401, giriş 201, dünkü PTF 10/10 × 200; Open-Meteo forecast / previous-runs / archive / satellite 200.
   - ✅ Temel kurulum: saat Europe/Istanbul, otomatik güvenlik güncellemesi, güvenlik duvarı (yalnız SSH), SSH yalnız anahtarla, 2 GB swap, Node 20, `tre` kullanıcısı, `/srv/tr-energy`.
   - ✅ Kod `96e40e3` (`next build` lint hatasında durur; `next dev` durmaz), `data/` + `.cache/` + `dev.db` anlık kopyası (`kaynaklar/` gitmedi), `next build`, systemd `tr-energy-web` (`next start`, 127.0.0.1:3000; Mac'ten SSH tüneliyle).
-  - [ ] Tam tur duman testi sunucuya karşı (`SMOKE_BASE=http://localhost:3100 npm run test:smoke`).
-  - [ ] `.env` (EPİAŞ kullanıcısı) kullanıcı kopyalar; giriş ekranı gelince EPİAŞ bilgisi uygulamaya taşınır (aşağıda).
-  - [ ] Zamanlanmış işler systemd timer'a: güneş tahmini TR 09:30 + 11:00, saatlik eşitleme; `caffeinate` yok.
-  - [ ] Bildirim: `osascript` çağrıları (`scripts/epias-monthly-sync.mts`, `lib/solar-engine/pipeline.ts`) Linux'ta ntfy / Telegram'a; iş çalışmazsa haber veren izleme (Healthchecks.io).
-  - [ ] Günlük veritabanı yedeği (sunucuda `predev` yok) ve sunucu dışına yedek.
-  - [ ] Geçiş: Mac'teki launchd işleri durur, son veri kopyası, sunucu işleri açılır; bir hafta geri dönüş imkânı. Sonra `scripts/launchd/README.md`, CLAUDE.md güncellenir.
+  - [ ] Tam tur duman testi sunucuya karşı (`SMOKE_BASE=https://tr-energy.tail342501.ts.net npm run test:smoke`).
+  - ✅ `.env` sunucuda (kullanıcı kopyaladı, izin 600); giriş ekranı gelince EPİAŞ bilgisi uygulamaya taşınır (aşağıda).
+  - ✅ Zamanlanmış işler systemd timer'da (`scripts/server/systemd/`): güneş tahmini TR 09:30 + 11:00, saatlik eşitleme, 03:00 yedek, 12:15 tahmin denetimi, 12:30 günlük özet.
+  - ✅ Bildirim ntfy (`lib/notify.ts`, `09d474f`); hata veren iş, eksik tahmin ve günlük özet telefona. Healthchecks.io gerekmedi.
+  - ✅ Günlük veritabanı yedeği sunucuda; her gün 13:00 Mac'e kopya (`scripts/tools/server-backup.sh`, `~/TR-Energy-Yedek/`).
+  - ✅ Geçiş 22.10.2026 ≈ 14:55: Mac launchd işleri durdu, son veri kopyası, sunucu işleri açık. Erişim Tailscale (https://tr-energy.tail342501.ts.net). Kod güncelleme `scripts/server/deploy.sh`; belgeler `scripts/server/README.md`, `scripts/launchd/README.md`, CLAUDE.md.
+  - [ ] 29.10.2026: sorun yoksa Mac'teki eski iki plist silinir.
 - [ ] **Giriş ekranı ve "EPİAŞ hesabım" (kullanıcı 22.10.2026; sunucu taşıması bittikten sonra).** Kararlar: şimdilik tek hesap (sonra kullanıcı eklenebilir yapıda), iki adımlı giriş sonra.
   1. Giriş sayfası (e-posta + şifre); şifre karma (hash) olarak saklanır; girişsiz hiçbir sayfa ve API açılmaz; oturum süresi, çıkış, çok yanlış denemede geçici kilit.
   2. "EPİAŞ hesabım" ayar sayfası: kullanıcı adı / şifre girilir, "Bağlantıyı dene" (TGT alır). Şifre veritabanında şifrelenmiş; anahtar veritabanı dışında, sunucudaki ayrı dosyada. Kaydedilen şifre bir daha gösterilmez.

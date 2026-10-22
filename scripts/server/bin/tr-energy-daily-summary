@@ -1,0 +1,18 @@
+#!/bin/bash
+# TR 12:30 gunluk ozet (ntfy)
+cd /srv/tr-energy
+D=$(date -d tomorrow +%F); F=data/pool/forecast-log/solar/${D:0:7}/$D.json.gz
+if [ -f "$F" ]; then
+  T=$(zcat "$F" | python3 -c "import json,sys; p=json.load(sys.stdin)[\"plants\"]; print(f\"{sum(x[\"status\"]==\"ok\" for x in p)}/{len(p)} santral\")")
+  L1="Yarinin ($D) gunes tahmini yazildi: $T."
+else L1="UYARI: yarinin ($D) gunes tahmini YOK."; fi
+since=$(date -d "24 hours ago" "+%F %T")
+ok=0; bad=0
+for u in tr-energy-epias-monthly tr-energy-solar-forecast tr-energy-db-backup; do
+  n=$(journalctl -u $u --since "$since" -o cat 2>/dev/null | grep -c "Finished\|Deactivated successfully")
+  f=$(journalctl -u $u --since "$since" -o cat 2>/dev/null | grep -c "Failed with result")
+  ok=$((ok+n)); bad=$((bad+f))
+done
+L2="Son 24 saat: $ok basarili calisma, $bad hata."
+DISK=$(df -h / | awk "NR==2{print \$5}")
+/usr/local/bin/tr-energy-notify "TR-Energy gunluk ozet" "$L1 $L2 Disk: $DISK dolu."

@@ -62,6 +62,14 @@ Konum koordinatlı bir kayıttan alınır. Tahmin ancak kayıt bulunamazsa kulla
 - **Raporda ve ekranda:** tahmini konum `~` ile işaretlenir (`formatLocation`); hava verisine dayanan her sonuç konum kaynağını yazar.
 - **Yasak:** Konumu kaynağı olmadan yazmak, santral adından tahmin edip kayıt gibi göstermek.
 
+## Sunucu
+
+Zamanlanmış işler (güneş tahmini, EPİAŞ eşitlemesi, yedek) ve uygulama 22.10.2026'dan beri sunucuda çalışır; Mac'te değil. Ayrıntı `scripts/server/README.md`.
+
+- Verinin asıl yeri sunucu (`/srv/tr-energy`); Mac'teki `data/` ve `.cache/` kendiliğinden güncellenmez.
+- Kod değişikliği sunucuya commit ve push'tan sonra `bash scripts/server/deploy.sh` ile gider. Sunucuda `next build` lint hatasında durur.
+- Bildirim `lib/notify.ts` ile (macOS'ta masaüstü, sunucuda ntfy); `osascript` doğrudan çağrılmaz.
+
 ## Raporlar
 
 Rapor, hesaplama ya da veri koduna dokunduktan sonra `npm run check:reports` (0 hata) ve `npm test` çalıştırılır.

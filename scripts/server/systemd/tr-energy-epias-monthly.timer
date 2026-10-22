@@ -1,0 +1,8 @@
+[Unit]
+Description=tr-energy-epias-monthly zamanlayici
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=5min
+Persistent=true
+[Install]
+WantedBy=timers.target

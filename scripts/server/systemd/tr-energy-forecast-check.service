@@ -1,0 +1,5 @@
+[Unit]
+Description=Yarinin gunes tahmini yazildi mi
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/tr-energy-forecast-check

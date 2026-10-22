@@ -1,5 +1,17 @@
 # Zamanlanmış görevler (macOS launchd)
 
+> **22.10.2026'dan beri güneş tahmini ve EPİAŞ eşitlemesi sunucuda çalışıyor** (`scripts/server/README.md`); Mac'te bu iki iş durduruldu, burada yalnız geri dönüş için duruyor. Mac'te çalışan tek iş sunucu yedeğinin kopyası (`com.tr-energy.server-backup`, aşağıda).
+
+## Sunucu yedeğinin Mac'e kopyası (`com.tr-energy.server-backup`)
+
+Her gün 13:00 `scripts/tools/server-backup.sh` sunucudaki veriyi `~/TR-Energy-Yedek/` altına çeker. launchd Masaüstü'ndeki betiği çalıştıramadığı için betik önce kopyalanır:
+
+```bash
+mkdir -p ~/.local/bin && cp scripts/tools/server-backup.sh ~/.local/bin/tr-energy-server-backup.sh
+cp scripts/launchd/com.tr-energy.server-backup.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.tr-energy.server-backup.plist
+```
+
 ## Günlük güneş tahmin kaydı (`com.tr-energy.solar-forecast`)
 
 `scripts/solar-forecast-daily.mts` her gün Mac saatiyle 08:30 ve 10:00'da çalışır, kesimi geçmemiş ilk gün için proje güneş santrallerinin saatlik tahminini `data/pool/forecast-log/solar/` altına bir kez yazar.

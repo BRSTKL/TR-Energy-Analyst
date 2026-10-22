@@ -1,0 +1,8 @@
+[Unit]
+Description=tr-energy-solar-forecast zamanlayici
+[Timer]
+OnCalendar=*-*-* 09:30:00
+OnCalendar=*-*-* 11:00:00
+Persistent=true
+[Install]
+WantedBy=timers.target

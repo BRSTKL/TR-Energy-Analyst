@@ -1,0 +1,7 @@
+[Unit]
+Description=tr-energy-forecast-check zamanlayici
+[Timer]
+OnCalendar=*-*-* 12:15:00
+Persistent=true
+[Install]
+WantedBy=timers.target

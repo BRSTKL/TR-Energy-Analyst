@@ -1,0 +1,4 @@
+#!/bin/bash
+# kullanim: tr-energy-notify "baslik" "mesaj"
+T=$(grep -m1 "^NTFY_TOPIC=" /srv/tr-energy/.env | cut -d= -f2-)
+[ -n "$T" ] && curl -s -m 15 -H "Content-Type: application/json" -d "$(printf "{\"topic\":\"%s\",\"title\":\"%s\",\"message\":\"%s\"}" "$T" "$1" "$2")" https://ntfy.sh/ >/dev/null

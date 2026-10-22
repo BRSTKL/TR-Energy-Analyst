@@ -1,0 +1,16 @@
+[Unit]
+Description=TR-Energy Analyst web (next start)
+After=network-online.target
+
+[Service]
+User=tre
+WorkingDirectory=/srv/tr-energy
+EnvironmentFile=/srv/tr-energy/.env.build
+EnvironmentFile=-/srv/tr-energy/.env
+Environment=NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
+ExecStart=/usr/bin/node node_modules/.bin/next start -H 127.0.0.1 -p 3000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,4 @@
+#!/bin/bash
+# TR 12:15: yarinin gunes tahmini yazilmis mi?
+D=$(date -d tomorrow +%F); F=/srv/tr-energy/data/pool/forecast-log/solar/${D:0:7}/$D.json.gz
+[ -f "$F" ] || { /usr/local/bin/tr-energy-notify "TR-Energy: tahmin yok" "$D icin gunes tahmini 12:15e kadar yazilmadi"; exit 1; }

@@ -1,0 +1,5 @@
+[Unit]
+Description=TR-Energy hata bildirimi (%i)
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/tr-energy-notify "TR-Energy: is basarisiz" "%i calismadi. Gunluk: journalctl -u %i"
