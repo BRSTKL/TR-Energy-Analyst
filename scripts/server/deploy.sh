@@ -17,11 +17,11 @@ set -euo pipefail
 cd /srv/tr-energy
 # .env kabukta okunmaz (şifrede özel karakter olabilir); Prisma ve Next onu kendileri okur
 as_tre() { sudo -u tre bash -c "set -a; . ./.env.build; set +a; $1"; }
-old=$(git rev-parse HEAD)
+old=$(sudo -u tre git rev-parse HEAD)
 sudo -u tre git pull -q --ff-only
-new=$(git rev-parse HEAD)
+new=$(sudo -u tre git rev-parse HEAD)
 echo "kod: ${old:0:7} -> ${new:0:7}"
-changed=$(git diff --name-only "$old" "$new")
+changed=$(sudo -u tre git diff --name-only "$old" "$new")
 if echo "$changed" | grep -qx "package-lock.json"; then echo "paketler kuruluyor"; as_tre "npm ci --no-audit --no-fund >/dev/null"; fi
 if echo "$changed" | grep -qx "prisma/schema.prisma"; then
   echo "şema değişti: yedek ve prisma db push"
