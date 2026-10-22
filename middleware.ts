@@ -12,10 +12,13 @@ export async function middleware(req: NextRequest) {
   if (PUBLIC_PATHS.some((re) => re.test(pathname))) return NextResponse.next();
   if (await verifySession(req.cookies.get(SESSION_COOKIE)?.value)) return NextResponse.next();
   if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Giriş gerekli." }, { status: 401 });
-  // Göreli adres: sunucu bir ön sunucunun (Tailscale serve) arkasında 127.0.0.1:3000'i görür; mutlak adres tarayıcıyı
-  // https://localhost:3000'e gönderiyordu.
-  const target = pathname === "/" ? "/login" : `/login?next=${encodeURIComponent(pathname + search)}`;
-  return new NextResponse(null, { status: 307, headers: { Location: target } });
+  // Adres tarayıcının gördüğü sunucuyla kurulur: ön sunucunun (Tailscale serve) arkasında req.nextUrl 127.0.0.1:3000'i
+  // görür ve tarayıcıyı https://localhost:3000'e gönderiyordu.
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? req.nextUrl.host;
+  const proto = req.headers.get("x-forwarded-proto") ?? req.nextUrl.protocol.replace(":", "");
+  const url = new URL(`${proto}://${host}/login`);
+  if (pathname !== "/") url.searchParams.set("next", pathname + search);
+  return NextResponse.redirect(url);
 }
 
 export const config = {
