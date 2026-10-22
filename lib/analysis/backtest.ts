@@ -90,6 +90,8 @@ export function priceHours(hourly: HourlyResult[], profile: ImbalancePricingProf
   const byKey = new Map(hourly.map((h) => [key(h.plantId, new Date(h.timestamp).getTime()), h]));
   return hourly.map((h) => {
     const t = new Date(h.timestamp).getTime();
+    // Aynı gecikme her oran ve eğitim penceresi için tekrar soruluyordu (metin anahtarlı arama, isteğin ≈ üçte biri)
+    const prevByLag = new Map<number, HourlyResult | undefined>();
     const r = processHourlyRecord(
       { timestamp: h.timestamp, actualMwh: h.actualMwh, forecastMwh: h.forecastMwh },
       pricedMarket(h),
@@ -102,7 +104,10 @@ export function priceHours(hourly: HourlyResult[], profile: ImbalancePricingProf
       baselineCost: r.imbalanceCost,
       positivePrice: r.positivePrice,
       negativePrice: r.negativePrice,
-      prev: (lagHours: number) => byKey.get(key(h.plantId, t - lagHours * 3_600_000)),
+      prev: (lagHours: number) => {
+        if (!prevByLag.has(lagHours)) prevByLag.set(lagHours, byKey.get(key(h.plantId, t - lagHours * 3_600_000)));
+        return prevByLag.get(lagHours);
+      },
     };
   });
 }
@@ -124,12 +129,30 @@ export function costWithMultiplier(h: PricedHour, k: number, _profile?: Imbalanc
 const K_GRID = Array.from({ length: 41 }, (_, i) => Number((0.8 + i * 0.01).toFixed(2)));
 
 /** Eğitim saatlerinde toplam maliyeti en aza indiren çarpan (0,80–1,20 aralığında, 0,01 adımla) */
-export function bestMultiplier(train: PricedHour[], profile: ImbalancePricingProfile): number {
+export function bestMultiplier(train: PricedHour[], _profile: ImbalancePricingProfile): number {
+  // costWithMultiplier'ın formülü düz dizilerle (aynı işlemler, aynı toplama sırası, sonuç birebir aynı): 41 katsayı ×
+  // eğitim saatleri her deneme ayında santral başına tekrarlandığı için 66 santrallik projede istek ≈ 50 sn sürüyordu
+  const n = train.length;
+  const act = new Float64Array(n);
+  const fc = new Float64Array(n);
+  const up = new Float64Array(n);
+  const dn = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const h = train[i];
+    act[i] = h.source.actualMwh;
+    fc[i] = h.source.forecastMwh;
+    up[i] = h.source.ptf - h.positivePrice;
+    dn[i] = h.negativePrice - h.source.ptf;
+  }
   let bestK = 1;
   let bestCost = train.reduce((s, h) => s + h.baselineCost, 0);
   for (const k of K_GRID) {
     if (k === 1) continue;
-    const c = train.reduce((s, h) => s + costWithMultiplier(h, k, profile), 0);
+    let c = 0;
+    for (let i = 0; i < n; i++) {
+      const delta = act[i] - fc[i] * k;
+      c += delta === 0 ? 0 : delta > 0 ? delta * up[i] : -delta * dn[i];
+    }
     if (c < bestCost - 1e-6) {
       bestCost = c;
       bestK = k;

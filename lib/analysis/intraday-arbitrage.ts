@@ -793,6 +793,23 @@ export function evaluateRealisticClosing(
  * (satışta pozitif). Gelirler verilen profil ile hesaplama motorundan geçirilir; işlem fiyatı
  * realisticTradePrice ile (zor saatte kayma) ve miktar saatlik GİP hacminin `volumeCapPercent` payıyla sınırlı.
  */
+/**
+ * Saatin dengesizlik fiyatları (saf: saatin piyasa verisi ve profilin o tarihteki kuralı). Backtest aynı saati her
+ * oran ve her eğitim penceresi için tekrar fiyatlıyordu (66 santrallik projede isteğin ≈ %20'si); saat ve profil
+ * nesnesi başına bir kez bulunur.
+ */
+const pricesCache = new WeakMap<ImbalancePricingProfile, WeakMap<HourlyResult, { positive: number; negative: number }>>();
+function hourImbalancePrices(h: HourlyResult, profile: ImbalancePricingProfile): { positive: number; negative: number } {
+  let byHour = pricesCache.get(profile);
+  if (!byHour) pricesCache.set(profile, (byHour = new WeakMap()));
+  let p = byHour.get(h);
+  if (!p) {
+    const { positive, negative } = imbalancePrices(pricedMarket(h), resolveImbalanceProfile(profile, h.timestamp));
+    byHour.set(h, (p = { positive, negative }));
+  }
+  return p;
+}
+
 export function persistenceTradeGain(
   h: HourlyResult,
   prev: Pick<HourlyResult, "actualMwh" | "forecastMwh"> | undefined,
@@ -807,8 +824,7 @@ export function persistenceTradeGain(
   const { price } = realisticTradePrice(h, s > 0 ? "sell" : "buy", realism.stressHaircutPercent);
   // Dengesizlik fiyatları plana bağlı değildir: bir kez bulunur (motoru her çağrıda çalıştırmak backtest'i yavaşlatıyordu).
   // Gelir(f) = f·PTF + tutar(gerçekleşen − f) olduğundan gelir farkı + s·(fiyat − PTF) = tutar farkı + s·fiyat
-  const market = pricedMarket(h);
-  const { positive, negative } = imbalancePrices(market, resolveImbalanceProfile(profile, h.timestamp));
+  const { positive, negative } = hourImbalancePrices(h, profile);
   const amount = (d: number) => calculateImbalanceAmount(d, positive, negative);
   const imbalance = h.actualMwh - h.forecastMwh;
   return {
