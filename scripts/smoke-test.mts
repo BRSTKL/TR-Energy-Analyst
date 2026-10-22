@@ -13,11 +13,35 @@
  * Yükleme bitişi: dönen simge ve "Yükleniyor…" yazıları kaybolup metin 2 sn değişmeyince (en çok 120 sn; önbelleksiz
  * geriye dönük test 60 sn'yi geçebiliyor). Tarayıcı: sistemdeki Google Chrome (playwright-core; ek indirme yok).
  * Çıkış kodu: hata varsa 1 (uyarılar düşürmez).
+ *
+ * Giriş (22.10.2026'dan beri her sayfa oturum ister): SMOKE_COOKIE verilirse o kullanılır (sunucuya karşı:
+ * scripts/auth-token.mts, scripts/server/README.md). Verilmezse yereldeki .env'nin AUTH_SECRET'i ve ilk hesapla 30
+ * dakikalık bir oturum üretilir.
  */
 
 import { chromium, type Page } from "playwright-core";
 
 const BASE = (process.env.SMOKE_BASE ?? "http://localhost:3000").replace(/\/$/, "");
+const SESSION_COOKIE = "tre_session";
+
+async function sessionCookie(): Promise<string> {
+  if (process.env.SMOKE_COOKIE) return process.env.SMOKE_COOKIE.trim();
+  try {
+    process.loadEnvFile(".env");
+  } catch {
+    /* .env yok */
+  }
+  const { prisma } = await import("@/lib/prisma");
+  const { signSession } = await import("@/lib/auth/session");
+  const user = await prisma.user.findFirst({ orderBy: { createdAt: "asc" }, select: { id: true } });
+  await prisma.$disconnect();
+  if (!user || !process.env.AUTH_SECRET) {
+    console.error("Oturum yok: SMOKE_COOKIE verin ya da yerelde hesap açın ve .env'ye AUTH_SECRET ekleyin.");
+    process.exit(1);
+  }
+  return signSession({ userId: user.id, expiresAt: Date.now() + 30 * 60_000 });
+}
+const COOKIE = await sessionCookie();
 const ALL = process.argv.includes("--all");
 // Yalnız etkilenen sayfalar (kullanıcı kararı 19.10.2026): tek sayfa değişikliğinde tam tur yerine
 const ONLY = process.argv.includes("--only")
@@ -35,7 +59,7 @@ type Check = { url: string; label: string; mobile?: boolean; expect404?: boolean
 type Result = { label: string; url: string; ms: number; errors: string[]; warnings: string[] };
 
 async function getJson<T>(path: string): Promise<T> {
-  const r = await fetch(BASE + path);
+  const r = await fetch(BASE + path, { headers: { cookie: `${SESSION_COOKIE}=${COOKIE}` } });
   if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
   return (await r.json()) as T;
 }
@@ -162,7 +186,9 @@ if (ONLY) {
 
 // --- Çalıştır ---
 const browser = await chromium.launch({ channel: "chrome", headless: true });
-const page = await (await browser.newContext()).newPage();
+const context = await browser.newContext();
+await context.addCookies([{ name: SESSION_COOKIE, value: COOKIE, url: BASE }]);
+const page = await context.newPage();
 console.log(`Duman testi: ${BASE}, ${checks.length} sayfa (${chosen.length} proje: ${chosen.map((p) => p.name.slice(0, 20)).join(", ")})\n`);
 const results: Result[] = [];
 for (const c of checks) {

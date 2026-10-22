@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const storedCredentials = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/services/epias-account", () => ({ getStoredEpiasCredentials: storedCredentials }));
 import {
   formatToEpiasIso,
   epiasDateToWallClock,
@@ -73,20 +76,30 @@ describe("EPİAŞ Service - Kimlik Bilgileri ve TGT", () => {
     process.env = { ...originalEnv };
   });
 
-  it("getEpiasCredentials .env içerisindeki kullanıcı adı ve şifreyi döndürmelidir", () => {
+  it("getEpiasCredentials kayıtlı hesap yoksa .env içerisindeki kullanıcı adı ve şifreyi döndürmelidir", async () => {
+    storedCredentials.mockResolvedValueOnce(null);
     process.env.EPIAS_USERNAME = "test@example.com";
     process.env.EPIAS_PASSWORD = "SecretPassword123";
 
-    const creds = getEpiasCredentials();
+    const creds = await getEpiasCredentials();
     expect(creds.username).toBe("test@example.com");
     expect(creds.password).toBe("SecretPassword123");
   });
 
-  it("getEpiasCredentials kimlik bilgileri eksikse açıklayıcı hata fırlatmalıdır", () => {
+  it("getEpiasCredentials \"Hesabım\" sayfasında kaydedilen hesabı .env'ye tercih etmelidir", async () => {
+    storedCredentials.mockResolvedValueOnce({ username: "kayitli@example.com", password: "Kayitli123" });
+    process.env.EPIAS_USERNAME = "test@example.com";
+    process.env.EPIAS_PASSWORD = "SecretPassword123";
+
+    expect(await getEpiasCredentials()).toEqual({ username: "kayitli@example.com", password: "Kayitli123" });
+  });
+
+  it("getEpiasCredentials kimlik bilgileri eksikse açıklayıcı hata fırlatmalıdır", async () => {
+    storedCredentials.mockResolvedValueOnce(null);
     delete process.env.EPIAS_USERNAME;
     delete process.env.EPIAS_PASSWORD;
 
-    expect(() => getEpiasCredentials()).toThrow(/EPİAŞ kimlik bilgileri bulunamadı/);
+    await expect(getEpiasCredentials()).rejects.toThrow(/EPİAŞ kimlik bilgileri bulunamadı/);
   });
 
   it("testEpiasConnection geçersiz kimlik bilgilerinde ok: false ve hata mesajı dönmelidir", async () => {

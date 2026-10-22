@@ -128,3 +128,30 @@ model ImbalancePricingProfile {
 
   @@index([projectId])
 }
+
+// Uygulama hesabı (giriş ekranı, 22.10.2026). Şimdilik tek hesap; yapı birden çok hesaba uygun.
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String // scrypt karması (lib/auth/password.ts); açık şifre saklanmaz
+  failedLogins Int           @default(0)
+  lockedUntil  DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  epiasAccount EpiasAccount?
+}
+
+// Kullanıcının EPİAŞ şeffaflık hesabı. Şifre AES-256-GCM ile şifreli (lib/auth/secret-box.ts; anahtar .env'de
+// CREDENTIALS_KEY). Zamanlanmış işler de bunu kullanır (lib/services/epias-account.ts).
+model EpiasAccount {
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  username       String
+  passwordSealed String
+  lastCheckAt    DateTime?
+  lastCheckOk    Boolean?
+  lastCheckError String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}

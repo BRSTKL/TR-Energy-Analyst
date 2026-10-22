@@ -69,6 +69,7 @@ Zamanlanmış işler (güneş tahmini, EPİAŞ eşitlemesi, yedek) ve uygulama 2
 - Verinin asıl yeri sunucu (`/srv/tr-energy`); Mac'teki `data/` ve `.cache/` kendiliğinden güncellenmez.
 - Kod değişikliği sunucuya commit ve push'tan sonra `bash scripts/server/deploy.sh` ile gider. Sunucuda `next build` lint hatasında durur.
 - Bildirim `lib/notify.ts` ile (macOS'ta masaüstü, sunucuda ntfy); `osascript` doğrudan çağrılmaz.
+- Uygulama girişlidir (`middleware.ts`): girişsiz sayfa /login'e, API 401. EPİAŞ hesabı "Hesabım" sayfasında şifreli saklanır; kod `getEpiasCredentials()` ile alır (önce kayıt, yoksa `.env`), `.env`'yi doğrudan okumaz. Duman testi oturumu `SMOKE_COOKIE` ya da yerel `.env`'deki `AUTH_SECRET` ile alır.
 
 ## Raporlar
 

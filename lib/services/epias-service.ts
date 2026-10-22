@@ -20,6 +20,7 @@ import {
   calculateImbalanceCost,
 } from "@/lib/calculations/engine";
 import { normalizeSystemDirection } from "@/lib/parsers/epias-parser";
+import { getStoredEpiasCredentials } from "@/lib/services/epias-account";
 
 export { normalizeSystemDirection };
 
@@ -76,19 +77,28 @@ const DEFAULT_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 /**
- * .env dosyasından veya process.env ortamından EPİAŞ kimlik bilgilerini alır.
+ * EPİAŞ kimlik bilgileri: önce "Hesabım" sayfasında kaydedilen hesap (lib/services/epias-account.ts), yoksa .env
+ * (EPIAS_USERNAME / EPIAS_PASSWORD).
  */
-export function getEpiasCredentials(): { username: string; password: string } {
+export async function getEpiasCredentials(): Promise<{ username: string; password: string }> {
+  const stored = await getStoredEpiasCredentials();
+  if (stored) return stored;
+
   const username = process.env.EPIAS_USERNAME;
   const password = process.env.EPIAS_PASSWORD;
 
   if (!username || !password) {
     throw new Error(
-      "EPİAŞ kimlik bilgileri bulunamadı. Lütfen .env dosyasına EPIAS_USERNAME ve EPIAS_PASSWORD değerlerini ekleyin."
+      "EPİAŞ kimlik bilgileri bulunamadı. \"Hesabım\" sayfasından EPİAŞ hesabınızı girin (ya da .env dosyasına EPIAS_USERNAME ve EPIAS_PASSWORD ekleyin)."
     );
   }
 
   return { username: username.trim(), password: password.trim() };
+}
+
+/** Kayıtlı hesap değişince bellekteki EPİAŞ biletini bırakır (eski hesapla istek gitmesin). */
+export function resetEpiasTgt() {
+  cachedTgt = null;
 }
 
 /**
@@ -100,7 +110,7 @@ export async function getEpiasTgt(forceRefresh = false): Promise<string> {
     return cachedTgt.ticket;
   }
 
-  const { username, password } = getEpiasCredentials();
+  const { username, password } = await getEpiasCredentials();
 
   const params = new URLSearchParams();
   params.append("username", username);
@@ -781,7 +791,7 @@ export async function testEpiasConnection(): Promise<{
   error?: string;
 }> {
   try {
-    const creds = getEpiasCredentials();
+    const creds = await getEpiasCredentials();
     const tgt = await getEpiasTgt(true);
     return {
       ok: true,

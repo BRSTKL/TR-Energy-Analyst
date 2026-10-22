@@ -5,7 +5,8 @@ Zamanlanmış işler ve uygulama Mac'te değil sunucuda çalışır. Mac kapalı
 - **Sunucu:** TuemCloud Advanced VDS-T, İstanbul, Ubuntu 24.04, `root@5.180.187.237` (yalnız SSH anahtarıyla). Aylık ödeme, iade yok.
 - **Uygulama:** https://tr-energy.tail342501.ts.net (yalnız Tailscale'e bağlı cihazlar; internete kapalı). Sunucuda `next start`, 127.0.0.1:3000.
 - **Dizin:** `/srv/tr-energy` (kullanıcı `tre`). Verinin asıl yeri burası; Mac'teki `data/` ve `.cache/` geliştirme kopyasıdır, kendiliğinden güncellenmez.
-- **Sırlar:** sunucudaki `.env` (izin 600): `DATABASE_URL`, `EPIAS_USERNAME`, `EPIAS_PASSWORD`, `NTFY_TOPIC`. Depoda yok. `.env.build` yalnız `DATABASE_URL` içerir (derleme için).
+- **Sırlar:** sunucudaki `.env` (izin 600): `DATABASE_URL`, `EPIAS_USERNAME`, `EPIAS_PASSWORD` (yedek; asıl hesap "Hesabım" sayfasında), `NTFY_TOPIC`, `AUTH_SECRET` (oturum çerezi imzası), `CREDENTIALS_KEY` (kayıtlı EPİAŞ şifresinin şifreleme anahtarı; kaybolursa EPİAŞ hesabı yeniden girilir). Depoda yok. `.env.build` yalnız `DATABASE_URL` içerir (derleme için).
+- **Giriş:** her sayfa oturum ister (`middleware.ts`, 7 gün). İlk açılışta `/login` hesap oluşturma formunu gösterir; tek hesap. Şifre unutulursa ya da 5 hatalı denemeyle kilitlenirse: `ssh -t root@5.180.187.237 'cd /srv/tr-energy && sudo -u tre node --env-file=.env node_modules/.bin/tsx --tsconfig tsconfig.json scripts/auth-user.mts reset <e-posta>'`.
 
 ## Zamanlanmış işler (`systemd/`, saatler Türkiye)
 
@@ -32,7 +33,11 @@ bash scripts/server/deploy.sh
 
 Çeker; paketler değiştiyse `npm ci`; şema değiştiyse yedek alıp `prisma db push`; `next build` (lint hatasında durur, `next dev` durmaz); web servisini yeniden başlatır ve sayfaları denetler. Hata olursa bildirim gelir, eski sürüm çalışmaya devam eder.
 
-Duman testi sunucuya karşı: `SMOKE_BASE=https://tr-energy.tail342501.ts.net npm run test:smoke`.
+Duman testi sunucuya karşı (30 dakikalık oturum çerezi sunucuda üretilir):
+
+```bash
+SMOKE_COOKIE=$(ssh root@5.180.187.237 'cd /srv/tr-energy && sudo -u tre node --env-file=.env node_modules/.bin/tsx --tsconfig tsconfig.json scripts/auth-token.mts') SMOKE_BASE=https://tr-energy.tail342501.ts.net npm run test:smoke
+```
 
 ## Yedek
 
