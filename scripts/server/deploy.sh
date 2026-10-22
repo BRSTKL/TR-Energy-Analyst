@@ -35,8 +35,12 @@ if ! as_tre "NEXT_TELEMETRY_DISABLED=1 npm run build > /var/log/tr-energy/build.
 fi
 systemctl restart tr-energy-web
 sleep 5
-for p in / /sector /market; do
-  c=$(curl -s -o /dev/null -w "%{http_code}" -m 30 "http://127.0.0.1:3000$p")
+# Giriş gerektiği için sayfalar oturum çereziyle denetlenir (scripts/auth-token.mts, 5 dakika)
+cookie=$(sudo -u tre node --env-file=.env node_modules/.bin/tsx --tsconfig tsconfig.json scripts/auth-token.mts 5 2>/dev/null || true)
+checks="/login /api/auth/status"
+[ -n "$cookie" ] && checks="$checks / /sector /market" || echo "hesap yok: yalnız giriş sayfası denetlendi"
+for p in $checks; do
+  c=$(curl -s -o /dev/null -w "%{http_code}" -m 60 -b "tre_session=$cookie" "http://127.0.0.1:3000$p")
   echo "$c $p"
   [ "$c" = 200 ] || { /usr/local/bin/tr-energy-notify "TR-Energy: yükleme sonrası hata" "$p HTTP $c (${new:0:7})"; exit 1; }
 done
