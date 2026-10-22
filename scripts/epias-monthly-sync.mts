@@ -26,6 +26,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fetchUevm } from "@/lib/services/epias-plants";
 import { parseUevmItems } from "@/lib/epias-plant/plant-data";
+import { notify as sendNotification } from "@/lib/notify";
 
 const ROOT = process.cwd();
 const CACHE = path.join(ROOT, ".cache", "epias");
@@ -73,8 +74,7 @@ const saveState = () => {
 function notify(title: string, text: string) {
   log(`BİLDİRİM: ${title}: ${text}`);
   if (dry) return;
-  const q = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  spawn("osascript", ["-e", `display notification "${q(text)}" with title "${q(title)}"`], { stdio: "ignore" });
+  sendNotification(title, text);
 }
 
 // Kilit: başka bir çalışma sürüyorsa çık (süreç ölmüşse kilit bayattır)

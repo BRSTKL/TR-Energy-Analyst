@@ -35,6 +35,7 @@
 
 import { execSync, spawn } from "node:child_process";
 import { prisma } from "@/lib/prisma";
+import { notify } from "@/lib/notify";
 import { isUnlicensedName } from "@/lib/analysis/candidate-access";
 import { readPoolPlantInfo } from "@/lib/pool/pool-store";
 import { forecastSolarEnsemble, forecastSolarPlant } from "@/lib/solar-engine/forecast";
@@ -362,7 +363,7 @@ export async function runDailyForecast(opts: DailyForecastOptions = {}): Promise
   if (written && decisions.length) {
     await review.commit();
     const text = `${decisions.length} santralde canlı sürüm değişti: ${decisions.map((d) => `${plants.get(d.epiasPlantId) ?? d.epiasPlantId} → ${d.to.replace(SOLAR_MODEL_ID, "temel")}`).join(", ")}`.slice(0, 220);
-    spawn("osascript", ["-e", `display notification "${text.replace(/"/g, "'")}" with title "Güneş tahmin motoru"`], { stdio: "ignore" });
+    notify("Güneş tahmin motoru", text);
   }
   const mwh = ok.reduce((s, p) => s + (p.hours ?? []).reduce((a: number, v) => a + (v ?? 0), 0), 0);
   console.log(

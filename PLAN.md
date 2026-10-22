@@ -1051,6 +1051,22 @@ Sıra: 23.0 → 23.1 → 23.2 (kayıt ve karne erken başlasın, kanıt birikir)
     4. Kod: kural `lib/epias-plant/installed-capacity.ts`'e (saf eşleştirme), dosya okuma `lib/services/installed-capacity.ts`'e; CLAUDE.md "Kurulu güç" bölümü güncellenir; backfill betiği EPDK kaynağını da raporlar. Rüzgâr / hidro için ayrı EPDK dışa aktarımı gerekir (kullanıcı yapar).
     5. Açık soru (kullanıcı): Bulgu 4'teki 12 santralde üretim neden lisans MWe'sini aşıyor? EPDK ekranında 1–2 tanesi için "Yardımcı Kaynak" satırı ve tadil geçmişine bakılabilir; dışa aktarım yalnız "Ana Kaynak" satırlarını içeriyor.
 
+- [~] **Sunucuya taşıma (kullanıcı 22.10.2026; sebep: Mac uykudayken saatlik iş 22.10 02:16–11:38 hiç çalışmadı).** Sunucu: TuemCloud Advanced VDS-T, İstanbul, 3 vCPU / 6 GB / 70 GB, Ubuntu 24.04, aylık (iade yok). Almanya (Hetzner) EPİAŞ coğrafi engel riski yüzünden seçilmedi; Docker şimdilik yok; alan adı yok (önce yalnız kullanıcı, ileride demo için ücretsiz adres).
+  - ✅ Erişim testi (sunucudan): EPİAŞ biletsiz 401, giriş 201, dünkü PTF 10/10 × 200; Open-Meteo forecast / previous-runs / archive / satellite 200.
+  - ✅ Temel kurulum: saat Europe/Istanbul, otomatik güvenlik güncellemesi, güvenlik duvarı (yalnız SSH), SSH yalnız anahtarla, 2 GB swap, Node 20, `tre` kullanıcısı, `/srv/tr-energy`.
+  - ✅ Kod `96e40e3` (`next build` lint hatasında durur; `next dev` durmaz), `data/` + `.cache/` + `dev.db` anlık kopyası (`kaynaklar/` gitmedi), `next build`, systemd `tr-energy-web` (`next start`, 127.0.0.1:3000; Mac'ten SSH tüneliyle).
+  - [ ] Tam tur duman testi sunucuya karşı (`SMOKE_BASE=http://localhost:3100 npm run test:smoke`).
+  - [ ] `.env` (EPİAŞ kullanıcısı) kullanıcı kopyalar; giriş ekranı gelince EPİAŞ bilgisi uygulamaya taşınır (aşağıda).
+  - [ ] Zamanlanmış işler systemd timer'a: güneş tahmini TR 09:30 + 11:00, saatlik eşitleme; `caffeinate` yok.
+  - [ ] Bildirim: `osascript` çağrıları (`scripts/epias-monthly-sync.mts`, `lib/solar-engine/pipeline.ts`) Linux'ta ntfy / Telegram'a; iş çalışmazsa haber veren izleme (Healthchecks.io).
+  - [ ] Günlük veritabanı yedeği (sunucuda `predev` yok) ve sunucu dışına yedek.
+  - [ ] Geçiş: Mac'teki launchd işleri durur, son veri kopyası, sunucu işleri açılır; bir hafta geri dönüş imkânı. Sonra `scripts/launchd/README.md`, CLAUDE.md güncellenir.
+- [ ] **Giriş ekranı ve "EPİAŞ hesabım" (kullanıcı 22.10.2026; sunucu taşıması bittikten sonra).** Kararlar: şimdilik tek hesap (sonra kullanıcı eklenebilir yapıda), iki adımlı giriş sonra.
+  1. Giriş sayfası (e-posta + şifre); şifre karma (hash) olarak saklanır; girişsiz hiçbir sayfa ve API açılmaz; oturum süresi, çıkış, çok yanlış denemede geçici kilit.
+  2. "EPİAŞ hesabım" ayar sayfası: kullanıcı adı / şifre girilir, "Bağlantıyı dene" (TGT alır). Şifre veritabanında şifrelenmiş; anahtar veritabanı dışında, sunucudaki ayrı dosyada. Kaydedilen şifre bir daha gösterilmez.
+  3. `getEpiasCredentials` (`lib/services/epias-service.ts`, bugün yalnız `.env`) önce kayıtlı hesabı, yoksa `.env`'yi okur. Zamanlanmış işler (girişsiz çalışır) aynı kayıtlı hesabı kullanır.
+  4. Sonra: `npm test`, `npm run check:reports`, tam tur duman testi; sunucuya yükleme.
+
 ## 4. İlerleme kaydı
 | Tarih | Adım | Commit | Not |
 |---|---|---|---|
