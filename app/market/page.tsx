@@ -16,7 +16,7 @@ import type { GroupCapture } from "@/lib/analysis/capture-rate";
 import { MethodLink } from "@/components/method-link";
 import { pctOf, yearLocative } from "@/lib/format";
 interface MarketResponse {
-  available: { start: string; end: string; lastFullMonthEnd: string };
+  available: { start: string; end: string; lastFullMonthEnd: string; lastFullDay: string };
   period: { start: string; end: string; label: string };
   previousPeriod: { start: string; end: string; label: string; verifiedHours: number; compared: boolean };
   current: MarketSummary;
@@ -52,6 +52,8 @@ const signed = (v: number, d = 0) => `${sign(v)}${nf(Math.abs(v), d)}`;
 /** Türkçe yüzde: "+%45" */
 const signedPct = (v: number) => `${sign(v)}%${nf(Math.abs(v))}`;
 const monthName = (key: string) => MONTHS_SHORT[Number(key.slice(5, 7)) - 1];
+/** "19 Ekim 2026" */
+const trDay = (d: string) => `${Number(d.slice(8, 10))} ${MONTHS[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}`;
 const lastDay = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate();
 const iso = (y: number, m: number, d: number) => `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 
@@ -169,14 +171,17 @@ export default function MarketPage() {
   const months = monthsOf(year, data.available);
   const startMonth = Number(data.period.start.slice(5, 7));
   const endMonth = sameYear ? Number(data.period.end.slice(5, 7)) : months[months.length - 1];
-  /** Ay aralığından dönem: bitiş, verinin son gününü aşmaz */
+  /** Ay aralığından dönem: bitiş, verinin son tam gününü aşmaz */
   const select = (y: number, from: number, to: number) => {
     const end = iso(y, to, lastDay(y, to));
-    setRange({ start: iso(y, from, 1), end: end > data.available.end ? data.available.end : end });
+    setRange({ start: iso(y, from, 1), end: end > data.available.lastFullDay ? data.available.lastFullDay : end });
   };
+  /** Dönem ay ortasında bitiyorsa son ayın grafik etiketi "Eki (1–19)" */
+  const endDay = Number(data.period.end.slice(8, 10));
+  const partialKey = endDay < lastDay(Number(data.period.end.slice(0, 4)), Number(data.period.end.slice(5, 7))) ? data.period.end.slice(0, 7) : null;
 
   const monthly = pairs.map(({ key, cur, prev }) => ({
-    month: monthName(key),
+    month: key === partialKey ? `${monthName(key)} (1–${endDay})` : monthName(key),
     [`Makas ${names.cur}`]: cur.spreadMean,
     [`Makas ${names.prev}`]: prev?.spreadMean ?? null,
     [`PTF ${names.cur}`]: cur.ptfMean,
@@ -250,6 +255,10 @@ export default function MarketPage() {
             </div>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Piyasa özeti {data.period.label}</h1>
             <MethodLink section="piyasa" label="Yöntem ve varsayımlar" />
+            <p className="mt-1 text-xs text-slate-500">
+              Son veri: {trDay(data.available.lastFullDay)}. Fiyatlar her gün EPİAŞ&apos;tan güncellenir; santral üretimine dayanan
+              bölümler (GİP katılımı, yakalama oranı) ay bitince.
+            </p>
             <p className="mt-1 max-w-3xl text-xs text-slate-600 sm:text-sm">
               EPİAŞ saatlik PTF, SMF, sistem yönü ve GİP verisinden {nf(c.hours)} saat. SMF–PTF makası, dengesizliğin gün öncesi
               fiyatından ne kadar uzakta uzlaştığını gösterir; sistemle aynı yöndeki her MWh sapmanın bedeli bu farkla büyür.

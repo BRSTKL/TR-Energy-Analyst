@@ -61,3 +61,6 @@ scripts/tmp/
 /kaynaklar/*
 !/kaynaklar/README.md
 !/kaynaklar/EPIAS-VERI-LISTESI.md
+
+# Üretilmiş santral dökümleri (şirket adları içerir)
+/eksik-veri-santraller.csv

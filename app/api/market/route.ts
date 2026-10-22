@@ -12,14 +12,19 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const lastDayOfMonth = (d: string) => new Date(Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)), 0)).getUTCDate();
 const trDate = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}`;
 
-/** "2026 (Ocak–Ağustos)", tam yıl için "2025"; ay başı ya da sonu olmayan dönemde tarih aralığı */
+/**
+ * "2026 (Ocak–Ağustos)", tam yıl için "2025"; ay ortasında biten dönem "2026 (Ocak – 19 Ekim)" ya da "1–19 Ekim 2026";
+ * ay başında başlamayan ya da yıl aşan dönemde tarih aralığı
+ */
 function periodLabel(start: string, end: string): string {
   const y = start.slice(0, 4);
-  const wholeMonths = start.endsWith("-01") && Number(end.slice(8, 10)) === lastDayOfMonth(end);
-  if (!wholeMonths || !end.startsWith(y)) return `${trDate(start)} – ${trDate(end)}`;
+  if (!start.endsWith("-01") || !end.startsWith(y)) return `${trDate(start)} – ${trDate(end)}`;
   if (start.endsWith("-01-01") && end.endsWith("-12-31")) return y;
   const m = (d: string) => MONTHS_TR[Number(d.slice(5, 7)) - 1];
-  return start.slice(5, 7) === end.slice(5, 7) ? `${m(start)} ${y}` : `${y} (${m(start)}–${m(end)})`;
+  const sameMonth = start.slice(5, 7) === end.slice(5, 7);
+  const endDay = Number(end.slice(8, 10));
+  if (endDay !== lastDayOfMonth(end)) return sameMonth ? `1–${endDay} ${m(end)} ${y}` : `${y} (${m(start)} – ${endDay} ${m(end)})`;
+  return sameMonth ? `${m(start)} ${y}` : `${y} (${m(start)}–${m(end)})`;
 }
 
 const yearLabel = (start: string, end: string) => (start.slice(0, 4) === end.slice(0, 4) ? start.slice(0, 4) : periodLabel(start, end));
@@ -46,8 +51,8 @@ async function load(start: string, end: string): Promise<MarketHour[]> {
  * GET /api/market?start=YYYY-AA-GG&end=YYYY-AA-GG
  *
  * Doğrulanmış (EPİAŞ ya da dosya) piyasa verisinden dönem özeti ve bir önceki yılın aynı günleriyle karşılaştırma.
- * Dönem verilmezse: son doğrulanmış tam ayın yılı, yılbaşından o ayın sonuna. Doğrulanmamış (LEGACY) saatler dışarıda
- * bırakılır ve sayısı bildirilir.
+ * Dönem verilmezse: son tam günün yılı, yılbaşından o güne (ay ortasında biterse önceki yıl da aynı güne kadar).
+ * Doğrulanmamış (LEGACY) saatler dışarıda bırakılır ve sayısı bildirilir.
  */
 export async function GET(request: Request) {
   const q = new URL(request.url).searchParams;
@@ -64,8 +69,10 @@ export async function GET(request: Request) {
     const d = next.getUTCDate() === 1 && next.getUTCHours() === 0 ? last : new Date(Date.UTC(endOfMonth.getUTCFullYear(), endOfMonth.getUTCMonth(), 0));
     return d.toISOString().slice(0, 10);
   })();
+  // Son tam gün: son saat 23:00 ise o gün, değilse bir önceki gün
+  const lastFullDay = new Date(last.getTime() - (last.getUTCHours() === 23 ? 0 : 86_400_000)).toISOString().slice(0, 10);
 
-  const end = DAY.test(q.get("end") ?? "") ? q.get("end")! : lastFullMonthEnd;
+  const end = DAY.test(q.get("end") ?? "") ? q.get("end")! : lastFullDay;
   const start = DAY.test(q.get("start") ?? "") ? q.get("start")! : `${end.slice(0, 4)}-01-01`;
   if (start > end) return NextResponse.json({ success: false, error: "Başlangıç tarihi bitişten sonra olamaz." }, { status: 400 });
   const prevStart = shiftYear(start, -1);
@@ -98,7 +105,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     success: true,
-    available: { start: first, end: last.toISOString().slice(0, 10), lastFullMonthEnd },
+    available: { start: first, end: last.toISOString().slice(0, 10), lastFullMonthEnd, lastFullDay },
     period: { start, end, label },
     previousPeriod: { start: prevStart, end: prevEnd, label: prevLabel, verifiedHours: prev.length, compared: previous !== null },
     current,

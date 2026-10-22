@@ -27,7 +27,7 @@ Santralin kurulu gücü resmî kayıttan alınır. Tahmin ancak kayıt bulunamaz
     ```bash
     npx tsx --env-file=.env scripts/installed-capacity-backfill.mts --write
     ```
-    Eski tahminin hata raporunu da yazar. EPİAŞ erişimi için VPN gerekir.
+    Eski tahminin hata raporunu da yazar. EPİAŞ'a 20.10.2026'dan beri VPN'siz erişiliyor.
 - **Raporda:**
   - Tahmini kurulu güç Ek A'da `~` ile işaretlenir.
   - Ek B kaynağı yazar.
