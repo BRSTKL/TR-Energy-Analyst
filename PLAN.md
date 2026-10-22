@@ -1055,7 +1055,7 @@ Sıra: 23.0 → 23.1 → 23.2 (kayıt ve karne erken başlasın, kanıt birikir)
   - ✅ Erişim testi (sunucudan): EPİAŞ biletsiz 401, giriş 201, dünkü PTF 10/10 × 200; Open-Meteo forecast / previous-runs / archive / satellite 200.
   - ✅ Temel kurulum: saat Europe/Istanbul, otomatik güvenlik güncellemesi, güvenlik duvarı (yalnız SSH), SSH yalnız anahtarla, 2 GB swap, Node 20, `tre` kullanıcısı, `/srv/tr-energy`.
   - ✅ Kod `96e40e3` (`next build` lint hatasında durur; `next dev` durmaz), `data/` + `.cache/` + `dev.db` anlık kopyası (`kaynaklar/` gitmedi), `next build`, systemd `tr-energy-web` (`next start`, 127.0.0.1:3000; Mac'ten SSH tüneliyle).
-  - [ ] Tam tur duman testi sunucuya karşı (`SMOKE_BASE=https://tr-energy.tail342501.ts.net npm run test:smoke`).
+  - ✅ Tam tur duman testi sunucuya karşı (96e40e3, SSH tüneli): kod hatası yok. Kalan iki iş ana oturumda: Inavitas geriye dönük test sayfası sunucuda 120 sn'de açılmıyor (Mac'te 59 sn; sunucu işlemcisi daha yavaş), /planning telefonda 191 px yatay taşma (eski). Yavaş API: DSG 49 sn, sonuçlar / tahmin 22–30 sn. Sonraki turlar: `SMOKE_BASE=https://tr-energy.tail342501.ts.net npm run test:smoke`.
   - ✅ `.env` sunucuda (kullanıcı kopyaladı, izin 600); giriş ekranı gelince EPİAŞ bilgisi uygulamaya taşınır (aşağıda).
   - ✅ Zamanlanmış işler systemd timer'da (`scripts/server/systemd/`): güneş tahmini TR 09:30 + 11:00, saatlik eşitleme, 03:00 yedek, 12:15 tahmin denetimi, 12:30 günlük özet.
   - ✅ Bildirim ntfy (`lib/notify.ts`, `09d474f`); hata veren iş, eksik tahmin ve günlük özet telefona. Healthchecks.io gerekmedi.
