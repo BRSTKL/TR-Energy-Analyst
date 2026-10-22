@@ -775,7 +775,7 @@ Rüzgâr: beklenen = santralin güç eğrisi (100 m hız 0,5 m/s × 8 yön hücr
               ]}
             />
             <p>
-              Sınırlar: kurulu güç kayıttan (YEKDEM, EPDK lisansı) ya da en yüksek üretimden alt sınır (129 rüzgâr santralinin 35'inde alt sınır; kayıp eşiği buna
+              Sınırlar: kurulu güç kayıttan (YEKDEM, EPDK lisansı) ya da en yüksek üretimden alt sınır (129 rüzgâr santralinin 35&apos;inde alt sınır; kayıp eşiği buna
               bağlı); kapasite artışı eğriyi dönem içinde değiştirebilir; talimatla kısma ilk KGÜP&apos;te görünmüyorsa plansız sayılır. Gecikme: IFS ≈ 1
               gün, ERA5 ≈ 5–6 gün; plansız kayıp ERA5 kadar gecikir. Kaynaklar: Open-Meteo.com (CC BY 4.0); ERA5: Copernicus Climate Change Service;
               SARAH3: EUMETSAT CM SAF. Güneşte plansız kayıp kar örtüsünü de içerebilir: santral konumunda ERA5 kar derinliği (Open-Meteo, 0,25°)
