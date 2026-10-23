@@ -1,3 +1,4 @@
+import { projectWindForecast } from "@/lib/wind-engine/forecast";
 import { NextResponse } from "next/server";
 import { projectLiveForecast } from "@/lib/solar-engine/forecast";
 import { forecastReference } from "@/lib/services/production-loss";
@@ -12,10 +13,11 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   try {
-    const live = await projectLiveForecast(params.id);
+    const wind = new URL(_req.url).searchParams.get("tech") === "RES";
+    const live = await (wind ? projectWindForecast(params.id) : projectLiveForecast(params.id));
     if (!live) return NextResponse.json({ success: false, error: "Proje bulunamadı." }, { status: 404 });
     const ids = live.plants.map((p) => p.epiasPlantId).filter((x): x is number => x !== null);
-    return NextResponse.json({ success: true, ...live, reference: forecastReference(ids) });
+    return NextResponse.json({ success: true, ...live, reference: wind ? null : forecastReference(ids) });
   } catch (error) {
     console.error("Live forecast error:", error);
     return NextResponse.json({ success: false, error: error instanceof Error ? error.message : "Üretim tahmini hazırlanamadı." }, { status: 500 });

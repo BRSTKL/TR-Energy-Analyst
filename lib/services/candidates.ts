@@ -1,3 +1,4 @@
+import {weakWindEvidence,type WindBlendEvidence} from "@/lib/wind-engine/models/blend-evidence";
 /**
  * TR-Energy Analyst - Aday santral taraması için veri (PLAN 4.2)
  *
@@ -53,6 +54,8 @@ export interface ProjectCandidates {
   withoutHourly: number;
   /** YEKDEM çıkış sayımı (teknoloji süzgecinden geçen, projede ve toplayıcı portföyünde olmayan adaylarda); liste alınamadıysa null */
   yekdemExits: { currentYear: number; exited: number; endsThisYear: number; endsSoon: number; mw: number } | null;
+  /** Seçili yılın geçmiş rüzgâr model/plan karışım kanıtı. */
+  weakWindForecast?:Record<number,WindBlendEvidence>;
   result: ScreeningResult;
   /** Sözleşme fiyatı (PLAN 16.3) için girdiler; teklif sayfada priceContract ile hesaplanır */
   pricing: CandidatePricing;
@@ -271,6 +274,7 @@ export async function projectCandidates(
           };
         })()
       : null,
+    weakWindForecast:(()=>{try{return weakWindEvidence(JSON.parse(fs.readFileSync(path.join(process.cwd(),".cache","forecast","wind-candidates-blend.json"),"utf8")),year);}catch{return {};}})(),
     result: screenCandidates(m.members, candidates, data.profile, { top, sortBy }),
     pricing: (() => {
       const ts = withData.flatMap((p) => [new Date(p.hourly[0].timestamp).getTime(), new Date(p.hourly[p.hourly.length - 1].timestamp).getTime()]);

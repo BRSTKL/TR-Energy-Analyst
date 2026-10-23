@@ -84,14 +84,14 @@ function schedulerNote(date: string, lines: string[] | null): string {
  * [fromDay, toDay] hedef günlerinin karnesi. `logs` verilirse kayıt dosyaları yerine onlar kullanılır (geriye dönük
  * deneme: scripts/forecast-scorecard.mts --simulate).
  */
-export async function scorecard(epiasPlantIds: number[], fromDay: string, toDay: string, opts: { logs?: ForecastLog[]; provisionalOnly?: boolean; schedulerLog?: boolean } = {}): Promise<Scorecard> {
+export async function scorecard(epiasPlantIds: number[], fromDay: string, toDay: string, opts: { logs?: ForecastLog[]; provisionalOnly?: boolean; schedulerLog?: boolean; tech?: "GES" | "RES" } = {}): Promise<Scorecard> {
   const from = Date.parse(`${fromDay}T00:00:00Z`);
   const to = Date.parse(`${toDay}T00:00:00Z`) + DAY;
   let logs = opts.logs;
   if (!logs) {
     logs = [];
     for (let d = from; d < to; d += DAY) {
-      const l = await readForecastLog(new Date(d).toISOString().slice(0, 10));
+      const l = await readForecastLog(new Date(d).toISOString().slice(0, 10), opts.tech === "RES" ? "wind" : "solar");
       if (l) logs.push(l);
     }
   }
@@ -100,7 +100,7 @@ export async function scorecard(epiasPlantIds: number[], fromDay: string, toDay:
     const p = await scorecardPlantData(id, fromDay, toDay, { provisionalOnly: opts.provisionalOnly });
     if (p) plants.set(id, p);
   }
-  const card = buildScorecard({ from: fromDay, to: toDay, logs, plants, market: await loadMarket(from, to) });
+  const card = buildScorecard({ tech: opts.tech, from: fromDay, to: toDay, logs, plants, market: await loadMarket(from, to) });
   if (opts.schedulerLog !== false) {
     const lines = fs.existsSync(SCHEDULER_LOG) ? fs.readFileSync(SCHEDULER_LOG, "utf8").split("\n") : null;
     for (const m of card.missingDays) if (m.reason === "kayıt yok") m.note = schedulerNote(m.date, lines);
@@ -121,11 +121,11 @@ export interface ProjectScorecard {
  * Projenin lisanslı, konumlu güneş santralleri için ayın karnesi (ay verilmezse kaydı olan en son ay). Dönem: ayın ilk
  * kaydından ayın sonuna ya da dünden (Türkiye) önceye kadar.
  */
-export async function projectScorecard(projectId: string, month?: string, now = Date.now()): Promise<ProjectScorecard | null> {
-  const list = await projectWeatherPlants(projectId);
+export async function projectScorecard(projectId: string, month?: string, now = Date.now(), tech: "GES" | "RES" = "GES"): Promise<ProjectScorecard | null> {
+  const list = await projectWeatherPlants(projectId, tech);
   if (!list) return null;
   const ids = Array.from(new Set(list.plants.filter((p) => p.epiasPlantId !== null && p.locationSource && !isUnlicensedName(p.name)).map((p) => p.epiasPlantId!)));
-  const all = await listForecastLogs();
+  const all = await listForecastLogs(tech === "RES" ? "wind" : "solar");
   const months = Array.from(new Set(all.map((d) => d.slice(0, 7)))).sort().reverse();
   const m = month && months.includes(month) ? month : months[0] ?? null;
   if (!m || !ids.length) return { months, month: m, firstLog: all[0] ?? null, card: null };
@@ -135,5 +135,5 @@ export async function projectScorecard(projectId: string, month?: string, now = 
   const fromDay = all.find((d) => d.startsWith(m))!;
   const toDay = monthEnd < yesterday ? monthEnd : yesterday;
   if (toDay < fromDay) return { months, month: m, firstLog: all[0] ?? null, card: null };
-  return { months, month: m, firstLog: all[0] ?? null, card: await scorecard(ids, fromDay, toDay) };
+  return { months, month: m, firstLog: all[0] ?? null, card: await scorecard(ids, fromDay, toDay, { tech, schedulerLog: tech !== "RES" }) };
 }

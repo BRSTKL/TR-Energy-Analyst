@@ -3,7 +3,15 @@
 Proje rüzgâr santralleri için ertesi günün saatlik üretim tahmini. Güneş motoruyla (`lib/solar-engine/`) aynı iskelet ve
 kurallar: her yeni yöntem önce geriye dönük testte, sonra gölge sürüm olarak sınanır; şampiyonu karne seçer. Plan: `PLAN.md` Aşama 23.
 
-Durum (19.10.2026): saf model kodu ve geriye dönük test kümeleri (`scripts/wind-candidates-backtest.mts --set phys|prob|curt|corr|blend`). Günlük akışa, kayda ve ekrana henüz bağlı değil (bağlama Mac'te sınanır).
+Durum (23.10.2026): saf aday modelleri ve geçmiş sınamaları korunur. `forecast.ts` temel medyan eğriyi canlı ECMWF ile üretir; Üretim tahmini sayfasında ayrı Rüzgâr sekmesi, deneysel P10–P90 ve rampa olasılığı vardır. Temel geçmiş d2 ile, canlı girdi en yeni çalışmayla: başarı koşulları birebir aynı sayılmaz. Üç birleşim (ortalama, hız ortalaması, ağırlıklı) günlük akışta ayrı gölge kimlikleriyle üretilir; ek kaynak hatası temel tahmini iptal etmez. Rüzgâr ayrışması m/s olarak `windSpreadMs` ile ve kaynak alınma anıyla saklanır. Öğrenen düzeltme ve beklenen kısıntı da ayrı gölge kimlikleriyle üretilir; yeterli eğitim/etiket/fiyat yoksa `no-data` kalır. Birleşim, fiziksel eğri ve düzeltme henüz otomatik canlı sürüm seçilmez; önce sınama, sonra yeni günlerin gölge karnesi gerekir.
+
+Günlük kayıt: `scripts/wind-forecast-daily.mts [projeId] --dry` yalnız denemedir; `--write` bütün projelerde yalnız yarın için, kesimden önce ve bir kez `data/pool/forecast-log/wind/` altına yazar. Proje seçilerek kısmi günlük kayıt yazılamaz. Sunucudaki görevler bu kod değişikliğiyle etkinleştirilmez; Mac zamanlayıcısı eklenmez. Hava çalışmasının kimliği bilinmiyorsa `runInit: null` olarak saklanır, uydurulmaz.
+
+Kayıt deposu ve karne, güneşteki mevcut parçaları teknoloji parametresiyle kullanır (güneş varsayılanı aynı). Rüzgâr karnesi RES KÜPST toleransıyla ve ilk KGÜP ile ortak saatlerde hesaplanır. Güneşin uydu kayıp/gök durumu maskesi rüzgâra uygulanmaz; rüzgârda kayıp hariç sütunu tüm saatlerle aynıdır. Henüz kayıt yoksa başarı değeri gösterilmez.
+
+Mevcut temel geçmiş sınaması 2025 başından genişleyen eğitim kullanır; canlı sürüm son dört ayı kullanır. Bu iki koşulun maliyetleri birebir aynı performans iddiası olarak sunulmaz.
+
+Canlı eğitimde UEVM önceliklidir; havuzda mevcutsa eksik saatler geçici üretimle doldurulur. Geçmiş sınamalarının varsayılanı UEVM olarak kalır. Veri bulunmayan santral sessizce sıfır tahmin almaz. Konum metninde tahmini ilçe merkezi `~` ile gösterilir. Rüzgâr bandının dağılımı 90 günlük kalibrasyondan önceki örneklem dışı veride, genişliği sonraki dönemde seçilir; hedefin son üç günü dışarıda kalır. Kalibrasyon kapsaması gelecek gün garantisi değildir. Belirsizlik bandı santral bazındadır; portföy bandı santral çeyreklikleri toplanarak türetilmez.
 
 ## Klasörler
 
@@ -17,8 +25,8 @@ Durum (19.10.2026): saf model kodu ve geriye dönük test kümeleri (`scripts/wi
 | `models/correction.ts` | Öğrenen düzeltme (23.5): ortak GBM (`lib/forecast/gbm.ts`) ile kararlılık, rampa ve son günlerin hatası. |
 | `models/blend.ts` | Şirket planıyla karışım ve zayıf tahminci listesi (23.8; yalnız analiz). |
 | `data/wind-hours.ts` | Eğitim ve sınama verisi: havuzdaki üretim + ECMWF / ICON-EU / GFS arşivleri + gerçekleşen rüzgâr (etiket). |
-| `learning/` | (23.1) Kayıt, karne, şampiyon: güneşteki parçalar `lib/forecast/` altına taşınınca buradan kullanılır. |
-| `pipeline.ts`, `registry.ts`, `forecast.ts` | (23.2 bağlama) Günlük akış, sürümler, tek santral tahmini. |
+| `learning/oos.ts` | Rüzgâr bandı ve rampa için her ay yalnız geçmiş dört ayla üretilen örneklem dışı seri. Kayıt/karne deposu teknoloji parametreli ortak kullanılır; rüzgâr şampiyon seçimi henüz etkin değil. |
+| `forecast.ts` | Proje canlı tahmini; `scripts/wind-forecast-daily.mts` ayrı ve varsayılan kuru günlük akış. |
 
 Rüzgâra özgü olmayan parçalar `lib/forecast/` altında: bilgi zamanı (`info-time.ts`), kayıp ve kısıntı tespiti (`wind-loss.ts`),
 sıfır fiyat olasılığı ve kısma oranı (`zero-price.ts`), değişim algılama (`change-detection.ts`), tatil takvimi (`tr-holidays.ts`).

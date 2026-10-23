@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   try {
     const month = new URL(req.url).searchParams.get("month") ?? undefined;
-    const r = await projectScorecard(params.id, month && /^\d{4}-\d{2}$/.test(month) ? month : undefined);
+    const r = await projectScorecard(params.id, month && /^\d{4}-\d{2}$/.test(month) ? month : undefined, Date.now(), new URL(req.url).searchParams.get("tech") === "RES" ? "RES" : "GES");
     if (!r) return NextResponse.json({ success: false, error: "Proje bulunamadı." }, { status: 404 });
     return NextResponse.json({ success: true, ...r });
   } catch (error) {

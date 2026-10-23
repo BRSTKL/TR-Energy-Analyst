@@ -334,6 +334,7 @@ export default function CandidatesPage() {
                         </TableCell>
                         <TableCell>
                           <p className="font-medium text-slate-900">{c.name}</p>
+                          {c.type === "RES" && data?.weakWindForecast?.[c.epiasPlantId] && <p className="text-xs text-amber-700" title={`Geçmiş şirket planıyla karışım analizi: ${data.weakWindForecast[c.epiasPlantId].from}–${data.weakWindForecast[c.epiasPlantId].to}; ${data.weakWindForecast[c.epiasPlantId].months} ay. Canlı tahmin veya tasarruf garantisi değildir.`}>Geçmiş analizde model katkısı yüksek: %{nf(100*data.weakWindForecast[c.epiasPlantId].weight,0)}</p>}
                           <p className="text-xs text-slate-500">{sub(c)}</p>
                           <AccessBadge c={c} />
                           <YekdemExitBadge c={c} />

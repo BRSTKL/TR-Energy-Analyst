@@ -59,6 +59,13 @@ describe("rüzgârda birden çok hava modeli (23.4)", () => {
     }
   });
 
+  it("canlı yol gelecekte aynı fiziksel tahmini verir; geçmiş ve gerçekleşenli girdiyi reddeder", () => {
+    const h = test[0];
+    expect(m.predictLive({ ...h, uevm: null, live: true }, h.t - 2 * DAY)).toEqual(m.predict(h));
+    expect(() => m.predictLive(h, h.t - 2 * DAY)).toThrow();
+    expect(() => m.predictLive({ ...h, uevm: null }, h.t)).toThrow();
+  });
+
   it("aynı veriyle aynı sonuç", () => {
     const m2 = fitWindEnsemble(train, CAP, opts);
     expect(m2.weights).toEqual(m.weights);

@@ -55,7 +55,7 @@ const SLOW_API_MS = 10_000;
 const BAD_TEXT = /.{0,40}(NaN|undefined|Infinity|\[object Object\]|Invalid Date).{0,40}/g;
 const BUSY_TEXT = /Yükleniyor…|Yükleniyor\.\.\.|Hesaplanıyor\.\.\.|Test çalıştırılıyor|Model kuruluyor/;
 
-type Check = { url: string; label: string; mobile?: boolean; expect404?: boolean; expectText?: RegExp };
+type Check = { url: string; label: string; mobile?: boolean; tech?: "RES"; expect404?: boolean; expectText?: RegExp };
 type Result = { label: string; url: string; ms: number; errors: string[]; warnings: string[] };
 
 async function getJson<T>(path: string): Promise<T> {
@@ -113,6 +113,10 @@ async function run(page: Page, c: Check): Promise<Result> {
     const resp = await page.goto(BASE + c.url, { waitUntil: "domcontentloaded", timeout: LOAD_TIMEOUT_MS });
     if (resp && resp.status() >= 400 && !c.expect404) errors.push(`sayfa HTTP ${resp.status()}`);
     if (!(await waitLoaded(page))) errors.push(`${LOAD_TIMEOUT_MS / 1000} sn içinde yüklenmedi`);
+    if (c.tech === "RES") {
+      await page.getByRole("button", { name: "Rüzgâr", exact: true }).click();
+      if (!(await waitLoaded(page))) errors.push("Rüzgâr sekmesi sürede yüklenmedi");
+    }
     const text = await page.evaluate(() => document.body?.innerText ?? "");
     for (const m of text.matchAll(BAD_TEXT)) errors.push(`ekranda "${m[1]}": …${m[0].replace(/\s+/g, " ")}…`);
     if (c.expectText && !c.expectText.test(text)) errors.push(`beklenen metin yok: ${c.expectText}`);
@@ -177,6 +181,7 @@ if (ONLY) {
   const kept = checks.filter(hit);
   // Seçilen her sayfanın telefon genişliği de denenir
   for (const c of kept.filter((c) => !c.mobile && !c.expect404)) if (!kept.some((k) => k.mobile && k.url === c.url)) kept.push({ ...c, label: `📱 ${c.label}`, mobile: true });
+  kept.push(...kept.filter(c => /\/forecast$/.test(c.url)).map(c => ({ ...c, tech: "RES" as const, label: `${c.label} · rüzgâr` })));
   if (!kept.length) {
     console.error(`--only ${ONLY.join(",")}: eşleşen sayfa yok`);
     process.exit(2);

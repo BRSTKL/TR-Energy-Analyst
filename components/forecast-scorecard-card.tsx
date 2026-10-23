@@ -16,6 +16,12 @@ const dm = (s: string) => `${Number(s.slice(8, 10))} ${MONTHS[Number(s.slice(5, 
 const unit = (r: ScorePair["model"]) => (r.uevmMwh > 0 ? r.totalTl / r.uevmMwh : NaN);
 /** Sürüm adları (kendi kendine öğrenme, lib/solar-engine/learning/self-learning.ts) */
 const MODEL_LABEL: Record<string, string> = {
+  "wind-median-correction-v1": "Rüzgâr öğrenen düzeltme (gölge)",
+  "wind-median-curtailment-v1": "Rüzgâr beklenen kısıntı (gölge)",
+  "wind-median-d2-uevm-v1": "Rüzgâr temel (4 ay eğitim)",
+  "wind-ensemble-mean-v1": "Rüzgâr üç model: tahmin ortalaması (gölge)",
+  "wind-ensemble-speed-v1": "Rüzgâr üç model: hız ortalaması (gölge)",
+  "wind-ensemble-weighted-v1": "Rüzgâr üç model: ağırlıklı (gölge)",
   [LIVE_SERIES]: "Gönderilen tahmin (her santralin o günkü canlı sürümü)",
   [BASE_MODEL]: "Temel (4 ay eğitim)",
   [`${BASE_MODEL}-w2`]: "2 ay eğitim",
@@ -51,21 +57,21 @@ function PairCells({ p }: { p: ScorePair }) {
  * Üretim tahmini sayfası: tahmin karnesi (PLAN 21.4). Günlük kayıttaki (GÖP kesiminden önce yazılmış) tahminler
  * gerçekleşen üretimle; şirketin ilk KGÜP'üyle aynı saatlerde.
  */
-export function ForecastScorecardCard({ projectId }: { projectId: string }) {
+export function ForecastScorecardCard({ projectId, tech = "GES" }: { projectId: string; tech?: "GES" | "RES" }) {
   const [month, setMonth] = useState<string | null>(null);
   const [data, setData] = useState<ProjectScorecard | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setError(null);
-    fetch(`/api/projects/${projectId}/forecast/scorecard${month ? `?month=${month}` : ""}`)
+    fetch(`/api/projects/${projectId}/forecast/scorecard?tech=${tech}${month ? `&month=${month}` : ""}`)
       .then((r) => r.json())
       .then((d) => {
         if (!d.success) throw new Error(d.error);
         setData(d);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Karne yüklenemedi."));
-  }, [projectId, month]);
+  }, [projectId, month, tech]);
 
   const card = data?.card ?? null;
   // Santral boşlukları santral başına özet
@@ -84,6 +90,7 @@ export function ForecastScorecardCard({ projectId }: { projectId: string }) {
           saatlerde karşılaştırılır. Hata: WAPE (mutlak hata ÷ üretim). Maliyet: dengesizlik + KÜPST, MWh başına, dönemin kuralıyla. Gerçekleşen üretim önce EPİAŞ
           gerçek zamanlı verisiyle (geçici, ≈ 2 gün gecikmeli), ay uzlaştırılınca UEVM ile (kesin).
         </CardDescription>
+        {tech === "RES" && <p className="text-xs text-slate-600">Rüzgârda tüm saatler ölçülür; güneşin uydu kayıp ve gök durumu ayrımı uygulanmaz. Kayıp hariç sütunu tüm saatlerle aynıdır. Kayıtlar birikmeden başarı sonucu gösterilmez.</p>}
         {data && data.months.length > 1 && (
           <div className="flex flex-wrap gap-1 pt-1">
             {data.months.map((m) => (

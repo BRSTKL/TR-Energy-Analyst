@@ -82,14 +82,14 @@ export async function plantLocation(row: { epiasPlantId: number | null; latitude
 }
 
 /** Projenin güneş santralleri (ada göre), konum ve hava verisi durumuyla */
-export async function projectWeatherPlants(projectId: string): Promise<{ project: { id: string; name: string }; plants: ProjectWeatherPlant[] } | null> {
+export async function projectWeatherPlants(projectId: string, tech: "GES" | "RES" = "GES"): Promise<{ project: { id: string; name: string }; plants: ProjectWeatherPlant[] } | null> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: {
       id: true,
       name: true,
       plants: {
-        where: { type: "GES" },
+        where: { type: tech },
         select: { epiasPlantId: true, name: true, organizationName: true, latitude: true, longitude: true, locationSource: true, locationRef: true },
         orderBy: { name: "asc" },
       },

@@ -1,3 +1,5 @@
+import {windOos} from "@/lib/wind-engine/learning/oos";
+import {calibratedWindBands} from "@/lib/wind-engine/models/calibrated-bands";
 /**
  * Rüzgâr motoru aday sürümlerinin geriye dönük testi (Aşama 23.3–23.8; güneşteki scripts/solar-candidates-backtest.mts'in
  * rüzgâr karşılığı). scripts/wind-forecast-backtest.mts ile aynı kurulum: konumu ve geçmiş rüzgâr tahmini olan proje rüzgâr
@@ -88,8 +90,10 @@ const iso = (ms: number) => new Date(ms).toISOString().slice(0, 7);
 type Hour = WindDataHour & { pred: Record<string, number | null> };
 const nf = (v: number, d = 1) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
 const results: Array<{ id: number; name: string; capacityMw: number; notes: Record<string, number>; all: Record<string, CandidateResult> }> = [];
+const rollingCoverage=new Map<string,[number,number]>();
 const cover = { inside: 0, n: 0, byMonth: new Map<string, [number, number]>() };
 const ramp = { model: 0, clim: 0, n: 0, events: 0 };
+const blendByYear:Record<string,Array<{id:number;w:number;months:number}>>={};
 const blendList: Array<{ id: number; name: string; w: number; months: number }> = [];
 
 // Sıfır fiyat olasılığı (23.7): ay başına ortak model, bütün saatler (rüzgâr gece de üretir)
@@ -116,6 +120,8 @@ for (const [id, p] of uniq) {
   const data = await loadWindPlantData(id, TRAIN_FROM, end, ptfMap);
   if (!data) continue;
   const cap = p.capacityMw;
+  const yearlyWeights=new Map<number,number[]>();
+  const rollingOos=SET==="prob"?windOos(data.hours,cap,end):[];
   const notes: Record<string, number> = {};
   const tested: Hour[] = [];
   for (const { y, m } of months) {
@@ -169,6 +175,11 @@ for (const [id, p] of uniq) {
     const hist = tested.filter((h) => h.t < from - DAY && h.uevm !== null && h.pred["rüzgâr modeli"] !== null && (h.ptf ?? 1) > 0);
     if (SET === "prob") {
       if (from < Date.UTC(FIRST_TEST.y, FIRST_TEST.m - 1 + 3, 1)) continue; // en az 3 aylık geçmiş
+      if(from>=Date.UTC(2026,0,1)) {
+        const bandTest=rollingOos.filter(h=>h.t>=from&&h.t<Date.UTC(y,m,1));
+        const band=calibratedWindBands(rollingOos.filter((h):h is typeof h & {pred:number;actual:number;ws:number}=>h.t<from&&h.actual!==null&&h.pred!==null&&h.ws!==null),from,bandTest,cap);
+        if(band) bandTest.forEach((h,i)=>{if(h.actual===null||band.p10[i]===null||band.p90[i]===null)return;const k=iso(from);const c=rollingCoverage.get(k)??[0,0];if(h.actual>=band.p10[i]!&&h.actual<=band.p90[i]!)c[0]++;c[1]++;rollingCoverage.set(k,c);});
+      }
       const qm = fitWindQuantiles(
         hist.filter((h) => h.ws.d2 !== null).map((h) => ({ pred: h.pred["rüzgâr modeli"]!, ws: h.ws.d2!, actual: h.uevm! })),
         cap
@@ -241,6 +252,7 @@ for (const [id, p] of uniq) {
       );
       if (fit && rows.length >= 500) {
         notes["w × 10 (ay toplamı)"] = (notes["w × 10 (ay toplamı)"] ?? 0) + Math.round(fit.w * 10);
+        const weights=yearlyWeights.get(y)??[];weights.push(fit.w);yearlyWeights.set(y,weights);
         notes["w ay"] = (notes["w ay"] ?? 0) + 1;
       }
       for (const h of test) {
@@ -249,6 +261,7 @@ for (const [id, p] of uniq) {
       }
     }
   }
+  for(const [year,weights] of yearlyWeights){const xs=blendByYear[year]??[];xs.push({id,w:weights.reduce((a,b)=>a+b,0)/weights.length,months:weights.length});blendByYear[year]=xs;}
   const names = NAMES[SET];
   const cand: Record<string, (h: Hour) => number | null> = Object.fromEntries(names.map((n) => [n, n === "ilk KGÜP" ? (h: Hour) => h.kgupFirst : (h: Hour) => h.pred[n] ?? null]));
   const evalHours = SET === "prob" || SET === "corr" ? tested.filter((h) => h.t >= CORR_FIRST) : tested;
@@ -270,9 +283,9 @@ fs.writeFileSync(
     plants: results,
     leaky: LEAKY,
     notLive: NOT_LIVE,
-    ...(SET === "prob" ? { coverage: { inside: cover.inside, n: cover.n, months: Object.fromEntries(cover.byMonth) }, ramp } : {}),
+    ...(SET === "prob" ? { coverage: { rolling:Object.fromEntries(rollingCoverage), inside: cover.inside, n: cover.n, months: Object.fromEntries(cover.byMonth) }, ramp } : {}),
     ...(SET === "curt" ? { zeroPriceBrier: zpBrier } : {}),
-    ...(SET === "blend" ? { blend: blendList, weak } : {}),
+    ...(SET === "blend" ? { blend: blendList, blendByYear, weak } : {}),
   })
 );
 const names = NAMES[SET];
@@ -301,3 +314,5 @@ if (SET === "blend") {
   for (const w of weak) console.log(`  ${w.name.slice(0, 30).padEnd(30)} ortalama w ${nf(w.w, 2)} (${w.months} ay)`);
   console.log("Not: ilk KGÜP canlıda bizde yok; karışım yalnız geçmişe bakan analizdir.");
 }
+
+if(SET==="prob") console.log("Kayan kalibrasyon ayrı test ayları:",JSON.stringify(Object.fromEntries(rollingCoverage)));

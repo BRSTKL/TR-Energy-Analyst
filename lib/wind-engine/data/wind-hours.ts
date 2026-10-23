@@ -9,7 +9,7 @@
  */
 
 import { hourMeanWind } from "@/lib/forecast/wind-loss";
-import { readPoolYear } from "@/lib/pool/pool-store";
+import { readPoolYear, readProvisionalYear } from "@/lib/pool/pool-store";
 import { readWindForecastYear, readWindNwpYear, readWindYear } from "@/lib/weather/weather-store";
 import { hubWind, WIND_NWP_MODELS, type WindNwpYear } from "@/lib/weather/wind-nwp-archive";
 import type { WindEnsembleHour } from "../models/ensemble";
@@ -32,7 +32,7 @@ export interface WindPlantData {
 }
 
 /** `from`–`to` (duvar saati ms) arası saatler; ECMWF tahmin arşivi yoksa null */
-export async function loadWindPlantData(epiasPlantId: number, from: number, to: number, ptf: Map<number, number>, realizedModel: "ecmwf_ifs" | "era5" = "ecmwf_ifs"): Promise<WindPlantData | null> {
+export async function loadWindPlantData(epiasPlantId: number, from: number, to: number, ptf: Map<number, number>, realizedModel: "ecmwf_ifs" | "era5" = "ecmwf_ifs", opts: { provisional?: boolean } = {}): Promise<WindPlantData | null> {
   const y0 = new Date(from).getUTCFullYear();
   const y1 = new Date(to - 1).getUTCFullYear() + 1;
   const stamps = { d1: new Map<number, number[]>(), d2: new Map<number, number[]>() };
@@ -78,6 +78,7 @@ export async function loadWindPlantData(epiasPlantId: number, from: number, to: 
     const p = await readPoolYear(epiasPlantId, y);
     if (!p) continue;
     const s0 = Date.parse(p.start);
+    const provisional = opts.provisional ? await readProvisionalYear(epiasPlantId, y) : null;
     for (let i = 0; i < p.uevm.length; i++) {
       const t = s0 + i * HOUR;
       if (t < from || t >= to) continue;
@@ -88,7 +89,7 @@ export async function loadWindPlantData(epiasPlantId: number, from: number, to: 
       const re = hourMeanWind(a?.[0] ?? null, b?.[0] ?? null, a?.[1] ?? null, b?.[1] ?? null);
       hours.push({
         t,
-        uevm: p.uevm[i] === null ? null : Math.max(0, p.uevm[i]!),
+        uevm: (() => { const value = p.uevm[i] ?? provisional?.values[(t - Date.parse(provisional.start)) / HOUR] ?? null; return value === null ? null : Math.max(0, value); })(),
         kgupFirst: p.kgupFirst[i],
         kgupFinal: p.kgupFinal?.[i] ?? null,
         ptf: ptf.get(t) ?? null,

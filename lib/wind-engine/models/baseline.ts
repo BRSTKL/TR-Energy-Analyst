@@ -66,6 +66,7 @@ export function fitWindBaseline(train: WindEngineHour[], capacityMw: number, opt
   return {
     ...model,
     density: opts.density,
+    predictLive: (h, now) => model.predictLive(prep(h as WindEngineHour), now),
     predict: (h) => {
       // Sıcaklık ve basınç aynı çalışmadan, damga i ve i+1 ortalaması: iki damga da denetlenir (biri "instant", biri "mean")
       if (opts.density && !opts.leak) assertAvailable([weatherFeature(`t2m_${opts.lead}`, h.t, "instant", L), weatherFeature(`p_${opts.lead}`, h.t, "mean", L)], h.t);

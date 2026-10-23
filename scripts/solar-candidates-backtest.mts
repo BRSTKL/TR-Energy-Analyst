@@ -1,3 +1,4 @@
+import {calibratedBands} from "@/lib/solar-engine/models/calibrated-bands";
 /**
  * Güneş motoru aday sürümlerinin geriye dönük testi (Aşama 22): canlı temel (sürüm 3 kalıcılıksız) ile adaylar aynı
  * koşulda. scripts/forecast-backtest.mts ile aynı kurulum: konumlu güneş santralleri, Ocak 2025 – son tam ay, her test
@@ -79,7 +80,9 @@ type Cov = [number, number];
 const covNew = (): Cov[] => WIDTHS.map(() => [0, 0] as Cov);
 /** Kapsama sayaçları: dönem (seçim / sınama) × kapsam (tüm / kayıp hariç) × çarpan; ay ay (kayıp hariç, çarpan 1); kayıtlı tavan */
 const cov = { sel: { all: covNew(), ex: covNew() }, test: { all: covNew(), ex: covNew() } };
+const rollingCoverage = new Map<string,[number,number]>();
 const covMonth = new Map<string, Cov>();
+const seasonalCov = new Map<string, Cov[]>();
 const covRecorded: { raw: Cov; rec: Cov } = { raw: [0, 0], rec: [0, 0] };
 const [ly, lm] = endArg.split("-").map(Number);
 const FIRST = { y: 2025, m: 1 };
@@ -352,9 +355,13 @@ for (const id of await listPoolPlants()) {
       );
       const usable = hist.filter((h) => h.uevm !== null && h.pred[K] !== null && h.pred[K] !== undefined && !clean.exclude(h) && !(h.ptf !== null && h.ptf <= TRAIN_ZERO_PRICE_MAX));
       const cap = test.find((h) => h.pred._cap)?.pred._cap ?? 0;
+      const recMw = recorded.get(id);
+      if(from>=WIDTH_TEST_FROM && recMw) {
+        const band=calibratedBands(hist.filter(h=>h.uevm!==null&&h.pred[K]!=null).map(h=>({t:h.t,pred:h.pred[K]!,actual:h.uevm!})),from,test.map(h=>h.pred[K]??null),recMw);
+        if(band) test.forEach((h,i)=>{if(h.uevm===null||h.pred[K]==null||h.pred[K]!<=0.01*recMw)return;const c=rollingCoverage.get(`${y}-${String(m).padStart(2,"0")}`)??[0,0];if(h.uevm>=band.p10[i]!&&h.uevm<=band.p90[i]!)c[0]++;c[1]++;rollingCoverage.set(`${y}-${String(m).padStart(2,"0")}`,c);});
+      }
       const qm = fitResidualQuantiles(usable.map((h) => ({ pred: h.pred[K]!, actual: h.uevm! })), cap);
       if (!qm) continue;
-      const recMw = recorded.get(id);
       const qmRec = recMw ? fitResidualQuantiles(usable.map((h) => ({ pred: h.pred[K]!, actual: h.uevm! })), cap, { ceiling: Math.max(cap, recMw) }) : null;
       // Teklif çeyrekliği: geçmiş saatlerde gerçek fiyatlarla en ucuzu
       const pick = chooseBidQuantile((qq) => evaluateForecasts(usable, { c: (h: Hour) => qm.quantile(h.pred[K]!, qq) }, market, "GES").c.totalTl);
@@ -402,6 +409,11 @@ for (const id of await listPoolPlants()) {
         c[1]++;
       }
     });
+    const season = Math.floor(new Date(h.t).getUTCMonth() / 3);
+    const sk = `${h.t < WIDTH_TEST_FROM ? "sel" : "test"}:${season}`;
+    const sc = seasonalCov.get(sk) ?? covNew();
+    WIDTHS.forEach((_, i) => { sc[i][0] += h.uevm! >= b.p10[i] && h.uevm! <= b.p90[i] ? 1 : 0; sc[i][1]++; });
+    seasonalCov.set(sk, sc);
     if (!exLoss) continue;
     const mk = new Date(h.t).toISOString().slice(0, 7);
     const mc = covMonth.get(mk) ?? [0, 0];
@@ -424,7 +436,7 @@ for (const id of await listPoolPlants()) {
 }
 
 fs.mkdirSync(path.join(process.cwd(), ".cache", "forecast"), { recursive: true });
-fs.writeFileSync(path.join(process.cwd(), ".cache", "forecast", `solar-candidates-backtest-${SET}.json`), JSON.stringify({ generatedAt: new Date().toISOString(), period: { from: SET === "prob" ? "2025-04" : "2025-01", to: endArg }, set: SET, onlyProject, plants: results, ...(SET === "curt" ? { zeroPriceBrier: zpBrier, leaky: LEAKY } : {}), ...(SET === "prob" ? { coverage: { widths: WIDTHS, cov, months: Object.fromEntries(covMonth), recorded: covRecorded } } : {}) }));
+fs.writeFileSync(path.join(process.cwd(), ".cache", "forecast", `solar-candidates-backtest-${SET}.json`), JSON.stringify({ generatedAt: new Date().toISOString(), period: { from: SET === "prob" ? "2025-04" : "2025-01", to: endArg }, set: SET, onlyProject, plants: results, ...(SET === "curt" ? { zeroPriceBrier: zpBrier, leaky: LEAKY } : {}), ...(SET === "prob" ? { coverage: { rolling: Object.fromEntries(rollingCoverage), seasonal: Object.fromEntries(seasonalCov), widths: WIDTHS, cov, months: Object.fromEntries(covMonth), recorded: covRecorded } } : {}) }));
 const sum = (k: "all" | "exLoss", n: string, f: "totalTl" | "uevmMwh") => results.reduce((s, r) => s + r[k][n][f], 0);
 if (SET === "prob") {
   const n = results.reduce((a, r) => a + (r.notes["kapsama saat"] ?? 0), 0);
@@ -439,6 +451,17 @@ if (SET === "prob") {
   console.log(
     `Genişlik çarpanı (Nisan–Aralık 2025'in bütün saatleriyle seçildi): ${nf(pick.width)} → seçimde %${nf(pick.coverage * 100)}; 2026 sınaması (ANA SONUÇ): bütün saatler ${pc(cov.test.all[wi])}, kayıp hariç (iyimser) ${pc(cov.test.ex[wi])}`
   );
+  let seasonalInside = 0, seasonalN = 0;
+  console.log("Mevsimsel çarpan (yalnız 2025 bütün saatlerden seçim; 2026 bağımsız sınama):");
+  for (let season = 0; season < 4; season++) {
+    const selection = seasonalCov.get(`sel:${season}`);
+    const test = seasonalCov.get(`test:${season}`);
+    if (!selection || !test) { console.log(`  Mevsim ${season + 1}: seçim/sınama verisi yok; kalibre kabul edilmez`); continue; }
+    const chosen = chooseWidth(w => selection[WIDTHS.indexOf(w)]);
+    const c = test[WIDTHS.indexOf(chosen.width)]; seasonalInside += c[0]; seasonalN += c[1];
+    console.log(`  Mevsim ${season + 1}: çarpan ${chosen.width}, sınama ${pc(c)}`);
+  }
+  console.log(`Mevsimsel ortak kapsam: ${pc([seasonalInside, seasonalN])}; eksik mevsimler bu ölçüye girmez.`);
   const pickEx = chooseWidth((w) => cov.sel.ex[WIDTHS.indexOf(w)]);
   console.log(`  Karşılaştırma: kayıp hariç saatlerle seçilseydi ${nf(pickEx.width)} → 2026 bütün saatler ${pc(cov.test.all[WIDTHS.indexOf(pickEx.width)])}`);
   console.log(`Tavan kırpması (kayıtlı kurulu gücü olan santraller; bugünkü kayıt geçmişe uygulandı; kayıp hariç, iyimser; çarpan 1): eğitim tavanı ${pc(covRecorded.raw)}, kayıtlı güç ${pc(covRecorded.rec)}`);
@@ -461,3 +484,5 @@ for (const k of ["all", "exLoss"] as const) {
     console.log(`  ${n.padEnd(11)} ${nf(sum(k, n, "totalTl") / sum(k, n, "uevmMwh"))} TL/MWh, hata %${nf(results.reduce((s, r) => s + r[k][n].maeMwh * r[k][n].hours, 0) / Math.max(1, results.reduce((s, r) => s + r[k][n].uevmMwh, 0)) * 100)}${wins}`);
   }
 }
+
+if(SET==="prob") console.log("Kayan kalibrasyon ayrı test ayları:",JSON.stringify(Object.fromEntries(rollingCoverage)));

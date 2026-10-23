@@ -56,6 +56,7 @@ export interface WindEnsembleOptions {
 export type WindEnsemblePrediction = Record<WindEnsembleKind, number | null> & { sources: Array<number | null>; spreadMs: number | null };
 
 export interface WindEnsembleModel {
+  predictLive: (h: WindEnsembleHour, now: number, fallback?: boolean) => WindEnsemblePrediction;
   predict: (h: WindEnsembleHour, fallback?: boolean) => WindEnsemblePrediction;
   /** `weighted` ağırlıkları, kaynak sırasıyla (toplam 1) */
   weights: number[];
@@ -124,16 +125,14 @@ export function fitWindEnsemble(train: WindEnsembleHour[], capacityMw: number, o
   const curves = sources.map((s) => fit(train, s, opts.trainingEnd));
   const speedCurve = fit(train, "speed", opts.trainingEnd);
 
-  return {
-    weights,
-    sources,
-    predict: (h, fallback = false) => {
-      assertAvailable(
+  const predict = (h: WindEnsembleHour, fallback = false, now?: number): WindEnsemblePrediction => {
+      if (now !== undefined && (!Number.isFinite(now) || h.t <= now + 3 * 3_600_000 || h.uevm !== null)) throw new Error("Canlı birleşim yalnız gelecek ve gerçekleşensiz saat içindir");
+      if (now === undefined) assertAvailable(
         sources.flatMap((s) => [weatherFeature(`ws_${s}@i`, h.t, "instant", 2, s), weatherFeature(`ws_${s}@i+1`, h.t, "mean", 2, s)]),
         h.t
       );
       const winds = sources.map((s) => sourceWind(h, s));
-      const preds = sources.map((s, i) => (winds[i].ws === null || winds[i].dir === null ? null : curves[i].predict(asSource(h, winds[i]))));
+      const preds = sources.map((s, i) => (winds[i].ws === null || winds[i].dir === null ? null : (now === undefined ? curves[i].predict(asSource(h, winds[i])) : curves[i].predictLive(asSource(h, winds[i]), now))));
       const have = preds.map((p) => p !== null);
       const all = have.every(Boolean);
       const speeds = winds.filter((w) => w.ws !== null).map((w) => w.ws!);
@@ -144,8 +143,8 @@ export function fitWindEnsemble(train: WindEnsembleHour[], capacityMw: number, o
       const wSum = idx.reduce((s, i) => s + weights[i], 0);
       const weighted = idx.reduce((s, i) => s + (weights[i] / wSum) * preds[i]!, 0);
       const mw = meanWind(idx.map((i) => winds[i]));
-      const speed = mw.ws === null ? null : speedCurve.predict(asSource(h, mw));
+      const speed = mw.ws === null ? null : now === undefined ? speedCurve.predict(asSource(h, mw)) : speedCurve.predictLive(asSource(h, mw), now);
       return { mean, speed, weighted, sources: preds, spreadMs };
-    },
   };
+  return { weights, sources, predict: (h, fallback = false) => predict(h, fallback), predictLive: (h, now, fallback = true) => predict(h, fallback, now) };
 }

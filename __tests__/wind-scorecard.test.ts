@@ -1,0 +1,20 @@
+import {describe,it,expect} from 'vitest';
+import {buildScorecard,type ScorecardPlantData} from '@/lib/solar-engine/learning/scorecard';
+import {evaluateForecasts} from '@/lib/forecast/production-backtest';
+import type {ForecastLog} from '@/lib/solar-engine/learning/forecast-log';
+import type {MarketPriceRecord} from '@/lib/calculations/types';
+it('Rüzgâr karnesi RES KÜPST toleransıyla, ilk KGÜP ile aynı saatlerde fiyatlar',()=>{
+ const date='2026-09-01',start=Date.parse(date+'T00:00:00Z');
+ const rows=Array.from({length:24},(_,i)=>({t:start+i*3600000,uevm:10,ptf:null,pred:12,kgupFirst:11}));
+ const data:ScorecardPlantData={name:'Test RES',site:{latitude:39,longitude:35},realized:new Map(rows.map(h=>[h.t,{mwh:h.uevm,source:'UEVM'}])),kgupFirst:new Map(rows.map(h=>[h.t,h.kgupFirst])),sat:new Map()};
+ const market=new Map<number,MarketPriceRecord>(rows.map(h=>[h.t,{timestamp:new Date(h.t),ptf:2000,smf:2500,systemDirection:'DEFICIT'}]));
+ const log:ForecastLog={schema:1,tech:'RES',targetDate:date,issuedAt:'2026-08-31T08:00:00Z',cutoff:'2026-08-31T09:30:00Z',onTime:true,model:{id:'wind-test',trainingMonths:4},weather:{source:'test',model:'test',runInit:null},code:null,plants:[{epiasPlantId:1,name:'Test RES',status:'ok',hours:rows.map(h=>h.pred)}]};
+ const c=buildScorecard({tech:'RES',from:date,to:date,logs:[log],plants:new Map([[1,data]]),market});
+ const expected=evaluateForecasts(rows,{model:h=>h.pred,kgup:h=>h.kgupFirst},market,'RES');
+ expect(c.rows[0].all.model.totalTl).toBe(expected.model.totalTl);
+ expect(c.rows[0].all.kgup.totalTl).toBe(expected.kgup.totalTl);
+ expect(c.rows[0].exLoss).toEqual(c.rows[0].all);
+ expect(c.rows[0].bySky.bilinmiyor.model.hours).toBe(24);
+ const solar=evaluateForecasts(rows,{model:h=>h.pred},market,'GES');
+ expect(c.rows[0].all.model.totalTl).not.toBe(solar.model.totalTl);
+});

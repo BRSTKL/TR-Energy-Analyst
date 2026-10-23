@@ -1,10 +1,11 @@
 "use client";
+import type { ForecastBands } from "@/lib/solar-engine/models/calibrated-bands";
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, Loader2 } from "lucide-react";
-import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, CartesianGrid, ComposedChart, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ForecastReferenceCard } from "@/components/forecast-reference-card";
@@ -35,24 +36,28 @@ const ALERT_LABEL: Record<string, string> = {
   long_outage: "Uzun arıza",
 };
 
-function HourlyChart({ hours, days }: { hours: Array<number | null>; days: string[] }) {
+function HourlyChart({ hours, days, bands }: { hours: Array<number | null>; days: string[]; bands?: ForecastBands }) {
   const rows = Array.from({ length: 24 }, (_, h) => ({
     saat: `${String(h).padStart(2, "0")}:00`,
     d1: hours[h] ?? null,
     d2: hours[24 + h] ?? null,
+    band: bands?.p10[h] != null && bands?.p90[h] != null ? [bands.p10[h], bands.p90[h]] : null,
+    median: bands?.p50[h] ?? null,
   }));
   return (
     <div className="h-64">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={rows} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
+        <ComposedChart data={rows} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
           <CartesianGrid vertical={false} stroke={COLOR.grid} />
           <XAxis dataKey="saat" tick={{ fontSize: 11 }} stroke={COLOR.axis} tickLine={false} interval="preserveStartEnd" minTickGap={18} />
           <YAxis tick={{ fontSize: 11 }} stroke={COLOR.axis} tickLine={false} axisLine={false} width={48} domain={[0, "auto"]} />
-          <Tooltip formatter={(v: unknown) => (v === null || v === undefined ? "–" : `${nf(Number(v))} MWh`)} />
+          <Tooltip formatter={(v: unknown) => (v === null || v === undefined ? "–" : Array.isArray(v) ? `${nf(Number(v[0]))}–${nf(Number(v[1]))} MWh` : `${nf(Number(v))} MWh`)} />
           <Legend wrapperStyle={{ fontSize: 12 }} formatter={(v: string) => <span className="text-slate-600">{v}</span>} />
+          {bands && <Area name="P10–P90 (deneysel)" dataKey="band" fill="#2a78d6" fillOpacity={0.16} stroke="none" isAnimationActive={false} />}
+          {bands && <Line name="P50 (deneysel)" dataKey="median" stroke="#7c3aed" dot={false} isAnimationActive={false} />}
           <Line name={dayLabel(days[0], 0)} dataKey="d1" stroke={COLOR.day1} strokeWidth={2} dot={false} isAnimationActive={false} />
           {days[1] && <Line name={dayLabel(days[1], 1)} dataKey="d2" stroke={COLOR.day2} strokeWidth={2} dot={false} isAnimationActive={false} />}
-        </LineChart>
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );
@@ -82,20 +87,36 @@ const shortDay = (d: string) => `${Number(d.slice(8, 10))} ${MONTHS[Number(d.sli
  */
 export default function ForecastPage() {
   const { id } = useParams<{ id: string }>();
+  const [bandDate, setBandDate] = useState<string | null>(null);
+  const [solarBands, setSolarBands] = useState<Record<number, ForecastBands>>({});
   const [data, setData] = useState<ForecastResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tech, setTech] = useState<"GES" | "RES">("GES");
   const [plant, setPlant] = useState<number | null>(null);
 
   useEffect(() => {
-    fetch(`/api/projects/${id}/forecast`)
+    setData(null); setError(null); setPlant(null);
+    const abort = new AbortController();
+    fetch(`/api/projects/${id}/forecast?tech=${tech}`, { signal: abort.signal })
       .then((r) => r.json())
       .then((d) => {
         if (!d.success) throw new Error(d.error);
+        if (abort.signal.aborted) return;
         setData(d);
         setError(null);
       })
-      .catch((e) => setError(e instanceof Error ? e.message : "Tahmin yüklenemedi."));
-  }, [id]);
+      .catch((e) => { if (!abort.signal.aborted) setError(e instanceof Error ? e.message : "Tahmin yüklenemedi."); });
+    return () => abort.abort();
+  }, [id, tech]);
+
+  useEffect(() => {
+    if (tech !== "GES") return;
+    const abort = new AbortController(); setSolarBands({});
+    fetch(`/api/projects/${id}/forecast/bands`, { signal: abort.signal }).then(r => r.json()).then(d => {
+      if (!abort.signal.aborted && d.success) { setBandDate(d.date); setSolarBands(Object.fromEntries(d.plants.map((p: {epiasPlantId:number;bands:ForecastBands}) => [p.epiasPlantId,p.bands]))); }
+    }).catch(() => {});
+    return () => abort.abort();
+  }, [id, tech]);
 
   const ok = data?.plants.filter((p) => p.status === "ok") ?? [];
   const missing = data?.plants.filter((p) => p.status !== "ok") ?? [];
@@ -106,6 +127,7 @@ export default function ForecastPage() {
     const d = new Date(Date.parse(`${data.days[0]}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
     return Date.parse(data.weatherFetchedAt) > Date.parse(`${d}T09:30:00Z`);
   })();
+  const shownBands = selected ? (tech === "RES" ? selected.bands : bandDate === data?.days[0] ? solarBands[selected.epiasPlantId!] : undefined) : undefined;
   const shown = selected?.hours ?? data?.total ?? [];
   const daySum = (hours: Array<number | null>, d: number) => hours.slice(d * 24, d * 24 + 24).reduce((a: number, v) => a + (v ?? 0), 0);
   const peak = (() => {
@@ -127,9 +149,13 @@ export default function ForecastPage() {
       </Link>
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Üretim tahmini{data ? ` · ${data.project.name}` : ""}</h1>
-        <p className="text-sm text-slate-600">Güneş santrallerinin yarın ve öbür gün saat saat beklenen üretimi.</p>
+        <p className="text-sm text-slate-600">{tech === "GES" ? "Güneş" : "Rüzgâr"} santrallerinin yarın ve öbür gün saat saat beklenen üretimi.</p>
       </div>
 
+      <div className="flex gap-2" role="group" aria-label="Santral türü">
+        {(["GES", "RES"] as const).map(t => <button key={t} onClick={() => setTech(t)} aria-pressed={tech === t} className="rounded border px-4 py-2 text-sm">{t === "GES" ? "Güneş" : "Rüzgâr"}</button>)}
+      </div>
+      {tech === "RES" && <p className="text-sm text-slate-600">Açık referans: geçmiş d2 hava ile eğitilir, canlıda yeni ECMWF çalışması kullanılır. Şirket planından daha iyi olduğu iddia edilmez. Günlük rüzgâr kaydı sunucuda henüz etkin değil.</p>}
       {error && (
         <Card className="shadow-sm">
           <CardContent className="p-4 text-sm text-amber-800">{error}</CardContent>
@@ -142,7 +168,7 @@ export default function ForecastPage() {
       )}
       {data && data.plants.length === 0 && (
         <Card className="shadow-sm">
-          <CardContent className="p-4 text-sm text-slate-600">Bu projede güneş santrali yok. Rüzgâr ve hidro için tahmin henüz yok.</CardContent>
+          <CardContent className="p-4 text-sm text-slate-600">Bu projede seçilen türde santral yok.</CardContent>
         </Card>
       )}
 
@@ -177,7 +203,10 @@ export default function ForecastPage() {
               {data.days[1] && <StatBox label={`Öbür gün, ${shortDay(data.days[1])}`} value={nf(daySum(shown, 1), 0)} unit="MWh" />}
               <StatBox label="Yarın en yüksek" value={nf(peak.v, 0)} unit="MWh" sub={hourText(peak.h)} />
             </div>
-            <HourlyChart hours={shown} days={data.days} />
+            <HourlyChart hours={shown} days={data.days} bands={shownBands} />
+            {shownBands && <p className="text-xs text-slate-600">P10–P90 deneysel belirsizlik bandı; %80 kapsama garantisi değildir. {tech === "GES" ? "Bant günlük kaydın ağırlıklı+düzeltme gölge sürümüne aittir; mavi çizgi güncel açık referanstır ve farklı olabilir." : "Geçmiş örneklem dışı hatalardan kurulur; bağımsız kapsama sınaması bekliyor."} {shownBands.calibration.coverage !== null && `Geçmiş kalibrasyon kapsaması %${nf(100*shownBands.calibration.coverage,1)} (${shownBands.calibration.rows} saat).`}</p>}
+            {selected?.rampProbabilities && <p className="text-sm text-amber-800">Üç saatte kurulu gücün %30&apos;unu aşan değişim olasılığı, yarın en yüksek: {selected.rampProbabilities.slice(0,24).some(v=>v!==null) ? `%${nf(100*Math.max(...selected.rampProbabilities.slice(0,24).map(v=>v??0)),0)}` : "yeterli geçmiş yok"}. Deneysel uyarı; gerçekleşme garantisi değildir.</p>}
+            {selected && tech === "GES" && !shownBands && <p className="text-xs text-slate-500">Bu santral için yarının günlük kaydında belirsizlik bandı henüz yok; yeterli geçmiş ve yeni kesim öncesi kayıt oluşunca gösterilir.</p>}
             {selected?.locationText.startsWith("~") && <p className="text-xs text-amber-700">Bu santralin konumu ilçe merkezi tahmini: sonuç kaba.</p>}
           </CardContent>
         </Card>
@@ -217,7 +246,7 @@ export default function ForecastPage() {
                               ~
                             </span>
                           )}
-                          {p.warning && <div className="text-[11px] font-normal text-amber-700">Eğitim verisi az: tahmin kaba</div>}
+                          {p.warning && <div className="text-[11px] font-normal text-amber-700">{p.warning}</div>}
                           {p.alerts?.map((a) => (
                             <div key={a.kind} className="max-w-xs whitespace-normal break-words text-[11px] font-normal text-red-700">
                               {ALERT_LABEL[a.kind] ?? "Değişim uyarısı"}: {a.message}
@@ -252,7 +281,7 @@ export default function ForecastPage() {
                 Şirketler santral içi veri ve ticari tahmin servisi kullanır; bu sayfa bağımsız bir açık referanstır.
               </p>
             )}
-            <ForecastScorecardCard projectId={id} />
+            <ForecastScorecardCard key={tech} projectId={id} tech={tech} />
             {data.reference && data.reference.rows.length > 0 && (
               // Özet cümlesi yukarıda: kartın kendi özet paragrafı tekrar etmesin
               <ForecastReferenceCard period={data.reference.period} rows={data.reference.rows} summary={null} />
@@ -265,7 +294,7 @@ export default function ForecastPage() {
         <details className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs leading-relaxed text-slate-600 shadow-sm">
           <summary className="cursor-pointer text-sm font-medium text-slate-700">Nasıl hesaplandı?</summary>
           <div className="mt-2 space-y-2">
-            <p>
+            {tech === "RES" ? <p>Son dört aylık UEVM ve geçmiş d2 rüzgârıyla 100 m hız × yön medyan eğrisi kurulur. Canlı ECMWF rüzgârı m/s cinsinden, üretim saati için iki komşu damganın vektör ortalamasıyla kullanılır. Kısıntı ve bakım önceden bilinmez. Hava: Open-Meteo.com (CC BY 4.0), ECMWF. Günlük kayıt yazılmadan canlı sayfa sonucu karne kanıtı sayılmaz.</p> : <p>
               Her santral için model, santralin son 4 aydaki üretimini o günlerin hava tahminiyle eşleştirerek &quot;şu kadar güneşte şu kadar üretir&quot;
               ilişkisini öğrenir (panel düzlemine düşen ışınım × verim; uyduyla bulunan kısıntı ve arıza saatleri eğitimden çıkarılır). Sonra ECMWF&apos;nin en yeni
               hava tahminiyle yarını hesaplar{fetchedAt ? ` (hava tahmini ${fetchedAt}'de alındı, 3 saatte bir yenilenir)` : ""}. Planlı kısıntı, arıza ve
@@ -274,7 +303,7 @@ export default function ForecastPage() {
                 Kayıp üretim
               </Link>{" "}
               sayfasında. Hava verisi: Open-Meteo.com (CC BY 4.0), ECMWF.
-            </p>
+            </p>}
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>

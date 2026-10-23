@@ -144,3 +144,8 @@ export function rampClimatology(rows: RampRow[]): (t: number) => number {
     return n ? z / n : 0;
   };
 }
+
+/** Eksik gerçekleşenler tahmin girdisi olabilir, eğitim etiketi olamaz. */
+export function fitRampFromHistory(hours:RampHour[],capacityMw:number):RampModel|null{
+ return fitRampModel(buildRampRows(hours,capacityMw).filter(r=>r.y!==null));
+}

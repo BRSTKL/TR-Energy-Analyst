@@ -294,7 +294,7 @@ export async function runDailyForecast(opts: DailyForecastOptions = {}): Promise
       const sh = shadowByModel.get(modelId) ?? { modelId, plants: [] };
       shadowByModel.set(modelId, sh);
       sh.plants = sh.plants.filter((p) => p.epiasPlantId !== id);
-      sh.plants.push({ epiasPlantId: id, status: r.status, ...(r.message ? { message: r.message } : {}), ...(r.hours ? { hours: r.hours } : {}), ...(r.train ? { train: r.train } : {}), ...(r.bias ? { bias: r.bias } : {}), ...(r.modelSpread ? { modelSpread: r.modelSpread } : {}) });
+      sh.plants.push({ epiasPlantId: id, status: r.status, ...(r.message ? { message: r.message } : {}), ...(r.hours ? { hours: r.hours } : {}), ...(r.train ? { train: r.train } : {}), ...(r.bias ? { bias: r.bias } : {}), ...(r.modelSpread ? { modelSpread: r.modelSpread } : {}), ...(r.bands ? { bands: r.bands } : {}) });
     }
     return { ...results.get(champ)!, modelId: champ };
   }

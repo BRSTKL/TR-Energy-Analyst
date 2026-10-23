@@ -23,6 +23,7 @@ import { fitPowerCurve, LOSS_EXPECTED_MIN, LOSS_SHARE, PLANNED_SHARE } from "./w
 export const MIN_TRAIN_HOURS = 500;
 
 export interface WindFcHour {
+  live?: boolean;
   t: number;
   uevm: number | null;
   kgupFirst: number | null;
@@ -43,6 +44,8 @@ export interface WindForecastModel {
   excludedHours: number;
   /** Tahmin (MWh); rüzgâr ya da eğri hücresi yoksa null */
   predict: (h: WindFcHour) => number | null;
+  /** Yalnız o anda alınan ileri tarihli Forecast API girdisi; geçmiş sınamasında kullanılmaz. */
+  predictLive: (h: WindFcHour, now: number) => number | null;
 }
 
 export function fitWindForecast(
@@ -50,6 +53,7 @@ export function fitWindForecast(
   capacityMw: number,
   opts: { lead: "d1" | "d2"; trainingEnd: number; leak?: boolean }
 ): WindForecastModel {
+  if (train.some(h => h.live)) throw new Error("Canlı tahmin saati eğitime giremez");
   const { lead } = opts;
   const late = train.find((h) => h.t >= opts.trainingEnd);
   if (late) throw new LeakageError(`Eğitimde kesimden sonraki üretim: ${new Date(late.t).toISOString()}`, [{ name: "uevm", source: "production", availableAt: late.t }]);
@@ -70,6 +74,15 @@ export function fitWindForecast(
   return {
     trainHours: keep.length,
     excludedHours: valid.length - keep.length,
+    predictLive: (h, now) => {
+      const wallNow = now + 3 * 3_600_000;
+      if (!Number.isFinite(now) || !Number.isFinite(h.t) || h.t <= wallNow || h.uevm !== null) throw new Error("Canlı tahmin yalnız gelecekte ve gerçekleşensiz kullanılabilir");
+      assertAvailable([productionFeature("son eğitim üretimi", opts.trainingEnd - 3_600_000)], h.t);
+      const ws = h.ws[lead], dir = h.dir[lead];
+      if (ws === null || dir === null || !Number.isFinite(ws) || !Number.isFinite(dir)) return null;
+      const e = curve(ws, dir);
+      return e === null ? null : Math.min(Math.max(0, e), capacityMw);
+    },
     predict: (h) => {
       // Hava (d2) ve eğitimdeki en son üretim saati, bu tahmin saatinin kesiminden önce elde olmalı
       if (!opts.leak) assertAvailable([...windForecastFeatures(h.t, lead), productionFeature("son eğitim üretimi", opts.trainingEnd - 3_600_000)], h.t);

@@ -84,10 +84,19 @@ const mae = (rows: Row[], p: Omit<PhysicalCurveParams, "hubM">) => rows.reduce((
 function fitParams(rows: Row[], ceiling: number): Omit<PhysicalCurveParams, "hubM"> & { err: number } {
   let best = { ceiling, vCutIn: 3, vRated: 12, sectorK: Array(DIR_SECTORS).fill(1) as number[], err: Infinity };
   const grid = (sectorK: number[]) => {
+    // Her ızgara adayında aynı hızın küpünü yeniden hesaplamadan; toplama sırası ve formül birebir korunur.
+    const speeds = rows.map(r => r.ws * sectorK[r.sector]);
+    const cubes = speeds.map(v => v ** 3);
     for (const vCutIn of V_CI_GRID)
       for (const vRated of V_R_GRID) {
         if (vRated <= vCutIn + 3) continue;
-        const err = mae(rows, { ceiling, vCutIn, vRated, sectorK });
+        const ci3 = vCutIn ** 3, denominator = vRated ** 3 - ci3;
+        let err = 0;
+        for (let i = 0; i < rows.length; i++) {
+          const v = speeds[i];
+          const power = v >= CUT_OUT || v <= vCutIn ? 0 : v >= vRated ? ceiling : ceiling * (cubes[i] - ci3) / denominator;
+          err += Math.abs(power - rows[i].uevm);
+        }
         if (err < best.err - 1e-9) best = { ceiling, vCutIn, vRated, sectorK, err };
       }
   };
@@ -127,6 +136,7 @@ export function fitPhysicalCurve(
   capacityMw: number,
   opts: { trainingEnd: number; density?: boolean; elevationM?: number | null; hubHeights?: number[] }
 ): PhysicalCurveModel {
+  if (train.some(h => h.live)) throw new Error("Canlı tahmin saati eğitime giremez");
   const late = train.find((h) => h.t >= opts.trainingEnd);
   if (late) throw new LeakageError(`Eğitimde kesimden sonraki üretim: ${new Date(late.t).toISOString()}`, [{ name: "uevm", source: "production", availableAt: late.t }]);
   const prep = (h: WindEngineHour) => (opts.density ? withDensity(h, opts.elevationM ?? null) : h);

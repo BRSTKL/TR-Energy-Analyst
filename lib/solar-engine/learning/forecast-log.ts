@@ -1,3 +1,4 @@
+import type { ForecastBands } from "../models/calibrated-bands";
 /**
  * TR-Energy Analyst - Günlük tahmin kaydı (PLAN 21.1; kullanıcı 18.10.2026: "başlayalım")
  *
@@ -20,6 +21,10 @@ export const FORECAST_LOG_SCHEMA = 1;
 export const SOLAR_MODEL_ID = "solar-v3-nolag-gzu";
 
 export interface ForecastLogPlant {
+  bands?: ForecastBands;
+  rampProbabilities?: Array<number|null>;
+  /** Rüzgâr modellerinin hız ayrışması (m/s); güneşin MWh ayrışmasından ayrıdır. */
+  windSpreadMs?: Array<number|null>;
   epiasPlantId: number;
   name: string;
   status: "ok" | "no-data" | "error";
@@ -41,12 +46,12 @@ export interface ForecastLogPlant {
 /** Gölge sürüm: canlı olmayan adayın aynı gün, aynı kurallarla yaptığı tahmin (karne hepsini ölçer) */
 export interface ForecastLogShadow {
   modelId: string;
-  plants: Array<Pick<ForecastLogPlant, "epiasPlantId" | "status" | "message" | "hours" | "train" | "bias" | "modelSpread">>;
+  plants: Array<Pick<ForecastLogPlant, "epiasPlantId" | "status" | "message" | "hours" | "train" | "bias" | "modelSpread" | "bands" | "windSpreadMs" | "weatherFetchedAt">>;
 }
 
 export interface ForecastLog {
   schema: number;
-  tech: "GES";
+  tech: "GES" | "RES";
   /** Tahmin edilen gün (YYYY-MM-DD, Türkiye) */
   targetDate: string;
   /** Kaydın yazıldığı an (ISO, UTC) */

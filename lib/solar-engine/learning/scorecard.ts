@@ -152,8 +152,8 @@ interface Hour {
 const MODEL = "model";
 const KGUP = "ilk KGÜP";
 
-function pair(hours: Hour[], market: Map<number, MarketPriceRecord>, filter: (h: Hour) => boolean = () => true): ScorePair {
-  const r = evaluateForecasts(hours, { [MODEL]: (h: Hour) => h.f, [KGUP]: (h: Hour) => h.kgup }, market, "GES", filter);
+function pair(hours: Hour[], market: Map<number, MarketPriceRecord>, filter: (h: Hour) => boolean = () => true, tech: "GES" | "RES" = "GES"): ScorePair {
+  const r = evaluateForecasts(hours, { [MODEL]: (h: Hour) => h.f, [KGUP]: (h: Hour) => h.kgup }, market, tech, filter);
   // evaluateForecasts'in saat koşuluyla aynı: ikisinin de değeri ve piyasa fiyatı olan saatler
   const provisionalHours = hours.filter((h) => filter(h) && h.kgup !== null && market.has(h.t) && h.source === "GZÜ").length;
   return { model: r[MODEL], kgup: r[KGUP], provisionalHours };
@@ -170,6 +170,7 @@ const days = (from: string, to: string) => {
  * (ör. projenin güneş santralleri; kayıtta olup burada olmayan santral sayılmaz; burada olup kayıtta olmayan boşluktur).
  */
 export function buildScorecard(input: {
+  tech?: "GES" | "RES";
   from: string;
   to: string;
   logs: ForecastLog[];
@@ -177,6 +178,7 @@ export function buildScorecard(input: {
   market: Map<number, MarketPriceRecord>;
 }): Scorecard {
   const { from, to, plants, market } = input;
+  const pairTech = (hours: Hour[], prices: Map<number, MarketPriceRecord>, filter: (h: Hour) => boolean = () => true) => pair(hours, prices, filter, input.tech ?? "GES");
   const byDate = new Map(input.logs.map((l) => [l.targetDate, l]));
   const missingDays: MissingDay[] = [];
   const plantGaps: PlantGap[] = [];
@@ -222,7 +224,7 @@ export function buildScorecard(input: {
       series.set(key, s);
       s.days++;
       const skyKey = `${id}|${date}`;
-      if (!skyCache.has(skyKey)) skyCache.set(skyKey, skyClass(dailyClearness(d0, data.site, (t) => data.sat.get(t)?.ghi ?? null)));
+      if (!skyCache.has(skyKey)) skyCache.set(skyKey, input.tech === "RES" ? "bilinmiyor" : skyClass(dailyClearness(d0, data.site, (t) => data.sat.get(t)?.ghi ?? null)));
       const sky = skyCache.get(skyKey)!;
       let any = false;
       p.hours.forEach((f, i) => {
@@ -240,6 +242,7 @@ export function buildScorecard(input: {
   // Ölçüm maskesi: kayıp saatler santralin karne dönemindeki bütün saatleriyle (bütün modellere aynı)
   const lostByPlant = new Map<number, Set<number>>();
   for (const [id, data] of plants) {
+    if (input.tech === "RES") continue;
     const ts = Array.from(new Set(Array.from(series.values()).filter((s) => s.id === id).flatMap((s) => s.hours.map((h) => h.t)))).sort((a, b) => a - b);
     if (!ts.length) continue;
     const loss = detectLostHours(
@@ -253,7 +256,7 @@ export function buildScorecard(input: {
     if (lost) for (const h of s.hours) h.lost = lost.has(h.t);
   }
 
-  const bySky = (hours: Hour[]) => Object.fromEntries(SKY_CLASSES.map((c) => [c, pair(hours, market, (h) => !h.lost && h.sky === c)])) as Record<SkyClass, ScorePair>;
+  const bySky = (hours: Hour[]) => Object.fromEntries(SKY_CLASSES.map((c) => [c, pairTech(hours, market, (h) => !h.lost && h.sky === c)])) as Record<SkyClass, ScorePair>;
   const rows: ScorecardRow[] = Array.from(series.values())
     .map((s) => ({
       epiasPlantId: s.id,
@@ -262,8 +265,8 @@ export function buildScorecard(input: {
       location: s.location,
       days: s.days,
       scoredDays: s.scoredDays,
-      all: pair(s.hours, market),
-      exLoss: pair(s.hours, market, (h) => !h.lost),
+      all: pairTech(s.hours, market),
+      exLoss: pairTech(s.hours, market, (h) => !h.lost),
       bySky: bySky(s.hours),
     }))
     .sort((a, b) => a.name.localeCompare(b.name, "tr") || a.modelId.localeCompare(b.modelId));
@@ -276,10 +279,10 @@ export function buildScorecard(input: {
     const byLocation = Object.fromEntries(
       (["kayıt", "~ ilçe merkezi"] as LocationClass[]).map((c) => {
         const sub = ss.filter((s) => s.location === c);
-        return [c, { ...pair(sub.flatMap((s) => s.hours), market, (h) => !h.lost), plants: sub.length }];
+        return [c, { ...pairTech(sub.flatMap((s) => s.hours), market, (h) => !h.lost), plants: sub.length }];
       })
     ) as ScorecardGroup["byLocation"];
-    groups.push({ modelId, plants: ss.length, all: pair(hours, market), exLoss: pair(hours, market, (h) => !h.lost), bySky: bySky(hours), byLocation });
+    groups.push({ modelId, plants: ss.length, all: pairTech(hours, market), exLoss: pairTech(hours, market, (h) => !h.lost), bySky: bySky(hours), byLocation });
   }
 
   return {

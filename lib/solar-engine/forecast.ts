@@ -1,3 +1,5 @@
+import { calibratedBands, type ForecastBands } from "./models/calibrated-bands";
+import { correctedOos } from "./learning/corrected-oos";
 /**
  * TR-Energy Analyst - İleriye dönük güneş üretim tahmini (Üretim tahmini sayfası; kullanıcı kararı 16.10.2026)
  *
@@ -42,6 +44,10 @@ export const LIVE_DAYS = 2;
 const MIN_TRAIN_HOURS = 500;
 
 export interface LivePlantForecast {
+  weatherFetchedAt?: string;
+  location?: {latitude:number;longitude:number;locationSource:string};
+  bands?: ForecastBands;
+  rampProbabilities?: Array<number|null>;
   epiasPlantId: number | null;
   name: string;
   organizationName: string | null;
@@ -171,6 +177,7 @@ async function trainingWindow(epiasPlantId: number, now: number, months = 4): Pr
 
 /** Tek santralin tahmini (sayfa ve günlük tahmin kaydı aynı yolu kullanır) */
 export interface SolarPlantForecast {
+  bands?: ForecastBands;
   status: "ok" | "no-data" | "error";
   message?: string;
   warning?: string;
@@ -390,6 +397,17 @@ export async function forecastSolarEnsemble(
         out[kind] = { status: "ok", hours, ...common, train: { ...train, mount: `${train.mount}; düzeltme ${corr.rows} saat` } };
       }
 
+      const corrected = out["weighted-corr"];
+      if (corrected.status === "ok" && corrected.hours) {
+        try {
+          const residuals = correctedOos(hist, nwp, series, end);
+          const bands = calibratedBands(residuals, from, corrected.hours, cap);
+          if (bands) corrected.bands = bands;
+        } catch (error) {
+          corrected.warning = `Belirsizlik bandı kurulamadı: ${error instanceof Error ? error.message : String(error)}`;
+        }
+      }
+
       // Planlı kısıntı: ağırlıklı+düzeltme × (1 − P(sıfır fiyat) × kısma oranı)
       const wc = out["weighted-corr"];
       if (wc.status !== "ok") out["weighted-corr-curt"] = { status: wc.status, message: wc.message };
@@ -407,6 +425,8 @@ export async function forecastSolarEnsemble(
         const zp = opts.zeroPrice;
         out["weighted-corr-curt"] = {
           ...wc,
+          // Kısıntı sonrası dağılım ayrıca kalibre edilmedi; düzeltme bandını bu sürüme taşımayız.
+          bands: undefined,
           hours: wc.hours!.map((v, i) => (v === null ? null : round(curtailedForecast(v, zp.get(from + i * HOUR) ?? 0, rate.rate)))),
           train: { ...wc.train!, mount: `${wc.train!.mount}; kısma oranı ${rate.rate.toFixed(3)} (${rate.hours} sıfır fiyatlı saat)` },
         };
