@@ -8,6 +8,7 @@ import { fitWindEnsemble } from "./models/ensemble";
 import { liveWindNwp } from "./data/live-nwp";
 import type { ForecastLogShadow } from "@/lib/solar-engine/learning/forecast-log";
 import { isRecordedCapacity } from "@/lib/epias-plant/installed-capacity";
+import { readPtfMap } from "@/lib/services/ptf-recent";
 import { cachedForProject } from "@/lib/services/response-cache";
 import { windOos } from "./learning/oos";
 import { calibratedWindBands } from "./models/calibrated-bands";
@@ -62,14 +63,8 @@ async function computeWindForecast(
   const days = [0, 1].map((d) => new Date(start + d * DAY).toISOString().slice(0, 10));
   const total: Array<number | null> = Array(48).fill(null),
     plants: LivePlantForecast[] = [];
-  const prices = new Map(
-    (
-      await prisma.marketData.findMany({
-        where: { timestamp: { gte: new Date(end - 480 * DAY), lt: new Date(start) } },
-        select: { timestamp: true, ptf: true },
-      })
-    ).map((m) => [m.timestamp.getTime(), m.ptf])
-  );
+  // SMF henüz yokken yayımlanmış D-1 PTF ortak önbellekten tamamlanır.
+  const prices = await readPtfMap(end - 480 * DAY, start);
   const fetched: string[] = [];
   const shadows: ForecastLogShadow[] = [
     ...WIND_SHADOWS.map((v) => v.id),
