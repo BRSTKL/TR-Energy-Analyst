@@ -18,7 +18,8 @@ export async function liveWindNwp(
   lon: number,
   from: number,
   count: number,
-  now: number
+  now: number,
+  fresh = false
 ) {
   const file = path.join(
     process.cwd(),
@@ -33,7 +34,7 @@ export async function liveWindNwp(
   } | null = null;
   try {
     const v = JSON.parse(await fs.readFile(file, "utf8"));
-    if (v.at <= now && now - v.at < 3 * H && v.body?.hourly?.time) saved = v;
+    if (!fresh && v.at <= now && now - v.at < 3 * H && v.body?.hourly?.time) saved = v;
   } catch {
     /* yok */
   }

@@ -5,7 +5,7 @@ OnFailure=tr-energy-failed@%n.service
 Type=oneshot
 User=tre
 WorkingDirectory=/srv/tr-energy
-ExecStart=/usr/bin/node --env-file=.env node_modules/.bin/tsx --tsconfig tsconfig.json scripts/solar-forecast-daily.mts
+ExecStart=/usr/bin/flock -w 900 /srv/tr-energy/.cache/daily-forecast.lock /usr/bin/node --env-file=.env node_modules/.bin/tsx --tsconfig tsconfig.json scripts/solar-forecast-daily.mts
 TimeoutStartSec=1h
 StandardOutput=append:/var/log/tr-energy/tr-energy-solar-forecast.log
 StandardError=append:/var/log/tr-energy/tr-energy-solar-forecast.log

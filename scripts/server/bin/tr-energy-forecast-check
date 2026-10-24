@@ -1,4 +1,12 @@
 #!/bin/bash
-# TR 12:15: yarinin gunes tahmini yazilmis mi?
-D=$(date -d tomorrow +%F); F=/srv/tr-energy/data/pool/forecast-log/solar/${D:0:7}/$D.json.gz
-[ -f "$F" ] || { /usr/local/bin/tr-energy-notify "TR-Energy: tahmin yok" "$D icin gunes tahmini 12:15e kadar yazilmadi"; exit 1; }
+# TR 12:15: yarının güneş ve rüzgâr kayıtları mevcut mu?
+D=$(TZ=Europe/Istanbul date -d tomorrow +%F)
+missing=()
+for tech in solar wind; do
+  F=/srv/tr-energy/data/pool/forecast-log/$tech/${D:0:7}/$D.json.gz
+  [ -f "$F" ] || missing+=("$tech")
+done
+if [ ${#missing[@]} -gt 0 ]; then
+  /usr/local/bin/tr-energy-notify "TR-Energy: tahmin yok" "$D için eksik günlük tahmin: ${missing[*]}"
+  exit 1
+fi

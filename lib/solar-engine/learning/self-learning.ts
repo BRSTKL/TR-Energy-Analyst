@@ -153,17 +153,18 @@ const passes = (t: PairTest, candidates: number) => t.days >= MIN_COMMON_DAYS &&
  * temel değilse ve temel sürüm ona göre geçerse temele dönülür; değilse en düşük maliyet oranıyla geçen aday terfi eder.
  * Değişiklik yoksa null.
  */
-export function reviewChampion(epiasPlantId: number, current: string, daily: Record<string, Record<string, number>>): (ChampionDecision & { test: PairTest }) | null {
+export function reviewChampion(epiasPlantId: number, current: string, daily: Record<string, Record<string, number>>, rules: { baseModel?: string; candidates?: readonly string[] } = {}): (ChampionDecision & { test: PairTest }) | null {
+  const baseModel = rules.baseModel ?? BASE_MODEL;
   const champ = daily[current];
   const none: PairTest = { days: 0, costRatio: NaN, pBetter: 0 };
   // Canlı sürümün karnede hiç günü yoksa (sürüm artık üretilmiyor ya da hep hata) temele dön
   if (!champ || !Object.keys(champ).length)
-    return current === BASE_MODEL ? null : { epiasPlantId, from: current, to: BASE_MODEL, reason: "geri dönüş: canlı sürümün karnede günü yok", test: none };
-  const candidates = Object.keys(daily).filter((id) => id !== current && promotable(id));
-  if (current !== BASE_MODEL && daily[BASE_MODEL]) {
-    const back = comparePair(champ, daily[BASE_MODEL], epiasPlantId);
+    return current === baseModel ? null : { epiasPlantId, from: current, to: baseModel, reason: "geri dönüş: canlı sürümün karnede günü yok", test: none };
+  const candidates = Object.keys(daily).filter((id) => id !== current && promotable(id) && (!rules.candidates || rules.candidates.includes(id)));
+  if (current !== baseModel && daily[baseModel]) {
+    const back = comparePair(champ, daily[baseModel], epiasPlantId);
     if (passes(back, 1))
-      return { epiasPlantId, from: current, to: BASE_MODEL, reason: `geri dönüş: temel sürüm ${back.days} günde maliyetin ×${back.costRatio.toFixed(2)}'i (olasılık ${back.pBetter.toFixed(2)})`, test: back };
+      return { epiasPlantId, from: current, to: baseModel, reason: `geri dönüş: temel sürüm ${back.days} günde maliyetin ×${back.costRatio.toFixed(2)}'i (olasılık ${back.pBetter.toFixed(2)})`, test: back };
   }
   let best: { id: string; test: PairTest } | null = null;
   for (const id of candidates) {

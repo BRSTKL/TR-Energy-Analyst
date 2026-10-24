@@ -20,3 +20,16 @@ it("SMF bekleyen günün yayımlanmış PTF'sini ortak fiyat okuyucusundan alır
   await projectWindForecast("p", now, { shadow: true });
   expect(mocks.read).toHaveBeenCalledWith(expect.any(Number), target);
 });
+it("günlük fresh isteği proje önbelleğini kullanmaz", async () => {
+  const responseCache = await import("@/lib/services/response-cache");
+  const cache = vi.spyOn(responseCache, "cachedForProject");
+  mocks.read.mockResolvedValue(new Map());
+  await projectWindForecast("p", Date.UTC(2026,9,24,6), { shadow: true, fresh: true });
+  expect(cache).not.toHaveBeenCalled();
+  cache.mockRestore();
+});
+it("ekran yanıtına günlük gölge dizilerini taşımaz", async () => {
+  mocks.read.mockResolvedValue(new Map());
+  const result = await projectWindForecast("p", Date.UTC(2026,9,24,6));
+  expect(result).not.toHaveProperty("shadow");
+});

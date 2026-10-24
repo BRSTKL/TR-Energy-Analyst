@@ -155,7 +155,6 @@ export default function ForecastPage() {
       <div className="flex gap-2" role="group" aria-label="Santral türü">
         {(["GES", "RES"] as const).map(t => <button key={t} onClick={() => setTech(t)} aria-pressed={tech === t} className="rounded border px-4 py-2 text-sm">{t === "GES" ? "Güneş" : "Rüzgâr"}</button>)}
       </div>
-      {tech === "RES" && <p className="text-sm text-slate-600">Açık referans: geçmiş d2 hava ile eğitilir, canlıda yeni ECMWF çalışması kullanılır. Şirket planından daha iyi olduğu iddia edilmez. Günlük rüzgâr kaydı sunucuda henüz etkin değil.</p>}
       {error && (
         <Card className="shadow-sm">
           <CardContent className="p-4 text-sm text-amber-800">{error}</CardContent>
@@ -176,7 +175,7 @@ export default function ForecastPage() {
         <Card className="shadow-sm">
           <CardHeader className="pb-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <CardTitle className="text-base">{selected ? selected.name : `Portföy · ${ok.length} güneş santrali`}</CardTitle>
+              <CardTitle className="text-base">{selected ? selected.name : `Portföy · ${ok.length} ${tech === "GES" ? "güneş" : "rüzgâr"} santrali`}</CardTitle>
               <select
                 aria-label="Gösterilen"
                 className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm"
@@ -204,8 +203,7 @@ export default function ForecastPage() {
               <StatBox label="Yarın en yüksek" value={nf(peak.v, 0)} unit="MWh" sub={hourText(peak.h)} />
             </div>
             <HourlyChart hours={shown} days={data.days} bands={shownBands} />
-            {shownBands && <p className="text-xs text-slate-600">P10–P90 deneysel belirsizlik bandı; %80 kapsama garantisi değildir. {tech === "GES" ? "Bant günlük kaydın ağırlıklı+düzeltme gölge sürümüne aittir; mavi çizgi güncel açık referanstır ve farklı olabilir." : "Geçmiş örneklem dışı hatalardan kurulur; bağımsız kapsama sınaması bekliyor."} {shownBands.calibration.coverage !== null && `Geçmiş kalibrasyon kapsaması %${nf(100*shownBands.calibration.coverage,1)} (${shownBands.calibration.rows} saat).`}</p>}
-            {selected?.rampProbabilities && <p className="text-sm text-amber-800">Üç saatte kurulu gücün %30&apos;unu aşan değişim olasılığı, yarın en yüksek: {selected.rampProbabilities.slice(0,24).some(v=>v!==null) ? `%${nf(100*Math.max(...selected.rampProbabilities.slice(0,24).map(v=>v??0)),0)}` : "yeterli geçmiş yok"}. Deneysel uyarı; gerçekleşme garantisi değildir.</p>}
+            {shownBands && tech === "GES" && <p className="text-xs text-slate-600">P10–P90 deneysel belirsizlik bandı; %80 kapsama garantisi değildir. {tech === "GES" ? "Bant günlük kaydın ağırlıklı+düzeltme gölge sürümüne aittir; mavi çizgi güncel açık referanstır ve farklı olabilir." : "Geçmiş örneklem dışı hatalardan kurulur; bağımsız kapsama sınaması bekliyor."} {shownBands.calibration.coverage !== null && `Geçmiş kalibrasyon kapsaması %${nf(100*shownBands.calibration.coverage,1)} (${shownBands.calibration.rows} saat).`}</p>}
             {selected && tech === "GES" && !shownBands && <p className="text-xs text-slate-500">Bu santral için yarının günlük kaydında belirsizlik bandı henüz yok; yeterli geçmiş ve yeni kesim öncesi kayıt oluşunca gösterilir.</p>}
             {selected?.locationText.startsWith("~") && <p className="text-xs text-amber-700">Bu santralin konumu ilçe merkezi tahmini: sonuç kaba.</p>}
           </CardContent>
@@ -246,7 +244,9 @@ export default function ForecastPage() {
                               ~
                             </span>
                           )}
-                          {p.warning && <div className="text-[11px] font-normal text-amber-700">{p.warning}</div>}
+                          {p.warning && (tech === "GES"
+                            ? <div className="text-[11px] font-normal text-amber-700">{p.warning}</div>
+                            : <span className="ml-1 text-xs font-normal text-slate-500" title={p.warning} aria-label={p.warning}>{p.warning.startsWith("~") ? "~" : "Bilgi"}</span>)}
                           {p.alerts?.map((a) => (
                             <div key={a.kind} className="max-w-xs whitespace-normal break-words text-[11px] font-normal text-red-700">
                               {ALERT_LABEL[a.kind] ?? "Değişim uyarısı"}: {a.message}
@@ -261,6 +261,11 @@ export default function ForecastPage() {
                   })}
               </TableBody>
             </Table>
+            {tech === "RES" && (
+              <p className="border-t border-slate-100 px-6 py-3 text-xs leading-relaxed text-slate-500">
+                Not: Rüzgâr tahminleri açık hava ve üretim verileriyle hesaplanır. Eğitimde kesinleşmiş üretim, eksik saatlerde geçici üretim kullanılır. Santralin kendi tahmininden daha başarılı olduğu henüz kanıtlanmamıştır.
+              </p>
+            )}
             {missing.length > 0 && (
               <p className="px-6 py-3 text-xs text-slate-500">
                 Tahmin dışı: {missing.map((p) => `${p.name} (${STATUS[p.status]})`).join(", ")}.
@@ -304,6 +309,8 @@ export default function ForecastPage() {
               </Link>{" "}
               sayfasında. Hava verisi: Open-Meteo.com (CC BY 4.0), ECMWF.
             </p>}
+            {tech === "RES" && shownBands && <p>Deneysel P10–P90 bandı geçmiş örneklem dışı hatalardan hesaplanır; gelecek kapsama garantisi değildir. {shownBands.calibration.coverage !== null && `Geçmiş kalibrasyon kapsaması %${nf(100 * shownBands.calibration.coverage, 1)} (${shownBands.calibration.rows} saat).`}</p>}
+            {selected?.rampProbabilities && <p className="text-xs text-slate-600">Üç saatte kurulu gücün %30&apos;unu aşan değişim olasılığı, yarın en yüksek: {selected.rampProbabilities.slice(0,24).some(v=>v!==null) ? `%${nf(100*Math.max(...selected.rampProbabilities.slice(0,24).map(v=>v??0)),0)}` : "yeterli geçmiş yok"}. Deneysel uyarı; gerçekleşme garantisi değildir.</p>}
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -317,7 +324,7 @@ export default function ForecastPage() {
                 <TableBody>
                   {ok.map((p) => (
                     <TableRow key={`t-${p.epiasPlantId}`}>
-                      <TableCell>{p.name}</TableCell>
+                      <TableCell>{p.name}{tech === "RES" && p.warning && <div className="mt-1 max-w-xs whitespace-normal text-slate-500">{p.warning}</div>}</TableCell>
                       <TableCell className="tabular-nums">{p.locationText}</TableCell>
                       <TableCell>
                         {p.train!.from} – {p.train!.to}

@@ -1,3 +1,5 @@
+import { readChampions, championOf } from "@/lib/solar-engine/learning/champions";
+import { selectWindForecast } from "./learning/select-forecast";
 import {
   WIND_BASE_MODEL,
   WIND_SHADOWS,
@@ -33,24 +35,32 @@ const H = 3_600_000,
   DAY = 24 * H;
 export const WIND_MODEL_ID = WIND_BASE_MODEL;
 export interface ProjectWindForecast extends ProjectLiveForecast {
+  plants: Array<LivePlantForecast & { modelId?: string; day2ModelId?: string }>;
   shadow?: ForecastLogShadow[];
 }
 
 export async function projectWindForecast(
   projectId: string,
   now = Date.now(),
-  opts: { shadow?: boolean } = {}
+  opts: { shadow?: boolean; fresh?: boolean; models?: Record<string, string> } = {}
 ): Promise<ProjectWindForecast | null> {
-  return cachedForProject(
-    projectId,
-    `wind-live:${Math.floor(now / (3 * H))}:${!!opts.shadow}`,
-    () => computeWindForecast(projectId, now, opts)
-  );
+  const registry = opts.models ? null : await readChampions("RES");
+  const models = opts.models ?? Object.fromEntries(Object.keys(registry!.plants).map(id => [id, championOf(registry!, Number(id), "RES")]));
+  const needsShadow = opts.shadow || Object.values(models).some(id => id !== WIND_MODEL_ID);
+  const read = async () => {
+    const raw = await computeWindForecast(projectId, now, { ...opts, shadow: needsShadow });
+    if (!raw) return null;
+    const selected = selectWindForecast(raw, models);
+    if (!opts.shadow) delete selected.shadow;
+    return selected;
+  };
+  if (opts.fresh) return read();
+  return cachedForProject(projectId, `wind-live:${Math.floor(now / (3 * H))}:${!!needsShadow}:${registry?.updatedAt ?? JSON.stringify(models)}`, read);
 }
 async function computeWindForecast(
   projectId: string,
   now: number,
-  opts: { shadow?: boolean }
+  opts: { shadow?: boolean; fresh?: boolean; models?: Record<string, string> }
 ): Promise<ProjectWindForecast | null> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
@@ -154,7 +164,7 @@ async function computeWindForecast(
       try {
         const v = JSON.parse(await fs.readFile(file, "utf8"));
         if (
-          now >= Date.parse(v.at) &&
+          !opts.fresh && now >= Date.parse(v.at) &&
           now - Date.parse(v.at) < 3 * H &&
           v.body?.hourly?.time
         )
@@ -240,8 +250,8 @@ async function computeWindForecast(
             validationFrom: trainEnd - 30 * DAY,
           });
           const [icon, gfs] = await Promise.all([
-            liveWindNwp("icon_eu", loc.latitude, loc.longitude, start, 48, now),
-            liveWindNwp("gfs_global", loc.latitude, loc.longitude, start, 48, now),
+            liveWindNwp("icon_eu", loc.latitude, loc.longitude, start, 48, now, !!opts.fresh),
+            liveWindNwp("gfs_global", loc.latitude, loc.longitude, start, 48, now, !!opts.fresh),
           ]);
           const predictions = Array.from({ length: 48 }, (_, i) => {
             const e = liveWind.find((h) => h.t === start + i * H);
@@ -281,8 +291,8 @@ async function computeWindForecast(
               message: predictions.some((p) => p?.sources.some((v) => v === null))
                 ? "Eksik hava kaynağı olan saatlerde mevcut modeller kullanıldı"
                 : undefined,
-              hours: predictions.slice(0, 24).map((r) => r?.[v.kind] ?? null),
-              windSpreadMs: predictions.slice(0, 24).map((r) => r?.spreadMs ?? null),
+              hours: predictions.map((r) => r?.[v.kind] ?? null),
+              windSpreadMs: predictions.map((r) => r?.spreadMs ?? null),
               weatherFetchedAt: [cached.at, icon.fetchedAt, gfs.fetchedAt].sort().at(-1),
             })
           );
@@ -339,7 +349,7 @@ async function computeWindForecast(
                 .map((h, i) => [h.t, values?.[i] ?? null])
             );
             const hours = Array.from(
-              { length: 24 },
+              { length: 48 },
               (_, i) => byT.get(start + i * H) ?? null
             );
             shadows
@@ -394,7 +404,7 @@ async function computeWindForecast(
           hours.slice(d * 24, d * 24 + 24).reduce<number>((s, v) => s + (v ?? 0), 0)
         ),
         peakMwh: hours.reduce<number>((s, v) => Math.max(s, v ?? 0), 0),
-        warning: `Açık referans; ${!isRecordedCapacity(p.capacitySource) ? "~ kurulu güç alt sınırı; " : ""}UEVM, yoksa mevcut geçici üretim eğitimi. Şirket planını geçtiği iddia edilmez.`,
+        ...(!isRecordedCapacity(p.capacitySource) ? { warning: "~ Kurulu güç kesin değil; gözlenen en yüksek üretim alt sınır olarak kullanılıyor." } : {}),
         train: {
           from: new Date(trainStart).toISOString().slice(0, 10),
           to: new Date(trainEnd - H).toISOString().slice(0, 10),

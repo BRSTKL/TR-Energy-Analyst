@@ -1,0 +1,11 @@
+[Unit]
+Description=Gunluk ruzgar tahmini
+OnFailure=tr-energy-failed@%n.service
+[Service]
+Type=oneshot
+User=tre
+WorkingDirectory=/srv/tr-energy
+ExecStart=/usr/bin/flock -w 900 /srv/tr-energy/.cache/daily-forecast.lock /usr/bin/node --env-file=.env node_modules/.bin/tsx --tsconfig tsconfig.json scripts/wind-forecast-daily.mts --write
+TimeoutStartSec=1h
+StandardOutput=append:/var/log/tr-energy/tr-energy-wind-forecast.log
+StandardError=append:/var/log/tr-energy/tr-energy-wind-forecast.log

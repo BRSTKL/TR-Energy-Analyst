@@ -13,9 +13,10 @@ Zamanlanmış işler ve uygulama Mac'te değil sunucuda çalışır. Mac kapalı
 | İş | Ne zaman | Ne yapar |
 |---|---|---|
 | `tr-energy-solar-forecast` | 09:30, 11:00 | `scripts/solar-forecast-daily.mts` |
+| `tr-energy-wind-forecast` | 10:00, 11:30 (Europe/Istanbul) | `scripts/wind-forecast-daily.mts --write`; kurulum sonrası etkin |
 | `tr-energy-epias-monthly` | saatte bir | `scripts/epias-monthly-sync.mts` |
 | `tr-energy-db-backup` | 03:00 | `scripts/backup-db.mts daily` (`prisma/backups/`, son 5) |
-| `tr-energy-forecast-check` | 12:15 | yarının güneş tahmini yazılmadıysa bildirim |
+| `tr-energy-forecast-check` | 12:15 | yarının güneş/rüzgâr tahmini yazılmadıysa bildirim (yeni dosyalar kurulunca) |
 | `tr-energy-daily-summary` | 12:30 | günlük özet bildirimi |
 | `tr-energy-web` | sürekli | `next start` |
 
@@ -47,3 +48,9 @@ SMOKE_COOKIE=$(ssh root@5.180.187.237 'cd /srv/tr-energy && sudo -u tre node --e
 ## Mac'e geri dönüş
 
 Mac'teki eski iş tanımları (`com.tr-energy.solar-forecast`, `com.tr-energy.epias-monthly`) 29.10.2026'ya kadar `~/Library/LaunchAgents/` altında durur. Geri dönmek için: sunucuda `systemctl disable --now tr-energy-solar-forecast.timer tr-energy-epias-monthly.timer`, sunucudan `data/` ve `.cache/` Mac'e çekilir, Mac'te `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/<plist>`.
+
+## Rüzgâr günlük görevi (24.10.2026)
+
+Görev dosyaları kod deposunda hazırdır; `deploy.sh` systemd/bin kopyalarını kendiliğinden kurmaz. Kod yükleme ve görev etkinleştirme onaylandıktan sonra yeni wind service/timer ile güncellenen solar service, forecast-check ve daily-summary sunucudaki karşılıklarına kopyalanır. `systemd-analyze verify` ile birimler denetlenir, `systemctl daemon-reload` ardından yalnız wind timer etkinleştirilir. Güneşin mevcut saatleri korunur. İki tahmin servisi `/srv/tr-energy/.cache/daily-forecast.lock` üzerinde `flock` kullanır; en çok 15 dakika kilit bekler.
+
+RES kayıtları `data/pool/forecast-log/wind/` altında; şampiyon defteri aynı dizinde `champions.json`. Kesim sonrası geçmişe kayıt doldurulmaz. İlk uygun sabah çalışması gerçek kanıt dönemini başlatır; 28 günlük kanıt hemen tamamlanmış sayılamaz.

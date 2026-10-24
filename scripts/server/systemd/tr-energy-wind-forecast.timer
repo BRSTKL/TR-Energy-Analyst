@@ -1,0 +1,8 @@
+[Unit]
+Description=tr-energy-wind-forecast zamanlayici
+[Timer]
+OnCalendar=*-*-* 10:00:00 Europe/Istanbul
+OnCalendar=*-*-* 11:30:00 Europe/Istanbul
+Persistent=true
+[Install]
+WantedBy=timers.target
