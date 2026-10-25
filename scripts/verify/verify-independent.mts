@@ -1,7 +1,7 @@
 /**
  * Bağımsız doğrulama (PLAN 11.3): hesap motorunu kullanmadan ham veriden yeniden hesaplar ve motorla karşılaştırır.
  *
- *   npx tsx --tsconfig tsconfig.json scripts/verify-independent.mts [projeId] [--hours 20]
+ *   npx tsx --tsconfig tsconfig.json scripts/verify/verify-independent.mts [projeId] [--hours 20]
  *
  * Ham veri: havuz dosyası (data/pool/<id>/<yıl>.json.gz, zlib ile doğrudan açılır, pool-codec kullanılmaz), EPİAŞ fiyatları
  * (MarketData: PTF, SMF, resmi dengesizlik fiyatları, GİP ağırlıklı ortalaması). Formüller bu dosyada, mevzuattan:

@@ -4,12 +4,12 @@
  * hesaplanır ve /api/projects/[id]/budget?intraday=0 yanıtıyla karşılaştırılır (varsayılan senaryo: makas 2026 düzeyinde,
  * 2026 kuralı, normal yıl; gün içi düzeltme kapalı, enflasyon boş → reel TL).
  *
- *   npx tsx --tsconfig tsconfig.json scripts/verify-budget.mts [projeId] [ay=01] [api-yanıtı.json]
+ *   npx tsx --tsconfig tsconfig.json scripts/verify/verify-budget.mts [projeId] [ay=01] [api-yanıtı.json]
  *
  * api-yanıtı.json verilmezse yanıt http://localhost:3000 adresinden alınır. İlk (önbelleksiz) yanıt 5 dakikayı aşabilir
  * (fetch zaman aşımı); o zaman önce curl --max-time 1800 ile dosyaya alınır.
  *
- * Ham veri (scripts/verify-independent.mts ile aynı yaklaşım):
+ * Ham veri (scripts/verify/verify-independent.mts ile aynı yaklaşım):
  * - Santraller: PowerPlant (tür, kurulu güç, EPİAŞ kimliği, sahip şirket); havuz dosyaları (data/pool/<id>/<yıl>.json.gz,
  *   zlib ile doğrudan, pool-codec kullanılmaz). Plan: ilk KGÜP.
  * - Fiyat: MarketData (PTF, SMF, sistem yönü); resmi dengesizlik fiyatı kullanılmaz.

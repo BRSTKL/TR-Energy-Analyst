@@ -84,3 +84,11 @@ Rapor, hesaplama ya da veri koduna dokunduktan sonra `npm run check:reports` (0 
 - LinkedIn yazısı, şirket raporu, demo metni gibi dışarıya giden her metin, yayımlanmadan önce `iddia-denetcisi` agent'ına verilir.
   - Her sayıyı verinin bugünkü hâliyle karşılaştırır.
   - PLAN ve commit mesajları kaynak sayılmaz.
+
+## Yapay zekâ bağlamı ve paralel çalışma
+
+Proje Codex ile paralel geliştirilir (kullanıcı kararı 22.10.2026). Codex `AGENTS.md`'yi okur; ortak bağlam `ai/` klasöründe (dizin `ai/README.md`). Bu dosyadaki kurallar bütün ajanlar için geçerlidir.
+
+- Oturum başında `ai/PICKUP.md` okunur; sonunda yapılan / karar / yarım / sıradaki oraya yazılır. Başka ajanın "üzerinde çalışılıyor" satırındaki dosyalara dokunulmaz. Dal, sunucuya yükleme ve çakışma kuralları `ai/execution/parallel-work.md`.
+- Kalıcı proje bilgisi (karar, ders, çürütülen fikir) yalnız kişisel hafızaya değil `ai/context/decisions.md`'ye de yazılır; Claude'un hafızası Codex'e görünmez.
+- Dosya eklenince ya da silinince `npm run ai:map` (`ai/MODULE_MAP.md` elle düzenlenmez).

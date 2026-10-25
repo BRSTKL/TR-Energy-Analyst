@@ -739,10 +739,11 @@ Beklenen (portföy) = Σ teknolojinin üretim payı × teknolojinin sektör capt
           </Section>
 
           <Section id="kayip" n={next()} title="Kayıp üretim (kısıntı ve arıza)">
+            <p>Güneş kaybı modeliyle bulunan beklenen üretim tahminidir; uydu ışınımı ölçülse de kayıp doğrudan sayaç ölçümü değildir. Raporun kayıp bölümünde sektör önbelleğinin yılı, son ayı ve kapsanan santral sayısı ayrıca yazılır; dengesizlik maliyetine eklenmez. Adaylarda yüksek plansız kayıp işareti, aynı yılın güneş örnekleminde plansız kayıp / potansiyel üretim oranının üst çeyreğini aşan santralleri gösterir (en az 10 santral). Neden işletmeciyle doğrulanmalıdır. Bağımsız kontrol: scripts/verify/verify-production-loss.mts; varsayılan örnek Viranşehir-7, Mayıs 2026.</p>
             <p>
               Santralin geçmişte üretebileceği ile ürettiği arasındaki fark, santral verisi olmadan. Üretebileceği geçmiş havadan, ürettiği EPİAŞ
               UEVM&apos;sinden. Kayıp saat, şirketin ilk KGÜP&apos;ü beklenenin %10&apos;unun altındaysa <b>planlı</b> (kısıntı ya da önceden bildirilen bakım),
-              değilse <b>plansız</b> (arıza, ilk KGÜP&apos;te olmayan bakım, talimat, şebeke ya da model hatası). Parasal karşılık kayıp MWh × PTF. Güneşte
+              değilse <b>plansız</b> (arıza, ilk KGÜP&apos;te olmayan bakım, talimat, şebeke ya da model hatası). Parasal karşılık kayıp MWh × max(PTF, 0). Güneşte
               ölçümdür (uydu); rüzgârda beklenen üretim santrale özgü bir güç eğrisinden, kaba ölçümdür. İkisi de geçmiş analizidir, tahmin modeli değildir.
             </p>
             <F>
@@ -1185,7 +1186,7 @@ Rüzgâr: beklenen = santralin güç eğrisi (100 m hız 0,5 m/s × 8 yön hücr
                 [
                   "1.11",
                   "5 Ekim 2026",
-                  "Gün içi düzeltmelerin işlem maliyeti: ilk ve son plan farkı GİP saatlik ağırlıklı ortalama fiyatından işlem görmüş sayılır, maliyet = (ilk − son plan) × (GİP − PTF). Önce plan değişikliği bedava sayılıyordu; gün içi kazancı brüt gösteriyor ve net olan kural tabanlı stratejiyle karşılaştırıyordu. Köprüde ayrı adım; gün içi sonrası sapma yükü nettir. Gain: işlem maliyeti 2,2 M TL, gün içi sonrası 24,7 → 26,9 M TL; Inavitas: 14,0 M TL, 240,8 → 254,8 M TL ve net düzeltme (%9,9) stratejinin (%14,5) altında kaldığı için %4,6 ek gün içi fırsatı görünür. Son plan kapsamı raporda, veri kalitesi bandında ve Ek B'de yazılır; kapsam %90'ın altındaysa KÜPST üst sınır etiketini alır (Zeros %95, son planı eksik 3 santral; Met %92, 1 LÜY birimi). Bağımsız doğrulama betiği (scripts/verify-independent.mts): Gain, Inavitas ve Met'in bütün santral-saatlerinde dengesizlik, KÜPST ve GİP işlem maliyeti ham veriden yeniden hesaplandı, en büyük fark 0,00 TL.",
+                  "Gün içi düzeltmelerin işlem maliyeti: ilk ve son plan farkı GİP saatlik ağırlıklı ortalama fiyatından işlem görmüş sayılır, maliyet = (ilk − son plan) × (GİP − PTF). Önce plan değişikliği bedava sayılıyordu; gün içi kazancı brüt gösteriyor ve net olan kural tabanlı stratejiyle karşılaştırıyordu. Köprüde ayrı adım; gün içi sonrası sapma yükü nettir. Gain: işlem maliyeti 2,2 M TL, gün içi sonrası 24,7 → 26,9 M TL; Inavitas: 14,0 M TL, 240,8 → 254,8 M TL ve net düzeltme (%9,9) stratejinin (%14,5) altında kaldığı için %4,6 ek gün içi fırsatı görünür. Son plan kapsamı raporda, veri kalitesi bandında ve Ek B'de yazılır; kapsam %90'ın altındaysa KÜPST üst sınır etiketini alır (Zeros %95, son planı eksik 3 santral; Met %92, 1 LÜY birimi). Bağımsız doğrulama betiği (scripts/verify/verify-independent.mts): Gain, Inavitas ve Met'in bütün santral-saatlerinde dengesizlik, KÜPST ve GİP işlem maliyeti ham veriden yeniden hesaplandı, en büyük fark 0,00 TL.",
                 ],
                 [
                   "1.10",

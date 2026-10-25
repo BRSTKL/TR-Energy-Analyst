@@ -1,5 +1,7 @@
 # TR-Energy Analyst
 
+> Yapay zekâ ajanları (Codex, Claude Code…) için giriş: [`AGENTS.md`](AGENTS.md) ve [`ai/`](ai/README.md) klasörü.
+
 Türkiye elektrik piyasasında yenilenebilir santral portföylerinin (RES, GES, HES) **dengesizlik maliyetini** EPİAŞ'ın kamuya açık verisinden saat saat hesaplayan, sektörle kıyaslayan ve karar üreten bir analiz uygulaması.
 
 Soru şu: *"Bu portföyün gün öncesi planı (KGÜP) ile gerçekleşen üretimi arasındaki fark bize ne kadara mal oluyor, neden değişti, ve ne yapmalıyız?"*
@@ -56,10 +58,10 @@ Ayrıntı: uygulamadaki `/methodology` sayfası.
 
 - 2024–2025 formül fiyatı EPİAŞ resmi dengesizlik fiyatıyla saat saat aynı (ortalama fark 0,01–0,02 TL).
 - Ana rakamlar uygulama kodu kullanılmadan, bağımsız betiklerle havuz verisinden yeniden hesaplandı. Santral bazında ve netleşmiş dengesizlik, KÜPST, WAPE, capture price ve piyasa özeti birebir tuttu ([ANALIZ_RAPORU.md](ANALIZ_RAPORU.md)).
-- `scripts/verify-independent.mts`: hesap motoru kullanılmadan ham havuz dosyası ve EPİAŞ fiyatlarından dengesizlik, KÜPST ve GİP işlem maliyeti yeniden hesaplanır. Gain (219.768), Inavitas (375.192) ve Met (75.816) santral-saatlerinin hepsinde en büyük fark 0,00 TL.
+- `scripts/verify/verify-independent.mts`: hesap motoru kullanılmadan ham havuz dosyası ve EPİAŞ fiyatlarından dengesizlik, KÜPST ve GİP işlem maliyeti yeniden hesaplanır. Gain (219.768), Inavitas (375.192) ve Met (75.816) santral-saatlerinin hepsinde en büyük fark 0,00 TL.
 - `scripts/sector-backtest.mts`: "ne olurdu" rakamları geçmişle sınanır (2025 → 2026, 858 santral). Risk primi geçmişte düşük tahmin etti (gerçek / tahmin medyanı 1,36), rapor aralık verir; zayıf santrallerin tipik olarak iyileşmediği görüldü, tahmin fırsatı en iyi çeyreğin gerçek iyileşmesiyle hesaplanır; aday sıralaması tutarlı (Spearman 0,67).
 - Mevzuat katsayıları Resmî Gazete metinlerinden doğrulandı ve testle sabitlendi.
-- **447 otomatik test** (Vitest); `tsc` ve ESLint temiz.
+- Otomatik testler (Vitest, `npm test`); `tsc` ve ESLint temiz.
 
 ## Sınırlar
 
@@ -67,7 +69,7 @@ Ayrıntı: uygulamadaki `/methodology` sayfası.
 - Dengesizlik riski ilk KGÜP'e göre (gün içi öncesi) hesaplanır; raporda gün içi sonrası rakam ayrıca verilir. GİP işlem maliyeti ortalama fiyatla tahmindir: şirketin gerçek işlem fiyatı farklı olabilir.
 - Yük alma / atma (YAL/YAT) talimatları santral bazında açık veride yok. Talimatlı miktar dengesizlik sayılmadığı için, sapması üretiminin %60'ını aşan santraller (çoğu büyük baraj) karneden ve aday taramasından çıkarılır.
 - Hidro alt tipi (barajlı / nehir tipi) tahminidir. Toplayıcı dışındaki grup üyeliği tahminidir.
-- Uygulama yerel çalışmak için tasarlandı, kimlik doğrulama yok.
+- Uygulama tek hesaplıdır (giriş ekranı) ve internete kapalıdır: sunucuda çalışır, Tailscale ile erişilir (`scripts/server/README.md`).
 
 ---
 
@@ -119,7 +121,7 @@ Veri depoda yok (`data/`, `.cache/` ve veritabanı `.gitignore`'da). İlk açıl
 1. Ana sayfada **EPİAŞ Canlı Veri Çek** ile piyasa verisini çekin.
 2. **Projelerim → EPİAŞ'tan santral analizi** ile şirket ya da toplayıcı adıyla santralleri seçip proje kurun.
 
-EPİAŞ bazı yurt dışı ağlardan gelen istekleri engelleyebilir. Bağlantı hatasında Türkiye çıkışlı bir ağ ya da VPN gerekir.
+EPİAŞ bazı yurt dışı ağlardan gelen istekleri engelleyebilir; bağlantı hatasında Türkiye çıkışlı bir ağ deneyin. EPİAŞ hesabı uygulamadaki "Hesabım" sayfasından da girilebilir (`.env` yedektir).
 
 > `npm run prisma:seed` eski sentetik demo verisini kurar ve **veritabanındaki bütün projeleri siler**. Gerçek verili bir veritabanında çalıştırmayın.
 

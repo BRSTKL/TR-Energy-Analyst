@@ -2532,6 +2532,15 @@ export async function exportPlantReportPptx(
     );
   }
 
+  if (r.productionLoss && !options.summaryOnly) {
+    const loss = r.productionLoss;
+    const s = contentSlide("Kayıp üretim", "Güneş üretimindeki tahmini kayıp");
+    text(s, `${loss.year} / 01–${String(loss.lastMonth).padStart(2, "0")}: ${loss.plants} / ${loss.eligible} proje santrali kapsanıyor (yalnız uydu verisi olan güneş santralleri).`, { x: M, y: 2, w: CW, h: .6, fontSize: 16 });
+    text(s, `Planlı: ${nf(loss.plannedMwh, 0)} MWh | Plansız: ${nf(loss.unplannedMwh, 0)} MWh`, { x: M, y: 3, w: CW, h: .6, fontSize: 20 });
+    text(s, `Potansiyel üretimde kayıp: %${nf(loss.lossPct, 1)} | Sektör güneş: %${nf(loss.sectorPct, 1)}`, { x: M, y: 4, w: CW, h: .6, fontSize: 18 });
+    text(s, `PTF ile tahmini karşılık: ${formatTlShort(loss.valueTl)}. Fatura veya kazanılabilir gelir değildir. Uydu, kurulum ve konum belirsizliği içerir; plansız kayıp arıza, talimat, kar veya model hatası olabilir. Kapsam rapor döneminden farklı olabilir; devreye alma ayları hariçtir.`, { x: M, y: 5, w: CW, h: 1, fontSize: 12 });
+  }
+
   // ---------------------------------------------------------------------------------------------
   // EK B: YÖNTEM VE SINIRLAR
   // ---------------------------------------------------------------------------------------------
@@ -2539,6 +2548,7 @@ export async function exportPlantReportPptx(
     const s = contentSlide("Ek B", "Yöntem ve sınırlar");
     s.addNotes("Yöntem sorusu gelirse bu slaytı açın. Özellikle sınırları kendiniz söyleyin: açık veride gün içi işlemler ve ikili anlaşmalar yok.");
     const blocks: Array<[string, string]> = [
+      ...(r.productionLoss ? [["Kayıp üretim (tahmini)", "SARAH3 uydu ışınımıyla panel düzlemi üretim referansı; komşu ayların P90 verimi. Üretim beklenenin yarısından azsa kayıp, ilk KGÜP beklenenin %10 altındaysa planlı. Kayıp × max(PTF, 0); şirket geliri veya dengesizlik maliyetine eklenmez. Sektör önbelleğinin belirtilen dönemi ve kapsamı kullanılır."] as [string, string]] : []),
       [
         "Veri",
         `EPİAŞ Şeffaflık Platformu. Plan: KGÜP (kesinleşmiş günlük üretim planı); gerçekleşen: UEVM (uzlaştırmaya esas veriş miktarı); fiyat: PTF ve SMF. Kapsam: ${periodLabel(

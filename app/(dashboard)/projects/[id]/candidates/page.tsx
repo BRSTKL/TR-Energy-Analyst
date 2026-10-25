@@ -335,6 +335,7 @@ export default function CandidatesPage() {
                         <TableCell>
                           <p className="font-medium text-slate-900">{c.name}</p>
                           {c.type === "RES" && data?.weakWindForecast?.[c.epiasPlantId] && <p className="text-xs text-amber-700" title={`Geçmiş şirket planıyla karışım analizi: ${data.weakWindForecast[c.epiasPlantId].from}–${data.weakWindForecast[c.epiasPlantId].to}; ${data.weakWindForecast[c.epiasPlantId].months} ay. Canlı tahmin veya tasarruf garantisi değildir.`}>Geçmiş analizde model katkısı yüksek: %{nf(100*data.weakWindForecast[c.epiasPlantId].weight,0)}</p>}
+                          {data?.highUnplannedLoss?.[c.epiasPlantId] && <p className="text-xs text-amber-700" title="Uydu modelinde plansız kayıp oranı aynı yılın güneş santrallerinin üst çeyreğinde. Arıza, kar, talimat veya model hatası olabilir; işletmeciyle doğrulanmalı.">Yüksek plansız kayıp (tahmini, Ocak–{data.highUnplannedLoss[c.epiasPlantId].lastMonth}): %{nf(data.highUnplannedLoss[c.epiasPlantId].pct, 1)}</p>}
                           <p className="text-xs text-slate-500">{sub(c)}</p>
                           <AccessBadge c={c} />
                           <YekdemExitBadge c={c} />

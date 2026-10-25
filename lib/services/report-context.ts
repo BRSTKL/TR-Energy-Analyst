@@ -1,3 +1,4 @@
+import { loadSectorCurtailment } from "@/lib/services/sector-curtailment";
 /**
  * TR-Energy Analyst - Dengesizlik Karnesi için EPİAŞ bağlamı ve ön kontrol
  *
@@ -48,6 +49,15 @@ export async function buildReportContext(plants: ReportPlantMeta[], year: number
   };
   const context: ReportContext = { missingCompanyPlants: new Map(), companyPlantTotals: new Map() };
   context.sector = await loadSectorContext(year);
+  const losses = loadSectorCurtailment();
+  const sectorLoss = losses?.years.find(y => y.year === year)?.groups.all;
+  if (losses && sectorLoss) {
+    const ids = new Set(plants.map(p => p.epiasPlantId));
+    const selected = losses.plants.filter(p => ids.has(p.epiasPlantId)).map(p => p.years[year]).filter(p => p && p.actualMwh > 0);
+    const total = (f: (p: typeof selected[number]) => number) => selected.reduce((a,p) => a + f(p), 0);
+    const actualMwh = total(p => p.actualMwh), plannedMwh = total(p => p.plannedLossMwh), unplannedMwh = total(p => p.unplannedLossMwh);
+    if (selected.length) context.productionLoss = { year, lastMonth: losses.lastMonth, plants: selected.length, eligible: plants.length, actualMwh, plannedMwh, unplannedMwh, valueTl: total(p => p.plannedValueTl + p.unplannedValueTl), lossPct: 100 * (plannedMwh + unplannedMwh) / (actualMwh + plannedMwh + unplannedMwh), sectorPct: sectorLoss.lossPct };
+  }
   context.aggregatorBenchmark = loadAggregatorBenchmark(year);
   const membership = await loadAggregatorMembership();
   if (membership)

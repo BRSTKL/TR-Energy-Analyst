@@ -3,11 +3,11 @@
  * (lib/calculations/engine.ts) ve aday taraması (lib/analysis/candidate-screening.ts) kullanılmadan ham veriden yeniden
  * hesaplanır ve /api/projects/[id]/candidates yanıtıyla karşılaştırılır.
  *
- *   npx tsx --tsconfig tsconfig.json scripts/verify-contract-price.mts <projeId> <epiasPlantId> [api-yanıtı.json]
+ *   npx tsx --tsconfig tsconfig.json scripts/verify/verify-contract-price.mts <projeId> <epiasPlantId> [api-yanıtı.json]
  *
  * api-yanıtı.json verilmezse yanıt http://localhost:3000 adresinden alınır (access=independent, top=10).
  *
- * Ham veri (scripts/verify-independent.mts ile aynı yaklaşım):
+ * Ham veri (scripts/verify/verify-independent.mts ile aynı yaklaşım):
  * - Portföy: havuz dosyaları (data/pool/<id>/<yıl>.json.gz, zlib ile doğrudan), santralin plan sürümü (ilk / son KGÜP).
  * - Aday: sektör karnesinin saatlik serisi (.cache/epias/sector-<yıl>-hourly/<id>.json.gz, zlib ile doğrudan).
  * - Fiyat: MarketData (PTF, SMF, sistem yönü, EPİAŞ resmi dengesizlik fiyatları).

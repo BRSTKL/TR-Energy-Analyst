@@ -433,3 +433,19 @@ describe("Ne değişti? slaytı reel kıyas", () => {
     expect(checkCostChangeText(null, nominalOnly)).toEqual([]);
   });
 });
+
+describe("Kayıp üretim rapor kapısı", () => {
+  const loss = { year: 2026, lastMonth: 5, plants: 1, eligible: 3, actualMwh: 900, plannedMwh: 60, unplannedMwh: 40, valueTl: 1000, lossPct: 10, sectorPct: 12 };
+  it("oranı, kapsamı ve negatif tutarı denetler", () => {
+    const report = sampleReport({ productionLoss: loss });
+    expect(checkReportData(report).filter(i => i.rule.startsWith('loss-'))).toEqual([]);
+    report.productionLoss = { ...loss, lossPct: 15, plants: 4, valueTl: -1 };
+    expect(checkReportData(report).filter(i => i.rule.startsWith('loss-')).map(i => i.rule)).toEqual(['loss-ratio', 'loss-coverage', 'loss-values']);
+  });
+  it("tam raporda tahmini kayıp slaytını ve yöntemini gösterir", async () => {
+    const report = sampleReport({ productionLoss: loss });
+    const slides = await extractSlideTexts(await exportPlantReportPptx(report));
+    expect(JSON.stringify(slides)).toContain('Güneş üretimindeki tahmini kayıp');
+    expect(JSON.stringify(slides)).toContain('SARAH3');
+  });
+});

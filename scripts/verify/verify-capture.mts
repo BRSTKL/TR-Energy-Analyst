@@ -5,7 +5,7 @@
  *   (lisanslılar), (3) yıllar arası kıyasın ortak kümesi (iki yılın karnesinde de aynı grupta olan lisanslılar; dönem oranı
  *   iki yıl için), (4) varsa lisanssız toplamların grup dönem oranı.
  *
- *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/verify-capture.mts [yıl=2026] [grup=GES] [ay=05]
+ *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/verify/verify-capture.mts [yıl=2026] [grup=GES] [ay=05]
  *
  * Tanım: capture fiyatı = Σ üretim × PTF / Σ üretim; baz PTF = verisi olan saatlerin PTF ortalaması (her saat bir kez).
  * Fark %0,01 puanı aşarsa çıkış kodu 1.

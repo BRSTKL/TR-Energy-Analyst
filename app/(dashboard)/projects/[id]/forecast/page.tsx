@@ -1,4 +1,5 @@
 "use client";
+import { forecastDaySummary, portfolioForecastHours } from "@/lib/forecast/display";
 import type { ForecastBands } from "@/lib/solar-engine/models/calibrated-bands";
 
 import React, { useEffect, useState } from "react";
@@ -42,7 +43,7 @@ function HourlyChart({ hours, days, bands }: { hours: Array<number | null>; days
     d1: hours[h] ?? null,
     d2: hours[24 + h] ?? null,
     band: bands?.p10[h] != null && bands?.p90[h] != null ? [bands.p10[h], bands.p90[h]] : null,
-    median: bands?.p50[h] ?? null,
+
   }));
   return (
     <div className="h-64">
@@ -51,10 +52,9 @@ function HourlyChart({ hours, days, bands }: { hours: Array<number | null>; days
           <CartesianGrid vertical={false} stroke={COLOR.grid} />
           <XAxis dataKey="saat" tick={{ fontSize: 11 }} stroke={COLOR.axis} tickLine={false} interval="preserveStartEnd" minTickGap={18} />
           <YAxis tick={{ fontSize: 11 }} stroke={COLOR.axis} tickLine={false} axisLine={false} width={48} domain={[0, "auto"]} />
-          <Tooltip formatter={(v: unknown) => (v === null || v === undefined ? "–" : Array.isArray(v) ? `${nf(Number(v[0]))}–${nf(Number(v[1]))} MWh` : `${nf(Number(v))} MWh`)} />
+          <Tooltip labelFormatter={(label) => hourText(Number(String(label).slice(0, 2)))} formatter={(v: unknown) => (v === null || v === undefined ? "–" : Array.isArray(v) ? `${nf(Number(v[0]))}–${nf(Number(v[1]))} MWh` : `${nf(Number(v))} MWh`)} />
           <Legend wrapperStyle={{ fontSize: 12 }} formatter={(v: string) => <span className="text-slate-600">{v}</span>} />
-          {bands && <Area name="P10–P90 (deneysel)" dataKey="band" fill="#2a78d6" fillOpacity={0.16} stroke="none" isAnimationActive={false} />}
-          {bands && <Line name="P50 (deneysel)" dataKey="median" stroke="#7c3aed" dot={false} isAnimationActive={false} />}
+          {bands && <Area name="Tahmin aralığı (deneysel)" dataKey="band" fill="#2a78d6" fillOpacity={0.16} stroke="none" isAnimationActive={false} />}
           <Line name={dayLabel(days[0], 0)} dataKey="d1" stroke={COLOR.day1} strokeWidth={2} dot={false} isAnimationActive={false} />
           {days[1] && <Line name={dayLabel(days[1], 1)} dataKey="d2" stroke={COLOR.day2} strokeWidth={2} dot={false} isAnimationActive={false} />}
         </ComposedChart>
@@ -93,6 +93,8 @@ export default function ForecastPage() {
   const [error, setError] = useState<string | null>(null);
   const [tech, setTech] = useState<"GES" | "RES">("GES");
   const [plant, setPlant] = useState<number | null>(null);
+  const [showUncertainty, setShowUncertainty] = useState(false);
+  useEffect(() => { setShowUncertainty(false); }, [plant, tech]);
 
   useEffect(() => {
     setData(null); setError(null); setPlant(null);
@@ -128,16 +130,10 @@ export default function ForecastPage() {
     return Date.parse(data.weatherFetchedAt) > Date.parse(`${d}T09:30:00Z`);
   })();
   const shownBands = selected ? (tech === "RES" ? selected.bands : bandDate === data?.days[0] ? solarBands[selected.epiasPlantId!] : undefined) : undefined;
-  const shown = selected?.hours ?? data?.total ?? [];
-  const daySum = (hours: Array<number | null>, d: number) => hours.slice(d * 24, d * 24 + 24).reduce((a: number, v) => a + (v ?? 0), 0);
-  const peak = (() => {
-    const day = shown.slice(0, 24);
-    let h = 0;
-    day.forEach((v, i) => {
-      if ((v ?? 0) > (day[h] ?? 0)) h = i;
-    });
-    return { h, v: day[h] ?? 0 };
-  })();
+  const shown = selected?.hours ?? portfolioForecastHours(ok.map(p => p.hours ?? []));
+  const tomorrow = forecastDaySummary(shown, 0);
+  const dayAfter = forecastDaySummary(shown, 1);
+  const productionValue = (v: number | null) => v === null ? "—" : nf(v);
   const fetchedAt = data?.weatherFetchedAt ? new Date(data.weatherFetchedAt).toLocaleString("tr-TR", { timeZone: "Europe/Istanbul", hour: "2-digit", minute: "2-digit", day: "numeric", month: "long" }) : null;
   const ref = data?.reference?.summary ?? null;
   const ym = (s: string) => `${MONTHS[Number(s.slice(5, 7)) - 1]} ${s.slice(0, 4)}`;
@@ -198,12 +194,17 @@ export default function ForecastPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-3 gap-2 sm:gap-3">
-              <StatBox label={`Yarın, ${shortDay(data.days[0])}`} value={nf(daySum(shown, 0), 0)} unit="MWh" />
-              {data.days[1] && <StatBox label={`Öbür gün, ${shortDay(data.days[1])}`} value={nf(daySum(shown, 1), 0)} unit="MWh" />}
-              <StatBox label="Yarın en yüksek" value={nf(peak.v, 0)} unit="MWh" sub={hourText(peak.h)} />
+              <StatBox label={`Yarın toplam · ${shortDay(data.days[0])}`} value={productionValue(tomorrow.totalMwh)} unit="MWh" sub={tomorrow.availableHours < 24 ? `${tomorrow.availableHours}/24 saat mevcut` : undefined} />
+              {data.days[1] && <StatBox label={`Öbür gün toplam · ${shortDay(data.days[1])}`} value={productionValue(dayAfter.totalMwh)} unit="MWh" sub={dayAfter.availableHours < 24 ? `${dayAfter.availableHours}/24 saat mevcut` : undefined} />}
+              <StatBox label="Yarın en yüksek saatlik üretim" value={productionValue(tomorrow.peakMwh)} unit="MWh" sub={tomorrow.peakHour === null ? "Eksik veri" : hourText(tomorrow.peakHour)} />
             </div>
-            <HourlyChart hours={shown} days={data.days} bands={shownBands} />
-            {shownBands && tech === "GES" && <p className="text-xs text-slate-600">P10–P90 deneysel belirsizlik bandı; %80 kapsama garantisi değildir. {tech === "GES" ? "Bant günlük kaydın ağırlıklı+düzeltme gölge sürümüne aittir; mavi çizgi güncel açık referanstır ve farklı olabilir." : "Geçmiş örneklem dışı hatalardan kurulur; bağımsız kapsama sınaması bekliyor."} {shownBands.calibration.coverage !== null && `Geçmiş kalibrasyon kapsaması %${nf(100*shownBands.calibration.coverage,1)} (${shownBands.calibration.rows} saat).`}</p>}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-slate-500">Saatlik üretim (MWh) · Türkiye saati</p>
+              {shownBands && <button type="button" aria-pressed={showUncertainty} onClick={() => setShowUncertainty(v => !v)} className={`rounded-md border px-3 py-1.5 text-xs ${showUncertainty ? "border-blue-300 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-600"}`}>Belirsizlik aralığı {showUncertainty ? "açık" : "kapalı"}</button>}
+            </div>
+            <HourlyChart hours={shown} days={data.days} bands={showUncertainty ? shownBands : undefined} />
+            {showUncertainty && shownBands && <p className="text-xs text-slate-500">Açık mavi alan olası üretim aralığını gösterir; deneysel bir göstergedir, gerçekleşme garantisi değildir.</p>}
+            {showUncertainty && shownBands && tech === "GES" && <p className="text-xs text-slate-600">P10–P90 deneysel belirsizlik bandı; %80 kapsama garantisi değildir. {tech === "GES" ? "Bant günlük kaydın ağırlıklı+düzeltme gölge sürümüne aittir; mavi çizgi güncel açık referanstır ve farklı olabilir." : "Geçmiş örneklem dışı hatalardan kurulur; bağımsız kapsama sınaması bekliyor."} {shownBands.calibration.coverage !== null && `Geçmiş kalibrasyon kapsaması %${nf(100*shownBands.calibration.coverage,1)} (${shownBands.calibration.rows} saat).`}</p>}
             {selected && tech === "GES" && !shownBands && <p className="text-xs text-slate-500">Bu santral için yarının günlük kaydında belirsizlik bandı henüz yok; yeterli geçmiş ve yeni kesim öncesi kayıt oluşunca gösterilir.</p>}
             {selected?.locationText.startsWith("~") && <p className="text-xs text-amber-700">Bu santralin konumu ilçe merkezi tahmini: sonuç kaba.</p>}
           </CardContent>
@@ -214,23 +215,25 @@ export default function ForecastPage() {
         <Card className="shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Santraller</CardTitle>
-            <CardDescription>Satıra tıklayınca grafikte o santral gösterilir.</CardDescription>
+            <CardDescription>Günlük toplamlar 24 saatin üretimidir. Son sütun yalnız yarının en yüksek saatini gösterir. Santral adına tıklayınca grafik değişir.</CardDescription>
           </CardHeader>
           <CardContent className="overflow-x-auto p-0">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Santral</TableHead>
-                  <TableHead className="text-right">Yarın, MWh</TableHead>
-                  {data.days[1] && <TableHead className="text-right">Öbür gün, MWh</TableHead>}
-                  <TableHead className="text-right">En yüksek saat, MWh</TableHead>
+                  <TableHead className="text-right">Yarın toplam<br /><span className="font-normal text-xs">{shortDay(data.days[0])} · MWh</span></TableHead>
+                  {data.days[1] && <TableHead className="text-right">Öbür gün toplam<br /><span className="font-normal text-xs">{shortDay(data.days[1])} · MWh</span></TableHead>}
+                  <TableHead className="text-right">Yarın en yüksek saat<br /><span className="font-normal text-xs">MWh</span></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {[...ok]
-                  .sort((a, b) => b.daily![0] - a.daily![0])
+                  .sort((a, b) => (forecastDaySummary(b.hours ?? [], 0).totalMwh ?? -1) - (forecastDaySummary(a.hours ?? [], 0).totalMwh ?? -1))
                   .map((p) => {
                     const isSel = selected?.epiasPlantId === p.epiasPlantId;
+                    const day1 = forecastDaySummary(p.hours ?? [], 0);
+                    const day2 = forecastDaySummary(p.hours ?? [], 1);
                     return (
                       <TableRow
                         key={`${p.epiasPlantId}-${p.name}`}
@@ -253,9 +256,9 @@ export default function ForecastPage() {
                             </div>
                           ))}
                         </TableCell>
-                        <TableCell className="text-right font-medium tabular-nums">{nf(p.daily![0])}</TableCell>
-                        {data.days[1] && <TableCell className="text-right tabular-nums text-slate-600">{nf(p.daily![1])}</TableCell>}
-                        <TableCell className="text-right tabular-nums text-slate-600">{nf(p.peakMwh!)}</TableCell>
+                        <TableCell className="text-right font-medium tabular-nums">{productionValue(day1.totalMwh)}{day1.availableHours < 24 && <div className="text-xs font-normal text-slate-500">{day1.availableHours}/24 saat</div>}</TableCell>
+                        {data.days[1] && <TableCell className="text-right tabular-nums text-slate-600">{productionValue(day2.totalMwh)}{day2.availableHours < 24 && <div className="text-xs text-slate-500">{day2.availableHours}/24 saat</div>}</TableCell>}
+                        <TableCell className="text-right tabular-nums text-slate-600">{productionValue(day1.peakMwh)}{day1.peakHour !== null && <div className="text-xs text-slate-500">{hourText(day1.peakHour)}</div>}</TableCell>
                       </TableRow>
                     );
                   })}

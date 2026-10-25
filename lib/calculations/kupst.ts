@@ -7,7 +7,8 @@
  *   KÜPSM = max(0, |UEVM − KÜP| − tolerans × KÜP)          (saatlik, santral / uzlaştırma birimi bazında)
  *   KÜPST = KÜPSM × max(PTF, SMF) × katsayı
  *
- * Santral bazında hesaplandığı için şirket içinde netleşmez (dengesizlikten farkı budur).
+ * Şirket projelerinde santral (UEVÇB) bazında hesaplandığı için şirket içinde netleşmez (dengesizlikten farkı budur);
+ * toplayıcı topluluğunda portföy toplamı üzerinden hesaplanır (aşağıda).
  *
  * Dayanak ve belirsizlikler (29.09.2026'da kaynak metinlerle kontrol edildi):
  *   - 2025 öncesi: rüzgâr 0,21, güneş 0,12, diğer 0,05; katsayı 0,03 (13025 sayılı kararın değiştirdiği oranlar).
@@ -24,8 +25,9 @@
  *     uzlaştırmaya esas veriş-çekiş birimi bazında hesaplanır (portföy toplamı; sapmalar netleşir); tolerans, kaynak
  *     türlerinin işletmedeki kurulu gücüne göre ağırlıklandırılır; fiyat katsayısı topluluk için md. 2(b): 2025'te 0,03,
  *     2026'da 0,05. Tesisler topluluk oluşturmazsa her biri münferit hesaplanır (kupstForHour).
- *   - Arıza sayısına bağlı katsayı artışı (arıza kayıtları açık veride yok) ve topluluk / depolama katsayıları kapsam
- *     dışıdır: hesap, arızası eşiği aşmayan yenilenebilir santral içindir (alt sınır).
+ *   - Arıza sayısına bağlı katsayı artışı (arıza kayıtları açık veride yok) ve depolama katsayısı kapsam dışıdır: santral
+ *     hesabı arızası eşiği aşmayan yenilenebilir santral içindir (alt sınır). Topluluk katsayısı uygulanır
+ *     (`communityCoef`, kupstCommunityHours / kupstCommunityTotal).
  * Bu nedenle rapor KÜPST'ü "tahmini" olarak etiketler.
  */
 

@@ -79,6 +79,14 @@ export function checkReportData(r: PlantReportData, bridge?: BridgeStep[]): Repo
   const err = (rule: string, message: string) => issues.push({ level: "error", rule, message });
   const warn = (rule: string, message: string) => issues.push({ level: "warning", rule, message });
   const sum = <T>(xs: T[], f: (x: T) => number) => xs.reduce((a, x) => a + f(x), 0);
+  if (r.productionLoss) {
+    const l = r.productionLoss;
+    const total = l.plannedMwh + l.unplannedMwh;
+    const pct = l.actualMwh + total > 0 ? 100 * total / (l.actualMwh + total) : 0;
+    if (Math.abs(l.lossPct - pct) > 1e-6) err("loss-ratio", "Kayıp oranı üretim ve kayıp toplamıyla tutarsız.");
+    if (l.plants < 1 || l.plants > l.eligible || l.lastMonth < 1 || l.lastMonth > 12) err("loss-coverage", "Kayıp üretim kapsamı geçersiz.");
+    if ([l.actualMwh, l.plannedMwh, l.unplannedMwh, l.valueTl].some(v => !Number.isFinite(v) || v < 0)) err("loss-values", "Kayıp üretim değerleri geçersiz.");
+  }
   const t = r.totals;
   const st = r.settlement;
 

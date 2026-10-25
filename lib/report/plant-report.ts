@@ -115,6 +115,8 @@ export interface ReportCompany {
 
 /** Rapor dışından gelen bağlam (EPİAŞ şirket dizini); saf hesaplama ağ bağlantısı gerektirmesin diye ayrı verilir */
 export interface ReportContext {
+  /** Güneş kaybı: sektör önbelleğinin açıkça belirtilen ortak dönemi. */
+  productionLoss?: { year: number; lastMonth: number; plants: number; eligible: number; actualMwh: number; plannedMwh: number; unplannedMwh: number; valueTl: number; lossPct: number; sectorPct: number } | null;
   /** Şirketin EPİAŞ'ta kayıtlı ama projede olmayan santralleri: organizationId → santral adları */
   missingCompanyPlants?: Map<number, string[]>;
   /** Şirketin EPİAŞ'ta kayıtlı toplam santral sayısı: organizationId → sayı */
@@ -150,6 +152,7 @@ export interface ReportContext {
 }
 
 export interface PlantReportData {
+  productionLoss?: ReportContext["productionLoss"];
   projectName: string;
   period: { start: string; end: string; months: number; hours: number };
   plants: ReportPlantRow[];
@@ -1402,6 +1405,7 @@ export function buildPlantReport(
   }
 
   return {
+    productionLoss: context.productionLoss,
     projectName: data.project.name,
     period: { start: iso(start), end: iso(end), months: monthly.length, hours: hourSet.size },
     plants,
