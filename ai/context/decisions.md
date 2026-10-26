@@ -1,7 +1,7 @@
 # Kararlar, dersler, çürütülen fikirler
 
 Bir şey önermeden önce buraya bakın: çoğu fikir denendi. Tarihler 2026. Sayılar o günün verisidir; bugün için veriden
-yeniden üretin. Ayrıntılı geçmiş `PLAN.md` ("İlerleme kaydı" ve aşama maddeleri).
+yeniden üretin. Ayrıntılı geçmiş `PLAN.md` (süren aşamalar, son kayıtlar) ve `docs/plan-arsiv.md` (kapanan aşamalar, eski kayıtlar).
 
 ## Mevzuat ve hesap
 

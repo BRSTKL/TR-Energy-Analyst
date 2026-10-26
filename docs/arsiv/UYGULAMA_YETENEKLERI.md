@@ -1,4 +1,4 @@
-> **Not (4 Ekim 2026):** Bu belge uygulamanın ilk sürümünü anlatır ve güncel değildir (katsayılar, rapor slayt sayısı, sayfalar). Güncel özet için [README.md](README.md), yöntem için uygulamadaki `/methodology` sayfası.
+> **Not (4 Ekim 2026):** Bu belge uygulamanın ilk sürümünü anlatır ve güncel değildir (katsayılar, rapor slayt sayısı, sayfalar). Güncel özet için [README.md](../../README.md), yöntem için uygulamadaki `/methodology` sayfası.
 
 # TR-Energy Analyst — Kapsamlı Uygulama Yetenekleri ve Sistem Dokümantasyonu
 

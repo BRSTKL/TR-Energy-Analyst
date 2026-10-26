@@ -5,7 +5,7 @@
  * `.cache/forecast/change-warnings.json`'a yazar; Üretim tahmini sayfası (projectLiveForecast) buradan okur (sayfa açılışında
  * 150 günlük veri okunmasın). Yalnız uyarı: hiçbir kayıt değişmez (kurulu güç ve konum kendi kurallarıyla yazılır).
  *
- * Bağlanan uyarılar (20.10.2026 gerçek veri taraması, scripts/change-detection-scan.mts):
+ * Bağlanan uyarılar (20.10.2026 gerçek veri taraması, scripts/analysis/change-detection-scan.mts):
  * - (a) kapasite değişimi: yalnız kayıtlı (resmî ya da elle) kurulu güçle "over"; "under" her santralde. Taramada 0 uyarı.
  * - (b) uzun arıza: yalnız sürüyorsa ya da son 7 gün içinde bittiyse (eski olay tahmini etkilemez). Taramada 4 eski olay.
  * - (c) konum tutarsızlığı BAĞLANMADI: 6 uyarının 5'i 2025–2026 lisanslı yeni santrallerde 25–45 dk "geç" (boylamdan

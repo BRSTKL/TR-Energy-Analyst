@@ -27,7 +27,7 @@
  * Kendi kendine öğrenme (lib/solar-engine/learning/self-learning.ts, 19.10.2026): önce şampiyon değerlendirmesi (son 28 günün karnesi;
  * değişiklik bildirimle); sonra her santral için bütün sürümler (4 / 2 / 6 ay eğitim, günlük hata düzeltmeli) tahmin
  * yapar; santralin şampiyonu canlı tahmin (`modelId`), diğerleri gölge (`shadow`) olarak yazılır.
- * Zamanlama: scripts/launchd/ (Mac saatiyle 08:30 ve 10:00). Kesime WAIT_MARGIN'dan çok varken şu durumlarda yazmadan
+ * Zamanlama: sunucuda systemd (09:30 ve 11:00 Türkiye; scripts/server/README.md); Mac launchd tanımı yalnız geri dönüş için. Kesime WAIT_MARGIN'dan çok varken şu durumlarda yazmadan
  * çıkar (sonraki çalışma yazar): günün 00Z ECMWF çalışması henüz yayımlanmamış (ya da bilinmiyor), bir santralin hava
  * isteği düşmüş. Kesime daha az kaldıysa düşen hava istekleri kesime 10 dakika kalana kadar yeniden denenir (19.10.2026:
  * Open-Meteo aşırı yüklüydü, 36 santralin 18'i düştü), sonra elde olanla yazar. Kayıt varsa ikinci çalışma bir şey yapmaz.

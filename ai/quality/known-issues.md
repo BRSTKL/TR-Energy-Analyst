@@ -7,9 +7,6 @@ Tarihli; önermeden ya da "düzeltildi" demeden önce kodda kontrol edin.
 - **Büyük projede geçmişle sınama ilk açılışta yavaş** (22.10): Inavitas (66 santral) sunucuda soğuk istekte ~2 dk
   (sunucu işlemcisi tek çekirdekte Mac'ten ~5 kat yavaş). Sonraki açılışlar önbellekten 0,1 sn. Seçenekler (karar
   bekliyor): pencere ara toplamları (3–4 kat), çok çekirdek, diskte önbellek + ısıtma.
-- **Sabah tahmininde D-1 PTF** (22.10'da düzeltildi, 23.10 sabahı doğrulanacak): istek bitişi "bugün 23:00" iken
-  14:00'ten önce 400 dönüyordu; bitiş gün başına alındı. Sunucu günlüğünde "sıfır fiyat olasılığı" satırı dolu
-  çıkmalı.
 - **Metodoloji sayfası telefonda ~112 px yatay taşıyor** (20.10'da görüldü; doğrulanmadı).
 - **Metodoloji bulguları "2026 Ocak–Ağustos"** sayılarını alıntılıyor; tarihli ve doğru ama karne Ocak–Eylül'e
   güncellendi.
@@ -19,10 +16,12 @@ Tarihli; önermeden ya da "düzeltildi" demeden önce kodda kontrol edin.
   ayrı yazılmış (`lib/report/plant-report.ts` üç blok, `lib/analysis/backtest.ts` `costWithMultiplier`,
   `lib/analysis/dsg-scenarios.ts`). Fiyatlar motordan geldiği için sonuç doğru; ama tek bir yardımcıya
   (`lib/calculations/engine.ts`) taşınması bekliyor. Taşırken çıktı birebir aynı kalmalı (bkz. `checks.md`).
-- **Rüzgâr motoru** (Aşama 23) kodlandı, Mac sınaması Open-Meteo sınırında yarım; hiçbir akışa bağlı değil.
+- **Rüzgâr temel modeli** eğitimde görülmemiş hızda saat boş bırakıyordu; 26.10'da komşu hız aralığından doldurma eklendi (`fitPowerCurve` `fillGaps`). Rüzgâr geriye dönük test rakamları bu değişiklikten önceki; yeniden çalıştırılana kadar eski.
+- **Konum:** proje RES'lerinden Menekşe, Şule, R3-Muş-4, Alibeyhüyüğü köy noktası tahmini (~), Saray Döküm konumsuz; GES'te Yeni, G24-Kütahya, Omicron Erciş ilçe merkezi (26.10).
 
 ## Tuzaklar
 
+- **Next.js fetch önbelleği** (26.10'da düzeltildi): sunucu tarafı `fetch` yanıtı varsayılan bir yıl saklanıyordu; tahmin ekranı 22.10'dan beri bayat hava gösteriyordu. Yeni sunucu tarafı `fetch`'e `cache: "no-store"` şart (`__tests__/live-forecast.test.ts` koruma listesi).
 - **Aynı klasörde iki `next dev`:** ortak `.next`'i birbirine yazar; 404 kod parçaları, 120 sn zaman aşımı. Sağlıklı
   porta karşı test et ya da ayrı worktree kullan.
 - **Prisma şeması değişince** çalışan geliştirme sunucusu yeni alanda 500 verir: yeniden başlat.

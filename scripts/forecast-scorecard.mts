@@ -5,7 +5,7 @@
  *
  * Varsayılan: kaydı olan en son ay, kayıttaki bütün santraller. `--simulate`: kayıt dosyaları yerine geriye dönük
  * tahminle kurulmuş kayıtlar (karne kodunu kayıt birikmeden denemek için; ay başında önceki 4 ayın UEVM'siyle eğitilen
- * sürüm 3 kalıcılıksız, 2 gün önceki ECMWF tahmini: scripts/forecast-backtest.mts ile aynı). Kayıtlar diske yazılmaz,
+ * sürüm 3 kalıcılıksız, 2 gün önceki ECMWF tahmini: scripts/analysis/forecast-backtest.mts ile aynı). Kayıtlar diske yazılmaz,
  * model kimliği "sim-…". Simülasyon iyimserdir (önceki ayın UEVM'si ay başında elde sayılır): yalnız kod denemesi, sayısı
  * dışarıya verilmez. `--provisional-only`: gerçekleşen yalnız GZÜ (UEVM yok sayılır): geçici karnenin kesinden
  * farkını görmek için. `--drop`: o günün kaydı yokmuş gibi (eksik gün listesi denemesi). `--dump <klasör>`: simülasyon

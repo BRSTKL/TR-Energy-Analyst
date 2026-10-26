@@ -1,8 +1,8 @@
 import {windOos} from "@/lib/wind-engine/learning/oos";
 import {calibratedWindBands} from "@/lib/wind-engine/models/calibrated-bands";
 /**
- * Rüzgâr motoru aday sürümlerinin geriye dönük testi (Aşama 23.3–23.8; güneşteki scripts/solar-candidates-backtest.mts'in
- * rüzgâr karşılığı). scripts/wind-forecast-backtest.mts ile aynı kurulum: konumu ve geçmiş rüzgâr tahmini olan proje rüzgâr
+ * Rüzgâr motoru aday sürümlerinin geriye dönük testi (Aşama 23.3–23.8; güneşteki scripts/analysis/solar-candidates-backtest.mts'in
+ * rüzgâr karşılığı). scripts/analysis/wind-forecast-backtest.mts ile aynı kurulum: konumu ve geçmiş rüzgâr tahmini olan proje rüzgâr
  * santralleri; test ayları Nisan 2025 – sonAy; her ay o aydan önceki bütün verilerle (2025-01'den genişleyen pencere)
  * eğitilir, eğitim ay başından 1 gün önce biter (bilgi zamanı); hava `d2`; maliyet dönemin kuralıyla
  * (lib/forecast/production-backtest.ts). Temel: "rüzgâr modeli" (medyan güç eğrisi, lib/forecast/wind-forecast.ts). Ana
@@ -22,7 +22,7 @@ import {calibratedWindBands} from "@/lib/wind-engine/models/calibrated-bands";
  *     KGÜP canlıda bizde yok. Çıktıda zayıf tahminci santraller listesi.
  * Ayarlar baştan sabittir; sonuca göre değiştirilmez. Kazanan aday ancak gölge sürüm karnesiyle canlıya alınır.
  *
- *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/wind-candidates-backtest.mts [sonAy=YYYY-AA] --set phys|prob|curt|corr|blend
+ *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/analysis/wind-candidates-backtest.mts [sonAy=YYYY-AA] --set phys|prob|curt|corr|blend
  * Çıktı: .cache/forecast/wind-candidates-<küme>.json
  */
 

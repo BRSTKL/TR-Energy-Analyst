@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-423 dosya, 37 grup; baş açıklaması olmayan (sayfalar hariç): 30.
+423 dosya, 38 grup; baş açıklaması olmayan (sayfalar hariç): 30.
 
 ## Sayfalar (app/**/page.tsx) (21)
 
@@ -302,7 +302,7 @@
 - `lib/services/ptf-recent.ts` — Son günlerin PTF'si (Aşama 22.6 kısıntı gölge sürümü için): MarketData'ya piyasa eşitlemesi (scripts/market-sync.mts --recent) düne kadar yazar: SMF uç noktası bitişin geçmişte olmasını ister.
 - `lib/services/realized-production.ts` — Gerçekleşen üretim, kaynağıyla (karne, PLAN 21.4; kural lib/pool/provisional.ts): Saat başına UEVM (kesin) ya da UEVM henüz yayımlanmamışsa EPİAŞ gerçek zamanlı üretimi (geçici, "GZÜ").
 - `lib/services/realtime-generation.ts` — EPİAŞ gerçek zamanlı üretimini (GZÜ) geçici üretim olarak havuza çeker (kural lib/pool/provisional.ts)
-- `lib/services/realtime-history.ts` — Geçmiş aylar için EPİAŞ gerçek zamanlı üretimi (GZÜ), yalnız geriye dönük test girdisi: (scripts/realtime-history.mts çeker, scripts/forecast-backtest-gzu.mts okur).
+- `lib/services/realtime-history.ts` — Geçmiş aylar için EPİAŞ gerçek zamanlı üretimi (GZÜ), yalnız geriye dönük test girdisi: (scripts/realtime-history.mts çeker, scripts/analysis/forecast-backtest-gzu.mts okur).
 - `lib/services/report-context.ts` — Dengesizlik Karnesi için EPİAŞ bağlamı ve ön kontrol: Rapor, santrallerin sahibi (şirket bazında uzlaştırma) ve YEKDEM durumuna dayanır.
 - `lib/services/report-export.ts` — "Dengesizlik Karnesi" PowerPoint raporunun üretimi ve tutarlılık denetimi.
 - `lib/services/response-cache.ts` — Proje hesaplarının önbelleği (PLAN 10.2): Sayfalar her açılışta aynı ağır hesabı yapıyordu (61 santrallik portföyde sonuç 5 sn, DSG 15 sn, ana sayfa 20 sn).
@@ -333,7 +333,7 @@
 - `lib/solar-engine/models/correction.ts` — Öğrenen düzeltme katmanı (Aşama 22.4): Bir tahmin modelinin (temel sürüm 3 ya da üç hava modelli birleşim) GEÇMİŞTEKİ ÖRNEKLEM DIŞI hatasını gradient boosting (models/gbm.ts) ile öğrenir ve yeni tahmine ekler.
 - `lib/solar-engine/models/ensemble.ts` — Üç hava modelli birleşim (Aşama 22.3): ECMWF IFS 0,25° + DWD ICON-EU + NOAA GFS: Aynı sürüm 3 modeli (production-model-v2.ts, kalıcılıksız) her hava modelinin 2 gün önceki tahminiyle ayrı eğitilir; üç birleşim: - `mean`: üç tahminin ortala…
 - `lib/solar-engine/models/gbm.ts` — Gradient boosting güneş ve rüzgâr motorunun ortak parçası oldu: lib/forecast/gbm.ts (Aşama 23.1, PLAN yönerge 6: ikinci motorda gereken parça kopyalanmaz, taşınır).
-- `lib/solar-engine/models/physical.ts` — Fiziksel güneş modeli (Aşama 22.2; DENENDİ, CANLIYA ALINMADI): Geriye dönük test 19.10.2026 (scripts/solar-candidates-backtest.mts; 55 konumlu güneş santrali, Ocak 2025 – Eylül 2026, her ay önceki 4 ayla eğitim, kayıp saatler hariç, denges…
+- `lib/solar-engine/models/physical.ts` — Fiziksel güneş modeli (Aşama 22.2; DENENDİ, CANLIYA ALINMADI): Geriye dönük test 19.10.2026 (scripts/analysis/solar-candidates-backtest.mts; 55 konumlu güneş santrali, Ocak 2025 – Eylül 2026, her ay önceki 4 ayla eğitim, kayıp saatler hari…
 - `lib/solar-engine/models/production-model-v2.ts` — Güneş üretim tahmini, sürüm 2 (PLAN 15.5 öncesi; tasarım yalnız 2024 verisiyle): Sürüm 1'den (production-model.ts, değişmeden kalır) üç fark: 1.
 - `lib/solar-engine/models/production-model.ts` — Santral bazında güneş üretim tahmini (PLAN 15.4): D günü saatlik üretim (MWh) tahmini, D-1 12:30 kesiminden önce elde olan bilgiyle (info-time.ts; her özellik eğitimde ve tahminde `assertAvailable` ile denetlenir): - 2 gün önceki ECMWF tah…
 - `lib/solar-engine/models/quantiles.ts` — Olasılıksal güneş tahmini: P10 / P50 / P90 ve maliyete göre teklif (Aşama 22.5): Tahminin geçmişteki ÖRNEKLEM DIŞI hatalarının dağılımı, tahmin düzeyine göre dilimlenir (tahmin / tavan: 0–0,2, 0,2–0,4, 0,4–0,6, 0,6–0,8, 0,8+; aynı düzeydek…
@@ -432,7 +432,7 @@
 - `components/wind-day-chart.tsx` — Rüzgâr santralinin bir günü: üretim (kayıp durumuna göre renkli), ilk KGÜP, beklenen üretim (MWh); altta 100 m rüzgâr (m/s)
 - `components/wind-loss-card.tsx` — "Son 12 ay"; verisi daha kısa santralde ay sayısı ("Verisi olan 6 ay")
 
-## scripts (kök) (70)
+## scripts (kök) (58)
 
 - `scripts/aggregator-benchmark.mts` — Toplayıcılar arası kıyası üretir (PLAN 8.7): .cache/epias/aggregator-benchmark-<yıl>.json: npx tsx --tsconfig tsconfig.json scripts/aggregator-benchmark.mts [yıl=2026] [bitiş=karnenin dönem sonu]
 - `scripts/aggregator-collect.mts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" olarak kayıtlı tüm katılımcıların santralleri .cache/epias/aggregator-membership.json'a yazılır.
@@ -443,17 +443,9 @@
 - `scripts/auth-user.mts` — Uygulama hesabının şifresini sıfırlar (şifre unutulunca ya da kilit açmak için).
 - `scripts/backup-db.mts` — Veritabanı yedeği alır: `npm run db:backup [-- sebep]`.
 - `scripts/budget-backtest.mts` — Bütçe yönteminin geçmişle sınaması (PLAN 17.2, kapı): 2026 bütçesi yalnız 2025 sonuna kadarki veriyle kurulur (sapma ve fiyat 2025, 2026 kuralı, makas 2025 düzeyinde ve +%20) ve 2026 Ocak–<sonAy> gerçekleşenle karşılaştırılır.
-- `scripts/change-detection-scan.mts` — Değişim algılama taraması (Aşama 22.7): proje güneş santrallerinde bağlanan uyarılar (kapasite değişimi, son / süren uzun arıza; lib/services/plant-change-warnings.ts) ve bağlanmayan konum tutarsızlığı.
 - `scripts/check-reports.mts` — Bütün projelerin PowerPoint raporunu (tam, anonim, özet, anonim özet) üretir ve tutarlılık denetiminden geçirir (lib/report/report-checks.ts).
 - `scripts/clean-project-descriptions.mts` — Proje açıklamalarındaki eski EPİAŞ kaynak notlarını santral kayıtlarına taşır ve açıklamayı kullanıcı metnine indirir.
-- `scripts/curtailment-scan.mts` — Uydu ışınımıyla kısıntı / arıza taraması (PLAN 15.5, 20.1): konumlu güneş santralleri, yıl başına kayıp saat, kayıp üretim ve TL karşılığı (kayıp × PTF; planlı = şirketin ilk KGÜP'ü ≈ 0; plansız = arıza / talimat).
-- `scripts/direction-backtest.mts` — Sistem yönü ve makas tahmininin geçmişle sınaması (Aşama 14.3).
-- `scripts/epdk-capacity-compare.mts` — EPDK lisans kurulu gücünü mevcut kurulu güç kaynağıyla karşılaştırır (yalnız analiz; hiçbir şey yazmaz).
-- `scripts/epdk-karne-compare.mts` — EPDK lisans listesi ile sektör karnesini karşılaştırır (Bekleyen işler: EPDK ↔ karne; güneş 15.10.2026).
 - `scripts/epias-monthly-sync.mts` — Aylık EPİAŞ eşitlemesi, kendiliğinden (güneş motoru yol haritası 2.
-- `scripts/forecast-backtest-gzu.mts` — Canlı eğitim penceresinin geriye dönük testi (PLAN 21.4; kullanıcı kararı 18.10.2026: karne ile birlikte): model solar-v3-nolag-gzu (lib/solar-engine/forecast.ts), her gün son tam güne kadar 4 ayla, geçici üretimle (EPİAŞ gerçek zamanlı ür…
-- `scripts/forecast-backtest.mts` — Güneş üretim tahmini geriye dönük testi (PLAN 15.5): konumu ve hava verisi olan santraller, Ocak 2025 – son tam ay.
-- `scripts/forecast-design-2024.mts` — Üretim tahmini sürüm 2 tasarımı (PLAN 15.5 öncesi): YALNIZ 2024 verisi.
 - `scripts/forecast-info-age.mts` — Bilgi yaşının etkisi (PLAN 15.5 ek): donmuş sürüm 2, aynı walk-forward düzeniyle üç hava sürümüyle çalıştırılır.
 - `scripts/forecast-preview.mts` — Üretim tahmini ön denemesi (PLAN 15.4): bir santral, bir test ayı; model önceki 4 ayla eğitilir.
 - `scripts/forecast-scorecard.mts` — Tahmin karnesi (PLAN 21.4; kural lib/solar-engine/learning/scorecard.ts): günlük tahmin kayıtları gerçekleşen üretimle.
@@ -473,7 +465,7 @@
 - `scripts/pool-import.mts` — Veri havuzuna mevcut veriyi aktarır (PLAN 7.3).
 - `scripts/pool-migrate-projects.mts` — Mevcut projeleri veri havuzuna taşır (PLAN 7.7).
 - `scripts/ptf-recent-sync.mts` — Son 3 gün ve bugünün PTF'sini EPİAŞ'tan `.cache/epias/ptf-recent.json`'a yazar (lib/services/ptf-recent.ts; Aşama 22.6).
-- `scripts/realtime-history.mts` — Geçmiş aylar için EPİAŞ gerçek zamanlı üretimi (GZÜ): canlı eğitim penceresinin geriye dönük testi için (scripts/forecast-backtest-gzu.mts; PLAN 21.4).
+- `scripts/realtime-history.mts` — Geçmiş aylar için EPİAŞ gerçek zamanlı üretimi (GZÜ): canlı eğitim penceresinin geriye dönük testi için (scripts/analysis/forecast-backtest-gzu.mts; PLAN 21.4).
 - `scripts/realtime-sync.mts` — Geçici üretim eşitlemesi: EPİAŞ gerçek zamanlı üretimi (GZÜ) havuza (lib/services/realtime-generation.ts, kural lib/pool/provisional.ts).
 - `scripts/satellite-sync.mts` — Uydu ışınımı (gerçekleşen; PLAN 15.5 kısıntı tespiti): konumu olan güneş santralleri için SARAH3 saatlik GHI / doğrudan / dağınık, 2024-01-01'den (SARAH3 gecikmesi + 1) gün öncesine kadar.
 - `scripts/sector-backtest.mts` — Geçmişle sınama (Aşama 12.2, 12.3, 16.2): sektör karnesindeki santrallerin 2025 ve 2026 Ocak–Ağustos verisi.
@@ -485,7 +477,6 @@
 - `scripts/sector-wind-curtailment.mts` — Sektörde rüzgâr santrallerinin kayıp üretimi (sektör sayfası, "Kayıp üretim" kartının Rüzgâr alt başlığı; kullanıcı 18.10.2026): sektör karnelerinin (2025, 2026) konumu ve rüzgâr verisi olan lisanslı rüzgâr santralleri.
 - `scripts/smoke-test.mts` — Duman testi (hata ayıklama testi 16.10.2026'nın otomatik hâli): çalışan geliştirme sunucusunda bütün sayfaları gezer.
 - `scripts/snow-sync.mts` — Sektör karnesindeki konumu olan lisanslı güneş santralleri için ERA5 saatlik kar derinliğini (lib/weather/snow.ts) havuza çeker: 2025-01-01'den 6 gün öncesine.
-- `scripts/solar-candidates-backtest.mts` — Güneş motoru aday sürümlerinin geriye dönük testi (Aşama 22): canlı temel (sürüm 3 kalıcılıksız) ile adaylar aynı koşulda.
 - `scripts/solar-forecast-daily.mts` — Günlük güneş tahmin kaydı: güneş tahmin motorunun günlük akışını çalıştırır (lib/solar-engine/pipeline.ts; kurallar ve ayrıntı orada).
 - `scripts/solar-oos-backfill.mts` — Öğrenen düzeltme katmanının örneklem dışı tahmin serisi önbelleğini doldurur (Aşama 22.4; lib/solar-engine/learning/oos-series.ts).
 - `scripts/system-attribution.mts` — Sistem yönü sekmesinin "Kimden geldi?" tablosu: havuzdaki her rüzgâr, güneş ve akarsu santralinin açık ve fazla saatlerde sistemi o yöne itmesi (lib/analysis/system-attribution.ts).
@@ -494,16 +485,28 @@
 - `scripts/umm-sync.mts` — Arıza / bakım bildirimlerini (piyasa mesaj sistemi) havuza çeker (Aşama 14.0).
 - `scripts/weather-models-sync.mts` — Ek hava modelleri arşivi (Aşama 22.3): konumlu güneş santralleri için ICON-EU ve GFS'in 2 gün önceki tahmini (lib/weather/nwp-models.ts).
 - `scripts/weather-sync.mts` — Hava verisi havuzu (PLAN 15.2): konumu olan santraller için Open-Meteo Previous Runs (ECMWF IFS 0,25°) saatlik verisi.
-- `scripts/wind-candidates-backtest.mts` — Rüzgâr motoru aday sürümlerinin geriye dönük testi (Aşama 23.3–23.8; güneşteki scripts/solar-candidates-backtest.mts'in rüzgâr karşılığı).
-- `scripts/wind-forecast-backtest.mts` — Rüzgâr üretim tahmini geriye dönük testi (kullanıcı 18.10.2026; güneşteki scripts/forecast-backtest.mts'in rüzgâr karşılığı).
 - `scripts/wind-forecast-daily.mts` — Günlük RES akışı; varsayılan kuru çalışma.
 - `scripts/wind-forecast-sync.mts` — Geçmiş rüzgâr tahminleri (rüzgâr üretim tahmini geriye dönük testi; lib/weather/wind-forecast-archive.ts): konumu olan proje rüzgâr santralleri için ECMWF IFS 0,25° 100 m hız / yön, `d1` ve `d2` sürümleri, 2025-01-01'den dünkü güne.
-- `scripts/wind-live-backtest.mts` — Güncel sunucu kopyasında 120 günlük, günlük kayan RES temel sınaması.
 - `scripts/wind-location-osm.mts` — Konumu olmayan proje rüzgâr santralleri için OpenStreetMap türbin kümelerinden konum (kullanıcı, 17.10.2026; GEM Wind Power Tracker'da olmayan, yalnız yaklaşık konumlu ya da EPDK ile uyuşmayan santraller).
 - `scripts/wind-loss-summary.mts` — Proje rüzgâr santrallerinin kayıp özeti (metodoloji "Kayıp üretim" tablosu bu çıktıdan): konum, kalite eşiği, son 12 ay planlı / plansız kayıp payı, plansız olaylar ve EPİAŞ bildirim çakışması, olay başlangıç saatleri, iki kaynağın anlaşma…
 - `scripts/wind-models-sync.mts` — Rüzgârda ek hava modellerinin geçmiş tahminleri (Aşama 23.4; lib/weather/wind-nwp-archive.ts): konumu olan proje rüzgâr santralleri için ICON-EU ve GFS `d2` rüzgârı (80 / 100 / 120 m, 10 m, hamle), 2025-01-01'den dünkü güne.
 - `scripts/wind-sync.mts` — Gerçekleşen rüzgâr (rüzgâr kayıp tespiti; lib/weather/reanalysis-wind.ts): konumu olan proje rüzgâr santralleri için ERA5 (0,25°) ve ECMWF IFS (9 km) saatlik 100 m hız / yön, 2025-01-01'den dünkü güne.
 - `scripts/yekdem-exit-sync.mts` — YEKDEM çıkış taraması için EPİAŞ YEKDEM listelerini yeniler (VPN gerekir): - kimlikli santral listesi 2014 → bu yıl (+ yıl sonundaysa gelecek yıl): .cache/epias/yekdem-<yıl>.json - katılımcı listesi (ad, şirket, kurulu güç): .cache/epias/y…
+
+## scripts/analysis (12)
+
+- `scripts/analysis/change-detection-scan.mts` — Değişim algılama taraması (Aşama 22.7): proje güneş santrallerinde bağlanan uyarılar (kapasite değişimi, son / süren uzun arıza; lib/services/plant-change-warnings.ts) ve bağlanmayan konum tutarsızlığı.
+- `scripts/analysis/curtailment-scan.mts` — Uydu ışınımıyla kısıntı / arıza taraması (PLAN 15.5, 20.1): konumlu güneş santralleri, yıl başına kayıp saat, kayıp üretim ve TL karşılığı (kayıp × PTF; planlı = şirketin ilk KGÜP'ü ≈ 0; plansız = arıza / talimat).
+- `scripts/analysis/direction-backtest.mts` — Sistem yönü ve makas tahmininin geçmişle sınaması (Aşama 14.3).
+- `scripts/analysis/epdk-capacity-compare.mts` — EPDK lisans kurulu gücünü mevcut kurulu güç kaynağıyla karşılaştırır (yalnız analiz; hiçbir şey yazmaz).
+- `scripts/analysis/epdk-karne-compare.mts` — EPDK lisans listesi ile sektör karnesini karşılaştırır (Bekleyen işler: EPDK ↔ karne; güneş 15.10.2026).
+- `scripts/analysis/forecast-backtest-gzu.mts` — Canlı eğitim penceresinin geriye dönük testi (PLAN 21.4; kullanıcı kararı 18.10.2026: karne ile birlikte): model solar-v3-nolag-gzu (lib/solar-engine/forecast.ts), her gün son tam güne kadar 4 ayla, geçici üretimle (EPİAŞ gerçek zamanlı ür…
+- `scripts/analysis/forecast-backtest.mts` — Güneş üretim tahmini geriye dönük testi (PLAN 15.5): konumu ve hava verisi olan santraller, Ocak 2025 – son tam ay.
+- `scripts/analysis/forecast-design-2024.mts` — Üretim tahmini sürüm 2 tasarımı (PLAN 15.5 öncesi): YALNIZ 2024 verisi.
+- `scripts/analysis/solar-candidates-backtest.mts` — Güneş motoru aday sürümlerinin geriye dönük testi (Aşama 22): canlı temel (sürüm 3 kalıcılıksız) ile adaylar aynı koşulda.
+- `scripts/analysis/wind-candidates-backtest.mts` — Rüzgâr motoru aday sürümlerinin geriye dönük testi (Aşama 23.3–23.8; güneşteki scripts/analysis/solar-candidates-backtest.mts'in rüzgâr karşılığı).
+- `scripts/analysis/wind-forecast-backtest.mts` — Rüzgâr üretim tahmini geriye dönük testi (kullanıcı 18.10.2026; güneşteki scripts/analysis/forecast-backtest.mts'in rüzgâr karşılığı).
+- `scripts/analysis/wind-live-backtest.mts` — Güncel sunucu kopyasında 120 günlük, günlük kayan RES temel sınaması.
 
 ## scripts/server (1)
 

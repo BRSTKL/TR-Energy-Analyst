@@ -6,7 +6,7 @@ Proje güneş santralleri için ertesi günün saatlik üretim tahmini; her gün
 
 | Klasör / dosya | Ne yapar |
 |---|---|
-| `pipeline.ts` | Günlük akış: ağ → veriyi tazele → şampiyon değerlendirmesi → bütün sürümlerle tahmin → değişmez kayıt. `scripts/solar-forecast-daily.mts` yalnız bunu çağırır (launchd, Mac saatiyle 08:30 ve 10:00). |
+| `pipeline.ts` | Günlük akış: ağ → veriyi tazele → şampiyon değerlendirmesi → bütün sürümlerle tahmin → değişmez kayıt. `scripts/solar-forecast-daily.mts` yalnız bunu çağırır (sunucuda systemd, 09:30 ve 11:00 Türkiye; `scripts/server/README.md`). |
 | `registry.ts` | Sürümler (kimlik, eğitim penceresi, hata düzeltmesi, hava modeli birleşimi). Yeni yöntem buraya aday olarak eklenir. |
 | `forecast.ts` | Tek santralin tahmini (`forecastSolarPlant`) ve sayfadaki proje tahmini (`projectLiveForecast`): eğitim penceresi, model kurulumu, canlı hava girdisi. |
 | `data/` | Eğitim verisi: havuzdaki üretim (UEVM, yoksa geçici GZÜ), geçmiş hava tahmini, uydu, PTF (`production-data.ts`). |

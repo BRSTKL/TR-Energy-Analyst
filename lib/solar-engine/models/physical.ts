@@ -1,7 +1,7 @@
 /**
  * TR-Energy Analyst - Fiziksel güneş modeli (Aşama 22.2; DENENDİ, CANLIYA ALINMADI)
  *
- * Geriye dönük test 19.10.2026 (scripts/solar-candidates-backtest.mts; 55 konumlu güneş santrali, Ocak 2025 – Eylül 2026,
+ * Geriye dönük test 19.10.2026 (scripts/analysis/solar-candidates-backtest.mts; 55 konumlu güneş santrali, Ocak 2025 – Eylül 2026,
  * her ay önceki 4 ayla eğitim, kayıp saatler hariç, dengesizlik maliyeti TL/MWh): temel (sürüm 3) 107,0; saf fiziksel
  * 136,2 (temeli 10 / 55 santralde yener); karma 119,1 (9 / 55); ilk KGÜP 84,8. İkisi de temelden kötü: hava modelinin
  * saatlik ışınım hatası panel geometrisinin inceliğinden büyük. Kod referans ve sonraki adımlar (22.4 düzeltme katmanının

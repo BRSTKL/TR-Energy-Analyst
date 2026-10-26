@@ -2,7 +2,7 @@
  * Sektör taraması tür değişikliğinin kuru çalışması (PLAN Bekleyen işler: EPDK ↔ karne, 2b): EPİAŞ UEVM santral listesindeki
  * her santral için eski tür (addan) ve yeni tür (EPDK lisansı → UEVM kaynak kırılımı → ad;
  * lib/sector/plant-technology.ts). Yeni hedefler, çıkanlar ve çelişkiler listelenir. EPİAŞ'a gidilmez: liste
- * `.cache/epias/plant-lists.json` (scripts/epdk-karne-compare.mts --epias yazar).
+ * `.cache/epias/plant-lists.json` (scripts/analysis/epdk-karne-compare.mts --epias yazar).
  *
  *   npx tsx --tsconfig tsconfig.json scripts/sector-technology-check.mts [yıl=2026]
  */

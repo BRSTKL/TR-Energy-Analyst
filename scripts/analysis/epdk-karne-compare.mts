@@ -2,7 +2,7 @@
  * EPDK lisans listesi ile sektör karnesini karşılaştırır (Bekleyen işler: EPDK ↔ karne; güneş 15.10.2026).
  * Dosya scripts/tools/epdk-licenses-extract.py ile hazırlanır (kullanıcının EPDK dışa aktarımı).
  *
- *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/epdk-karne-compare.mts <GES|RES|HES> [epdk.json] [karne yılı=2026] [--json]
+ *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/analysis/epdk-karne-compare.mts <GES|RES|HES> [epdk.json] [karne yılı=2026] [--json]
  * `--json`: eksik santraller ve nedenleri .cache/epdk/<tür>-karne-gaps.json
  * `--epias` (VPN): taranmamış santraller EPİAŞ'ın UEVM santral listesinde (`injection-quantity-powerplant-list`) ve gerçek
  * zamanlı üretim santral listesinde (`powerplant-list`) aranır; listeler .cache/epias/plant-lists.json'a yazılır.

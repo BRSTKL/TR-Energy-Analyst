@@ -1,7 +1,7 @@
 /**
  * Sistem yönü ve makas tahmininin geçmişle sınaması (Aşama 14.3).
  *
- *   npx tsx --tsconfig tsconfig.json scripts/direction-backtest.mts [ilkAy] [sonAy]
+ *   npx tsx --tsconfig tsconfig.json scripts/analysis/direction-backtest.mts [ilkAy] [sonAy]
  *
  * Girdi: doğrulanmış MarketData (EPİAŞ / dosya). EPİAŞ'a gidilmez. Ay verilmezse eğitim penceresi dolan bütün aylar
  * test edilir (uygulama da böyle; lib/services/direction-forecast.ts).

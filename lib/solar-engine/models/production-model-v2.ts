@@ -14,7 +14,7 @@
  * Bilgi zamanı: bütün hava girdileri `d2` (info-time.ts; her saat `assertAvailable`); 1 / 0 gün önceki girdiler yalnız
  * açık `leakUpperBound` bayrağıyla (sızıntı üst sınırı ölçümü). λ sabit.
  *
- * DONMUŞ AYAR (15.10.2026, `scripts/forecast-design-2024.mts`, yalnız 2024 Temmuz–Aralık, 10 santral × 6 ay):
+ * DONMUŞ AYAR (15.10.2026, `scripts/analysis/forecast-design-2024.mts`, yalnız 2024 Temmuz–Aralık, 10 santral × 6 ay):
  * ortalama mutlak hata ÷ ortalama üretim — sürüm 1 %22,5, sürüm 2 %21,4, sürüm 2 süzgeçsiz %20,5, sürüm 2 sabit 20°
  * %22,1, ilk KGÜP %17,6. Önceden konan kural (2024'te en iyisi) gereği kısıntı süzgeci (3) KAPALI: `V2_FROZEN`.
  * Süzgeç kodu tasarım karşılaştırması için durur; 2025–2026 sınamasında kullanılmaz.

@@ -10,7 +10,7 @@ import { correctedOos } from "./learning/corrected-oos";
  * tam üretim ayından önceki 4 ay (geriye dönük testle aynı pencere); geçici üretim (EPİAŞ gerçek zamanlı üretimi,
  * lib/pool/provisional.ts) daha ileriyse son tam güne kadar 4 ay (18.10.2026). Hava: 2 gün önceki tahmin (`d2`). Tahmin girdisi: isteğin yapıldığı andaki en yeni ECMWF IFS 0,25° tahmini (lib/weather/live-forecast.ts);
  * koordinat başına 3 saat önbellek (.cache/forecast/live). Kurulu güç sınırı: eğitimdeki en yüksek üretim.
- * Bu bir açık referanstır: geçmiş başarısı geriye dönük testte (scripts/forecast-backtest.mts, "sürüm 3 kalıcılıksız").
+ * Bu bir açık referanstır: geçmiş başarısı geriye dönük testte (scripts/analysis/forecast-backtest.mts, "sürüm 3 kalıcılıksız").
  */
 
 import fs from "node:fs";

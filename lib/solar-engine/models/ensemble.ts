@@ -8,7 +8,7 @@
  *   - `weighted`: santral başına ağırlık ∝ 1 / hata². Hata: eğitimin `valFrom` öncesiyle kurulan modellerin `valFrom`
  *     sonrasındaki (eğitimin son ayı) ortalama mutlak hatası, ÜÇ modelin de verisi olan ortak saatlerde. Test / hedef
  *     gün görülmez.
- * Bir modelin verisi olmayan saatte birleşim yok (null). Geriye dönük test 19.10.2026 (scripts/solar-candidates-backtest.mts,
+ * Bir modelin verisi olmayan saatte birleşim yok (null). Geriye dönük test 19.10.2026 (scripts/analysis/solar-candidates-backtest.mts,
  * 54 santral, kayıp hariç TL/MWh): temel 104,8; ortalama 101,9; girdi ortalaması 101,3; ağırlıklı 101,1.
  * Bilgi anı: eğitim saatleri `d2` (ek modellerin kuralı lib/weather/nwp-models.ts), canlı saatler kesimden önce alınan en yeni
  * tahmin. BİLİNEN UYUMSUZLUK (ECMWF temelde de aynı): eğitim 48–51 saat önceki, canlı ≈ 21–47 saat önceki tahminle; ağırlıklar

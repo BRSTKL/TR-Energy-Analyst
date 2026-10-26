@@ -3,7 +3,7 @@
  * üretim ve TL karşılığı (kayıp × PTF; planlı = şirketin ilk KGÜP'ü ≈ 0; plansız = arıza / talimat). Devreye alma
  * dönemi kayıp sayılmaz. lib/forecast/curtailment.ts (`detectLostHours`, `monthlyLoss`).
  *
- *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/curtailment-scan.mts [epiasPlantId tarih=YYYY-MM-DD]
+ *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/analysis/curtailment-scan.mts [epiasPlantId tarih=YYYY-MM-DD]
  */
 
 import { prisma } from "@/lib/prisma";

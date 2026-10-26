@@ -1,6 +1,6 @@
 /**
  * TR-Energy Analyst - Geçmiş aylar için EPİAŞ gerçek zamanlı üretimi (GZÜ), yalnız geriye dönük test girdisi
- * (scripts/realtime-history.mts çeker, scripts/forecast-backtest-gzu.mts okur). Havuzdaki geçici üretimden (rt-<yıl>,
+ * (scripts/realtime-history.mts çeker, scripts/analysis/forecast-backtest-gzu.mts okur). Havuzdaki geçici üretimden (rt-<yıl>,
  * canlı eğitim ve karne) ayrıdır.
  */
 

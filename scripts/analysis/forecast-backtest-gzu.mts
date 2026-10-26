@@ -1,7 +1,7 @@
 /**
  * Canlı eğitim penceresinin geriye dönük testi (PLAN 21.4; kullanıcı kararı 18.10.2026: karne ile birlikte): model
  * solar-v3-nolag-gzu (lib/solar-engine/forecast.ts), her gün son tam güne kadar 4 ayla, geçici üretimle (EPİAŞ gerçek
- * zamanlı üretimi, GZÜ) eğitilir. Karşılaştırma aynı saatlerde: "sürüm 3 kalıcılıksız" (scripts/forecast-backtest.mts:
+ * zamanlı üretimi, GZÜ) eğitilir. Karşılaştırma aynı saatlerde: "sürüm 3 kalıcılıksız" (scripts/analysis/forecast-backtest.mts:
  * her test ayı önceki 4 ayın UEVM'siyle, ay başında bir kez) ve şirketin ilk KGÜP'ü.
  *
  * Bilgi zamanı (D günü tahmini, D−1 sabahı yazılır): GZÜ iki gün gecikir, D−1'de D−3'ün sonuna kadar elde
@@ -29,8 +29,8 @@
  * ayın UEVM'si ay başında elde sayılır; gerçekte ≈ 20'sinde yayımlanır): o model iyimserdir, "GZÜ penceresi ondan ucuz"
  * sonucu ihtiyatlıdır. Geçmiş GZÜ bugün çekilir; EPİAŞ sonradan düzeltiyorsa testteki GZÜ canlıdakinden biraz temizdir.
  *
- *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/forecast-backtest-gzu.mts [sonAy=2026-09] [--shard i/n]
- *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/forecast-backtest-gzu.mts --summary
+ *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/analysis/forecast-backtest-gzu.mts [sonAy=2026-09] [--shard i/n]
+ *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/analysis/forecast-backtest-gzu.mts --summary
  *
  * Santral seçmek için kimlikler eklenebilir. Santral sonuçları .cache/forecast/gzu-backtest-band/<id>.json (paylarla paralel çalışır, var olan atlanır); --summary
  * toplamı .cache/forecast/solar-backtest-gzu.json'a (--project: yalnız proje santralleri, solar-backtest-gzu-project.json) yazar.

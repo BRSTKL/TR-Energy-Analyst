@@ -939,7 +939,7 @@ Rüzgâr: beklenen = santralin güç eğrisi (100 m hız 0,5 m/s × 8 yön hücr
               üçünde basit gün içi kalıcılık kuralının altında kaldı; gün öncesi kural iki portföyde kazandırdı (%3,8–5,5), ikisinde kaybettirdi.
               Kalıcılık + yön birleşimi 14 portföyün 8&apos;inde düz kalıcılık kuralını geçti, 6&apos;sında gerisinde kaldı; toplam örneklem dışı
               kazanç 156,8 M&apos;dan 160,9 M TL&apos;ye çıktı (+%2,6). En büyük kayıp bir portföyde 0,76 M TL.
-              Kod: lib/analysis/direction-*.ts; piyasa sınaması scripts/direction-backtest.mts. <Tag kind="scenario" />
+              Kod: lib/analysis/direction-*.ts; piyasa sınaması scripts/analysis/direction-backtest.mts. <Tag kind="scenario" />
             </p>
           </Section>
 

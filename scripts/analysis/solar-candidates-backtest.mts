@@ -1,7 +1,7 @@
 import {calibratedBands} from "@/lib/solar-engine/models/calibrated-bands";
 /**
  * Güneş motoru aday sürümlerinin geriye dönük testi (Aşama 22): canlı temel (sürüm 3 kalıcılıksız) ile adaylar aynı
- * koşulda. scripts/forecast-backtest.mts ile aynı kurulum: konumlu güneş santralleri, Ocak 2025 – son tam ay, her test
+ * koşulda. scripts/analysis/forecast-backtest.mts ile aynı kurulum: konumlu güneş santralleri, Ocak 2025 – son tam ay, her test
  * ayı önceki 4 ayla eğitilir (walk-forward), hava `d2`, uyduyla kayıp saatler eğitimden ve "kayıp hariç" kümesinden
  * çıkarılır, maliyet dönemin kuralıyla (lib/forecast/production-backtest.ts). Aday kümeleri (`--set`):
  *   - `nwp` (varsayılan, 22.3): aynı sürüm 3 modeli ICON-EU ve GFS'in 2 gün önceki tahminiyle (lib/weather/nwp-models.ts;
@@ -34,7 +34,7 @@ import {calibratedBands} from "@/lib/solar-engine/models/calibrated-bands";
  *     o aydan önceki en çok 12 ayın örneklem dışı hatasıyla öğrenilir (sıfır fiyatlı ve uyduyla kayıp saatler hariç; son
  *     günler trainingLossFilter kuralıyla dışarıda).
  *
- *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/solar-candidates-backtest.mts [sonAy=YYYY-AA] [--project] [--set nwp|phys|gbm|prob|curt]
+ *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/analysis/solar-candidates-backtest.mts [sonAy=YYYY-AA] [--project] [--set nwp|phys|gbm|prob|curt]
  * --project: yalnız proje santralleri. Çıktı: .cache/forecast/solar-candidates-backtest-<küme>.json
  */
 

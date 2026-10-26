@@ -1,6 +1,6 @@
 /**
  * Günlük güneş tahmin kaydı: güneş tahmin motorunun günlük akışını çalıştırır (lib/solar-engine/pipeline.ts; kurallar ve
- * ayrıntı orada). Zamanlama scripts/launchd/ (Mac saatiyle 08:30 ve 10:00).
+ * ayrıntı orada). Zamanlama: sunucuda systemd (09:30 ve 11:00 Türkiye; scripts/server/README.md).
  *
  *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/solar-forecast-daily.mts [YYYY-MM-DD] [--late] [--dry]
  */

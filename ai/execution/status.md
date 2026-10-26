@@ -1,7 +1,7 @@
 # Durum: yol haritası nerede
 
-Kaynak [`PLAN.md`](../../PLAN.md) (aşamalar, kabul ölçütleri, "Bekleyen işler", "İlerleme kaydı"). Bu dosya yalnız
-yön verir; 22.10.2026 itibarıyla. Çalışma kuralı: bir aşama bitince PLAN'da `[x]` + tarih + commit ve ilerleme kaydına
+Kaynak [`PLAN.md`](../../PLAN.md) (süren aşamalar, "Bekleyen işler", son ilerleme kaydı); kapanan aşamalar ve eski
+kayıtlar [`docs/plan-arsiv.md`](../../docs/plan-arsiv.md). Bu dosya yalnız yön verir; 26.10.2026 itibarıyla. Çalışma kuralı: bir aşama bitince PLAN'da `[x]` + tarih + commit ve ilerleme kaydına
 satır; **sonraki aşamaya kullanıcıya sormadan geçilmez**.
 
 ## Aşamalar
@@ -25,11 +25,12 @@ satır; **sonraki aşamaya kullanıcıya sormadan geçilmez**.
 | 20 | Uyduyla kısıntı ve arıza kaybı | ▶ |
 | 21 | Tahmin motoru (güneş canlı; günlük kayıt, kendi kendine öğrenme) | ▶ |
 | 22 | Gelişmiş güneş tahmin motoru (sürüm yarışı, planlı kısıntı gölge sürümü, değişim uyarıları) | ▶ |
-| 23 | Rüzgâr tahmin motoru | kod hazır, Mac sınaması yarım; akışa bağlı değil |
+| 23 | Rüzgâr tahmin motoru | ▶ sunucuda günlük kayıt 24.10'dan (10:00 / 11:30); 28 günlük gölge kanıtı sürüyor |
 
 ## Bekleyen işler (PLAN "Bekleyen işler" özeti)
 
-- Rüzgâr motoru sınaması (Open-Meteo arşivlerini tamamla, geriye dönük testler).
+- Rüzgâr ve güneş gölge sürümlerinin 28 günlük karne kanıtı (güneş en erken Kasım ortası, rüzgâr Kasım sonu).
+- 2024 üretimi: Gökada denemesi güneşte maliyeti ~%1,1 düşürdü, bantları 1–3,5 puan düzeltti (26.10); diğer proje güneş santralleri sürüyor, rüzgâr denenmedi.
 - EPDK lisans listesi ↔ sektör karnesi eksikleri: taramaya ekleme planı kullanıcı onayı bekliyor.
 - Gerçek uzlaştırma verisiyle kalibrasyon (tartışılacak; "doğrulama paketi" sayfası hazır).
 - Çok yıllık (2021–2025) hidro verisiyle bütçe (sonraya).

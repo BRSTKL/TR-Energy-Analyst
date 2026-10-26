@@ -9,7 +9,7 @@
  * 48 saat önceki üretim girdisi olmadan (`noLag`): ileriye dönük tahmin sayfasının modeli (kamu üretim verisi aylık
  * yayımlandığı için canlıda bu girdi yok); geçmiş başarısı o sayfada gösterilir.
  *
- *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/forecast-backtest.mts [sonAy=karnedeki son tam ay]
+ *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/analysis/forecast-backtest.mts [sonAy=karnedeki son tam ay]
  * Çıktı: .cache/forecast/solar-backtest.json (gün bazında maliyetler: 15.6 bootstrap)
  */
 

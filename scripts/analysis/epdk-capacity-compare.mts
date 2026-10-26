@@ -1,7 +1,7 @@
 /**
  * EPDK lisans kurulu gücünü mevcut kurulu güç kaynağıyla karşılaştırır (yalnız analiz; hiçbir şey yazmaz).
  *
- *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/epdk-capacity-compare.mts [--json <dosya>]
+ *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/analysis/epdk-capacity-compare.mts [--json <dosya>]
  *
  * Kaynaklar: kullanıcının EPDK lisans dışa aktarımı (`.cache/epdk/solar-licenses.json`, yalnız güneş; MWm, MWe,
  * işletmedeki MWe), YEKDEM katılımcı önbelleği (`.cache/epias/yekdem-participants.json`; EPİAŞ'a gidilmez), havuzdaki

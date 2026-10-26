@@ -1,6 +1,6 @@
 /**
  * Geçmiş aylar için EPİAŞ gerçek zamanlı üretimi (GZÜ): canlı eğitim penceresinin geriye dönük testi için
- * (scripts/forecast-backtest-gzu.mts; PLAN 21.4). Havuzdaki geçici üretim dosyalarına (rt-<yıl>) yazmaz: orası canlı
+ * (scripts/analysis/forecast-backtest-gzu.mts; PLAN 21.4). Havuzdaki geçici üretim dosyalarına (rt-<yıl>) yazmaz: orası canlı
  * eğitimin ve karnenin kaynağıdır; geçmiş GZÜ yalnız testin girdisidir. Eşleşme ve istek scripts/realtime-sync.mts ile
  * aynı (lib/services/realtime-generation.ts: EIC ile gerçek zamanlı kimlik, ay ay istek). Çekilmiş ay atlanır (kaldığı
  * yerden sürer). VPN gerekir.

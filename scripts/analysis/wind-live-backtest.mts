@@ -1,5 +1,5 @@
 /** Güncel sunucu kopyasında 120 günlük, günlük kayan RES temel sınaması.
- * node --import tsx scripts/wind-live-backtest.mts --snapshot /private/tmp/kopya [--plant 123] [--through YYYY-MM]
+ * node --import tsx scripts/analysis/wind-live-backtest.mts --snapshot /private/tmp/kopya [--plant 123] [--through YYYY-MM]
  * Yalnız snapshot/results içine yazar; DB, ağ, günlük tahmin deposu ve uygulama önbelleği yazılmaz.
  * Eğitim penceresi canlıyla aynı; geçmiş hava d2, üretim nihai UEVM'dir. Veri revizyon geçmişi ve canlı yeni hava çalışması yeniden üretilemez.
  */
@@ -184,7 +184,7 @@ const rows: Array<{
 }> = [];
 const runtimeFailures: Array<{ id: number; reason: string }> = [];
 const sourceFiles = [
-  "scripts/wind-live-backtest.mts",
+  "scripts/analysis/wind-live-backtest.mts",
   "lib/wind-engine/learning/live-backtest.ts",
   "lib/wind-engine/data/wind-hours.ts",
   "lib/forecast/wind-forecast.ts",

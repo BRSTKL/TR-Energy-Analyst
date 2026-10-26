@@ -9,9 +9,15 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
 
 | Ajan | Dal | Dosyalar / klasörler | Başlangıç |
 |---|---|---|---|
-| Codex | codex/tahmin-bantlari-ruzgar → main | Onaylı tüm yerel paket; commit/push/deploy; web yeniden başlayacak | 25.10.2026 |
 
 ---
+
+## 26.10.2026 · Claude · Proje düzeni
+
+- Kök: `dev-server.log` (264 MB), `.DS_Store`, `Icon` → `.cache/arsiv/duzen-2026-10-26/kok/` (silinmedi). Main'e tamamen birleşmiş `bulut-sinama` ve `codex/kayip-dogrulama-rapor` dalları silindi; iki eski `claude/*` dalı ve çalışma kopyası kullanıcı isteğiyle bırakıldı (her birinde main'de olmayan birer commit var).
+- Belgeler: `ANALIZ_RAPORU.md`, `suggestion.md`, `DEMO_SENARYOSU.md` → `docs/`; eski `UYGULAMA_YETENEKLERI.md` → `docs/arsiv/`. `PLAN.md` 285 → 140 KB: plan gerekçesi, kapanan aşamalar (1–4, 6–13, 15–19) ve eski ilerleme kaydı `docs/plan-arsiv.md`'ye; PLAN'da aşama dizini, süren aşamalar (5, 14, 20–23), karar noktaları, bekleyen işler ve son 12 kayıt. Satır kaybı yok (karşılaştırıldı). Eskimiş notlar düzeltildi: status, known-issues, decisions, güneş README, EPİAŞ listesi, zamanlama yorumları.
+- Betikler: `scripts/tmp/` (81 dosya, git dışı) → arşiv. 12 analiz betiği `scripts/analysis/` altına (liste `scripts/README.md`); aylık eşitlemenin çağırdığı `sector-backtest` ve `budget-backtest` kökte kaldı. Atıflar güncellendi (tarihsel PICKUP, plan-arsiv, docs/superpowers hariç); 12 betik esbuild ile çözümlendi, biri gerçek veriyle çalıştı. `scripts/launchd/` taşınmadı: Mac'teki sunucu yedeği görevi etkin.
+- Kontroller: 744 test, tsc, lint, 60 rapor 0 hata; `ai/MODULE_MAP.md` ve graphify kod grafiği güncellendi. Belge düğümleri eski yolları gösteriyor: belgeler için `/graphify --update` (anlam çıkarımı) gerekli.
 
 ## 26.10.2026 · Claude · Canlı hava: Next.js fetch önbelleği (yüklendi)
 

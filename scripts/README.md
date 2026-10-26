@@ -7,8 +7,9 @@ Komutları **proje kökünden** çalıştırın. Her betiğin baş açıklaması
 |---|---|
 | `scripts/` kökü | Günlük/aylık eşitleme, tahmin, veri bakımı ve mevcut komut girişleri |
 | [`verify/`](verify/) | Bağımsız hesap ve veri doğrulaması |
+| [`analysis/`](analysis/) | Geriye dönük testler, aday sınamaları ve tek seferlik analizler (sunucu görevleri çağırmaz) |
 | [`server/`](server/README.md) | Sunucu yükleme, systemd görevleri ve işletim yardımcıları |
-| [`launchd/`](launchd/README.md) | macOS görev tanımları ve geçiş bilgisi |
+| [`launchd/`](launchd/README.md) | macOS görevleri: sunucu yedeğinin Mac'e günlük kopyası (etkin); güneş ve aylık eşitleme tanımları 22.10'dan beri sunucuda, Mac kopyaları yalnız geri dönüş için |
 | `tools/` | Ham kaynak çıkarıcıları ve sunucudan yedek alma aracı |
 
 Sunucu görevlerinin, `package.json` komutlarının ve eşitleme zincirinin kullandığı kök betik yolları korunur.
@@ -47,3 +48,12 @@ Kendi kayıtlı terminal komutlarınızda yeni dizini kullanın.
 
 Günlük tahmin ve eşitleme betiklerini sırf taşıma kontrolü için çalıştırmayın; canlı kayıt ve veri üretebilirler.
 Kontrol kapsamı: [`ai/quality/checks.md`](../ai/quality/checks.md).
+
+## Analiz betikleri (26.10.2026'da `scripts/analysis/` altına taşındı)
+
+Sunucu görevlerinin ve aylık eşitlemenin çağırdığı `sector-backtest.mts` ve `budget-backtest.mts` kökte kaldı. Taşınanlar
+aynı adla: `change-detection-scan`, `curtailment-scan`, `direction-backtest`, `epdk-capacity-compare`, `epdk-karne-compare`,
+`forecast-backtest`, `forecast-backtest-gzu`, `forecast-design-2024`, `solar-candidates-backtest`, `wind-candidates-backtest`,
+`wind-forecast-backtest`, `wind-live-backtest`. Eski yol `scripts/<ad>.mts` → yeni yol `scripts/analysis/<ad>.mts`; tarihsel
+kayıtlar (PICKUP, `docs/plan-arsiv.md`, `docs/superpowers/`) eski yolu anar. Betikler `@/` içe aktarımı kullanır, proje
+kökünden çalıştırılır.

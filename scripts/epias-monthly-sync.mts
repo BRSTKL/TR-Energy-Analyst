@@ -1,7 +1,7 @@
 /**
  * Aylık EPİAŞ eşitlemesi, kendiliğinden (güneş motoru yol haritası 2. adım; kullanıcı 18.10.2026: "1. yolu yapalım").
  *
- * Mac'te saatte bir çalışır (scripts/launchd/com.tr-energy.epias-monthly.plist). Hedef ay: geçen ay (Türkiye saati).
+ * Sunucuda saatte bir çalışır (systemd tr-energy-epias-monthly; scripts/server/README.md; eski Mac tanımı scripts/launchd/). Hedef ay: geçen ay (Türkiye saati).
  * Her çalışmada önce iki küçük günlük iş: geçici üretim (12 saatte bir) ve piyasa fiyatları (`market-sync.mts --recent`,
  * veri dünü içerene kadar her saat; içeriyorsa bir saniyede çıkar). Piyasa sayfası böylece her gün dünün verisini gösterir.
  *   1. Ay tamamlandıysa ya da başka bir çalışma sürüyorsa hiçbir şey yapmaz.

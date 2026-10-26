@@ -1,5 +1,5 @@
 /**
- * Rüzgâr üretim tahmini geriye dönük testi (kullanıcı 18.10.2026; güneşteki scripts/forecast-backtest.mts'in rüzgâr
+ * Rüzgâr üretim tahmini geriye dönük testi (kullanıcı 18.10.2026; güneşteki scripts/analysis/forecast-backtest.mts'in rüzgâr
  * karşılığı). Konumu ve geçmiş rüzgâr tahmini olan proje rüzgâr santralleri; test ayları Nisan 2025 – sonAy, her ay o aydan
  * önceki bütün verilerle eğitilir (2025-01'den, genişleyen pencere; eğitim ay başından 1 gün öncesine kadar: bilgi zamanı).
  * Model lib/forecast/wind-forecast.ts (güç eğrisi, `d2` tahmin rüzgârıyla). Adaylar: rüzgâr modeli (d2; temiz, ana
@@ -16,7 +16,7 @@
  * seçenekte bütün adaylar üç modelin de verisi olan ortak saatlerde değerlendirilir; modellerin hız ayrışması dilimine göre
  * hata ayrıca yazılır.
  *
- *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/wind-forecast-backtest.mts [sonAy=karnedeki son tam ay] [--models]
+ *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/analysis/wind-forecast-backtest.mts [sonAy=karnedeki son tam ay] [--models]
  * Çıktı: .cache/forecast/wind-backtest.json
  */
 

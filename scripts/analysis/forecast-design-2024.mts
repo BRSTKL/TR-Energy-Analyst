@@ -4,7 +4,7 @@
  * gündüz saatlerinde ortalama mutlak hata ÷ ortalama üretim; santral-ay ortalaması. Sürüm 3 (15.5 ek): donmuş sürüm 2 +
  * uyduyla işaretlenen kayıp saatlerin eğitimden çıkarılması (curtailment.ts `trainingLossFilter`).
  *
- *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/forecast-design-2024.mts
+ *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/analysis/forecast-design-2024.mts
  */
 
 import { prisma } from "@/lib/prisma";

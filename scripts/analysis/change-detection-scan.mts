@@ -3,7 +3,7 @@
  * arıza; lib/services/plant-change-warnings.ts) ve bağlanmayan konum tutarsızlığı. Varsayılan yalnız okur; `--write`
  * bağlanan uyarıları Üretim tahmini sayfasının okuduğu dosyaya yazar (günlük akış bunu her kayıttan sonra kendisi yapar).
  *
- *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/change-detection-scan.mts [--write]
+ *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/analysis/change-detection-scan.mts [--write]
  */
 
 import { prisma } from "@/lib/prisma";

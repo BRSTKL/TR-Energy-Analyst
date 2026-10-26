@@ -2,7 +2,7 @@
  * TR-Energy Analyst - Örneklem dışı tahmin serisi (Aşama 22.4: öğrenen düzeltme katmanının eğitim verisi)
  *
  * Her ay, o aydan önceki 4 ayla kurulan modelin o aydaki tahmini: temel (sürüm 3, ECMWF) ve ağırlıklı üç model birleşimi
- * (models/ensemble.ts). Geriye dönük testteki seriyle aynı tanım (scripts/solar-candidates-backtest.mts `--set gbm`): hava
+ * (models/ensemble.ts). Geriye dönük testteki seriyle aynı tanım (scripts/analysis/solar-candidates-backtest.mts `--set gbm`): hava
  * `d2` arşivi, eğitim temizliği trainingLossFilter, ağırlık doğrulaması eğitimin son ayı.
  * Tamamlanmış aylar önbellekte (`.cache/forecast/oos/<epiasPlantId>/<YYYY-AA>.json`; yeniden kurulabilir): her gün yalnız
  * içinde bulunulan ay yeniden hesaplanır; seriyi üreten kod değişince (`codeHash`) bütün aylar yeniden. Önbelleği doldurmak:
