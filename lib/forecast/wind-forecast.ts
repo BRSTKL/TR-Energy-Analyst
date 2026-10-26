@@ -42,7 +42,7 @@ export function windForecastFeatures(t: number, lead: "d1" | "d2"): FeatureInfo[
 export interface WindForecastModel {
   trainHours: number;
   excludedHours: number;
-  /** Tahmin (MWh); rüzgâr ya da eğri hücresi yoksa null */
+  /** Tahmin (MWh); rüzgâr yoksa ya da hız kesme hızının (FILL_CUTOUT_MS) üstünde ve eğitimde görülmemişse null */
   predict: (h: WindFcHour) => number | null;
   /** Yalnız o anda alınan ileri tarihli Forecast API girdisi; geçmiş sınamasında kullanılmaz. */
   predictLive: (h: WindFcHour, now: number) => number | null;
@@ -70,7 +70,8 @@ export function fitWindForecast(
     if (exp < LOSS_EXPECTED_MIN * capacityMw) return true;
     return !(h.uevm < LOSS_SHARE * exp || (h.kgup !== null && h.kgup < PLANNED_SHARE * exp));
   });
-  const curve = fitPowerCurve(keep.length >= MIN_TRAIN_HOURS ? keep : valid);
+  // Tahminde boş hız dilimi komşulardan doldurulur (26.10.2026: eğitimde görülmemiş hızda saat null kalıp günü düşürüyordu)
+  const curve = fitPowerCurve(keep.length >= MIN_TRAIN_HOURS ? keep : valid, { fillGaps: true });
   return {
     trainHours: keep.length,
     excludedHours: valid.length - keep.length,

@@ -34,8 +34,21 @@ describe("rüzgâr üretim tahmini", () => {
     expect(p).toBeGreaterThan(curve(9) * 0.85);
     expect(p).toBeLessThan(curve(9) * 1.15);
     expect(m.predict({ ...test, ws: { d1: null, d2: 13.8 } })!).toBeLessThanOrEqual(50);
-    expect(m.predict({ ...test, ws: { d1: null, d2: 30 } })).toBeNull(); // eğitimde görülmemiş hız
+    expect(m.predict({ ...test, ws: { d1: null, d2: 30 } })).toBeNull(); // kesme hızı üstü, eğitimde görülmemiş
     expect(m.predict({ ...test, ws: { d1: null, d2: null } })).toBeNull();
+  });
+
+  it("eğride boş hız aralığı komşulardan doldurulur; eğitimin üstünde düz, kesme hızının üstünde null", () => {
+    // 7–8 m/s hiç görülmemiş, eğitimde en yüksek hız ~14 m/s
+    const train = synth(2400).filter((h) => h.ws.d2! < 7 || h.ws.d2! >= 8);
+    const m = fitWindForecast(train, 50, { lead: "d2", trainingEnd: T0 + 2400 * HOUR });
+    const at = (ws: number) => m.predict({ t: Date.UTC(2025, 4, 10, 12), uevm: null, kgupFirst: null, ws: { d1: null, d2: ws }, dir: { d1: null, d2: 180 } });
+    const gap = at(7.5)!;
+    expect(gap).not.toBeNull();
+    expect(gap).toBeGreaterThan(at(6.7)!); // komşuların arasında, hızla artan
+    expect(gap).toBeLessThan(at(8.3)!);
+    expect(at(18)).toBeCloseTo(at(13.8)!, 5); // görülmemiş yüksek hız: en yüksek aralığın değeri
+    expect(at(26)).toBeNull(); // kesme hızı (25 m/s) üstü bilinmiyor
   });
 
   it("sızıntı: kesimden sonraki üretimle eğitim ve d1 (izinsiz) hata verir; d2 özellikleri kesimden önce", () => {

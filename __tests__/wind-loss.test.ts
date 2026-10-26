@@ -30,6 +30,20 @@ describe("rüzgâr kaybı", () => {
     expect(f(20, 0)).toBeNull();
   });
 
+  it("boş hız aralığını doldurma yalnız istenince (kayıp tespiti doldurmaz)", () => {
+    const train = [
+      ...Array.from({ length: 10 }, () => ({ uevm: 10, ws: 5.2, dir: 0 })),
+      ...Array.from({ length: 10 }, () => ({ uevm: 30, ws: 7.2, dir: 0 })),
+    ];
+    expect(fitPowerCurve(train)(6.2, 0)).toBeNull();
+    const f = fitPowerCurve(train, { fillGaps: true });
+    expect(f(6.2, 0)).toBeCloseTo(20, 5); // 5,0 ve 7,0 aralıklarının ortası
+    expect(f(1, 0)).toBe(10); // en düşük aralığın altı: en düşük değer
+    expect(f(15, 0)).toBe(30); // en yüksek aralığın üstü: en yüksek değer
+    expect(f(25.5, 0)).toBeNull(); // kesme hızı üstü
+    expect(f(5.2, 180)).toBe(10); // dolu aralıkta yön hücresi yoksa hız medyanı (değişmedi)
+  });
+
   it("arıza (plansız) ve kısıntı (planlı) saatleri bulunur, normal saatler kayıp sayılmaz", () => {
     const hours = synth(120, (h, i) => {
       if (i >= 500 && i < 548) h.uevm = 0; // 2 gün arıza: ilk KGÜP normal

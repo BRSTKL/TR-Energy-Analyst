@@ -13,6 +13,13 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
 
 ---
 
+## 26.10.2026 · Claude · Rüzgâr temel modelinde boş saat düzeltmesi (yüklendi)
+
+- Sorun: 27.10 rüzgâr kaydında 5 santral (Akyel-1/2, Hilal-2, Akkuş, Yahyalı) "hedef günün 24 saati eksik": `fitPowerCurve` eğitimde görülmemiş hız aralığında null dönüyordu; gölgeler tam gün üretiyordu.
+- Düzeltme: `fitPowerCurve(train, { fillGaps: true })` yalnız `fitWindForecast` son eğrisinde: boş hız dilimi komşu dolu dilimler arasında doğrusal, altında en düşük, üstünde en yüksek dilim; 25 m/s (`FILL_CUTOUT_MS`) üstü null. Kayıp tespiti ve eğitim temizliği doldurmasız. Dolu saatlerin değeri değişmedi.
+- Kanıt: 2 yeni test kırmızı → yeşil; Mac verisiyle Enko / Gain / Inavitas 41 santral tam 24 saat; 741 test, tsc, lint, 60 rapor 0 hata; sızıntı denetçisi: sızıntı yok. Not: rüzgâr geriye dönük test rakamları (eskiden atlanan uç hızlı saatler artık sayılıyor) yeniden çalıştırılana kadar eski.
+- Kullanıcı isteğiyle commit, main'e ileri sarma, push ve `deploy.sh`; yükleme web servisini yeniden başlatır.
+
 ## 26.10.2026 · Claude · Sektör değişikliği geri alındı, RES konumları (GRW)
 
 **Yapılan**

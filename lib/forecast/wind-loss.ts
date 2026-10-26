@@ -79,8 +79,18 @@ function correlation(a: number[], b: number[]): number | null {
 
 type Valid = WindLossInput & { uevm: number; ws: number; dir: number };
 
-/** Güç eğrisi: hız × yön hücresi medyanı, yoksa hız dilimi medyanı (≥ MIN_SPEED_CELL saat), yoksa null */
-export function fitPowerCurve(train: Array<{ uevm: number; ws: number; dir: number }>): (ws: number, dir: number) => number | null {
+/** Doldurmada kesme hızı (100 m, m/s): üstünde türbin durabilir, eğitimde görülmediyse değer bilinmez */
+export const FILL_CUTOUT_MS = 25;
+
+/**
+ * Güç eğrisi: hız × yön hücresi medyanı, yoksa hız dilimi medyanı (≥ MIN_SPEED_CELL saat), yoksa null.
+ * `fillGaps` (yalnız tahmin; kayıp tespiti boş saati atlar): hız dilimi de boşsa iki yandaki dolu dilim arasında doğrusal,
+ * dolu dilimlerin altında en düşük, üstünde en yüksek dilimin değeri; FILL_CUTOUT_MS üstü yine null.
+ */
+export function fitPowerCurve(
+  train: Array<{ uevm: number; ws: number; dir: number }>,
+  opts: { fillGaps?: boolean } = {}
+): (ws: number, dir: number) => number | null {
   const cells = new Map<string, number[]>();
   const speeds = new Map<number, number[]>();
   for (const h of train) {
@@ -91,7 +101,17 @@ export function fitPowerCurve(train: Array<{ uevm: number; ws: number; dir: numb
   }
   const cellMed = new Map(Array.from(cells, ([k, v]) => [k, v.length >= MIN_CELL ? median(v) : null] as const));
   const speedMed = new Map(Array.from(speeds, ([k, v]) => [k, v.length >= MIN_SPEED_CELL ? median(v) : null] as const));
-  return (ws, dir) => cellMed.get(`${bin(ws)}|${sector(dir)}`) ?? speedMed.get(bin(ws)) ?? null;
+  const known = Array.from(speedMed).filter((x): x is [number, number] => x[1] !== null).sort((a, b) => a[0] - b[0]);
+  const fill = (b: number): number | null => {
+    if (!opts.fillGaps || !known.length || b * WIND_BIN >= FILL_CUTOUT_MS) return null;
+    const hi = known.findIndex(([k]) => k > b);
+    if (hi === 0) return known[0][1];
+    if (hi === -1) return known[known.length - 1][1];
+    const [b0, v0] = known[hi - 1];
+    const [b1, v1] = known[hi];
+    return v0 + ((v1 - v0) * (b - b0)) / (b1 - b0);
+  };
+  return (ws, dir) => cellMed.get(`${bin(ws)}|${sector(dir)}`) ?? speedMed.get(bin(ws)) ?? fill(bin(ws));
 }
 
 /**
