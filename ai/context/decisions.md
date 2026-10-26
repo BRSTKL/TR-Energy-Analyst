@@ -34,6 +34,12 @@ yeniden üretin. Ayrıntılı geçmiş `PLAN.md` (süren aşamalar, son kayıtla
   "açık referans" olarak kaldı, iyileştirme iddiası yok. Fark ≈ 1/3 şirketin kendi planladığı kısıntı ve arıza, ≈ 2/3
   gerçek tahmin kalitesi (SCADA, tedarikçi). Fizik zinciri (Perez / NOCT / AC tavan) ve hibrit ridge temel modelden
   **kötü** çıktı (19.10): hata hava tahmininden geliyor, geometriden değil.
+- **2024 üretimi güneş tahminine kalıcı kazanç getirmedi** (26.10): 17 proje güneş santraline 2024 üretimi eklenince geçmiş
+  sınamada maliyet −%4,0 (Nisan 2025 – Eylül 2026), ama kazancın tamamı 2025 aylarında (−%5 ile −%29); Haziran 2026'dan
+  sonra tam 0. Sebep: düzeltme katmanı en çok önceki 12 ayın örneklem dışı hatasıyla öğreniyor; 2024 yalnız 2025'in
+  ısınma aylarını doldurdu, 12 aylık pencere dolunca fark yok. Canlı motor son 12 ayı kullandığı için 2024 canlıda
+  işe yaramaz. P10–P90 ham kapsama %75,6 → %77,3 (hedef %80), ama seçilen çarpanla ana sonuç %75,8 → %72,1 düştü. Rüzgâra
+  ve diğer projelere genişletme önerilmez.
 - **2026 maliyet artışı fiyattan, tahmin hatasından değil:** sapma yüzdesi aynı kaldı, makas büyüdü. Yıllar arası TL
   kıyası her zaman reel / USD ile verilir.
 - **Kurulu güç eski tahmini sistematik düşük değildi** (+%1,8 toplam); kural yine de resmî kayıt ister.
