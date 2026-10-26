@@ -64,3 +64,6 @@ scripts/tmp/
 
 # Üretilmiş santral dökümleri (şirket adları içerir)
 /eksik-veri-santraller.csv
+
+# graphify yerel önbelleği (makineye özel mutlak yollar; yeniden üretilir)
+/graphify-out/
