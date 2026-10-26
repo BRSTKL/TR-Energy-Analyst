@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { liveForecastUrl, liveResponseProblem, liveWeatherHours } from "@/lib/weather/live-forecast";
+import { liveFetchDays, liveForecastUrl, liveResponseProblem, liveWeatherHours } from "@/lib/weather/live-forecast";
 
 const HOUR = 3_600_000;
 
@@ -76,6 +76,21 @@ describe("Canlı hava tahmini hizalaması", () => {
       expect(calls.length, f).toBeGreaterThan(0);
       for (const c of calls) expect(c.slice(0, 400), f).toContain('cache: "no-store"');
     }
+  });
+
+  it("öbür günün son saati için bir gün fazla istenir (ışınım bir saat geri kayar)", () => {
+    const days = liveFetchDays(2);
+    expect(days).toBe(4);
+    const res = (n: number) => {
+      const time = Array.from({ length: n * 24 }, (_, i) => new Date(Date.UTC(2026, 9, 26) + i * HOUR).toISOString().slice(0, 16));
+      const v = time.map(() => 50);
+      return { latitude: 0, longitude: 0, hourly: { time, shortwave_radiation: v, direct_radiation: v, diffuse_radiation: v, temperature_2m: v, cloud_cover: v } };
+    };
+    const from = Date.UTC(2026, 9, 27); // duvar saati: yarın 00:00
+    const filled = (n: number) => liveWeatherHours(res(n), from, from + 48 * HOUR).filter((h) => h.ghi !== null).length;
+    expect(filled(3)).toBe(47); // eski istek: 28 Ekim 23:00–24:00 boş kalıyordu
+    expect(filled(days)).toBe(48);
+    expect(liveForecastUrl(37, 32, days)).toContain("forecast_days=4");
   });
 });
 

@@ -19,6 +19,7 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
 - Düzeltme: bütün sunucu tarafı `fetch`'lere `cache: "no-store"`; yeni saf `liveResponseProblem` (yarının 24 saati yoksa / değer boşsa) güneş ECMWF + NWP, rüzgâr ECMWF + ICON/GFS canlı yolunda önbellek okurken ve yeni yanıtta uygulanır, sorunlu yanıt önbelleğe yazılmaz. 3 test kırmızı → yeşil (+ her fetch'te no-store koruma testi); 743 test; sızıntı denetçisi: sızıntı yok.
 - Sunucuda bozuk canlı önbellek ve Next'in 55 Open-Meteo kaydı yedeğe taşındı: `/root/tr-energy-live-cache-bad-20261026/`. Bellek içi önbellek yalnız yeniden başlatmayla boşalır (yükleme yapar).
 - Kural: sunucu tarafında yeni `fetch` eklenirse `cache: "no-store"` (koruma testi listesi `__tests__/live-forecast.test.ts`).
+- Öbür gün 23/24: güneş canlı havası 3 gün isteniyordu, ışınım bir saat geri kaydığı için öbür günün 23:00–24:00 saati boş kalıyordu. `liveFetchDays(LIVE_DAYS)` = 4 gün (rüzgâr zaten 4). Test 47 → 48 saat; Mac'te Inavitas 11/11 iki gün 24/24. Yüklendi; sunucudaki 3 günlük canlı önbellek yedeğe taşındı.
 
 ## 26.10.2026 · Claude · Rüzgâr temel modelinde boş saat düzeltmesi (yüklendi)
 

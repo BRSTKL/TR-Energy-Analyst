@@ -18,7 +18,7 @@ import path from "node:path";
 import { fitSolarModelV2, type SolarHourV2 } from "@/lib/solar-engine/models/production-model-v2";
 import { detectLostHours, trainingLossFilter } from "@/lib/forecast/curtailment";
 import { curtailedForecast, curtailmentRate } from "@/lib/forecast/zero-price";
-import { LIVE_VARIABLES, liveForecastUrl, liveResponseProblem, liveWeatherHours } from "@/lib/weather/live-forecast";
+import { LIVE_VARIABLES, liveFetchDays, liveForecastUrl, liveResponseProblem, liveWeatherHours } from "@/lib/weather/live-forecast";
 import type { OpenMeteoHourly } from "@/lib/weather/weather-codec";
 import { SATELLITE_DELAY_DAYS } from "@/lib/weather/satellite";
 import { readPoolPlantInfo, readPoolYear, readProvisionalYear } from "@/lib/pool/pool-store";
@@ -91,7 +91,7 @@ async function cachedLiveWeather(lat: number, lon: number, fresh = false): Promi
     }
   // Süre sınırı: takılan istek günlük tahmin kaydını kesimden sonraya itmesin. no-store: Next.js sunucusu fetch yanıtını
   // varsayılan bir yıl saklıyordu (26.10.2026); eski ya da boş yanıt önbelleğe yazılmaz
-  const r = await fetch(liveForecastUrl(lat, lon, LIVE_DAYS + 1), { cache: "no-store", headers: { "User-Agent": "TR-Energy-Analyst/1.0 (non-commercial research)" }, signal: AbortSignal.timeout(30_000) });
+  const r = await fetch(liveForecastUrl(lat, lon, liveFetchDays(LIVE_DAYS)), { cache: "no-store", headers: { "User-Agent": "TR-Energy-Analyst/1.0 (non-commercial research)" }, signal: AbortSignal.timeout(30_000) });
   const body = await r.json();
   if (!r.ok || !body?.hourly?.time) throw new Error(`Open-Meteo: ${r.status} ${body?.reason ?? ""}`);
   const problem = liveResponseProblem(body.hourly, Date.now(), LIVE_VARIABLES);
@@ -118,7 +118,7 @@ async function cachedLiveNwp(lat: number, lon: number, fresh = false): Promise<{
   for (const wait of [0, 15_000, 15_000]) {
     if (wait) await new Promise((r) => setTimeout(r, wait));
     try {
-      const r = await fetch(liveForecastUrl(lat, lon, LIVE_DAYS + 1, NWP_MODELS), { cache: "no-store", headers: { "User-Agent": "TR-Energy-Analyst/1.0 (non-commercial research)" }, signal: AbortSignal.timeout(30_000) });
+      const r = await fetch(liveForecastUrl(lat, lon, liveFetchDays(LIVE_DAYS), NWP_MODELS), { cache: "no-store", headers: { "User-Agent": "TR-Energy-Analyst/1.0 (non-commercial research)" }, signal: AbortSignal.timeout(30_000) });
       const b = await r.json();
       const problem = r.ok && b?.hourly?.time ? liveResponseProblem(b.hourly, Date.now(), NWP_COLUMNS) : null;
       if (r.ok && b?.hourly?.time && !problem) {

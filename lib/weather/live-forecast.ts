@@ -39,6 +39,10 @@ export function liveForecastUrl(latitude: number, longitude: number, days: numbe
   return `https://api.open-meteo.com/v1/forecast?${q}`;
 }
 
+/** İstenecek gün sayısı: bugün + `days` gün + bir gün daha (ışınım damgadan önceki saatin ortalaması; son üretim saati
+ * 23:00–24:00 ertesi günün 00:00 damgasında). 26.10.2026'ya kadar bir eksik isteniyordu: öbür günün son saati boş kalıyordu. */
+export const liveFetchDays = (days: number) => days + 2;
+
 const wallMs = (t: string) => Date.parse(`${t}:00Z`);
 
 /**
