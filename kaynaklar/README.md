@@ -18,6 +18,26 @@ Türkiye satırlarında bilinen sorunlar:
 - "State/Province" sütunu kaymış; il "City" sütununda.
 - Bazı EPDK lisans numaraları yanlış kayıtta. Bu yüzden GEM koordinatı EPDK ilçe merkezinden 40 km'den uzaksa reddedilir.
 
+## Global Renewables Watch (`grw/`)
+
+Microsoft / Planet / The Nature Conservancy; uydu görüntüsünden derin öğrenmeyle bulunmuş türbin noktaları, 2017 4. çeyrek – 2024 2. çeyrek. Santral adı yok. Kod MIT; kullanımda makaleye atıf (arXiv:2503.14860). GitHub sürüm sayfasından indirilir.
+
+| Dosya | Sürüm | İçerik | Çıkarıcı | Çıktı | Kullanıldığı yer |
+|---|---|---|---|---|---|
+| `wind_all_2024q2_v1.gpkg` | v1.0 (2024q2), indirme 26.10.2026, SHA-256 `c859544f…0398a` | Dünya rüzgâr türbinleri (375.197 nokta, kurulum çeyreği) | `python3 -I scripts/tools/grw-wind-extract.py <dosya> .cache/grw/wind-tr.json 2024q2` (dış paket gerekmez) | `.cache/grw/wind-tr.json` (3.254 Türkiye türbini, 295 küme) | Konumu tahmini RES'ler için aday listesi (`scripts/grw-wind-candidates.mts`; yalnız okur) |
+
+Bilinen sınırlar: 2024 ortasından sonra kurulan santral ya da genişleme yok; model bazı türbinleri kaçırıyor (Türkiye'deki gerçek sayının altında). Aday kesin eşleşme değildir; konum uydu görüntüsünde doğrulanınca elle girilir.
+
+## TransitionZero Solar Asset Mapper (`tz-sam/`)
+
+Sentinel-2 uydu görüntüsünden makine öğrenmesiyle bulunmuş güneş santrali alanları; tahmini kapasite (panel alanından) ve kurulum aralığı. Santral adı yok. Lisans: CC BY-NC 4.0 (TransitionZero); kaynak gösterilir, ticari kullanım ayrı izin ister. Kullanıcı TransitionZero indirme formundan zip olarak indirir.
+
+| Dosya | Sürüm | İçerik | Çıkarıcı | Çıktı | Kullanıldığı yer |
+|---|---|---|---|---|---|
+| `TZ-SAM Q2-2026.zip` → `2026-Q2/2026-Q2_analysis_polygons.csv` (zip'ten yalnız bu ve veri özeti PDF'i açıldı) | 2026-Q2, indirme 26.10.2026, zip SHA-256 `02fd2bce…99478` | Dünya güneş santrali alanları (109.902; merkez, MW, kurulum aralığı) | `python3 -I scripts/tools/tz-sam-extract.py <csv> .cache/tz-sam/solar-tr.json 2026-Q2` (dış paket gerekmez) | `.cache/tz-sam/solar-tr.json` (3.668 Türkiye alanı, ≈ 23,9 GW) | Konumu tahmini GES'ler için aday listesi (`scripts/tz-sam-candidates.mts`; yalnız okur) |
+
+Bilinen sınırlar: 2026 2. çeyrekten sonra kurulan santral yok; kapasite panel alanından tahmin (EPDK MWm ile kıyaslanır, kısmen kurulmuş santralde düşük çıkar). Aday kesin eşleşme değildir; konum uydu görüntüsünde doğrulanınca elle girilir.
+
 ## EPDK üretim lisansları (`epdk/`)
 
 Kaynak: lisans.epdk.gov.tr, Elektrik Piyasası Üretim Lisansları sorgusu. Sorgu ekranı reCAPTCHA istediği için kullanıcı "Ana Kaynak" seçip Sorgula → Raporla ile `.xls` indirir. Özgün adlar: `Elektrik  Lisanslar <tür>_.xls`.

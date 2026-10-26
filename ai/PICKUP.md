@@ -13,6 +13,21 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
 
 ---
 
+## 26.10.2026 · Claude · Sektör değişikliği geri alındı, RES konumları (GRW)
+
+**Yapılan**
+- Kaydı olmayan, commit edilmemiş sektör karnesi değişikliği incelendi ve geri alındı: kalite süzgeci gevşetmesi (veri %50, sapma %80; pratikte bütün santrallere), kimlikli gevşek ad eşleşmesi (SOMA A ve B / ORHANELİ termik santrallerini RES yapıyordu), `guessTechnologyFromName` değişikliği, hidro sırası (EPDK önce: Berke 510 MW, Muratlı, Köprübaşı, Kandil barajlarını aynı adlı küçük "Reg. ve HES" lisansı yüzünden nehir tipi yapıyordu). Mac'teki `sector-2026.json` commit'teki kuralla `--rebuild` edildi: 1.014 santral, RES 175 / GES 118 / HES 90 TL/MWh medyan. Rapor 0 hata, 739 test.
+- `location-autofill.mts --epdk --res` (rüzgârda korelasyonsuz, yalnız birebir adlı tek ilçe) commit `2984c55` (codex dalı; push yok).
+- Global Renewables Watch rüzgâr verisi `kaynaklar/grw/`; çıkarıcı `scripts/tools/grw-wind-extract.py` → `.cache/grw/wind-tr.json`; aday listesi `scripts/grw-wind-candidates.mts` (yalnız okur). Commit edilmedi.
+- Kullanıcı Google Maps'te 16 aday türbin kümesini doğruladı; 16 RES konumu `USER` olarak Mac'te ve **sunucuda** yazıldı (8'inin notunda "EŞLEŞME ZAYIF"). Sunucu yedeği `/root/tr-energy-loc-backup-20261026/`. Sunucuda bu 16 santralin ECMWF / ICON-EU / GFS / ERA5 / IFS arşivi yeni koordinatla yeniden çekildi (152 istek, 0 hata), koordinatlar dosyalarla eşleşiyor.
+
+**Yarım / sıradaki**
+- Konumu tahmini kalan proje santralleri: GES 6 (Iğdır DGES, Yeni, G24-Kütahya, G3-Ağrı 1-2 / 2-2, Omicron Erciş; GEM noktası 38.3845, 43.2011 doğrulanmadı), RES 9 (Ardıçlı, Eber, Şule, Işıklar, R3-Muş-4, Beyyurdu, Menekşe, Saray Döküm (Van'da, muhtemelen Tekirdağ), Alibeyhüyüğü). Mac ile sunucu karşılaştırıldı: fark 7 RES'ti (Mac'te 25.10 akşamı kayıtsız yazılmış ilçe merkezi tahminleri). Kullanıcı kararıyla 6'sı (Eber, Şule, Işıklar, R3-Muş-4, Beyyurdu, Menekşe) sunucuya `DISTRICT_CENTER` olarak aynı notla yazıldı, hava arşivleri çekildi (60 istek, 0 hata; yedek `/root/tr-energy-loc-backup-20261026b/`). Saray Döküm sunucuda bilerek konumsuz: Mac'teki nokta Van / Saray, santral Tekirdağ / Saray'da. Artık tek fark bu.
+- TZ-SAM 2026-Q2 (kullanıcı indirdi; `kaynaklar/tz-sam/`, `scripts/tools/tz-sam-extract.py`, `scripts/tz-sam-candidates.mts`): Iğdır DGES ve G3-Ağrı 1-2 / 2-2 (ortak alan) kullanıcı onayıyla `USER` yazıldı (Mac + sunucu; not uydu görüntüsünde doğrulandığını iddia etmez). Sunucuda ECMWF / ICON / GFS / SARAH3 arşivi yeniden çekildi; güneş OOS önbelleği konuma bağlı değil, bu üçünün `.cache/forecast/oos/<id>` klasörü yedeğe taşınıp yeniden kuruldu (Iğdır: geçmiş yetersiz, no-data). Yedek `/root/tr-energy-loc-backup-20261026c/`. Yeni GES, G24-Kütahya, Omicron Erciş için TZ-SAM'da uyan alan yok; GEM'in 38.3845, 43.2011 noktası büyük ihtimalle Omicron ENGİL208 (Van / Edremit).
+- Umurlar (#8158) düzeltildi: GRW noktası (39.85165, 28.33081; r 0,697) başka santraldi. Kullanıcı Google Maps'te "Umurlar Rüzgar Santrali" işaretini buldu (Çakırca, Dursunbey): 39.65086, 28.56241, r 0,845. Mac + sunucu yazıldı, arşiv yenilendi. Zayıf 7 RES'in r'si 0,90–0,98 (bölge tutuyor, çiftlik ayırt edilmiyor). Eber (#12324) kullanıcı Google'daki "Eber Rüzgar Enerji Santrali" işaretiyle doğruladı: 38.46817, 30.38469, r 0,941 (Sultandağı ilçe merkezi 0,731; EPDK dökümündeki ilçe yanlış); Mac + sunucu yazıldı, arşiv yenilendi. Ardıçlı (#12164) GEM exact 38.153, 32.7913 (r 0,960; 40 km sınırına takılmıştı) kullanıcı uyduda türbinleri doğruladı, Mac + sunucu yazıldı, arşiv yenildi. Kalan RES (kullanıcı Maps'te bulamadı, ilçe merkezinde kalıyor): Işıklar / Menekşe / Beyyurdu GEM approximate, R3-Muş-4 = Kurtik Dağı RES (6 × 7 MW, Muş güneyi). Şule, Alibeyhüyüğü, Saray Döküm bulunamadı.
+- Dikkat (genel): güneş OOS önbelleği (`lib/solar-engine/learning/oos-series.ts`) yalnız kod değişince geçersiz olur, konum değişince olmaz: konum yazılan GES için klasör elle yenilenmeli.
+- Yeni dosyalar (GRW betikleri, kaynaklar/README, MODULE_MAP) commit bekliyor.
+
 ## 25.10.2026 · Codex · Doğrulama betiklerinin güvenli düzenlenmesi
 
 **Yapılan / karar**

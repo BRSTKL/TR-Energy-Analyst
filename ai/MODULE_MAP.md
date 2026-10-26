@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-419 dosya, 37 grup; baş açıklaması olmayan (sayfalar hariç): 29.
+423 dosya, 37 grup; baş açıklaması olmayan (sayfalar hariç): 30.
 
 ## Sayfalar (app/**/page.tsx) (21)
 
@@ -432,7 +432,7 @@
 - `components/wind-day-chart.tsx` — Rüzgâr santralinin bir günü: üretim (kayıp durumuna göre renkli), ilk KGÜP, beklenen üretim (MWh); altta 100 m rüzgâr (m/s)
 - `components/wind-loss-card.tsx` — "Son 12 ay"; verisi daha kısa santralde ay sayısı ("Verisi olan 6 ay")
 
-## scripts (kök) (68)
+## scripts (kök) (70)
 
 - `scripts/aggregator-benchmark.mts` — Toplayıcılar arası kıyası üretir (PLAN 8.7): .cache/epias/aggregator-benchmark-<yıl>.json: npx tsx --tsconfig tsconfig.json scripts/aggregator-benchmark.mts [yıl=2026] [bitiş=karnenin dönem sonu]
 - `scripts/aggregator-collect.mts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" olarak kayıtlı tüm katılımcıların santralleri .cache/epias/aggregator-membership.json'a yazılır.
@@ -459,6 +459,7 @@
 - `scripts/forecast-scorecard.mts` — Tahmin karnesi (PLAN 21.4; kural lib/solar-engine/learning/scorecard.ts): günlük tahmin kayıtları gerçekleşen üretimle.
 - `scripts/gip-cap-impact.mts` — GİP işlem sınırının etkisi (PLAN 18.3): geriye dönük testin gün içi stratejileri sınırsız, %13 ve %10 sınırla.
 - `scripts/gip-participation.mts` — GİP likiditesi ve toplayıcıların gerçekleşen katılımı (PLAN 18.1).
+- `scripts/grw-wind-candidates.mts` — Konumu tahmini (ilçe / il merkezi) ya da boş olan proje RES'leri için Global Renewables Watch türbin kümelerinden aday listesi.
 - `scripts/imbalance-prices-sync.mts` — EPİAŞ resmi dengesizlik fiyatlarını (sistem dengesizlik tutarı / miktarı) MarketData tablosuna yazar.
 - `scripts/installed-capacity-backfill.mts` — Proje santrallerinin kurulu gücünü EPİAŞ YEKDEM kayıtlarından, yoksa EPDK lisansından (güneş, rüzgâr, hidro) doldurur ve eski tahminin (en yüksek saatlik üretim) hatasını raporlar.
 - `scripts/launch-app.sh` — başlatıcısı (masaüstü ikonundan çağrılır).
@@ -489,6 +490,7 @@
 - `scripts/solar-oos-backfill.mts` — Öğrenen düzeltme katmanının örneklem dışı tahmin serisi önbelleğini doldurur (Aşama 22.4; lib/solar-engine/learning/oos-series.ts).
 - `scripts/system-attribution.mts` — Sistem yönü sekmesinin "Kimden geldi?" tablosu: havuzdaki her rüzgâr, güneş ve akarsu santralinin açık ve fazla saatlerde sistemi o yöne itmesi (lib/analysis/system-attribution.ts).
 - `scripts/system-sync.mts` — Sistem geneli saatlik serileri (kaynak türüne göre KGÜP ve UEVM, yük tahmini, uzlaştırma tüketimi (UEÇM), gerçek zamanlı tüketim, teslim edilen talimatlar) EPİAŞ'tan veri havuzuna (`data/pool/system/<yıl>.json.gz`) tamamlar.
+- `scripts/tz-sam-candidates.mts` — Konumu tahmini (ilçe / il merkezi) ya da boş olan proje GES'leri için TZ-SAM güneş santrali alanlarından aday listesi.
 - `scripts/umm-sync.mts` — Arıza / bakım bildirimlerini (piyasa mesaj sistemi) havuza çeker (Aşama 14.0).
 - `scripts/weather-models-sync.mts` — Ek hava modelleri arşivi (Aşama 22.3): konumlu güneş santralleri için ICON-EU ve GFS'in 2 gün önceki tahmini (lib/weather/nwp-models.ts).
 - `scripts/weather-sync.mts` — Hava verisi havuzu (PLAN 15.2): konumu olan santraller için Open-Meteo Previous Runs (ECMWF IFS 0,25°) saatlik verisi.
@@ -507,15 +509,17 @@
 
 - `scripts/server/deploy.sh` — GitHub'daki main'i sunucuya yükler (Mac'ten çalıştırılır): bash scripts/server/deploy.sh Sırayla: çekme, paketler değiştiyse npm ci, şema değiştiyse yedek + prisma db push, next build, web servisini yeniden başlatma ve sayfa denetimi.
 
-## scripts/tools (7)
+## scripts/tools (9)
 
 - `scripts/tools/epdk-licenses-extract.py`
 - `scripts/tools/gem-hydro-extract.py`
 - `scripts/tools/gem-tracker-extract.py`
+- `scripts/tools/grw-wind-extract.py` — Türbin noktaları da yazılır: bitişik çiftlikler tek kümeye düşebildiği için aday arayan betik daha sık yeniden kümeler
 - `scripts/tools/osm-places-extract.py`
 - `scripts/tools/osm-renewable-extract.py`
 - `scripts/tools/osm-wind-turbines-extract.py` — Tek bağlantılı kümeleme: 0,02° ızgara hücreleriyle komşu arama
 - `scripts/tools/server-backup.sh` — Sunucu verisinin Mac'e günlük kopyası (sunucu dışı yedek).
+- `scripts/tools/tz-sam-extract.py`
 
 ## scripts/verify (6)
 
