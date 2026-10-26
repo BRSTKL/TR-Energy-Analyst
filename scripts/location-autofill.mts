@@ -35,7 +35,9 @@
  * ışınımı rüzgârda anlamsız olduğu için korelasyon hesaplanmaz; kanıt lisans no / birebir ad ve EPDK ilçe sınırıdır. Aynı
  * adlı birden çok kayıt (Soma (Bilgin) / Soma (Polat)) santral adındaki parantezli ek ve EPİAŞ şirket adıyla GEM'in proje
  * parantezi / sahip / işletmeci adı karşılaştırılarak ayrılır (`companyTokens`); ayrılmazsa belirsiz.
- * `--res` yalnız `--gem` ile (OSM, EPDK ve ilçe kipleri güneşe göre).
+ * `--epdk --res`: rüzgâr lisansları (`.cache/epdk/res-licenses.json`); uydu ışınımı rüzgârda anlamsız olduğu için yalnız
+ * birebir adlı, tek il / ilçeye çıkan lisans kabul edilir (korelasyon ölçütü yok).
+ * `--res` yalnız `--gem` ya da `--epdk` ile (OSM ve ilçe kipleri güneşe göre).
  * `--district` (kullanıcı kararı 15.10.2026): yalnız ilçe merkezi aşaması. Adında il / ilçe adı geçen konumsuz santraller için
  * o yerin OSM düğümü (`.cache/osm/places-tr.json`, scripts/tools/osm-places-extract.py); aynı ölçüt (≥ 0,85, aynı adlı uzak
  * yer yakınsa belirsiz); `DISTRICT_CENTER` kaynağıyla (tahmin, "~"); korelasyon tutmayan boş kalır.
@@ -56,7 +58,7 @@ const DISTRICT = process.argv.includes("--district");
 const EPDK = process.argv.includes("--epdk");
 const GEM = process.argv.includes("--gem");
 const TECH = process.argv.includes("--res") ? "RES" : "GES";
-if (TECH === "RES" && !GEM) throw new Error("--res yalnız --gem ile kullanılır");
+if (TECH === "RES" && !GEM && !EPDK) throw new Error("--res yalnız --gem veya --epdk ile kullanılır");
 const MIN_R = 0.85;
 const AMBIGUOUS_KM = 10;
 const AMBIGUOUS_DR = 0.02;
@@ -361,12 +363,13 @@ if (GEM) {
     }
 }
 
-// EPDK il / ilçe kipi (--epdk; kullanıcının EPDK lisans dışa aktarımı, .cache/epdk/solar-licenses.json): santral adı EPDK tesis
+// EPDK il / ilçe kipi (--epdk; kullanıcının EPDK lisans dışa aktarımı, .cache/epdk/solar-licenses.json veya res-licenses.json): santral adı EPDK tesis
 // adıyla eşleşir (ad kelimelerinin hepsi, numara çelişkisi yok; yürürlükteki lisans önce), il / ilçenin yer düğümü
 // (`districtPoint`), aynı kabul ölçütü; `DISTRICT_CENTER` ("~")
 if (EPDK) {
   const placesDoc = JSON.parse(fs.readFileSync(path.join(process.cwd(), ".cache", "osm", "places-tr.json"), "utf8")) as { extractedAt: string; places: OsmPlace[] };
-  const epdkDoc = JSON.parse(fs.readFileSync(path.join(process.cwd(), ".cache", "epdk", "solar-licenses.json"), "utf8")) as {
+  const epdkFile = TECH === "RES" ? "res-licenses.json" : "solar-licenses.json";
+  const epdkDoc = JSON.parse(fs.readFileSync(path.join(process.cwd(), ".cache", "epdk", epdkFile), "utf8")) as {
     exportedAt: string;
     licenses: Array<{ licenseNo: string; status: string; plant: string; il: string; ilce: string; mwe: string }>;
   };
@@ -400,15 +403,22 @@ if (EPDK) {
       if (!seen.has(k)) seen.set(k, { lic: l, p: districtPoint(l.il, l.ilce, placesDoc.places) });
     }
     const scored = [];
-    for (const { lic, p } of seen.values()) scored.push({ lic, p, r: p ? await correlationAt(id, p.lat, p.lon) : NaN });
+    // Rüzgârda uydu ışınımı korelasyonu anlamsız: yalnız birebir ad kabul edilir
+    for (const { lic, p } of seen.values()) scored.push({ lic, p, r: p && TECH === "GES" ? await correlationAt(id, p.lat, p.lon) : NaN });
     const ok = scored.filter((x) => x.p && Number.isFinite(x.r)).sort((x, y) => y.r - x.r);
     const best = ok[0];
-    let verdict = !scored.some((x) => x.p) ? "ilçe yer listesinde yok" : !best ? "değerlendirilemedi (üretim verisi yetersiz)" : "boş bırakıldı (korelasyon < 0,85)";
+    let verdict = !scored.some((x) => x.p)
+      ? "ilçe yer listesinde yok"
+      : TECH === "RES"
+        ? "boş bırakıldı (birebir adlı tek lisans yok)"
+        : !best
+          ? "değerlendirilemedi (üretim verisi yetersiz)"
+          : "boş bırakıldı (korelasyon < 0,85)";
     // Birebir ad ve tek yer: korelasyon ölçütü aranmaz (lisans kaydı yer kanıtı; depolama / kısıntı korelasyonu düşürür)
     const exact = scored.filter((x) => x.p && strictSameName(t.name, x.lic.plant));
     if (exact.length && new Set(exact.map((x) => `${x.lic.il}/${x.lic.ilce}`)).size === 1) {
       const x = exact[0];
-      verdict = `KABUL (~ EPDK ilçesi, birebir ad; korelasyon ${nf(x.r)})`;
+      verdict = `KABUL (~ EPDK ilçesi, birebir ad${TECH === "GES" ? `; korelasyon ${nf(x.r)}` : ""})`;
       found.push({ id, name: t0.name, p: x.p!, r: x.r, lic: x.lic, exact: true });
     } else if (best && best.r >= MIN_R) {
       const rival = ok.find((x) => x !== best && x.r >= best.r - AMBIGUOUS_DR && km(x.p!, best.p!) > AMBIGUOUS_KM);
@@ -428,7 +438,7 @@ if (EPDK) {
         latitude: f.p.lat,
         longitude: f.p.lon,
         locationSource: "DISTRICT_CENTER",
-        locationRef: `Tahmin: EPDK lisans kaydında ${f.lic.il} / ${f.lic.ilce} (${f.lic.plant}, lisans ${f.lic.licenseNo}; EPDK dışa aktarımı ${epdkDoc.exportedAt}); nokta ${f.p.name} ${f.p.place === "city" ? "il" : "ilçe"} merkezi (OSM ${f.p.osm}); ${f.exact ? `EPDK'da adı birebir aynı tek lisans (yer kanıtı); uydu GHI–UEVM korelasyonu ${Number.isFinite(f.r) ? nf(f.r) : "hesaplanamadı"} (depolama / kısıntı düşürebilir)` : `uydu GHI–UEVM korelasyonu ${nf(f.r)} ≥ ${MIN_R}`}; santralin kendi konumu değil; © OpenStreetMap katkıcıları, ODbL; ${new Date().toISOString().slice(0, 10)}`,
+        locationRef: `Tahmin: EPDK lisans kaydında ${f.lic.il} / ${f.lic.ilce} (${f.lic.plant}, lisans ${f.lic.licenseNo}; EPDK dışa aktarımı ${epdkDoc.exportedAt}); nokta ${f.p.name} ${f.p.place === "city" ? "il" : "ilçe"} merkezi (OSM ${f.p.osm}); ${f.exact ? `EPDK'da adı birebir aynı tek lisans (yer kanıtı)${TECH === "GES" ? `; uydu GHI–UEVM korelasyonu ${Number.isFinite(f.r) ? nf(f.r) : "hesaplanamadı"} (depolama / kısıntı düşürebilir)` : ""}` : `uydu GHI–UEVM korelasyonu ${nf(f.r)} ≥ ${MIN_R}`}; santralin kendi konumu değil; © OpenStreetMap katkıcıları, ODbL; ${new Date().toISOString().slice(0, 10)}`,
       });
       console.log(`  #${f.id} ${f.name}: havuz ${r.pool ? "yazıldı" : "korundu"}, proje santrali ${r.projectPlants}`);
     }
