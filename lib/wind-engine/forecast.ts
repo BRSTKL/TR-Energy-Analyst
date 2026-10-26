@@ -29,6 +29,7 @@ import { loadWindPlantData } from "./data/wind-hours";
 import { fitWindForecast } from "@/lib/forecast/wind-forecast";
 import { hourMeanWind } from "@/lib/forecast/wind-loss";
 import { formatLocation } from "@/lib/epias-plant/location";
+import { liveResponseProblem } from "@/lib/weather/live-forecast";
 import type { LivePlantForecast, ProjectLiveForecast } from "@/lib/solar-engine/forecast";
 
 const H = 3_600_000,
@@ -166,7 +167,8 @@ async function computeWindForecast(
         if (
           !opts.fresh && now >= Date.parse(v.at) &&
           now - Date.parse(v.at) < 3 * H &&
-          v.body?.hourly?.time
+          v.body?.hourly?.time &&
+          !liveResponseProblem(v.body.hourly, now, ["wind_speed_100m"])
         )
           cached = v;
       } catch {
@@ -182,12 +184,16 @@ async function computeWindForecast(
           timezone: "Europe/Istanbul",
           forecast_days: "4",
         });
+        // no-store: Next.js sunucusu fetch yanıtını varsayılan bir yıl saklıyordu (26.10.2026)
         const res = await fetch(`https://api.open-meteo.com/v1/forecast?${q}`, {
+          cache: "no-store",
           signal: AbortSignal.timeout(30000),
         });
         if (!res.ok) throw new Error(`Open-Meteo HTTP ${res.status}`);
         const body = await res.json();
         if (!body.hourly?.time) throw new Error("Hava yanıtı boş");
+        const problem = liveResponseProblem(body.hourly, now, ["wind_speed_100m"]);
+        if (problem) throw new Error(`Open-Meteo canlı tahmini kullanılamaz: ${problem}`);
         cached = { at: new Date(now).toISOString(), body };
         await fs.mkdir(path.dirname(file), { recursive: true });
         await fs.writeFile(file, JSON.stringify(cached));

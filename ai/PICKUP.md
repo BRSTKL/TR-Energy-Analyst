@@ -13,6 +13,13 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
 
 ---
 
+## 26.10.2026 · Claude · Canlı hava: Next.js fetch önbelleği (yüklendi)
+
+- Sorun: güneş tahmin ekranında birçok santral 0/24 saat. Kök neden: Next.js 14 sunucu tarafı `fetch` yanıtını varsayılan bir yıl saklıyor (`.next/cache/fetch-cache`, `revalidate 31536000`); canlı Open-Meteo tahmini 22.10 yanıtından geliyordu (sunucuya geçişten beri ekran bayat). Günlük görevler Next dışında çalıştığı için resmî kayıt etkilenmedi.
+- Düzeltme: bütün sunucu tarafı `fetch`'lere `cache: "no-store"`; yeni saf `liveResponseProblem` (yarının 24 saati yoksa / değer boşsa) güneş ECMWF + NWP, rüzgâr ECMWF + ICON/GFS canlı yolunda önbellek okurken ve yeni yanıtta uygulanır, sorunlu yanıt önbelleğe yazılmaz. 3 test kırmızı → yeşil (+ her fetch'te no-store koruma testi); 743 test; sızıntı denetçisi: sızıntı yok.
+- Sunucuda bozuk canlı önbellek ve Next'in 55 Open-Meteo kaydı yedeğe taşındı: `/root/tr-energy-live-cache-bad-20261026/`. Bellek içi önbellek yalnız yeniden başlatmayla boşalır (yükleme yapar).
+- Kural: sunucu tarafında yeni `fetch` eklenirse `cache: "no-store"` (koruma testi listesi `__tests__/live-forecast.test.ts`).
+
 ## 26.10.2026 · Claude · Rüzgâr temel modelinde boş saat düzeltmesi (yüklendi)
 
 - Sorun: 27.10 rüzgâr kaydında 5 santral (Akyel-1/2, Hilal-2, Akkuş, Yahyalı) "hedef günün 24 saati eksik": `fitPowerCurve` eğitimde görülmemiş hız aralığında null dönüyordu; gölgeler tam gün üretiyordu.

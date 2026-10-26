@@ -6,7 +6,7 @@ export async function windRunMetadata() {
       try {
         const response = await fetch(
           `https://api.open-meteo.com/data/${model}/static/meta.json`,
-          { signal: AbortSignal.timeout(15_000) }
+          { cache: "no-store", signal: AbortSignal.timeout(15_000) }
         );
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const meta = await response.json();

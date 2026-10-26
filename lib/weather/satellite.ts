@@ -63,7 +63,7 @@ export async function fetchSatellite(latitude: number, longitude: number, startD
   for (const wait of [0, 5_000, 20_000, 60_000]) {
     if (wait) await new Promise((r) => setTimeout(r, wait));
     try {
-      const res = await fetch(`https://satellite-api.open-meteo.com/v1/archive?${q}`, { headers: { "User-Agent": "TR-Energy-Analyst/1.0 (non-commercial research)" } });
+      const res = await fetch(`https://satellite-api.open-meteo.com/v1/archive?${q}`, { cache: "no-store", headers: { "User-Agent": "TR-Energy-Analyst/1.0 (non-commercial research)" } });
       const body = await res.json();
       if (res.ok && body?.hourly?.time) return body;
       last = `${res.status} ${body?.reason ?? ""}`;

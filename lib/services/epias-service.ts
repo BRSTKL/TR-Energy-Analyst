@@ -117,6 +117,7 @@ export async function getEpiasTgt(forceRefresh = false): Promise<string> {
   params.append("password", password);
 
   const res = await fetch(CAS_URL, {
+    cache: "no-store",
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -262,7 +263,7 @@ async function fetchWithNetworkRetry(
     try {
       await acquireEpiasSlot();
       // VPN değişince kopan bağlantı yanıt vermeden askıda kalabilir: zaman aşımı ağ hatası sayılır ve tekrar denenir
-      const res = await fetch(url, { ...init, signal: init.signal ?? AbortSignal.timeout(EPIAS_TIMEOUT_MS) });
+      const res = await fetch(url, { cache: "no-store", ...init, signal: init.signal ?? AbortSignal.timeout(EPIAS_TIMEOUT_MS) });
       // Hız sınırı: bekleyip aynı isteği tekrarla (en fazla 3 kez); sonra 429 çağırana döner
       if (res.status === 429 && throttled < 3) {
         throttled++;

@@ -140,7 +140,7 @@ export async function runDailyForecast(opts: DailyForecastOptions = {}): Promise
   // Ağ hazır mı: Open-Meteo'ya erişim (en çok 10 dakika, kesime 20 dakikadan az kalmayacak şekilde)
   async function online(): Promise<boolean> {
     try {
-      return (await fetch(`https://api.open-meteo.com/data/${WEATHER_MODEL}/static/meta.json`, { signal: AbortSignal.timeout(10_000) })).ok;
+      return (await fetch(`https://api.open-meteo.com/data/${WEATHER_MODEL}/static/meta.json`, { cache: "no-store", signal: AbortSignal.timeout(10_000) })).ok;
     } catch {
       return false;
     }
@@ -180,7 +180,7 @@ export async function runDailyForecast(opts: DailyForecastOptions = {}): Promise
   async function lastRunInit(): Promise<string | null> {
     for (let i = 0; i < 3; i++) {
       try {
-        const meta = (await (await fetch(`https://api.open-meteo.com/data/${WEATHER_MODEL}/static/meta.json`, { signal: AbortSignal.timeout(15_000) })).json()) as { last_run_initialisation_time?: number };
+        const meta = (await (await fetch(`https://api.open-meteo.com/data/${WEATHER_MODEL}/static/meta.json`, { cache: "no-store", signal: AbortSignal.timeout(15_000) })).json()) as { last_run_initialisation_time?: number };
         return meta.last_run_initialisation_time ? new Date(meta.last_run_initialisation_time * 1000).toISOString() : null;
       } catch {
         await sleep(10_000);
@@ -204,7 +204,7 @@ export async function runDailyForecast(opts: DailyForecastOptions = {}): Promise
     return Promise.all(
       ["dwd_icon_eu", "ncep_gfs013", "ncep_gfs025"].map(async (model) => {
         try {
-          const meta = (await (await fetch(`https://api.open-meteo.com/data/${model}/static/meta.json`, { signal: AbortSignal.timeout(15_000) })).json()) as { last_run_initialisation_time?: number; last_run_availability_time?: number };
+          const meta = (await (await fetch(`https://api.open-meteo.com/data/${model}/static/meta.json`, { cache: "no-store", signal: AbortSignal.timeout(15_000) })).json()) as { last_run_initialisation_time?: number; last_run_availability_time?: number };
           return { model, runInit: iso(meta.last_run_initialisation_time), availableAt: iso(meta.last_run_availability_time) };
         } catch {
           return { model, runInit: null, availableAt: null };

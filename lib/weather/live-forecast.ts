@@ -41,6 +41,24 @@ export function liveForecastUrl(latitude: number, longitude: number, days: numbe
 
 const wallMs = (t: string) => Date.parse(`${t}:00Z`);
 
+/**
+ * Canlı yanıtın kullanılamama sebebi; sağlamsa null. Yarının (Türkiye saati, UTC+3) 24 saati zaman ekseninde olmalı ve
+ * `columns` sütunlarından en az biri o saatlerde değer taşımalı. 26.10.2026: Next.js sunucusunun fetch önbelleği 22 Ekim
+ * yanıtını döndürüyordu (tarih ekseni geride); boş değerli yanıt da aynı şekilde yakalanır.
+ */
+export function liveResponseProblem(hourly: { time: string[]; [column: string]: unknown }, now: number, columns: readonly string[]): string | null {
+  const wall = new Date(now + 3 * HOUR);
+  const day = new Date(Date.UTC(wall.getUTCFullYear(), wall.getUTCMonth(), wall.getUTCDate() + 1)).toISOString().slice(0, 10);
+  const first = hourly.time.indexOf(`${day}T00:00`);
+  const last = hourly.time.indexOf(`${day}T23:00`);
+  if (first < 0 || last < first) return `yanıt ${day} gününü kapsamıyor (${hourly.time[0] ?? "?"} – ${hourly.time[hourly.time.length - 1] ?? "?"})`;
+  const filled = columns.some((c) => {
+    const v = hourly[c];
+    return Array.isArray(v) && v.slice(first, last + 1).some((x) => x !== null && x !== undefined);
+  });
+  return filled ? null : `${day} saatlerinde değer yok`;
+}
+
 /** Yanıtı üretim saatlerine çevirir: [from, to) aralığındaki saatler, sırayla; değeri olmayan alan null. `suffix`: çok modelli
  * yanıtta modelin sütun soneki (ör. "_icon_eu") */
 export function liveWeatherHours(res: OpenMeteoHourly, from: number, to: number, suffix = ""): LiveWeatherHour[] {

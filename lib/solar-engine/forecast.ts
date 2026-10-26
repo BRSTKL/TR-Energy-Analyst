@@ -18,7 +18,7 @@ import path from "node:path";
 import { fitSolarModelV2, type SolarHourV2 } from "@/lib/solar-engine/models/production-model-v2";
 import { detectLostHours, trainingLossFilter } from "@/lib/forecast/curtailment";
 import { curtailedForecast, curtailmentRate } from "@/lib/forecast/zero-price";
-import { liveForecastUrl, liveWeatherHours } from "@/lib/weather/live-forecast";
+import { LIVE_VARIABLES, liveForecastUrl, liveResponseProblem, liveWeatherHours } from "@/lib/weather/live-forecast";
 import type { OpenMeteoHourly } from "@/lib/weather/weather-codec";
 import { SATELLITE_DELAY_DAYS } from "@/lib/weather/satellite";
 import { readPoolPlantInfo, readPoolYear, readProvisionalYear } from "@/lib/pool/pool-store";
@@ -38,6 +38,8 @@ const DAY = 24 * HOUR;
 const TR_OFFSET = 3 * HOUR;
 const CACHE_DIR = path.join(process.cwd(), ".cache", "forecast", "live");
 const CACHE_TTL_MS = 3 * HOUR;
+/** Çok modelli canlı yanıtın sütunları (Open-Meteo `_<model>` soneki): denetimde biri dolu yeter */
+const NWP_COLUMNS = NWP_MODELS.flatMap((m) => LIVE_VARIABLES.map((v) => `${v}_${m}`));
 /** Tahmin edilen gün sayısı (yarından itibaren) */
 export const LIVE_DAYS = 2;
 /** Bunun altında eğitim saati olan santralde uyarı (≈ 2 ayın gündüz saatleri) */
@@ -83,14 +85,17 @@ async function cachedLiveWeather(lat: number, lon: number, fresh = false): Promi
   if (!fresh)
     try {
       const c = JSON.parse(fs.readFileSync(file, "utf8")) as { res: OpenMeteoHourly; fetchedAt: string };
-      if (Date.now() - Date.parse(c.fetchedAt) < CACHE_TTL_MS) return c;
+      if (Date.now() - Date.parse(c.fetchedAt) < CACHE_TTL_MS && !liveResponseProblem(c.res.hourly, Date.now(), LIVE_VARIABLES)) return c;
     } catch {
       /* önbellek yok */
     }
-  // Süre sınırı: takılan istek günlük tahmin kaydını kesimden sonraya itmesin
-  const r = await fetch(liveForecastUrl(lat, lon, LIVE_DAYS + 1), { headers: { "User-Agent": "TR-Energy-Analyst/1.0 (non-commercial research)" }, signal: AbortSignal.timeout(30_000) });
+  // Süre sınırı: takılan istek günlük tahmin kaydını kesimden sonraya itmesin. no-store: Next.js sunucusu fetch yanıtını
+  // varsayılan bir yıl saklıyordu (26.10.2026); eski ya da boş yanıt önbelleğe yazılmaz
+  const r = await fetch(liveForecastUrl(lat, lon, LIVE_DAYS + 1), { cache: "no-store", headers: { "User-Agent": "TR-Energy-Analyst/1.0 (non-commercial research)" }, signal: AbortSignal.timeout(30_000) });
   const body = await r.json();
   if (!r.ok || !body?.hourly?.time) throw new Error(`Open-Meteo: ${r.status} ${body?.reason ?? ""}`);
+  const problem = liveResponseProblem(body.hourly, Date.now(), LIVE_VARIABLES);
+  if (problem) throw new Error(`Open-Meteo canlı tahmini kullanılamaz: ${problem}`);
   const c = { res: body as OpenMeteoHourly, fetchedAt: new Date().toISOString() };
   fs.mkdirSync(CACHE_DIR, { recursive: true });
   fs.writeFileSync(file, JSON.stringify(c));
@@ -103,7 +108,7 @@ async function cachedLiveNwp(lat: number, lon: number, fresh = false): Promise<{
   if (!fresh)
     try {
       const c = JSON.parse(fs.readFileSync(file, "utf8")) as { res: OpenMeteoHourly; fetchedAt: string };
-      if (Date.now() - Date.parse(c.fetchedAt) < CACHE_TTL_MS) return c;
+      if (Date.now() - Date.parse(c.fetchedAt) < CACHE_TTL_MS && !liveResponseProblem(c.res.hourly, Date.now(), NWP_COLUMNS)) return c;
     } catch {
       /* önbellek yok */
     }
@@ -113,13 +118,14 @@ async function cachedLiveNwp(lat: number, lon: number, fresh = false): Promise<{
   for (const wait of [0, 15_000, 15_000]) {
     if (wait) await new Promise((r) => setTimeout(r, wait));
     try {
-      const r = await fetch(liveForecastUrl(lat, lon, LIVE_DAYS + 1, NWP_MODELS), { headers: { "User-Agent": "TR-Energy-Analyst/1.0 (non-commercial research)" }, signal: AbortSignal.timeout(30_000) });
+      const r = await fetch(liveForecastUrl(lat, lon, LIVE_DAYS + 1, NWP_MODELS), { cache: "no-store", headers: { "User-Agent": "TR-Energy-Analyst/1.0 (non-commercial research)" }, signal: AbortSignal.timeout(30_000) });
       const b = await r.json();
-      if (r.ok && b?.hourly?.time) {
+      const problem = r.ok && b?.hourly?.time ? liveResponseProblem(b.hourly, Date.now(), NWP_COLUMNS) : null;
+      if (r.ok && b?.hourly?.time && !problem) {
         body = b;
         break;
       }
-      last = `${r.status} ${b?.reason ?? ""}`;
+      last = problem ?? `${r.status} ${b?.reason ?? ""}`;
       if (r.status === 400) break;
     } catch (e) {
       last = e instanceof Error ? e.message : String(e);

@@ -113,7 +113,7 @@ export async function fetchWindForecastArchive(latitude: number, longitude: numb
   for (let attempt = 0, minutely = 0; attempt < waits.length; attempt++) {
     if (waits[attempt]) await new Promise((r) => setTimeout(r, waits[attempt]));
     try {
-      const res = await fetch(`https://previous-runs-api.open-meteo.com/v1/forecast?${q}`, { headers: { "User-Agent": "TR-Energy-Analyst/1.0 (non-commercial research)" } });
+      const res = await fetch(`https://previous-runs-api.open-meteo.com/v1/forecast?${q}`, { cache: "no-store", headers: { "User-Agent": "TR-Energy-Analyst/1.0 (non-commercial research)" } });
       const body = await res.json();
       if (res.ok && body?.hourly?.time) return body as WindForecastResponse;
       last = `${res.status} ${body?.reason ?? ""}`;

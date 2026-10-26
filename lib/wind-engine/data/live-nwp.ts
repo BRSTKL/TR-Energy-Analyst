@@ -11,6 +11,7 @@ import {
   type WindNwpYear,
 } from "@/lib/weather/wind-nwp-archive";
 import { hourMeanWind } from "@/lib/forecast/wind-loss";
+import { liveResponseProblem } from "@/lib/weather/live-forecast";
 const H = 3600000;
 export async function liveWindNwp(
   model: WindNwpModel,
@@ -34,7 +35,7 @@ export async function liveWindNwp(
   } | null = null;
   try {
     const v = JSON.parse(await fs.readFile(file, "utf8"));
-    if (!fresh && v.at <= now && now - v.at < 3 * H && v.body?.hourly?.time) saved = v;
+    if (!fresh && v.at <= now && now - v.at < 3 * H && v.body?.hourly?.time && !liveResponseProblem(v.body.hourly, now, WIND_NWP_VARIABLES[model])) saved = v;
   } catch {
     /* yok */
   }
@@ -48,12 +49,16 @@ export async function liveWindNwp(
       timezone: "Europe/Istanbul",
       forecast_days: "4",
     });
+    // no-store: Next.js sunucusu fetch yanıtını varsayılan bir yıl saklıyordu (26.10.2026)
     const res = await fetch(`https://api.open-meteo.com/v1/forecast?${q}`, {
+      cache: "no-store",
       signal: AbortSignal.timeout(30000),
     });
     if (!res.ok) throw new Error(`${model}: Open-Meteo HTTP ${res.status}`);
     const body = await res.json();
     if (!body.hourly?.time?.length) throw new Error(`${model}: boş hava yanıtı`);
+    const problem = liveResponseProblem(body.hourly, now, WIND_NWP_VARIABLES[model]);
+    if (problem) throw new Error(`${model}: canlı tahmin kullanılamaz: ${problem}`);
     saved = { at: now, body };
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, JSON.stringify(saved));

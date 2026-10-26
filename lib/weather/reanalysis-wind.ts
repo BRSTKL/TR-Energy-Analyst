@@ -94,7 +94,7 @@ export async function fetchWind(model: WindModel, latitude: number, longitude: n
   for (let attempt = 0, minutely = 0; attempt < waits.length; attempt++) {
     if (waits[attempt]) await new Promise((r) => setTimeout(r, waits[attempt]));
     try {
-      const res = await fetch(`https://archive-api.open-meteo.com/v1/archive?${q}`, { headers: { "User-Agent": "TR-Energy-Analyst/1.0 (non-commercial research)" } });
+      const res = await fetch(`https://archive-api.open-meteo.com/v1/archive?${q}`, { cache: "no-store", headers: { "User-Agent": "TR-Energy-Analyst/1.0 (non-commercial research)" } });
       const body = await res.json();
       if (res.ok && body?.hourly?.time) return body as WindResponse;
       last = `${res.status} ${body?.reason ?? ""}`;
