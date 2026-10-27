@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-445 dosya, 38 grup; baş açıklaması olmayan (sayfalar hariç): 31.
+459 dosya, 38 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
 ## Sayfalar (app/**/page.tsx) (22)
 
@@ -22,7 +22,7 @@
 - `/account` (`app/account/page.tsx`)
 - `/compare` (`app/compare/page.tsx`) — Verinin son yılından sonraki yıl (YEKDEM'den çıkış bu yıl için sorulur)
 - `/login` (`app/login/page.tsx`) — Yalnız uygulama içi yol ("/..." ama "//..." değil): dışarıya yönlendirme olmasın.
-- `/market/gunluk` (`app/market/gunluk/page.tsx`) — Karma renkleri: rüzgâr / güneş / lisanssız güneş açık tonlar, termik koyu
+- `/market/gunluk` (`app/market/gunluk/page.tsx`)
 - `/market` (`app/market/page.tsx`) — Türkçe yüzde: "+%45"
 - `/methodology` (`app/methodology/page.tsx`) — Metodoloji: uygulamadaki ve rapordaki her rakamın nereden geldiği.
 - `/` (`app/page.tsx`) — Ana sayfa: uygulamayı ilk açan kişinin gördüğü özet.
@@ -31,7 +31,7 @@
 - `/sector/aggregators/[id]` (`app/sector/aggregators/[id]/page.tsx`) — Toplayıcı ayrıntısı (PLAN 9.2): kıyas tablosundaki bir satırın içi.
 - `/sector` (`app/sector/page.tsx`) — "2025" ya da "2026 (Ocak–Ağustos)"
 
-## API (app/api/**/route.ts) (63)
+## API (app/api/**/route.ts) (64)
 
 - `GET, PUT, DELETE /api/account/epias` — GET /api/account/epias: hesap e-postası ve kayıtlı EPİAŞ hesabının özeti (şifre dönmez).
 - `POST /api/account/epias/test` — POST /api/account/epias/test: kayıtlı (yoksa .env) EPİAŞ hesabıyla yeni bilet alarak bağlantıyı dener.
@@ -56,6 +56,7 @@
 - `GET /api/market/daily` — GET /api/market/daily?date=YYYY-AA-GG: Günlük piyasa panosu: günün PTF / SMF / sistem yönü, net yük ve akşam rampası, kaynak karması, aynı sınıftaki son 28 günün PTF bandı (lib/analysis/daily-market.ts).
 - `GET /api/market/direction` — GET /api/market/direction: Sistem yönü tahmininin geçmişle sınaması (Aşama 14.3): iki karar anı için model ve rakiplerin aylık ve toplam skorları, kalibrasyon ve kapı sonucu.
 - `GET /api/market/gip` — GET /api/market/gip: GİP likiditesi (PLAN 18.4): saatlik hacmin aya ve günün saatine göre dağılımı, toplayıcıların gerçekleşen katılımı (scripts/gip-participation.mts) ve uygulamanın saatlik işlem sınırı.
+- `GET /api/market/live` — GET /api/market/live?day=today|tomorrow: today: bugünün şu ana kadarki piyasa ve sistem verisi (günlük pano hesabıyla); tomorrow: yarının açıklanmış PTF'si, yük tahmini ve GÖP hacmi (yarın görünümü).
 - `GET /api/market` — "2026 (Ocak–Ağustos)", tam yıl için "2025"; ay ortasında biten dönem "2026 (Ocak – 19 Ekim)" ya da "1–19 Ekim 2026"; ay başında başlamayan ya da yıl aşan dönemde tarih aralığı
 - `POST /api/pool/plant` — POST /api/pool/plant { powerPlantId, startDay, endDay, kgupVersion?
 - `GET /api/projects/[id]/backtest` — GET /api/projects/[id]/backtest: Her santral için kaydırmalı geriye dönük testi iki fiyat rejiminde çalıştırır: - "project": projenin fiyat profili (mevzuat modunda her saat kendi tarihinin kuralıyla) - "rules2026": tüm veri 2026 kuralları…
@@ -106,7 +107,7 @@
 - `app/not-found.tsx` — Türkçe 404 (hata ayıklama testi 16.10.2026: Next'in İngilizce varsayılan sayfası çıkıyordu)
 - `app/projects/loading.tsx`
 
-## lib/analysis (38)
+## lib/analysis (41)
 
 - `lib/analysis/aggregator-benchmark.ts` — Toplayıcılar arası kıyas (PLAN 8.7): EPİAŞ'taki her toplayıcının portföyündeki lisanslı santraller için aynı yöntem: saatlik sapma (UEVM − ilk KGÜP), EPİAŞ resmi dengesizlik fiyatı.
 - `lib/analysis/aggregator-detail.ts` — Toplayıcı ayrıntısı (PLAN 9.2): Kıyas tablosundaki bir toplayıcının içi: santraller (tek başına maliyet, sektör medyanına göre), aylık netleşme ve sahiplerin (üreticilerin) portföye katkısı.
@@ -139,12 +140,15 @@
 - `lib/analysis/planning-efficiency.ts` — — Planlama Verimliliği & "Ne Olurdu?" Simülasyon Motoru: Tüm fonksiyonlar SAF (pure) olarak tasarlanmıştır: - Dışsal yan etkisi yoktur (No side-effects, no I/O, no DB).
 - `lib/analysis/plant-comparison.ts` — Santral / Teknoloji Karşılaştırma ve Capture Price Analizi: Her santral, teknoloji grubu (RES, HES, GES) ve portföy için aynı birim metrikleri üretir.
 - `lib/analysis/portfolio-netting.ts` — Dengeden Sorumlu Grup (DSG) Netleştirme Analizi: Santraller aynı dengeden sorumlu grupta olsaydı, dengesizlikler saat bazında grup düzeyinde netleşirdi: bir santralin fazlası diğerinin açığını kapatır.
+- `lib/analysis/price-limit.ts` — PTF fiyat limiti (tavan) uyarısı: Limitin kendisi EPDK / EPİAŞ kararıyla değişir ve elimizde resmî bir tablo yoktur; bu yüzden limit verideki platodan çıkarılır: son `PRICE_LIMIT_WINDOW_DAYS` günde en az `PRICE_LIMIT_MIN_HOURS` saat görüle…
 - `lib/analysis/river-curtailment.ts` — Akarsu santrallerinde olası kısıntı (sistem yönü sekmesi; 20.10.2026): Akarsuda su ya da hava modeli yok; rüzgâr ve güneşteki gibi "üretebileceği" hesaplanamaz.
 - `lib/analysis/scaling-impact.ts` — Tahmin Ölçeklemesinin Dengesizlik Maliyetine Etkisi: Tahmin serisi tek bir katsayıyla (Σ gerçekleşen / Σ tahmin) çarpılsaydı dengesizlik maliyeti ne olurdu?
 - `lib/analysis/sector-backtest.ts` — Geçmişle sınama (Aşama 12.2 ve 12.3): Raporun "ne olurdu" rakamları gerçekle karşılaştırılır: yöntem geçen yılın verisiyle çalıştırılır, bu yıl gerçekte ne olduğuna bakılır, hata ölçülür.
 - `lib/analysis/sector-loss.ts` — Sektörde uyduyla kayıp üretim özeti (PLAN 20.4): Santral × ay kayıp (lib/forecast/curtailment.ts `monthlyLoss`, devreye alma ayları hariç) gruplanır: bütün santraller, YEKA (adı yarışma koduyla başlar, "G4-…", ya da "YEKA" içerir) ve diğer…
+- `lib/analysis/snapshot-report.ts` — Anlık görüntü raporu (veri havuzu: lib/pool/snapshot-store.ts): Bir günün (hedef gün) serisi birçok çekimde görülür: ilk kez yarın olarak, ertesi gün bugün olarak.
 - `lib/analysis/system-attribution.ts` — Sistem yönü: sürükleyen sapmanın santrallere, şirketlere, toplayıcılara ve bölgelere paylaştırılması (sektör karnesi "Sistem yönü" sekmesi, "Kimden geldi?"; 20.10.2026)
 - `lib/analysis/system-drivers.ts` — Sistem yönünü ne belirledi? (sektör karnesi, "Sistem yönü" sekmesi): Her saat, her kaynak türü için sapma = UEVM − son KGÜP (MW); tüketim için sapma = yük tahmini − gerçek zamanlı tüketim, ayın ortanca farkı çıkarılarak (seviye kamu verisi…
+- `lib/analysis/tomorrow-view.ts` — Yarın görünümü (PTF açıklandıktan sonra, genelde 13:00–14:00): Yarının açıklanmış PTF'si, yük tahmini ve GÖP eşleşme hacmi, aynı sınıftaki son günlerin ortancasıyla ve fiyat limitiyle kıyaslanır.
 - `lib/analysis/yekdem-exit.ts` — YEKDEM çıkışları: hangi santraller serbest piyasaya çıktı ya da çıkacak?: Kural: YEKDEM fiyatları tesisin işletmeye giriş tarihinden itibaren 10 yıl uygulanır (5346 s.
 
 ## lib/auth (4)
@@ -240,13 +244,14 @@
 
 - `lib/plants/validation.ts` — Santral tanımı doğrulaması: proje oluşturma, santral ekleme ve santral düzenleme aynı kuralları kullanır.
 
-## lib/pool (11)
+## lib/pool (12)
 
 - `lib/pool/pool-codec.ts` — Veri havuzu: santral-yıl dosyasının biçimi (PLAN 7.1): EPİAŞ santral verisi bir kez çekilir ve havuzda durur; projeler, sektör karnesi ve toplayıcı analizleri aynı veriyi kullanır.
 - `lib/pool/pool-hours.ts` — Proje santralinin saatleri veri havuzundan (PLAN 7.7): Havuzdan okunan (poolBacked) santral için saatlik plan ve gerçekleşen, projenin dönemi içinde, santralin KGÜP sürümüyle alınır.
 - `lib/pool/pool-store.ts` — Veri havuzu: dosya okuma/yazma (PLAN 7.1): Havuz `data/pool/<epiasPlantId>/<yıl>.json.gz` dosyalarıdır (git dışı).
 - `lib/pool/pool-sync.ts` — Veri havuzu: eksik tamamlama (PLAN 7.2): Bir santral ve dönem istendiğinde önce havuza bakılır.
 - `lib/pool/provisional.ts` — Geçici üretim: EPİAŞ gerçek zamanlı üretimi (GZÜ) (kullanıcı 18.10.2026: "geçici üretim olarak ayrı sakla, UEVM gelince kesinleşsin; eğitim ve karne bunu kullansın")
+- `lib/pool/snapshot-store.ts` — Veri havuzu: EPİAŞ anlık görüntüleri (27.10.2026): EPİAŞ yarının tahminlerini (rüzgâr, yük) ve fiyatını yalnız SON hâliyle verir; "12:25'te ne biliniyordu" sorusu geçmişten öğrenilemez.
 - `lib/pool/system-codec.ts` — Veri havuzu: sistem geneli saatlik seriler (Türkiye toplamı; "sistem yönünü ne belirledi?")
 - `lib/pool/system-store.ts` — Veri havuzu: sistem geneli seriler dosyaları (biçim system-codec.ts): `<havuz>/system/<yıl>.json.gz`.
 - `lib/pool/system-sync.ts` — Sistem geneli serileri havuza tamamlama: `ensureSystemCoverage(ilkAy, sonAy, fetcher)`: aralıktaki her ay için havuza bakar; eksik ya da yenileme zamanı gelmiş (geçici) ayları EPİAŞ'tan çeker ve yıl belgesine yazar (umm-sync.ts ile aynı ak…
@@ -281,7 +286,7 @@
 - `lib/sector/period.ts` — Sektör analizlerinin dönemi: içinde bulunulan yılın sektör karnesinin dönem sonu (scripts/sector-collect.mts; piyasa verisi olan son gün).
 - `lib/sector/plant-technology.ts` — Sektör taramasında santral teknolojisi (PLAN Bekleyen işler: EPDK ↔ karne, adım 2b): Eskiden tür yalnız addan tahmin ediliyordu (`guessTechnologyFromName`); adında tür eki olmayan santraller ("OYMAPINAR", "BORÇKA", "HASAN UĞURLU") ve tanın…
 
-## lib/services (41)
+## lib/services (43)
 
 - `lib/services/aggregator-data.ts` — Toplayıcı kıyası ve ayrıntısı için veri okuma (PLAN 8.7, 9.2): Santral saatleri veri havuzundan (ilk KGÜP ve UEVM), türü ve sahibi sektör karnesi dosyalarından ya da havuz tanımından, fiyatlar veritabanındaki EPİAŞ resmi dengesizlik fiyatl…
 - `lib/services/aggregator-membership.ts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" ekiyle kayıtlı tüm katılımcıların santral listesi çekilir ve .cache/epias/ aggregator-membership.json'a yazılır.
@@ -299,6 +304,7 @@
 - `lib/services/imbalance-budget.ts` — Dengesizlik bütçesi için veri (PLAN 17): Projenin bugünkü santralleri için geçmiş yılların saatleri havuzdan (UEVM ve KGÜP) ve piyasa verisinden (PTF, SMF, sistem yönü) bütçe saatlerine çevrilir (lib/analysis/imbalance-budget.ts).
 - `lib/services/imbalance-prices.ts` — EPİAŞ resmi dengesizlik fiyatları: EPİAŞ Şeffaflık Platformu her saat için sistemin pozitif ve negatif dengesizlik tutarını (TL) ve miktarını (MWh) yayımlar.
 - `lib/services/installed-capacity.ts` — Kurulu güç kaynağı (EPİAŞ YEKDEM katılımcı listeleri, EPDK lisansları): Kural ve eşleştirme: lib/epias-plant/installed-capacity.ts.
+- `lib/services/live-day.ts` — Canlı gün: bugünün şu ana kadarki verisi ve yarının açıklanmış verisi (EPİAŞ'tan istek anında)
 - `lib/services/outage-notices.ts` — Rapor için EPİAŞ arıza / bakım bildirimleri (Aşama 12.4): havuzdaki bildirimler (data/pool/umm) santral havuzundaki UEVÇB listesiyle (readPoolPlantInfo) proje santrallerine eşleştirilir.
 - `lib/services/plant-change-warnings.ts` — Güneş santrallerinde değişim uyarıları (Aşama 22.7 bağlaması; kural lib/forecast/change-detection.ts)
 - `lib/services/plant-location.ts` — Santral konumunu kaydetme (PLAN 15.1): Konum EPİAŞ santral kimliğiyle havuzdaki santral tanımına yazılır (projede olmayan sektör santralleri dahil) ve aynı kimlikteki proje santrallerine (`PowerPlant`) kopyalanır.
@@ -318,6 +324,7 @@
 - `lib/services/sector-curtailment.ts` — Sektörde uyduyla kayıp üretim önbelleği (PLAN 20.4): Güneş: `scripts/sector-curtailment.mts` çıktısı `.cache/epias/sector-curtailment.json`.
 - `lib/services/sector-epdk-map.ts` — Sektör il haritası verisi: EPDK lisanslarının il toplamları (hesap lib/sector/epdk-by-province.ts) Dosya yoksa o tür null döner (kaynak: scripts/tools/epdk-licenses-extract.py).
 - `lib/services/sector.ts` — Sektör karnesi verisi (diskten): Sektör karnesi scripts/sector-collect.mts ile toplanır ve .cache/epias/sector-<yıl>.json'a yazılır; bu modül onu okur ve santralleri şirket dizinindeki (plant-owners-<yıl>.json) şirket kimliğiyle zenginleşt…
+- `lib/services/snapshot-capture.ts` — EPİAŞ anlık görüntüsü çekimi (veri havuzu: lib/pool/snapshot-store.ts): Her çekimde altı istek: yarın için rüzgâr tahmini, yük tahmini, PTF ve KGÜP (yarının KGÜP'ü 27.10.2026'da HTTP 400 verdi; ne zaman sorulabilir olduğunu görmek için den…
 - `lib/services/system-attribution.ts` — Sistem yönü "Kimden geldi?": scripts/system-attribution.mts çıktısını (.cache/epias/system-attribution.json) okur, seçilen yıl, yön ve kaynak için şirket, toplayıcı ya da santral düzeyinde toplar (lib/analysis/system-attribution.ts).
 - `lib/services/system-drivers.ts` — Sistem yönünü ne belirledi? Veri toplama (hesap lib/analysis/system-drivers.ts'te): Havuzdaki sistem geneli serileri (data/pool/system/<yıl>.json.gz; scripts/system-sync.mts) ile MarketData'daki doğrulanmış sistem yönü saat saat birleştiri…
 - `lib/services/validation-pack.ts` — Kör doğrulama paketi (PLAN, Bekleyen işler: kalibrasyon): Şirketten veri istemeden raporun gerçeğe yakınlığını ölçmek için: bir ay için, açık veriyle hesapladığımız uzlaştırma tutarlarını tek sayfada göstermek; şirket yalnız "faturanızla f…
@@ -397,7 +404,7 @@
 - `lib/wind-engine/pipeline.ts` — RES günlük akışı: taze girdiler, kanıtla sürüm seçimi, kesimden önce değişmez kayıt.
 - `lib/wind-engine/registry.ts` — Rüzgâr günlük kayıt sürümleri.
 
-## components (50)
+## components (53)
 
 - `components/aggregator-benchmark-tab.tsx` — Sektör karnesi · Toplayıcılar sekmesi (PLAN 9.1): EPİAŞ'taki toplayıcıların aynı yöntemle kıyası.
 - `components/budget-tab.tsx` — Planlama sayfasının "2027 bütçesi" sekmesi (PLAN 17.3): gelecek yılın aylık dengesizlik + KÜPST bütçesi, senaryolar ve kötü durum aralığı.
@@ -415,7 +422,10 @@
 - `components/market-data-status.tsx` — Sonuç sayfasında her zaman görünen piyasa verisi göstergesi: projenin saatlerinin ne kadarının EPİAŞ'tan çekilmiş (veya dosyadan yüklenmiş) fiyatla hesaplandığı, son çekim zamanı ve ay ay durum.
 - `components/market-data-upload-dialog.tsx` — EPİAŞ web servislerine erişilemediğinde (örn. yurt dışı IP engeli), Şeffaflık Platformu'ndan indirilen PTF / SMF / Sistem Yönü / GİP AÖF raporlarını dosya olarak yükleme diyaloğu.
 - `components/market/chart-card.tsx` — Doğrulanmış renk seti: seçilen dönem vurgulu, önceki yıl gri; sistem yönü kırmızı (açık) ↔ mavi (fazla), dengede gri
+- `components/market/daily-dashboard.tsx` — Karma renkleri: rüzgâr / güneş / lisanssız güneş açık tonlar, termik koyu
 - `components/market/daily-table.tsx` — Günlük piyasa panosunun saatlik tablosu (ana sayfada ve /market/gunluk'te aynı).
+- `components/market/price-limit-note.tsx` — Fiyat limiti notu.
+- `components/market/tomorrow-view.tsx`
 - `components/method-link.tsx` — Metodoloji sayfasındaki ilgili bölüme küçük bağlantı ("Bu rakam nereden geliyor?")
 - `components/netting-card.tsx` — Dengeden sorumlu grup (DSG) netleştirme faydası: santrallerin tek başına ve grup halinde netleşmiş dengesizlik maliyetlerini karşılaştırır.
 - `components/plant-comparison-card.tsx` — Santralleri, teknoloji gruplarını (RES / HES / GES) ve portföyü aynı birim metriklerle yan yana gösterir.
@@ -450,7 +460,7 @@
 - `components/wind-day-chart.tsx` — Rüzgâr santralinin bir günü: üretim (kayıp durumuna göre renkli), ilk KGÜP, beklenen üretim (MWh); altta 100 m rüzgâr (m/s)
 - `components/wind-loss-card.tsx` — "Son 12 ay"; verisi daha kısa santralde ay sayısı ("Verisi olan 6 ay")
 
-## scripts (kök) (59)
+## scripts (kök) (60)
 
 - `scripts/aggregator-benchmark.mts` — Toplayıcılar arası kıyası üretir (PLAN 8.7): .cache/epias/aggregator-benchmark-<yıl>.json: npx tsx --tsconfig tsconfig.json scripts/aggregator-benchmark.mts [yıl=2026] [bitiş=karnenin dönem sonu]
 - `scripts/aggregator-collect.mts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" olarak kayıtlı tüm katılımcıların santralleri .cache/epias/aggregator-membership.json'a yazılır.
@@ -495,6 +505,7 @@
 - `scripts/sector-technology-check.mts` — Sektör taraması tür değişikliğinin kuru çalışması (PLAN Bekleyen işler: EPDK ↔ karne, 2b): EPİAŞ UEVM santral listesindeki her santral için eski tür (addan) ve yeni tür (EPDK lisansı → UEVM kaynak kırılımı → ad; lib/sector/plant-technology…
 - `scripts/sector-wind-curtailment.mts` — Sektörde rüzgâr santrallerinin kayıp üretimi (sektör sayfası, "Kayıp üretim" kartının Rüzgâr alt başlığı; kullanıcı 18.10.2026): sektör karnelerinin (2025, 2026) konumu ve rüzgâr verisi olan lisanslı rüzgâr santralleri.
 - `scripts/smoke-test.mts` — Duman testi (hata ayıklama testi 16.10.2026'nın otomatik hâli): çalışan geliştirme sunucusunda bütün sayfaları gezer.
+- `scripts/snapshot-capture.mts` — EPİAŞ anlık görüntüsü: yarının rüzgâr / yük tahmini, PTF ve KGÜP durumu, bugünün tahminleri (lib/services/snapshot-capture.ts).
 - `scripts/snow-sync.mts` — Sektör karnesindeki konumu olan lisanslı güneş santralleri için ERA5 saatlik kar derinliğini (lib/weather/snow.ts) havuza çeker: 2025-01-01'den 6 gün öncesine.
 - `scripts/solar-forecast-daily.mts` — Günlük güneş tahmin kaydı: güneş tahmin motorunun günlük akışını çalıştırır (lib/solar-engine/pipeline.ts; kurallar ve ayrıntı orada).
 - `scripts/solar-oos-backfill.mts` — Öğrenen düzeltme katmanının örneklem dışı tahmin serisi önbelleğini doldurur (Aşama 22.4; lib/solar-engine/learning/oos-series.ts).
@@ -512,7 +523,7 @@
 - `scripts/wind-sync.mts` — Gerçekleşen rüzgâr (rüzgâr kayıp tespiti; lib/weather/reanalysis-wind.ts): konumu olan proje rüzgâr santralleri için ERA5 (0,25°) ve ECMWF IFS (9 km) saatlik 100 m hız / yön, 2025-01-01'den dünkü güne.
 - `scripts/yekdem-exit-sync.mts` — YEKDEM çıkış taraması için EPİAŞ YEKDEM listelerini yeniler (VPN gerekir): - kimlikli santral listesi 2014 → bu yıl (+ yıl sonundaysa gelecek yıl): .cache/epias/yekdem-<yıl>.json - katılımcı listesi (ad, şirket, kurulu güç): .cache/epias/y…
 
-## scripts/analysis (13)
+## scripts/analysis (16)
 
 - `scripts/analysis/change-detection-scan.mts` — Değişim algılama taraması (Aşama 22.7): proje güneş santrallerinde bağlanan uyarılar (kapasite değişimi, son / süren uzun arıza; lib/services/plant-change-warnings.ts) ve bağlanmayan konum tutarsızlığı.
 - `scripts/analysis/curtailment-scan.mts` — Uydu ışınımıyla kısıntı / arıza taraması (PLAN 15.5, 20.1): konumlu güneş santralleri, yıl başına kayıp saat, kayıp üretim ve TL karşılığı (kayıp × PTF; planlı = şirketin ilk KGÜP'ü ≈ 0; plansız = arıza / talimat).
@@ -523,6 +534,9 @@
 - `scripts/analysis/forecast-backtest-gzu.mts` — Canlı eğitim penceresinin geriye dönük testi (PLAN 21.4; kullanıcı kararı 18.10.2026: karne ile birlikte): model solar-v3-nolag-gzu (lib/solar-engine/forecast.ts), her gün son tam güne kadar 4 ayla, geçici üretimle (EPİAŞ gerçek zamanlı ür…
 - `scripts/analysis/forecast-backtest.mts` — Güneş üretim tahmini geriye dönük testi (PLAN 15.5): konumu ve hava verisi olan santraller, Ocak 2025 – son tam ay.
 - `scripts/analysis/forecast-design-2024.mts` — Üretim tahmini sürüm 2 tasarımı (PLAN 15.5 öncesi): YALNIZ 2024 verisi.
+- `scripts/analysis/ptf-load-evidence.mts` — Kanıt: yarının fiyatını yorumlamak için hangi veri işe yarıyor?
+- `scripts/analysis/res-forecast-price-evidence.mts` — Kanıt: EPİAŞ'ın sistem geneli rüzgâr tahmini (/renewables/data/res-generation-and-forecast, 15 dakikalık üretim ve tahmin) fiyat okumasına ne katıyor?
+- `scripts/analysis/snapshot-report.mts` — Anlık görüntü raporu: hangi serinin saat kaçta yayımlandığı, sürümler arası değişim, hangi çekimin rüzgâr tahmini gerçekleşene daha yakın (lib/analysis/snapshot-report.ts; veri `snapshots/`, scripts/snapshot-capture.mts).
 - `scripts/analysis/solar-candidates-backtest.mts` — Güneş motoru aday sürümlerinin geriye dönük testi (Aşama 22): canlı temel (sürüm 3 kalıcılıksız) ile adaylar aynı koşulda.
 - `scripts/analysis/wind-candidates-backtest.mts` — Rüzgâr motoru aday sürümlerinin geriye dönük testi (Aşama 23.3–23.8; güneşteki scripts/analysis/solar-candidates-backtest.mts'in rüzgâr karşılığı).
 - `scripts/analysis/wind-forecast-backtest.mts` — Rüzgâr üretim tahmini geriye dönük testi (kullanıcı 18.10.2026; güneşteki scripts/analysis/forecast-backtest.mts'in rüzgâr karşılığı).
