@@ -12,11 +12,11 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
 
 ---
 
-## 27.10.2026 · Claude · EPİAŞ anlık görüntü işi (yerelde, kurulum onay bekliyor)
+## 27.10.2026 · Claude · EPİAŞ anlık görüntü işi (yüklendi ve sunucuda kuruldu)
 
 - **Yapılan:** `lib/pool/snapshot-store.ts` (yaz-bir-kez `data/pool/snapshots/<çekim günü>/<SSDD>.json.gz`), `lib/services/snapshot-capture.ts` (yarın: rüzgâr tahmini `/renewables/data/res-generation-and-forecast`, yük tahmini, PTF, KGÜP; bugün: rüzgâr ve yük tahmini), `scripts/snapshot-capture.mts` (`--dry`), `lib/analysis/snapshot-report.ts` + `scripts/analysis/snapshot-report.mts`, `scripts/server/systemd/tr-energy-snapshot.{service,timer}` (08:02–13:02 saatlik, 12:25, 13:30, 14:02; `Persistent=false`), testler (`snapshot-store`, `snapshot-report`). UMM dahil değil (kullanıcı kararı). Yerelde çekim ve rapor geçici havuzda denendi (çekim yaklaşık 5 KB).
 - **Bulgu:** EPİAŞ sistem rüzgâr tahminini yayımlıyor (Haziran–Ekim 2026'da tahmin + dünkü artık fiyat hatasını %15,9 azalttı, `scripts/analysis/res-forecast-price-evidence.mts`); tahmin serisinin tanımı Mayıs 2026 öncesinde bizim gerçek zamanlı rüzgârla tutmuyor. Yarının KGÜP'ü 15:13'te HTTP 400, 17:48'de 24 kayıt döndü: yayım saati arası.
-- **Yarım:** kod yerelde, **sunucuya kurulmadı** (deploy ve `systemctl enable` kullanıcı onayı bekliyor, komut `scripts/server/README.md`'de). Commit yok.
+- **Yapılan (kurulum):** commit'ler `149979f`, `f241579`, `ec3df98`; `main`'e push, sunucuya yüklendi (`ea8819c → ec3df98`), `tr-energy-snapshot.timer` etkinleştirildi (ilk çalışma 28.10.2026 08:02) ve ilk çekim elle denendi (`snapshots/2026-10-27/1754.json.gz`, 6 seri dolu). Sunucuda `/api/market/live` today ve tomorrow denendi (24 saat dolu).
 - **Sıradaki:** onaydan sonra kurulum; 2 hafta sonra yayım saati tablosu (`snapshot-report`), 8 hafta sonra revizyon istatistiği, 12:25 sürümüyle yarın görünümü ve fiyat modeli ex-ante testi.
 
 ## 27.10.2026 · Claude · Günlük pano: Bugün, Yarın ve fiyat limiti (yerelde, `claude/gunluk-pano`, commit yok)

@@ -15,7 +15,7 @@ Zamanlanmış işler ve uygulama Mac'te değil sunucuda çalışır. Mac kapalı
 | `tr-energy-solar-forecast` | 09:30, 11:00 | `scripts/solar-forecast-daily.mts` |
 | `tr-energy-wind-forecast` | 10:00, 11:30 (Europe/Istanbul) | `scripts/wind-forecast-daily.mts --write`; kurulum sonrası etkin |
 | `tr-energy-epias-monthly` | saatte bir | `scripts/epias-monthly-sync.mts` (günlük küçük işler: piyasa fiyatları, sistem geneli seriler `system-sync.mts --recent`) |
-| `tr-energy-snapshot` | 08:02–13:02 saatlik, 12:25, 13:30, 14:02 | `scripts/snapshot-capture.mts` (**kurulum onay bekliyor**, aşağıya bakın) |
+| `tr-energy-snapshot` | 08:02–13:02 saatlik, 12:25, 13:30, 14:02 | `scripts/snapshot-capture.mts` (27.10.2026'dan beri kurulu, aşağıya bakın) |
 | `tr-energy-db-backup` | 03:00 | `scripts/backup-db.mts daily` (`prisma/backups/`, son 5) |
 | `tr-energy-forecast-check` | 12:15 | yarının güneş/rüzgâr tahmini yazılmadıysa bildirim (yeni dosyalar kurulunca) |
 | `tr-energy-daily-summary` | 12:30 | günlük özet bildirimi |
@@ -56,11 +56,11 @@ Görev dosyaları kod deposunda hazırdır; `deploy.sh` systemd/bin kopyaların�
 
 RES kayıtları `data/pool/forecast-log/wind/` altında; şampiyon defteri aynı dizinde `champions.json`. Kesim sonrası geçmişe kayıt doldurulmaz. İlk uygun sabah çalışması gerçek kanıt dönemini başlatır; 28 günlük kanıt hemen tamamlanmış sayılamaz.
 
-## EPİAŞ anlık görüntüleri (27.10.2026; kod hazır, sunucuya kurulmadı)
+## EPİAŞ anlık görüntüleri (27.10.2026'dan beri sunucuda çalışır)
 
 EPİAŞ yarının rüzgâr / yük tahminini ve fiyatını yalnız son hâliyle verir; "12:25'te ne biliniyordu" geçmişten öğrenilemez. `scripts/snapshot-capture.mts` her çekimde altı seriyi alır (yarın: rüzgâr tahmini, yük tahmini, PTF, KGÜP; bugün: rüzgâr tahmini, yük tahmini) ve `data/pool/snapshots/<çekim günü>/<SSDD>.json.gz` olarak bir kez yazar (düzenlenmez; yaklaşık 5 KB). Hata veren seri durumuyla kaydedilir; bütün seriler hata verirse iş başarısız sayılır (ntfy). Kaçırılan çekim sonradan yapılmaz (`Persistent=false`). Rapor: `scripts/analysis/snapshot-report.mts` (hangi serinin saat kaçta yayımlandığı, sürümler arası değişim, gerçekleşene hata).
 
-Kurulum (kullanıcı onayından sonra; paralel çalışma kuralı: `systemctl` ancak kullanıcı isteyince): kod `deploy.sh` ile yüklenir, sonra sunucuda
+Kurulum (27.10.2026, kullanıcı onayıyla yapıldı; yeniden kurmak için): kod `deploy.sh` ile yüklenir, sonra sunucuda
 
 ```bash
 cp scripts/server/systemd/tr-energy-snapshot.{service,timer} /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now tr-energy-snapshot.timer
