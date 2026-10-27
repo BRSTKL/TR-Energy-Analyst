@@ -52,6 +52,7 @@ Konum koordinatlı bir kayıttan alınır. Tahmin ancak kayıt bulunamazsa kulla
   - Kaydetme: `lib/services/plant-location.ts`. Havuzdaki santral tanımına (`data/pool/<id>/plant.json`, projede olmayan santraller dahil) ve aynı kimlikteki `PowerPlant` kayıtlarına yazar.
   - Elle giriş, pilot listesi ve projelere kopyalama: `scripts/plant-location.mts` (`set`, `pilot`, `sync`).
   - Otomatik doldurma: `scripts/location-autofill.mts`. `--gem` GEM kaydıyla (EPDK lisans no ya da birebir ad; EPDK ilçe merkezinden 40 km'den uzaksa reddedilir), `--epdk` EPDK il / ilçe merkeziyle (tahmin). GEM dosyası `scripts/tools/gem-tracker-extract.py` ile `.cache/gem/` altına çıkarılır.
+  - Hidro (HES): `scripts/hydro-location-autofill.mts` (kural `lib/epias-plant/hydro-location.ts`). Sıra GEM Hydropower Tracker (`.cache/gem/hydro-tr.json`), OpenStreetMap hidro santralleri (`.cache/osm/hydro-plants-tr.json`, `scripts/tools/osm-hydro-overpass.py`), EPDK ilçe merkezi (tahmin). Ad eşleşmesi tek başına yetmez: güç oranı ya da EPDK ilçesine yakınlık da gerekir.
 - **Santral kaydı:** `PowerPlant.locationSource` şu değerlerden birini alır:
   - `USER`: elle doğrulandı. Bu değere hiçbir otomatik işlem dokunmaz.
   - `GEM_TRACKER` ya da `OSM`: koordinatlı kayıt.
