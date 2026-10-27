@@ -25,6 +25,19 @@ Ayar seçimi (seçim dönemi 2025-07 – 2026-03, birleşim MAE; sınama 2026-04
 413; 2024'ten, 364 gün 338 / 413; 728 gün 332 / 412; 364 gün gazsız 335 / 416; **728 gün gazsız 328 / 415** (seçilen).
 2024 verisi küçük ama tutarlı bir kazanç veriyor; sınamada fark yok. Haziran–Ekim'de ilk ayara göre 418 → 425 hafif kötü.
 
+### Hata bütçesini kapatma: adım 1 ve 2 (28.10.2026)
+
+- **Adım 1, tahmin sapması özellikleri** (yük planının ve rüzgâr tahmininin son 7 günlük sapması): seçim döneminde birleşim
+  328,4 → 327,9 (gürültü), rüzgâr sapması sınamada LEAR'ı kötüleştirdi (425 → 435). Motora alınmadı (`ENGINE_EXCLUDE`).
+- **Adım 2, ülke güneş tahmini** (`lib/ptf/solar.ts`): 2.682 işletmedeki GES'ten (GEM) 30 bölge noktası
+  (`data/pool/ptf/solar-regions.json`, 16,5 GW), noktalarda ECMWF "2 gün önceki" küresel ışınım (2024-03'ten arşiv,
+  `scripts/ptf/solar-regions.mts --fetch`), tahmin = güç ağırlıklı ışınım × son 7 günden öğrenilen saatlik ölçek
+  (seçimde 7 gün 268, 28 gün 365 MW). Hedef T'nin KGÜP güneşi; gündüz saatlik MAE kendi tahmin 333 MW, vekil (son 7 gün
+  ortancası) 719 MW (−%54; 909 gün). Fiyat: birleşim seçimde 328,4 → 319,3 (%2,8), sınamada 415,5 → 405,8 (%2,3),
+  ikisinde de anlamlı; "güneşi tam bilseydik" (351,3) açığının %64'ü kapandı. Canlıda yarının ışınımı 30 nokta için
+  Open-Meteo'dan anlık çekilir (`liveRegionWeather`).
+- **Son durum** (482 gün): birleşim 357 TL/MWh, R2'den −%23,2; Haziran–Ekim 410 (−%30). Aralık kapsaması %83,7.
+
 Hata bütçesi (kusursuz girdi tanısı, GBM, bütün dönem MAE; canlı 394): tüketim tam bilinseydi 375 (−%5), rüzgâr 348
 (−%12), güneş 373 (−%5), üçü birden 309 (−%22). Rüzgârın büyük kısmı EPİAŞ tahmini olmayan 2025'ten; Haziran–Ekim'de
 (EPİAŞ tahmini var) kusursuz rüzgâr −%5. EPİAŞ rüzgâr tahmini Haziran–Ekim'de birleşime ~%6 katkı veriyor (434 → 460
