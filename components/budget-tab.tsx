@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import { AlertCircle, Download, Loader2 } from "lucide-react";
-import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { ComposedChart, ResponsiveContainer } from "recharts";
+import { ChartBar as Bar, ChartGrid as CartesianGrid, ChartLegend as Legend, ChartLine as Line, ChartTip as Tooltip, ChartXAxis as XAxis, ChartYAxis as YAxis } from "@/components/ui/chart";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";

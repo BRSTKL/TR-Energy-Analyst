@@ -2,7 +2,8 @@
 
 import React from "react";
 import { Loader2 } from "lucide-react";
-import { Bar, CartesianGrid, Cell, ComposedChart, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Cell, ComposedChart, LineChart, ResponsiveContainer } from "recharts";
+import { ChartBar as Bar, ChartGrid as CartesianGrid, ChartLegend as Legend, ChartLine as Line, ChartTip as Tooltip, ChartXAxis as XAxis, ChartYAxis as YAxis } from "@/components/ui/chart";
 import { Button } from "@/components/ui/button";
 import { LOSS_COLOR, LOSS_LABEL } from "@/components/weather-day-chart";
 import type { WindDay } from "@/lib/services/wind-loss";

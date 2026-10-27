@@ -20,18 +20,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts";
+import { BarChart, LineChart, ResponsiveContainer } from "recharts";
+import { ChartBar as Bar, ChartGrid as CartesianGrid, ChartLegend as Legend, ChartLine as Line, ChartTip as Tooltip, ChartXAxis as XAxis, ChartYAxis as YAxis } from "@/components/ui/chart";
 import { ClipboardCheck, CloudSun, SunMedium,
   Activity,
   AlertCircle,

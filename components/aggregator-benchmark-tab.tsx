@@ -2,7 +2,8 @@
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Download, FileDown, Loader2 } from "lucide-react";
-import { CartesianGrid, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis, Cell } from "recharts";
+import { ResponsiveContainer, Scatter, ScatterChart, ZAxis, Cell } from "recharts";
+import { ChartGrid as CartesianGrid, ChartTip as Tooltip, ChartXAxis as XAxis, ChartYAxis as YAxis } from "@/components/ui/chart";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -135,7 +136,7 @@ function ScatterPanel({ scatter }: { scatter: ScatterPoint[] }) {
               const p = payload?.[0]?.payload as ScatterPoint | undefined;
               if (!p) return null;
               return (
-                <div className="rounded-md border bg-white px-2.5 py-1.5 text-xs shadow">
+                <div className="rounded-lg border bg-popover p-3 text-xs shadow-sm shadow-black/5">
                   <b>{p.name}</b>
                   <div>
                     {nf(p.x)} GWh · endeks {nf(p.y, 2)} · {p.z} santral

@@ -2,18 +2,8 @@
 
 import { PLAN_EXCESS_HINT, planExcessFromActualVsForecast } from "@/lib/conventions";
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ReferenceLine,
-  Cell,
-} from "recharts";
+import { ResponsiveContainer, BarChart, ReferenceLine, Cell } from "recharts";
+import { ChartBar as Bar, ChartGrid as CartesianGrid, ChartLegend as Legend, ChartTip as Tooltip, ChartXAxis as XAxis, ChartYAxis as YAxis } from "@/components/ui/chart";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,

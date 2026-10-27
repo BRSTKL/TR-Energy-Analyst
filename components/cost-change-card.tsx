@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { BarChart, Cell, LabelList, ResponsiveContainer } from "recharts";
+import { ChartBar as Bar, ChartGrid as CartesianGrid, ChartTip as Tooltip, ChartXAxis as XAxis, ChartYAxis as YAxis } from "@/components/ui/chart";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { COST_FACTORS, type CostChangePeriod, type CostChangeResult } from "@/lib/analysis/cost-change";
@@ -155,7 +156,7 @@ export function CostChangeCard({ data }: { data: CostChangeData }) {
                     content={({ active, payload }) => {
                       const s = active && payload?.[0] ? (payload[0].payload as Step) : null;
                       return s ? (
-                        <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm">
+                        <div className="rounded-lg border bg-popover p-3 text-xs shadow-sm shadow-black/5">
                           <p className="font-semibold text-slate-900">
                             {s.name}: {s.display} {u}/MWh
                           </p>
