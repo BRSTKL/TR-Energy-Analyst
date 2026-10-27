@@ -13,6 +13,19 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
 
 ---
 
+## 27.10.2026 · Claude · Tanıtım videosu ve ekran görüntüsü betiği (dal `claude/lucid-keller-16n5p7`, main'e alınmadı)
+
+- Yapılan: Lemo-Opuscar (Living Screencast stili) ile 80 sn tanıtım filmi; ekranlar koddan yeniden çizildi, adlar anonim,
+  maskot "Sayaç". Film kaynağı repoda değil (oturumun geçici klasöründe; MP4, SRT, TREATMENT, FACTS, build.sh kullanıcıya
+  gönderildi). Rakamlar 3 Ekim kaydından; `iddia-denetcisi` düzeltmeleri uygulandı (makas Oca–Ağu nominal +%58 / reel +%19,
+  netleşme %37 = 92,1 → 57,7, %18 = "1 saat önce · teorik" satırı, 415 MW ve "16 slayt" çıkarıldı).
+- Yeni: `scripts/video-screens.mts`: bir projenin bütün sayfalarını ve genel sayfaları gezip şirket / santral / toplayıcı /
+  proje adlarını takma adla değiştirerek tam boy ekran görüntüsü alır (`.cache/video-screens/<proje>/`). Yalnız okur;
+  oturum duman testi gibi (`SMOKE_COOKIE` / `AUTH_SECRET`). Sahte sunucuyla uçtan uca denendi; gerçek sunucuda
+  çalıştırılmadı (bu ortamdan erişim yok).
+- Sıradaki: kullanıcı betiği sunucuya karşı çalıştırıp görüntüleri verecek; bütün sayfaları gezen "uygulama turu"
+  videosu bu görüntülerden çizilecek. Yayından önce rakamlar sunucuda yeniden okunmalı (FACTS listesi).
+
 ## 26.10.2026 · Claude · Canlı hava: Next.js fetch önbelleği (yüklendi)
 
 - Sorun: güneş tahmin ekranında birçok santral 0/24 saat. Kök neden: Next.js 14 sunucu tarafı `fetch` yanıtını varsayılan bir yıl saklıyor (`.next/cache/fetch-cache`, `revalidate 31536000`); canlı Open-Meteo tahmini 22.10 yanıtından geliyordu (sunucuya geçişten beri ekran bayat). Günlük görevler Next dışında çalıştığı için resmî kayıt etkilenmedi.

@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-423 dosya, 37 grup; baş açıklaması olmayan (sayfalar hariç): 30.
+424 dosya, 37 grup; baş açıklaması olmayan (sayfalar hariç): 30.
 
 ## Sayfalar (app/**/page.tsx) (21)
 
@@ -432,7 +432,7 @@
 - `components/wind-day-chart.tsx` — Rüzgâr santralinin bir günü: üretim (kayıp durumuna göre renkli), ilk KGÜP, beklenen üretim (MWh); altta 100 m rüzgâr (m/s)
 - `components/wind-loss-card.tsx` — "Son 12 ay"; verisi daha kısa santralde ay sayısı ("Verisi olan 6 ay")
 
-## scripts (kök) (70)
+## scripts (kök) (71)
 
 - `scripts/aggregator-benchmark.mts` — Toplayıcılar arası kıyası üretir (PLAN 8.7): .cache/epias/aggregator-benchmark-<yıl>.json: npx tsx --tsconfig tsconfig.json scripts/aggregator-benchmark.mts [yıl=2026] [bitiş=karnenin dönem sonu]
 - `scripts/aggregator-collect.mts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" olarak kayıtlı tüm katılımcıların santralleri .cache/epias/aggregator-membership.json'a yazılır.
@@ -492,6 +492,7 @@
 - `scripts/system-sync.mts` — Sistem geneli saatlik serileri (kaynak türüne göre KGÜP ve UEVM, yük tahmini, uzlaştırma tüketimi (UEÇM), gerçek zamanlı tüketim, teslim edilen talimatlar) EPİAŞ'tan veri havuzuna (`data/pool/system/<yıl>.json.gz`) tamamlar.
 - `scripts/tz-sam-candidates.mts` — Konumu tahmini (ilçe / il merkezi) ya da boş olan proje GES'leri için TZ-SAM güneş santrali alanlarından aday listesi.
 - `scripts/umm-sync.mts` — Arıza / bakım bildirimlerini (piyasa mesaj sistemi) havuza çeker (Aşama 14.0).
+- `scripts/video-screens.mts` — Tanıtım videosu için ekran görüntüleri: bir projenin bütün sayfalarını ve genel sayfaları gezer, şirket / santral / toplayıcı / proje adlarını takma adla değiştirip tam boy ekran görüntüsü alır.
 - `scripts/weather-models-sync.mts` — Ek hava modelleri arşivi (Aşama 22.3): konumlu güneş santralleri için ICON-EU ve GFS'in 2 gün önceki tahmini (lib/weather/nwp-models.ts).
 - `scripts/weather-sync.mts` — Hava verisi havuzu (PLAN 15.2): konumu olan santraller için Open-Meteo Previous Runs (ECMWF IFS 0,25°) saatlik verisi.
 - `scripts/wind-candidates-backtest.mts` — Rüzgâr motoru aday sürümlerinin geriye dönük testi (Aşama 23.3–23.8; güneşteki scripts/solar-candidates-backtest.mts'in rüzgâr karşılığı).
