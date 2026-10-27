@@ -12,12 +12,12 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
 
 ---
 
-## 28.10.2026 · Claude · PTF motoru: ülke güneş tahmini (`claude/ptf-motoru`, commit yok)
+## 28.10.2026 · Claude · PTF motoru: ülke güneş tahmini (yüklendi)
 
 - **Yapılan:** adım 1 (tahmin sapması özellikleri) kazanç vermedi, çıkarıldı. Adım 2: `lib/ptf/solar.ts`, `lib/ptf/solar-regions.ts`, `lib/services/ptf-solar.ts`, `scripts/ptf/{solar-regions,solar-eval,summary}.mts`, `__tests__/ptf-solar.test.ts`; Mac'te `data/pool/ptf/solar-regions.json` ve 30 noktanın hava arşivi (90 Open-Meteo isteği). Motor canlıda yarının ışınımını çeker.
 - **Sonuç:** güneş tahmini vekilden −%54 (gündüz MAE 333 vs 719 MW); fiyat birleşimi 366 → 357 TL/MWh (seçim −%2,8, sınama −%2,3, ikisi de anlamlı); "güneşi tam bilseydik" açığının %64'ü kapandı. Haziran–Ekim 410.
-- **Yarım:** commit / push / sunucu yok. Sunucuya yüklemeden önce `data/pool/ptf/` (bölgeler + hava arşivi) sunucuda olmalı: Mac'ten kopya ya da sunucuda `solar-regions.mts --fetch` (`--pick` için `.cache/gem/solar-tr.json` gerekir). Arşiv saatlik işte günde bir güncellenir (`solar-regions.mts --fetch`, son çekim 20 saatten eskiyse geçen aydan bugüne; taze ise 0 istek).
-- **Sıradaki:** sunucuya bölge listesi ve ilk arşiv, sonra adım 3 (kendi rüzgâr tahmini) ve adım 4 (talep).
+- **Yüklendi (28.10 01:10):** commit'ler `c6cc7e2`'ye kadar main'e push, sunucuya yüklendi (`3585870 → c6cc7e2`; yükleme betiğinin yerel ssh oturumu sunucu bittikten sonra asılı kaldı, sayfalar elle denetlendi: /, /sector, /market, /market/teklif, /market/gunluk 200). `data/pool/ptf/solar-regions.json` Mac'ten sunucuya kopyalandı (kullanıcı onayıyla); bölge hava arşivi sunucuda saatlik işle çekildi (01:07, 90 istek). Sunucuda kuru çalışma: güneş kendi tahmin, son 60 gün birleşim hatası 389 TL/MWh. Arşiv saatlik işte günde bir güncellenir.
+- **Sıradaki:** adım 3 (kendi rüzgâr tahmini) ve adım 4 (talep).
 
 ---
 
