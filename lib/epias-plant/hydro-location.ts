@@ -10,7 +10,7 @@
  *   - yer: santralin EPDK lisansındaki ilçenin merkezine ≤ 40 km (ilçesi olmayan lisansta il merkezine ≤ 150 km).
  * Güç uyuşmazsa ya da yer uzaksa kanıt ne olursa olsun reddedilir; ikisi de bilinmiyorsa kabul edilmez. Adayın adında santralin
  * adında olmayan ayırt edici kelime varsa ("ULUDERE HES" / "Uludere İnceler Barajı HES": Uludere bir ilçe adı) yalnız yer yetmez,
- * güç de tutmalıdır. Birbirinden 5 km'den
+ * güç de tutmalıdır. EPDK'da aynı ad birbirinden uzak (> 80 km) yerlerde lisanslıysa yalnız yer ayırt etmez, güç de tutmalıdır. Birbirinden 5 km'den
  * uzak birden çok aday kalırsa belirsiz sayılır. Ad eşleşmesi EPDK lisans eşleştirmesiyle aynı kuralı kullanır
  * (`epdkLicensesOf`: ayırt edici kelimelerin hepsi, Romen / sayı ünite numarası çelişmez, "REG. VE HES" = "REGÜLATÖRÜ VE HES").
  * SAF: listeler çağırandan gelir.
@@ -117,6 +117,12 @@ export function selectHydroSite(plant: { name: string; refMw: number | null }, s
     }
     if (mwOk === null && nearOk === null) {
       why.push(`${s.name}: güç ve EPDK yeri bilinmiyor, doğrulanamadı`);
+      continue;
+    }
+    // EPDK'da aynı adlı lisanslar birbirinden uzak yerlerde ("AKSU HES": Erzurum, Malatya, Isparta) ve güç tutmuyorsa hangi
+    // santral olduğu bilinmez: yer kanıtı ayırt etmez
+    if (mwOk !== true && centers.length > 1 && centers.some((a) => centers.some((b) => distanceKm(a, b) > 2 * EPDK_ILCE_KM))) {
+      why.push(`${s.name}: EPDK'da aynı ad birbirinden uzak yerlerde ve güç doğrulanamadı`);
       continue;
     }
     const extra = extraWords(plant.name, s.name);

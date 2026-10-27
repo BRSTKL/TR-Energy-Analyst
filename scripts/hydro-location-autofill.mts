@@ -22,12 +22,16 @@ import { prisma } from "@/lib/prisma";
 import { isUnlicensedName } from "@/lib/analysis/candidate-access";
 import { districtIsProvince, districtPoint, foldName, type OsmPlace } from "@/lib/epias-plant/location-match";
 import { epdkCapacityOf, epdkLicensesOf, type EpdkLicense } from "@/lib/epias-plant/installed-capacity";
-import { EPDK_IL_KM, EPDK_ILCE_KM, parseMw, selectHydroSite, type EpdkCenter, type HydroSite } from "@/lib/epias-plant/hydro-location";
+import { distanceKm, EPDK_IL_KM, EPDK_ILCE_KM, parseMw, selectHydroSite, type EpdkCenter, type HydroSite } from "@/lib/epias-plant/hydro-location";
 import { readPoolPlantInfo } from "@/lib/pool/pool-store";
-import { setPlantLocation } from "@/lib/services/plant-location";
+import { replacePlantLocation, setPlantLocation } from "@/lib/services/plant-location";
 import { stripEic } from "@/lib/sector/plant-technology";
 
 const WRITE = process.argv.includes("--write");
+/** Denetim: mevcut konumu olan santralleri de değerlendirir, bu araçla yazılmış kaydın bugünkü kuralla hâlâ kabul edilip edilmediğini söyler (yazmaz) */
+const AUDIT = process.argv.includes("--audit") || process.argv.includes("--clean");
+/** Temizlik (`--clean --write`): denetimde geçersiz çıkan kaydı ilçe merkezi tahminiyle değiştirir; tahmin de çıkarılamazsa konumu boşaltır */
+const CLEAN = process.argv.includes("--clean");
 const cache = path.join(process.cwd(), ".cache");
 const readJson = <T,>(...p: string[]) => JSON.parse(fs.readFileSync(path.join(cache, ...p), "utf8")) as T;
 const today = new Date().toISOString().slice(0, 10);
@@ -58,13 +62,13 @@ for (const r of rows) if (!isUnlicensedName(r.name)) targets.set(r.epiasPlantId!
 
 const tidy = (n: string) => stripEic(n).replace(/\s*\([^)]*\)?\s*$/, "").replace(/\s+/g, " ").trim();
 const fmt = (v: number, d = 1) => v.toFixed(d).replace(".", ",");
-const found: Array<{ id: number; name: string; loc: Parameters<typeof setPlantLocation>[1]; src: string }> = [];
+const found: Array<{ id: number; name: string; loc: Parameters<typeof setPlantLocation>[1]; src: string; siteId?: string; powerEvidence?: boolean }> = [];
 const count: Record<string, number> = {};
 let considered = 0;
 
 for (const [id, t] of targets) {
   const cur = (await readPoolPlantInfo(id))?.location ?? null;
-  if (cur && cur.locationSource !== "DISTRICT_CENTER") continue; // USER, GEM_TRACKER, OSM: dokunulmaz
+  if (cur && cur.locationSource !== "DISTRICT_CENTER" && !AUDIT) continue; // USER, GEM_TRACKER, OSM: dokunulmaz
   considered++;
   const name = tidy(t.name);
   const lics = epdkLicensesOf(name, epdk.licenses, "HES");
@@ -81,7 +85,7 @@ for (const [id, t] of targets) {
   if (g.ok) {
     const rec = (g.site as (typeof gemSites)[number]).rec;
     found.push({
-      id, name: t.name, src: "GEM",
+      id, name: t.name, src: "GEM", siteId: g.site.id, powerEvidence: g.evidence.some((e) => e.startsWith("güç")),
       loc: { latitude: rec.lat, longitude: rec.lon, locationSource: "GEM_TRACKER", locationRef: `Global Energy Monitor, Global Hydropower Tracker ${gem.version} (CC BY 4.0): ${rec.project}${rec.river ? `, ${rec.river}` : ""} (GEM ${rec.gemLocationId}, konum doğruluğu ${rec.accuracy}); eşleşme ${g.evidence.join(", ")}; ${today}` },
     });
     console.log(`${label} GEM: ${rec.project} (${g.evidence.join("; ")})`);
@@ -90,7 +94,7 @@ for (const [id, t] of targets) {
   const o = selectHydroSite({ name, refMw }, osmSites, centers);
   if (o.ok) {
     found.push({
-      id, name: t.name, src: "OSM",
+      id, name: t.name, src: "OSM", siteId: o.site.id, powerEvidence: o.evidence.some((e) => e.startsWith("güç")),
       loc: { latitude: o.site.lat, longitude: o.site.lon, locationSource: "OSM", locationRef: `OSM ${o.site.id} '${o.site.name}' (eşleşme ${o.evidence.join(", ")}); © OpenStreetMap katkıcıları, ODbL; Overpass ${osm.extractedAt}; otomatik kabul ${today}, kullanıcı doğrulaması bekliyor` },
     });
     console.log(`${label} OSM: ${o.site.name} (${o.evidence.join("; ")})`);
@@ -113,9 +117,44 @@ for (const [id, t] of targets) {
   }
 }
 
+// Aynı koordinatlı kayda birden çok EPİAŞ santrali düşüyorsa ("KALE HES(KALE ENR.)", "KALE HES(AVKAL)", "KALE REG. ve HES(KARAKURT)": parantezli ek
+// farklı santralleri ayırır, GEM / OSM'de tek kayıt var) ve güç kanıtı yoksa hangisinin o kayıt olduğu bilinmez: bu santrallere yazılmaz
+const perSite = new Map<string, number>();
+for (const f of found) if (f.siteId) perSite.set(`${f.src}:${f.siteId}`, (perSite.get(`${f.src}:${f.siteId}`) ?? 0) + 1);
+const shared = found.filter((f) => f.siteId && !f.powerEvidence && (perSite.get(`${f.src}:${f.siteId}`) ?? 0) > 1);
+for (const f of shared) console.log(`  elendi (aynı kayıda birden çok santral, güç kanıtı yok): #${f.id} ${f.name}`);
+for (let i = found.length - 1; i >= 0; i--) if (shared.includes(found[i])) found.splice(i, 1);
 for (const f of found) count[f.src] = (count[f.src] ?? 0) + 1;
 console.log(`\nHedef ${targets.size}, konumu aranan ${considered}: GEM ${count.GEM ?? 0}, OSM ${count.OSM ?? 0}, EPDK ilçe (~) ${count.EPDK ?? 0}, bulunamayan ${considered - found.length}${WRITE ? " (yazılıyor)" : " (kuru çalışma; yazmak için --write)"}`);
-if (WRITE)
+if (AUDIT) {
+  // Bu araçla yazılmış koordinatlı kayıtlar (kaynak notu bu betiğin biçiminde): bugünkü kuralla hâlâ aynı yeri veriyor mu
+  const kept = new Map(found.map((f) => [f.id, f]));
+  const bad: string[] = [];
+  const fix: Array<{ id: number; name: string; loc: Parameters<typeof setPlantLocation>[1] | null }> = [];
+  let checked = 0;
+  for (const [id, t] of targets) {
+    const cur = (await readPoolPlantInfo(id))?.location ?? null;
+    if (!cur || !/Hydropower Tracker|Overpass/.test(cur.locationRef)) continue;
+    checked++;
+    const f = kept.get(id);
+    if (!f) {
+      bad.push(`#${id} ${t.name}: artık kabul edilmiyor (yazılı: ${cur.locationSource} ${cur.locationRef.slice(0, 90)})`);
+      fix.push({ id, name: t.name, loc: null });
+    } else if (distanceKm({ lat: cur.latitude, lon: cur.longitude }, { lat: f.loc.latitude, lon: f.loc.longitude }) > 5) {
+      bad.push(`#${id} ${t.name}: farklı yer seçiliyor`);
+      fix.push({ id, name: t.name, loc: f.loc });
+    }
+  }
+  console.log(`\nDenetim: bu araçla yazılmış ${checked} kayıt, bugünkü kuralla geçerli sayılmayan ${bad.length}`);
+  for (const b of bad) console.log(`  ${b}`);
+  if (CLEAN && WRITE)
+    for (const x of fix) {
+      const r = await replacePlantLocation(x.id, x.loc);
+      console.log(`  #${x.id} ${x.name}: ${x.loc ? `${x.loc.locationSource} yazıldı` : "konum boşaltıldı"}, havuz ${r.pool ? "güncellendi" : "değişmedi"}, proje santrali ${r.projectPlants}`);
+    }
+  else if (CLEAN) console.log("  (kuru çalışma; temizlemek için --clean --write)");
+}
+if (WRITE && !AUDIT)
   for (const f of found) {
     const r = await setPlantLocation(f.id, f.loc);
     console.log(`  #${f.id} ${f.name}: havuz ${r.pool ? "yazıldı" : "korundu"}, proje santrali ${r.projectPlants}`);

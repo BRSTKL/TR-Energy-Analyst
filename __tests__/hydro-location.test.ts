@@ -57,6 +57,13 @@ describe("selectHydroSite", () => {
     expect(selectHydroSite({ name: "ULUDERE HES", refMw: 5 }, [{ ...extra, mw: 5 }], [near]).ok).toBe(true);
   });
 
+  it("EPDK'da aynı ad uzak yerlerde ve güç doğrulanamıyorsa yer ayırt etmez", () => {
+    const far: EpdkCenter = { lat: 41.5, lon: 41.1, maxKm: 40 };
+    const s = site({ name: "Aksu hydroelectric plant", mw: null, lat: 41.4, lon: 41.1 });
+    expect(selectHydroSite({ name: "AKSU HES", refMw: null }, [s], [far, near]).ok).toBe(false);
+    expect(selectHydroSite({ name: "AKSU HES", refMw: 30 }, [{ ...s, mw: 30 }], [far, near]).ok).toBe(true);
+  });
+
   it("birbirinden uzak iki aday belirsizdir", () => {
     const v = selectHydroSite({ name: "KALE HES", refMw: 30 }, [site({ name: "Kale HES", mw: 30 }), site({ id: "w2", name: "Kale HES", mw: 31, lat: 38.3, lon: 35.7 })], [{ ...near, maxKm: 100 }]);
     expect(v).toMatchObject({ ok: false });

@@ -56,3 +56,28 @@ export async function syncProjectLocations(): Promise<{ updated: number; without
   }
   return { updated, withoutLocation };
 }
+
+/**
+ * Otomatik yazılmış hatalı konumu değiştirir ya da kaldırır (`loc` null: konum boşaltılır). Elle girilen (USER) konuma dokunulmaz.
+ * `setPlantLocation` koordinatlı kaydın yerine ilçe merkezi tahmini yazmaz (kural: lib/epias-plant/location.ts); bu işlev,
+ * yeni kuralın artık kabul etmediği eski bir otomatik kaydı geri almak içindir (hidro, 27.10.2026).
+ */
+export async function replacePlantLocation(epiasPlantId: number, loc: PlantLocation | null): Promise<{ pool: boolean; projectPlants: number }> {
+  if (loc) {
+    const err = locationError(loc);
+    if (err) throw new Error(`Santral ${epiasPlantId}: ${err}`);
+  }
+  const info = await readPoolPlantInfo(epiasPlantId);
+  let pool = false;
+  if (info?.location && info.location.locationSource !== "USER") {
+    await writePoolPlantInfo({ epiasPlantId, location: loc ? { ...loc, locationRef: loc.locationRef.trim() } : undefined });
+    pool = true;
+  }
+  const rows = await prisma.powerPlant.findMany({ where: { epiasPlantId }, select: { id: true, locationSource: true } });
+  const ids = rows.filter((r) => r.locationSource !== "USER").map((r) => r.id);
+  if (ids.length) {
+    const data = loc ? { ...loc, locationRef: loc.locationRef.trim() } : { latitude: null, longitude: null, locationSource: null, locationRef: null };
+    await prisma.powerPlant.updateMany({ where: { id: { in: ids } }, data });
+  }
+  return { pool, projectPlants: ids.length };
+}
