@@ -61,6 +61,27 @@ describe("ensureUmmCoverage", () => {
     return s;
   }
 
+  it("refreshCurrent: içinde bulunulan ay son çekimi eskiyse yeniden çekilir, geçen ay çekilmez", async () => {
+    const store = memoryStore();
+    const calls: string[] = [];
+    const fetcher = async (q: { startDate: string }) => {
+      calls.push(q.startDate.slice(0, 7));
+      return [msg(1)];
+    };
+    const t0 = new Date("2026-10-20T06:00:00Z");
+    await ensureUmmCoverage("2026-09", "2026-10", fetcher, { now: t0, store, refreshCurrent: { hours: 6 } });
+    expect(calls).toEqual(["2026-09", "2026-10"]);
+    // 3 saat sonra: taze
+    await ensureUmmCoverage("2026-09", "2026-10", fetcher, { now: new Date(t0.getTime() + 3 * 3_600_000), store, refreshCurrent: { hours: 6 } });
+    expect(calls).toHaveLength(2);
+    // 7 saat sonra: yalnız içinde bulunulan ay
+    await ensureUmmCoverage("2026-09", "2026-10", fetcher, { now: new Date(t0.getTime() + 7 * 3_600_000), store, refreshCurrent: { hours: 6 } });
+    expect(calls).toEqual(["2026-09", "2026-10", "2026-10"]);
+    // seçenek yokken eskisi gibi: geçici ay bekleme süresi dolmadıkça çekilmez
+    await ensureUmmCoverage("2026-09", "2026-10", fetcher, { now: new Date(t0.getTime() + 9 * 3_600_000), store });
+    expect(calls).toHaveLength(3);
+  });
+
   it("eksik ayları çeker, gelecekteki ayı çekmez, ikinci çağrıda havuzdan okur", async () => {
     const store = memoryStore();
     const calls: string[] = [];

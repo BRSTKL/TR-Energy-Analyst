@@ -2,6 +2,10 @@
  * Arıza / bakım bildirimlerini (piyasa mesaj sistemi) havuza çeker (Aşama 14.0).
  *
  *   npx tsx --tsconfig tsconfig.json --env-file=.env scripts/umm-sync.mts [ilkAy=2024-01] [sonAy=bu ay]
+ *   npx tsx --tsconfig tsconfig.json --env-file=.env scripts/umm-sync.mts --recent
+ *
+ * `--recent`: geçen ay ve içinde bulunulan ay; içinde bulunulan ay son çekimi 6 saatten eskiyse yeniden çekilir (günlük eşitleme:
+ * scripts/epias-monthly-sync.mts, her saat çağırır; taze havuzda bir saniyede çıkar).
  *
  * Eksik ya da yenileme zamanı gelmiş ayları EPİAŞ'tan çeker (ay başına bir istek; VPN gerekir), kesin ayları atlar.
  * Çıktı: data/pool/umm/<yıl>.json.gz. Sonunda özet: ay başına bildirim, sorgunun ay sınırı davranışı (bildirim
@@ -16,8 +20,10 @@ import { listPoolPlants, readPoolPlantInfo } from "@/lib/pool/pool-store";
 
 const now = new Date();
 const thisMonth = new Date(now.getTime() + 3 * 3_600_000).toISOString().slice(0, 7);
-const from = process.argv[2] ?? "2024-01";
-const to = process.argv[3] ?? thisMonth;
+const recent = process.argv[2] === "--recent";
+const lastMonth = new Date(Date.UTC(Number(thisMonth.slice(0, 4)), Number(thisMonth.slice(5, 7)) - 2, 1)).toISOString().slice(0, 7);
+const from = recent ? lastMonth : (process.argv[2] ?? "2024-01");
+const to = recent ? thisMonth : (process.argv[3] ?? thisMonth);
 
 const results = await ensureUmmCoverage(
   from,
@@ -27,7 +33,7 @@ const results = await ensureUmmCoverage(
     if (!Array.isArray(r?.items)) throw new Error("Beklenmeyen yanıt: items yok");
     return r.items;
   },
-  { now, onMonth: (r) => console.log(`${r.month}  ${r.source.padEnd(6)} ${r.messages ?? ""}${r.error ? `  HATA: ${r.error.slice(0, 160)}` : ""}`) }
+  { now, refreshCurrent: recent ? { hours: 6 } : undefined, onMonth: (r) => console.log(`${r.month}  ${r.source.padEnd(6)} ${r.messages ?? ""}${r.error ? `  HATA: ${r.error.slice(0, 160)}` : ""}`) }
 );
 
 const failed = results.filter((r) => r.source === "failed");
