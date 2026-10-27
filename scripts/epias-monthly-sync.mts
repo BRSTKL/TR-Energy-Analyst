@@ -2,8 +2,9 @@
  * Aylık EPİAŞ eşitlemesi, kendiliğinden (güneş motoru yol haritası 2. adım; kullanıcı 18.10.2026: "1. yolu yapalım").
  *
  * Sunucuda saatte bir çalışır (systemd tr-energy-epias-monthly; scripts/server/README.md; eski Mac tanımı scripts/launchd/). Hedef ay: geçen ay (Türkiye saati).
- * Her çalışmada önce iki küçük günlük iş: geçici üretim (12 saatte bir) ve piyasa fiyatları (`market-sync.mts --recent`,
- * veri dünü içerene kadar her saat; içeriyorsa bir saniyede çıkar). Piyasa sayfası böylece her gün dünün verisini gösterir.
+ * Her çalışmada önce üç küçük günlük iş: geçici üretim (12 saatte bir), piyasa fiyatları (`market-sync.mts --recent`,
+ * veri dünü içerene kadar her saat; içeriyorsa bir saniyede çıkar) ve sistem geneli seriler (`system-sync.mts --recent`, her
+ * Türkiye günü bir kez). Piyasa sayfası ve günlük pano böylece her gün dünün verisini gösterir.
  *   1. Ay tamamlandıysa ya da başka bir çalışma sürüyorsa hiçbir şey yapmaz.
  *   2. EPİAŞ veri uç noktasına erişilemiyorsa yapmaz; ayın 5'inden sonra günde bir kez bildirim (20.10.2026'dan beri VPN
  *      gerekmiyor, erişim yoksa internet bağlantısı ya da EPİAŞ kesintisi).
@@ -129,6 +130,23 @@ if (!dry) {
       clearTimeout(timer);
       const line = out.trim().split("\n").pop() ?? "";
       if (!line.startsWith("Piyasa verisi güncel")) console.log(`${stamp()} günlük piyasa: ${line}`);
+      resolve();
+    });
+  });
+}
+
+// Sistem geneli serileri (gerçek zamanlı üretim, tüketim, KGÜP; günlük piyasa panosu): geçen ay ve içinde bulunulan ay, her Türkiye
+// günü bir kez (havuz zaten güncelse bir saniyede çıkar). Aynı kilit altında; hata sonraki saatlik çalışmada yeniden denenir.
+if (!dry) {
+  await new Promise<void>((resolve) => {
+    const c = spawn(process.execPath, ["--env-file=.env", "node_modules/.bin/tsx", "--tsconfig", "tsconfig.json", "scripts/system-sync.mts", "--recent"], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    c.stdout.on("data", (b) => (out += b));
+    c.stderr.on("data", (b) => (out += b));
+    const timer = setTimeout(() => c.kill("SIGTERM"), 10 * 60_000);
+    c.on("close", () => {
+      clearTimeout(timer);
+      if (out.trim()) console.log(`${stamp()} günlük sistem verisi: ${out.trim().split("\n").join(" | ")}`);
       resolve();
     });
   });

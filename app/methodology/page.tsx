@@ -148,7 +148,7 @@ export default function MethodologyPage() {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-6xl gap-8 px-4 pt-6 sm:px-6 lg:grid-cols-[220px_1fr] lg:px-8 print:block print:max-w-none print:px-0">
+      <div className="mx-auto grid max-w-6xl gap-8 px-4 pt-6 sm:px-6 grid-cols-1 lg:grid-cols-[220px_1fr] lg:px-8 print:block print:max-w-none print:px-0">
         <nav className="print:hidden lg:sticky lg:top-6 lg:self-start">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">İçindekiler</p>
           <ol className="mt-2 space-y-1 text-sm">
@@ -163,7 +163,7 @@ export default function MethodologyPage() {
           </ol>
         </nav>
 
-        <main className="space-y-6 rounded-lg border border-slate-200 bg-white p-6 shadow-sm print:space-y-4 print:border-0 print:p-0 print:shadow-none">
+        <main className="min-w-0 space-y-6 rounded-lg border border-slate-200 bg-white p-6 shadow-sm print:space-y-4 print:border-0 print:p-0 print:shadow-none">
           <Section id="ozet" n={next()} title="Özet">
             <p>
               Uygulama, bir üreticinin gün öncesi üretim planı (KGÜP) ile gerçekleşen üretimini (UEVM) saat saat karşılaştırır ve plan hatasının
@@ -408,6 +408,86 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
               ]}
             />
             <p>Yıllar arası karşılaştırmada her ay bir önceki yılın aynı ayıyla eşlenir. <Tag kind="exact" /></p>
+          </Section>
+
+          <Section id="gunluk-pano" n={next()} title="Günlük piyasa panosu">
+            <p>
+              Bir günün fiyatlarını, sistem yönünü, net yükünü ve akşam rampasını gösterir. Betimler, tahmin etmez: kıyas bandı geçmişin
+              gerçekleşmiş fiyatlarıdır, yarının fiyatı hesaplanmaz.
+            </p>
+            <Table
+              head={["Gösterge", "Tanım"]}
+              rows={[
+                ["PTF, SMF, sistem yönü", "EPİAŞ doğrulanmış saatlik değerleri"],
+                [
+                  "Net yük (tüketim taraflı)",
+                  "Gerçek zamanlı tüketim − gerçek zamanlı rüzgâr üretimi − KGÜP güneşi (MW, saatlik ortalama). Seviyesi yaklaşık, saatten saate değişimi daha sağlam.",
+                ],
+                [
+                  "Net yük (arz taraflı)",
+                  "Gerçek zamanlı üretimin rüzgâr ve güneş dışındaki kaynakları (termik, hidro, diğer) + net ithalat. Tüketime ve güneş planına bakmaz.",
+                ],
+                [
+                  "Akşam rampası",
+                  "15:00–22:00 arasında 3 saatlik pencerelerin en büyük net yük artışı. İki tanımın rampasının ortalaması gösterilir, iki değer arasındaki fark yanında yazılır.",
+                ],
+                ["Kıyas bandı", "Son 28 günün aynı sınıftaki (tatil, yarım gün, hafta sonu, hafta içi) günlerinin saatlik PTF ortancası ve çeyrekler arası aralığı; saat başına en az 6 gün yoksa gösterilmez"],
+                ["Lisanssız güneş (plan)", "KGÜP güneşi − gerçek zamanlı güneş (en az 0): plana göre tahmini pay, ölçüm değil"],
+              ]}
+            />
+            <p>
+              <b>Neden güneş KGÜP planından?</b> Gerçek zamanlı tüketim lisanssız (çatı) güneşi içerir: gece tüketim ile gerçek zamanlı
+              üretim farkı yaklaşık 40 MW, öğlen yaklaşık 15 GW (26.10.2026 ölçümü). Gerçek zamanlı güneş yalnız lisanslıdır (öğlen yaklaşık
+              3,3 GW; KGÜP güneşi yaklaşık 16,9 GW). Lisanssız güneşin gerçeği haftalarca (resmî sayaç üretimi, UEVM) görünmediği için plan
+              kullanılır. Güneşi gerçek zamanlıdan alsak akşam rampası yaklaşık 13,6 GW yerine 5,6 GW çıkardı. <Tag kind="estimate" />
+            </p>
+            <p>
+              <b>Neden iki tanım?</b> Üç ayrı ölçüm (şebeke tüketimi, üretici çıkışı, sayaç enjeksiyonu) farklı yerde ölçüldüğü için net
+              yük seviyeleri arasında 2,3–2,8 GW sabit fark var; hangisi doğru bilinmiyor. Saatten saate değişim (rampa) bu farktan etkilenmez.
+              Tüketim taraflı tanım rampayı çoğunlukla düşük, arz taraflı yüksek gösterir; ortalamaları tek tanımdan daha yakındır.
+            </p>
+            <p>
+              <b>Ölçülmüş doğruluk</b> (Ocak 2025 – Eylül 2026, 21 ay, 631 gün; referans: resmî sayaç üretimi toplamı − rüzgâr − güneş + gerçek
+              zamanlı net ithalat, kendisi de bir tanımdır). Akşam rampası hatası, aylık mutlak medyanların gün ağırlıklı ortalaması:
+            </p>
+            <Table
+              head={["Rampa hesabı", "Medyan hata (MW)"]}
+              rows={[
+                ["Tüketim taraflı (A)", "957 (plan eksik günler dahil; onlar hariç günlük hata medyanı yaklaşık 430)"],
+                ["Arz taraflı (B)", "414"],
+                ["İkisinin ortalaması", "512 (plan eksik günler dahil; onlar hariç günlük hata medyanı yaklaşık 270)"],
+                ["Panodaki (plan eksik günde yalnız B, diğer günlerde ortalama)", "285"],
+              ]}
+            />
+            <ul className="list-disc space-y-1 pl-5">
+              <li>
+                Aylık ortalama akşam rampası 6–11 GW; panodaki rampanın aylık medyan hatası 140–470 MW (aylık ortalama rampanın yaklaşık
+                %1,5–6&apos;sı), en kötü %10&apos;luk günlerde 400–1.400 MW. Temmuz–Eylül 2026&apos;da: 140–250 MW tipik, 400–600 MW en kötü %10.
+              </li>
+              <li>
+                <b>Aralık bir güven aralığı değildir:</b> gerçek rampa günlerin yalnız %58&apos;inde iki tanımın arasında kaldı (aya göre %26–96).
+              </li>
+              <li>
+                <b>Plan kontrolü:</b> KGÜP güneş planı bazı günlerde eksik (77 gün: Ocak – Mart 2025, 1–21 Mayıs 2026). Plan eksikse tüketim
+                taraflı rampa 5 GW&apos;a kadar sapar. Plan / gerçek zamanlı güneş oranı 1&apos;in altındaysa ya da son 4 haftanın medyanının %70&apos;inin
+                altındaysa (olağan oran 4–6) o günün tüketim taraflı net yükü, güneş planı ve lisanssız güneş bandı gösterilmez, rampa yalnız
+                arz taraflı verilir ve ekranda uyarı çıkar.
+              </li>
+              <li>
+                Güneş planının saatlik hatası (KGÜP − gerçekleşen) Temmuz–Eylül 2026&apos;da ortalama +35 ile +94 MW, ortalama mutlak 175–234 MW
+                (öğlen güneşinin yaklaşık %1&apos;i). Gerçek zamanlı rüzgâr resmî sayaçtan ortalama 270–350 MW düşük.
+              </li>
+              <li>
+                Tüketim serisinin kendisini doğrulayacak bağımsız bir ölçü yok; net yük seviyesi bu yüzden ±2–3 GW belirsizdir. Rakamlar
+                her ay yeniden ölçülür: <code className="break-all">npx tsx --env-file=.env --tsconfig tsconfig.json scripts/analysis/daily-market-accuracy.mts</code>{" "}
+                (resmî sayaç üretimi gelen aylar tabloya kendiliğinden eklenir; sonuç <code className="break-all">.cache/epias/daily-market-accuracy.json</code>).
+              </li>
+            </ul>
+            <p>
+              Gerçek zamanlı değerler ölçümdür ve EPİAŞ sonradan düzeltebilir. Veri günde bir kez sunucuda güncellenir; dünün verisi ertesi
+              sabah hazırdır. Cümleler yalnız gözlemi söyler (örn. PTF zirvesi net yük zirvesine bir saat yakın); tek günlük gözlem bir
+              ilişkinin kanıtı değildir.
+            </p>
           </Section>
 
           <Section id="birimler" n={next()} title="Fiyat birimleri: reel TL ve USD">

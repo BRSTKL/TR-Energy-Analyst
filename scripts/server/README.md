@@ -14,7 +14,7 @@ Zamanlanmış işler ve uygulama Mac'te değil sunucuda çalışır. Mac kapalı
 |---|---|---|
 | `tr-energy-solar-forecast` | 09:30, 11:00 | `scripts/solar-forecast-daily.mts` |
 | `tr-energy-wind-forecast` | 10:00, 11:30 (Europe/Istanbul) | `scripts/wind-forecast-daily.mts --write`; kurulum sonrası etkin |
-| `tr-energy-epias-monthly` | saatte bir | `scripts/epias-monthly-sync.mts` |
+| `tr-energy-epias-monthly` | saatte bir | `scripts/epias-monthly-sync.mts` (günlük küçük işler: piyasa fiyatları, sistem geneli seriler `system-sync.mts --recent`) |
 | `tr-energy-db-backup` | 03:00 | `scripts/backup-db.mts daily` (`prisma/backups/`, son 5) |
 | `tr-energy-forecast-check` | 12:15 | yarının güneş/rüzgâr tahmini yazılmadıysa bildirim (yeni dosyalar kurulunca) |
 | `tr-energy-daily-summary` | 12:30 | günlük özet bildirimi |

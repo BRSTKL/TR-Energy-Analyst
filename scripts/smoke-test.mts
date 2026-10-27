@@ -148,6 +148,7 @@ const checks: Check[] = [
   { url: "/projects", label: "Projeler" },
   { url: "/projects/epias", label: "EPİAŞ'tan proje" },
   { url: "/market", label: "Piyasa" },
+  { url: "/market/gunluk", label: "Günlük pano" },
   { url: "/sector", label: "Sektör karnesi" },
   { url: "/compare", label: "Karşılaştırma" },
   { url: "/methodology", label: "Metodoloji" },

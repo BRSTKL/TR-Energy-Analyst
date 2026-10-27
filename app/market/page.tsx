@@ -3,7 +3,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Download, Info, Loader2 } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { BarChart, LineChart, ResponsiveContainer } from "recharts";
+import { ChartBar as Bar, ChartGrid as CartesianGrid, ChartLegend as Legend, ChartLine as Line, ChartTip as Tooltip, ChartXAxis as XAxis, ChartYAxis as YAxis } from "@/components/ui/chart";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,6 +15,7 @@ import type { SectorCaptureCommon, SectorCaptureYear } from "@/lib/services/sect
 import type { GroupCapture } from "@/lib/analysis/capture-rate";
 
 import { MethodLink } from "@/components/method-link";
+import { COLOR, ChartCard } from "@/components/market/chart-card";
 import { pctOf, yearLocative } from "@/lib/format";
 interface MarketResponse {
   available: { start: string; end: string; lastFullMonthEnd: string; lastFullDay: string };
@@ -42,8 +44,6 @@ type Unit = "TL" | "REAL" | "USD";
 
 const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
 const MONTHS_SHORT = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
-/** Doğrulanmış renk seti: seçilen dönem vurgulu, önceki yıl gri; sistem yönü kırmızı (açık) ↔ mavi (fazla), dengede gri */
-const COLOR = { cur: "#2a78d6", prev: "#b4b2a9", smf: "#eb6834", deficit: "#e34948", surplus: "#2a78d6", balanced: "#c8c7c1", grid: "#e2e8f0", axis: "#64748b" };
 
 const nf = (v: number, d = 0) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
 const pct = (a: number, b: number) => (a === 0 ? null : ((b - a) / Math.abs(a)) * 100);
@@ -64,24 +64,6 @@ function monthsOf(year: number, a: MarketResponse["available"]): number[] {
   const from = year === sy ? sm : 1;
   const to = year === ey ? em : 12;
   return Array.from({ length: Math.max(0, to - from + 1) }, (_, i) => from + i);
-}
-
-function ChartCard({ title, description, children, wide }: { title: string; description: string; children: React.ReactElement; wide?: boolean }) {
-  return (
-    <Card className={`shadow-sm ${wide ? "lg:col-span-2" : ""}`}>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base">{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="h-[280px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            {children}
-          </ResponsiveContainer>
-        </div>
-      </CardContent>
-    </Card>
-  );
 }
 
 const axis = {
@@ -254,7 +236,12 @@ export default function MarketPage() {
               <span className="font-medium text-slate-700">Piyasa</span>
             </div>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Piyasa özeti {data.period.label}</h1>
-            <MethodLink section="piyasa" label="Yöntem ve varsayımlar" />
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <MethodLink section="piyasa" label="Yöntem ve varsayımlar" />
+              <Link href="/market/gunluk" className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline">
+                Günlük pano: dünün fiyatları, net yük ve akşam rampası
+              </Link>
+            </div>
             <p className="mt-1 text-xs text-slate-500">
               Son veri: {trDay(data.available.lastFullDay)}. Fiyatlar her gün EPİAŞ&apos;tan güncellenir; santral üretimine dayanan
               bölümler (GİP katılımı, yakalama oranı) ay bitince.

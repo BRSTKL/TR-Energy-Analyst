@@ -54,6 +54,6 @@ Kontrol kapsamı: [`ai/quality/checks.md`](../ai/quality/checks.md).
 Sunucu görevlerinin ve aylık eşitlemenin çağırdığı `sector-backtest.mts` ve `budget-backtest.mts` kökte kaldı. Taşınanlar
 aynı adla: `change-detection-scan`, `curtailment-scan`, `direction-backtest`, `epdk-capacity-compare`, `epdk-karne-compare`,
 `forecast-backtest`, `forecast-backtest-gzu`, `forecast-design-2024`, `solar-candidates-backtest`, `wind-candidates-backtest`,
-`wind-forecast-backtest`, `wind-live-backtest`. Eski yol `scripts/<ad>.mts` → yeni yol `scripts/analysis/<ad>.mts`; tarihsel
+`wind-forecast-backtest`, `wind-live-backtest`; ayrıca (27.10.2026) `daily-market-accuracy`: günlük panonun akşam rampası ve net yük doğruluğunu resmî sayaç üretimiyle (UEVM) aylık yeniden ölçer, yalnız havuzu okur. Eski yol `scripts/<ad>.mts` → yeni yol `scripts/analysis/<ad>.mts`; tarihsel
 kayıtlar (PICKUP, `docs/plan-arsiv.md`, `docs/superpowers/`) eski yolu anar. Betikler `@/` içe aktarımı kullanır, proje
 kökünden çalıştırılır.

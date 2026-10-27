@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { Activity, ArrowRight, BookOpen, Database, Layers, UserRound, Wind, Zap } from "lucide-react";
+import { Activity, ArrowRight, BookOpen, CalendarDays, Database, Layers, UserRound, Wind, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -300,6 +300,11 @@ export default function HomePage() {
             <Button asChild variant="outline" className="gap-2">
               <Link href="/market">
                 <Activity className="h-4 w-4" /> Piyasa
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="gap-2">
+              <Link href="/market/gunluk">
+                <CalendarDays className="h-4 w-4" /> Günlük pano
               </Link>
             </Button>
             <Button asChild variant="outline" className="gap-2">

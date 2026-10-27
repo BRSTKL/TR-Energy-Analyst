@@ -8,17 +8,21 @@
  *     sistem yönü hesabında kullanılmaz (saatlik sinyali daha zayıf; gerekçe lib/analysis/system-drivers.ts)
  *   - consumption: gerçek zamanlı tüketim (`/consumption/data/realtime-consumption`); sistem yönü hesabında tüketim budur
  *   - upDelivered / downDelivered / netInstruction: teslim edilen YAL, YAT (eksi) ve net talimat (`/markets/bpm/data/order-summary-up|down`)
+ *   - rt / rtImportExport: gerçek zamanlı üretim, kaynağa göre, ve ithalat / ihracat (`/generation/data/realtime-generation`, Türkiye
+ *     toplamı; günlük piyasa panosu, Aşama 24). Dünün saatleri ertesi gün yayımlı (UEVM haftalarca sonra); ölçümdür, EPİAŞ düzeltebilir.
  * MWh (saatlik, yani ortalama MW). Verisi olmayan saat null. Ay ay çekim anı santral havuzuyla aynı kuralla geçici / kesin
  * sayılır (pool-codec.ts: PROVISIONAL_DAYS; UEVM uzlaştırma kesinleşene kadar düzeltilebilir).
  *
  * KGÜP ile UEVM aynı santralleri kapsar (lisanssız güneş dahil; Eylül 2026 aylık ortalamaları %3 içinde). Gerçek zamanlı
- * üretim kullanılmaz: güneşte KGÜP'ten saatte ortalama yaklaşık 4.400 MW düşük (Eylül 2026), lisanssız güneşi kapsamıyor. Kaynak adları UEVM'ninkiler; KGÜP'ün Türkçe alanları eşlenir,
- * KGÜP'te ayrı olmayan asfaltit "other"a, LNG "naturalGas"a eklenir.
+ * üretim (`rt`) sistem yönü hesabında kullanılmaz: güneşte KGÜP'ten saatte ortalama yaklaşık 4.400 MW düşük (Eylül 2026), lisanssız
+ * güneşi kapsamıyor. Günlük panoda rüzgâr ve lisanslı kaynaklar için kullanılır; güneşin lisanssız payı KGÜP'ten alınır
+ * (gerçek zamanlı tüketim lisanssız güneşi içerir, gerçek zamanlı üretim içermez: 26.10.2026 ölçümü). Kaynak adları UEVM'ninkiler;
+ * KGÜP'ün Türkçe alanları eşlenir, KGÜP'te ayrı olmayan asfaltit "other"a, LNG "naturalGas"a eklenir.
  *
  * Zaman damgaları uygulamanın kuralıyla duvar saatidir (UTC alanlarında). SAF: I/O yok (dosya işleri system-store.ts).
  */
 
-import { isFinalFetch, REFRESH_DAYS_PARTIAL, REFRESH_DAYS_PROVISIONAL, hoursInYear, type MonthStatus } from "./pool-codec";
+import { isFinalFetch, REFRESH_DAYS_PROVISIONAL, hoursInYear, type MonthStatus } from "./pool-codec";
 
 export const SYSTEM_SOURCES = [
   "wind",
@@ -37,11 +41,11 @@ export const SYSTEM_SOURCES = [
 ] as const;
 export type SystemSource = (typeof SYSTEM_SOURCES)[number];
 
-export type SystemScalar = "lep" | "uecm" | "consumption" | "upDelivered" | "downDelivered" | "netInstruction";
-export const SYSTEM_SCALARS: readonly SystemScalar[] = ["lep", "uecm", "consumption", "upDelivered", "downDelivered", "netInstruction"];
+export type SystemScalar = "lep" | "uecm" | "consumption" | "upDelivered" | "downDelivered" | "netInstruction" | "rtImportExport";
+export const SYSTEM_SCALARS: readonly SystemScalar[] = ["lep", "uecm", "consumption", "upDelivered", "downDelivered", "netInstruction", "rtImportExport"];
 
-/** Belge biçimi: 2 = UEÇM eklendi (20.10.2026). Eski biçimdeki belgenin bütün ayları yeniden çekilir */
-export const SYSTEM_FORMAT = 2;
+/** Belge biçimi: 2 = UEÇM eklendi (20.10.2026), 3 = gerçek zamanlı üretim eklendi. Eski biçimdeki belgenin bütün ayları yeniden çekilir */
+export const SYSTEM_FORMAT = 3;
 
 type Series = Array<number | null>;
 
@@ -59,6 +63,10 @@ export interface SystemYear {
   upDelivered: Series;
   downDelivered: Series;
   netInstruction: Series;
+  /** Gerçek zamanlı üretim (kaynağa göre; lisanssız güneşi içermez) */
+  rt: Record<SystemSource, Series>;
+  /** Gerçek zamanlı ithalat / ihracat (EPİAŞ `importExport`; işareti EPİAŞ'ınkidir) */
+  rtImportExport: Series;
   /** Ay ("01".."12") → çekilme anı (ISO) */
   fetched: Record<string, string>;
 }
@@ -72,6 +80,7 @@ export interface SystemMonthRaw {
   consumption: unknown[];
   up: unknown[];
   down: unknown[];
+  rt: unknown[];
 }
 
 const HOUR = 3_600_000;
@@ -102,6 +111,25 @@ const UEVM_FIELDS: Record<string, SystemSource> = {
   lng: "naturalGas",
 };
 
+/** Gerçek zamanlı üretim alanı → kaynak (`total` ve `importExport` kaynak değildir) */
+const RT_FIELDS: Record<string, SystemSource> = {
+  wind: "wind",
+  sun: "sun",
+  river: "river",
+  dammedHydro: "dam",
+  naturalGas: "naturalGas",
+  lng: "naturalGas",
+  lignite: "lignite",
+  importCoal: "importedCoal",
+  blackCoal: "stoneCoal",
+  fueloil: "fueloil",
+  geothermal: "geothermal",
+  biomass: "biomass",
+  naphta: "naphtha",
+  asphaltiteCoal: "other",
+  wasteheat: "other",
+};
+
 const bySource = (n: number): Record<SystemSource, Series> =>
   Object.fromEntries(SYSTEM_SOURCES.map((s) => [s, Array(n).fill(null)])) as Record<SystemSource, Series>;
 
@@ -119,6 +147,8 @@ export function emptySystemYear(year: number): SystemYear {
     upDelivered: Array(n).fill(null),
     downDelivered: Array(n).fill(null),
     netInstruction: Array(n).fill(null),
+    rt: bySource(n),
+    rtImportExport: Array(n).fill(null),
     fetched: {},
   };
 }
@@ -144,11 +174,12 @@ export function writeSystemMonth(doc: SystemYear, month: number, raw: SystemMont
   for (const s of SYSTEM_SOURCES) {
     clear(doc.kgup[s]);
     clear(doc.uevm[s]);
+    clear(doc.rt[s]);
   }
   for (const k of SYSTEM_SCALARS) clear(doc[k]);
 
   // "_": sayılmayan seriler (YAT ve net talimat YAL ile aynı saatlerde gelir)
-  const count: Record<string, number> = { dpp: 0, uevm: 0, lep: 0, uecm: 0, consumption: 0, instructions: 0, _: 0 };
+  const count: Record<string, number> = { dpp: 0, uevm: 0, lep: 0, uecm: 0, consumption: 0, instructions: 0, rt: 0, _: 0 };
   const addSources = (target: Record<SystemSource, Series>, fields: Record<string, SystemSource>, item: Record<string, unknown>, i: number) => {
     for (const s of SYSTEM_SOURCES) target[s][i] = 0;
     for (const [field, s] of Object.entries(fields)) {
@@ -168,6 +199,12 @@ export function writeSystemMonth(doc: SystemYear, month: number, raw: SystemMont
     addSources(doc.uevm, UEVM_FIELDS, it, i);
     count.uevm++;
   }
+  for (const it of raw.rt as Array<Record<string, unknown>>) {
+    const i = hourIndex(doc.year, it.date);
+    if (!inMonth(i)) continue;
+    addSources(doc.rt, RT_FIELDS, it, i);
+    count.rt++;
+  }
   const scalar = (items: unknown[], field: string, target: Series, key: string, dateField = "date") => {
     for (const it of items as Array<Record<string, unknown>>) {
       const i = hourIndex(doc.year, it[dateField]);
@@ -184,6 +221,7 @@ export function writeSystemMonth(doc: SystemYear, month: number, raw: SystemMont
   scalar(raw.up, "upRegulationDelivered", doc.upDelivered, "instructions");
   scalar(raw.down, "downRegulationDelivered", doc.downDelivered, "_");
   scalar(raw.up, "net", doc.netInstruction, "_");
+  scalar(raw.rt, "importExport", doc.rtImportExport, "_");
   delete count._;
   doc.fetched[mm(month)] = fetchedAt.toISOString();
   return { hours: count };
@@ -194,6 +232,7 @@ export function upgradeSystemYear(doc: SystemYear): SystemYear {
   if (doc.format === SYSTEM_FORMAT) return doc;
   const n = hoursInYear(doc.year);
   for (const k of SYSTEM_SCALARS) if (!Array.isArray(doc[k])) doc[k] = Array(n).fill(null);
+  if (!doc.rt) doc.rt = bySource(n);
   doc.fetched = {};
   doc.format = SYSTEM_FORMAT;
   return doc;
@@ -205,15 +244,29 @@ export function systemMonthStatus(doc: SystemYear | null, month: number): MonthS
   return isFinalFetch(doc!.year, month, at) ? "final" : "provisional";
 }
 
-/** Santral havuzundaki needsFetch ile aynı kural (eksik → evet, kesin → hayır, geçici → bekleme süresi dolunca) */
+/** Türkiye saatiyle gün ("YYYY-AA-GG") */
+const trDay = (ms: number) => new Date(ms + 3 * HOUR).toISOString().slice(0, 10);
+
+/** Dünün son saatinde (23:00) gerçek zamanlı tüketim yok mu? Dün bu belgenin yılına düşmüyorsa false */
+function yesterdayMissing(doc: SystemYear, now: Date): boolean {
+  const i = hourIndex(doc.year, `${trDay(now.getTime() - 24 * HOUR)}T23:00:00`);
+  return i !== null && doc.consumption[i] === null;
+}
+
+/**
+ * Santral havuzundaki needsFetch ile aynı kural (eksik → evet, kesin → hayır, geçici → bekleme süresi dolunca). Fark: ay
+ * bitmeden çekilmiş ay (içinde bulunulan ay, ya da bittikten sonra ilk kez) her Türkiye günü bir kez yenilenir, böylece günlük
+ * pano dünün verisini görür (24 saatlik bekleme, saatlik işte her gün bir saat kayardı). Dünün son saati hâlâ boşsa
+ * (EPİAŞ henüz yayımlamamış) en az bir saat sonra yeniden denenir.
+ */
 export function systemNeedsFetch(doc: SystemYear | null, month: number, now: Date): boolean {
   const status = systemMonthStatus(doc, month);
   if (status === "missing") return true;
   if (status === "final") return false;
   const at = Date.parse(doc!.fetched[mm(month)]);
   const partial = at < Date.UTC(doc!.year, month, 1) - 3 * HOUR;
-  const days = partial ? REFRESH_DAYS_PARTIAL : REFRESH_DAYS_PROVISIONAL;
-  return now.getTime() - at >= days * 24 * HOUR;
+  if (partial) return trDay(at) < trDay(now.getTime()) || (now.getTime() - at >= HOUR && yesterdayMissing(doc!, now));
+  return now.getTime() - at >= REFRESH_DAYS_PROVISIONAL * 24 * HOUR;
 }
 
 /**

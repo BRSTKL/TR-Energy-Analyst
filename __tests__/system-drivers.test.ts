@@ -88,6 +88,8 @@ function rawHour(date: string, o: { kgupWind: number; uevmWind: number; lep: num
     consumption: [{ date, consumption: o.consumption + 1500 }],
     up: [{ date, upRegulationDelivered: 100, net: o.net ?? 60 }],
     down: [{ date, downRegulationDelivered: -40, net: o.net ?? 60 }],
+    // Gerçek zamanlı üretim: rüzgâr UEVM'den 50 düşük, lisanssız güneş yok; ithalat / ihracat 700
+    rt: [{ date, total: o.uevmWind - 50 + 20, wind: o.uevmWind - 50, sun: 3, dammedHydro: 7, naturalGas: 4, lng: 2, importCoal: 1, wasteheat: 1, asphaltiteCoal: 2, importExport: 700 }],
   };
 }
 
@@ -115,8 +117,28 @@ describe("sistem geneli havuz biçimi", () => {
     expect(doc.lep[hourIndex(2026, "2026-10-01T00:00:00+03:00")!]).toBeNull();
 
     // Yeniden yazımda ayın eski saatleri silinir
-    writeSystemMonth(doc, 9, { dpp: [], uevm: [], lep: [], uecm: [], consumption: [], up: [], down: [] }, new Date("2026-10-27T00:00:00Z"));
+    writeSystemMonth(doc, 9, { dpp: [], uevm: [], lep: [], uecm: [], consumption: [], up: [], down: [], rt: [] }, new Date("2026-10-27T00:00:00Z"));
     expect(doc.kgup.wind[i]).toBeNull();
+    expect(doc.rt.wind[i]).toBeNull();
+    expect(doc.rtImportExport[i]).toBeNull();
+  });
+
+  it("gerçek zamanlı üretim: kaynak eşleme (LNG doğalgaza, asfaltit ve atık ısı diğere), ithalat / ihracat ayrı seri", () => {
+    const doc = emptySystemYear(2026);
+    const raw = rawHour("2026-09-01T00:00:00+03:00", { kgupWind: 1000, uevmWind: 900, lep: 40000, consumption: 41000 });
+    const { hours } = writeSystemMonth(doc, 9, raw, new Date("2026-10-20T00:00:00Z"));
+    const i = hourIndex(2026, "2026-09-01T00:00:00+03:00")!;
+    expect(hours.rt).toBe(1);
+    expect(doc.rt.wind[i]).toBe(850);
+    expect(doc.rt.sun[i]).toBe(3);
+    expect(doc.rt.dam[i]).toBe(7);
+    expect(doc.rt.naturalGas[i]).toBe(6);
+    expect(doc.rt.importedCoal[i]).toBe(1);
+    expect(doc.rt.other[i]).toBe(3);
+    expect(doc.rtImportExport[i]).toBe(700);
+    // Cevapta olmayan saat 0 değil boş
+    expect(doc.rt.wind[i + 1]).toBeNull();
+    expect(doc.rtImportExport[i + 1]).toBeNull();
   });
 
   it("saatler: sapma işaretleri (artı = fazlaya iter), tüketimden ayın ortanca farkı çıkar, eksik saat atlanır", () => {
@@ -213,6 +235,42 @@ describe("sistem geneli havuz biçimi", () => {
     expect(doc.format).toBe(SYSTEM_FORMAT);
     expect(doc.uecm).toHaveLength(8760);
     expect(systemNeedsFetch(doc, 1, new Date("2026-10-21T00:00:00Z"))).toBe(true);
+  });
+
+  it("biçim 2 belge (gerçek zamanlı üretim yok) biçim 3'e taşınır; mevcut seriler korunur", () => {
+    const old = emptySystemYear(2026) as Partial<ReturnType<typeof emptySystemYear>>;
+    old.format = 2;
+    delete old.rt;
+    delete old.rtImportExport;
+    old.lep![5] = 123;
+    old.fetched = { "09": "2026-10-20T00:00:00.000Z" };
+    const doc = upgradeSystemYear(old as ReturnType<typeof emptySystemYear>);
+    expect(doc.format).toBe(SYSTEM_FORMAT);
+    expect(SYSTEM_FORMAT).toBe(3);
+    expect(doc.rt.wind).toHaveLength(8760);
+    expect(doc.rt.wind.every((v) => v === null)).toBe(true);
+    expect(doc.rtImportExport).toHaveLength(8760);
+    expect(doc.lep[5]).toBe(123);
+    expect(systemNeedsFetch(doc, 9, new Date("2026-10-21T00:00:00Z"))).toBe(true);
+  });
+
+  it("günlük yenileme: ay içinde çekilen ay her Türkiye günü bir kez yenilenir; dün boşsa en az bir saat sonra yeniden denenir", () => {
+    const doc = emptySystemYear(2026);
+    const yesterdayLast = hourIndex(2026, "2026-10-20T23:00:00+03:00")!;
+    // 20 Ekim 13:00'te (Türkiye) çekildi; aynı gün sonraki çalışmalar yeniden çekmez
+    doc.fetched["10"] = "2026-10-20T10:00:00.000Z";
+    doc.consumption[hourIndex(2026, "2026-10-19T23:00:00+03:00")!] = 30000;
+    expect(systemNeedsFetch(doc, 10, new Date("2026-10-20T20:30:00Z"))).toBe(false);
+    // Türkiye saatiyle gece yarısından sonra (21 Ekim 00:30) yeni gün: yenilenir
+    expect(systemNeedsFetch(doc, 10, new Date("2026-10-20T21:30:00Z"))).toBe(true);
+    // 21 Ekim 00:10'da çekildi, ama dünün (20 Ekim) son saati boş: bir saat dolmadan beklenir, sonra yeniden denenir
+    doc.fetched["10"] = "2026-10-20T21:10:00.000Z";
+    expect(systemNeedsFetch(doc, 10, new Date("2026-10-20T21:40:00Z"))).toBe(false);
+    expect(systemNeedsFetch(doc, 10, new Date("2026-10-20T22:30:00Z"))).toBe(true);
+    // Dünün son saati doluysa gün içinde bir daha çekilmez
+    doc.consumption[yesterdayLast] = 31000;
+    expect(systemNeedsFetch(doc, 10, new Date("2026-10-20T22:30:00Z"))).toBe(false);
+    expect(systemNeedsFetch(doc, 10, new Date("2026-10-21T21:30:00Z"))).toBe(true);
   });
 
   it("yenileme: eksik ay çekilir, yeni çekilen geçici ay bekler, içinde bulunulan ay düne kadar", () => {
