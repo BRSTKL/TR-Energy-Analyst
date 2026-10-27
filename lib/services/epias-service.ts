@@ -72,6 +72,8 @@ let cachedTgt: { ticket: string; expiresAt: number } | null = null;
 
 const CAS_URL = "https://giris.epias.com.tr/cas/v1/tickets";
 const API_BASE = "https://seffaflik.epias.com.tr/electricity-service/v1";
+/** Doğal gaz servisi (aynı hesap ve TGT): GRF, SGP fiyatı, dengeleme gazı */
+export const GAS_API_BASE = "https://seffaflik.epias.com.tr/natural-gas-service/v1";
 
 const DEFAULT_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -350,9 +352,9 @@ async function callEpiasEndpoint<T = any>(
  * TGT süresi dolmuşsa bir kez yeniler; ağ hatalarında fetchWithNetworkRetry ile tekrar dener.
  * `path`, API_BASE'e göre verilir: "/generation/data/dpp".
  */
-export async function epiasRequest<T = any>(path: string, body?: unknown): Promise<T> {
+export async function epiasRequest<T = any>(path: string, body?: unknown, base: string = API_BASE): Promise<T> {
   const send = async (tgt: string) =>
-    fetchWithNetworkRetry(`${API_BASE}${path}`, {
+    fetchWithNetworkRetry(`${base}${path}`, {
       method: body === undefined ? "GET" : "POST",
       headers: {
         TGT: tgt,
