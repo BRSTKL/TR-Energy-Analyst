@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-441 dosya, 38 grup; baş açıklaması olmayan (sayfalar hariç): 30.
+445 dosya, 38 grup; baş açıklaması olmayan (sayfalar hariç): 31.
 
 ## Sayfalar (app/**/page.tsx) (22)
 
@@ -178,8 +178,9 @@
 
 - `lib/db-backup.ts` — SQLite Veritabanı Yedekleme: Veri silen veya üzerine yazan işlemlerden (proje/santral silme, üretim verisi içe aktarma, piyasa verisi yükleme/senkronu) önce ve her `npm run dev` başlangıcında veritabanının tutarlı bir kopyasını `prisma/bac…
 
-## lib/epias-plant (6)
+## lib/epias-plant (7)
 
+- `lib/epias-plant/hydro-location.ts` — Hidro santral konumu: koordinatlı kayıtla eşleştirme (kural: lib/epias-plant/location.ts): Koordinatlı hidro kaynakları: Global Energy Monitor Global Hydropower Tracker (.cache/gem/hydro-tr.json; büyük santraller) ve OpenStreetMap hidroele…
 - `lib/epias-plant/installed-capacity.ts` — Santral kurulu gücü (kaynaklı): KURAL: kurulu güç resmî kayıttan alınır, tahmin ancak kayıt bulunamazsa kullanılır ve tahmin olduğu her yerde söylenir.
 - `lib/epias-plant/location-match.ts` — Santral adıyla OpenStreetMap konum adayı (PLAN 20.2): EPİAŞ santral adı ve sahip şirket adı, OSM `power=plant` kayıtlarının adı ve işletmecisiyle kelime düzeyinde karşılaştırılır (Türkçe harfler sadeleştirilir, genel kelimeler atılır).
 - `lib/epias-plant/location.ts` — Santral konumu (kaynaklı; PLAN 15.1): KURAL: konum koordinatlı bir kayıttan alınır, tahmin ancak kayıt bulunamazsa kullanılır ve tahmin olduğu her yerde söylenir (kurulu güçteki disiplin).
@@ -449,7 +450,7 @@
 - `components/wind-day-chart.tsx` — Rüzgâr santralinin bir günü: üretim (kayıp durumuna göre renkli), ilk KGÜP, beklenen üretim (MWh); altta 100 m rüzgâr (m/s)
 - `components/wind-loss-card.tsx` — "Son 12 ay"; verisi daha kısa santralde ay sayısı ("Verisi olan 6 ay")
 
-## scripts (kök) (58)
+## scripts (kök) (59)
 
 - `scripts/aggregator-benchmark.mts` — Toplayıcılar arası kıyası üretir (PLAN 8.7): .cache/epias/aggregator-benchmark-<yıl>.json: npx tsx --tsconfig tsconfig.json scripts/aggregator-benchmark.mts [yıl=2026] [bitiş=karnenin dönem sonu]
 - `scripts/aggregator-collect.mts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" olarak kayıtlı tüm katılımcıların santralleri .cache/epias/aggregator-membership.json'a yazılır.
@@ -469,6 +470,7 @@
 - `scripts/gip-cap-impact.mts` — GİP işlem sınırının etkisi (PLAN 18.3): geriye dönük testin gün içi stratejileri sınırsız, %13 ve %10 sınırla.
 - `scripts/gip-participation.mts` — GİP likiditesi ve toplayıcıların gerçekleşen katılımı (PLAN 18.1).
 - `scripts/grw-wind-candidates.mts` — Konumu tahmini (ilçe / il merkezi) ya da boş olan proje RES'leri için Global Renewables Watch türbin kümelerinden aday listesi.
+- `scripts/hydro-location-autofill.mts` — Hidro santrallerin (HES) konumunu koordinatlı kayıtlarla tamamlar (kural: lib/epias-plant/location.ts, eşleştirme: lib/epias-plant/hydro-location.ts; kullanıcı 27.10.2026: hidro konumları projeye eklensin, OSM indirmesi ve ilçe merkezi tah…
 - `scripts/imbalance-prices-sync.mts` — EPİAŞ resmi dengesizlik fiyatlarını (sistem dengesizlik tutarı / miktarı) MarketData tablosuna yazar.
 - `scripts/installed-capacity-backfill.mts` — Proje santrallerinin kurulu gücünü EPİAŞ YEKDEM kayıtlarından, yoksa EPDK lisansından (güneş, rüzgâr, hidro) doldurur ve eski tahminin (en yüksek saatlik üretim) hatasını raporlar.
 - `scripts/launch-app.sh` — başlatıcısı (masaüstü ikonundan çağrılır).
@@ -530,16 +532,18 @@
 
 - `scripts/server/deploy.sh` — GitHub'daki main'i sunucuya yükler (Mac'ten çalıştırılır): bash scripts/server/deploy.sh Sırayla: çekme, paketler değiştiyse npm ci, şema değiştiyse yedek + prisma db push, next build, web servisini yeniden başlatma ve sayfa denetimi.
 
-## scripts/tools (9)
+## scripts/tools (11)
 
 - `scripts/tools/epdk-licenses-extract.py`
 - `scripts/tools/gem-hydro-extract.py`
 - `scripts/tools/gem-tracker-extract.py`
 - `scripts/tools/grw-wind-extract.py` — Türbin noktaları da yazılır: bitişik çiftlikler tek kümeye düşebildiği için aday arayan betik daha sık yeniden kümeler
+- `scripts/tools/osm-hydro-overpass.py`
 - `scripts/tools/osm-places-extract.py`
 - `scripts/tools/osm-renewable-extract.py`
 - `scripts/tools/osm-wind-turbines-extract.py` — Tek bağlantılı kümeleme: 0,02° ızgara hücreleriyle komşu arama
 - `scripts/tools/server-backup.sh` — Sunucu verisinin Mac'e günlük kopyası (sunucu dışı yedek).
+- `scripts/tools/turkiye-harita-extract.py` — projection: equirectangular, cos(39deg), fit width 1000 region borders: edges shared by two provinces of different regions
 - `scripts/tools/tz-sam-extract.py`
 
 ## scripts/verify (6)

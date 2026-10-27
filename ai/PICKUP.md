@@ -9,7 +9,6 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
 
 | Ajan | Dal | Dosyalar / klasörler | Başlangıç |
 |---|---|---|---|
-| Claude | claude/gunluk-pano (çalışma ağacı `.claude/worktrees/gunluk-pano`) | `lib/pool/system-*`, `lib/pool/system-sync.ts`, `scripts/system-sync.mts`, `scripts/epias-monthly-sync.mts` (yalnız günlük adım), `lib/analysis/daily-market.ts`, `lib/services/daily-market.ts`, `app/api/market/daily/`, `app/market/gunluk/`, `components/market/`, `app/market/page.tsx` (yalnız bağlantı), `app/methodology/page.tsx` (yalnız piyasa bölümü) | 27.10.2026 |
 
 ---
 
@@ -20,7 +19,9 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
 - **Yarım:** commit yok (sonradan commit edildi; önizleme sayfası silindi). Harita verisini üreten betik `scripts/tools/` altına alınıp `kaynaklar/README.md`'ye yazılmalı.
 - **Yapılan (ikinci tur):** sektör sayfasında "Harita" sekmesi: `components/sector-province-map-card.tsx`, EPDK lisanslarından il başına lisanslı güç (RES / GES / HES / hepsi; yürürlükteki ana kaynak; işletmedeki MWe, yoksa lisans MWe; GES lisans MWe). Hesap `lib/sector/epdk-by-province.ts` (+ `__tests__/epdk-by-province.test.ts`), veri `lib/services/sector-epdk-map.ts`, API `GET /api/sector/epdk-il`. Kart kaynağı, tarihi ve kapsamı (kurulmamış tesis içerebilir, lisanssız yok) yazar.
 - **Yarım:** harita sekmesi duman testinde yok (sektör sayfası varsayılan sekmeyle açılıyor); elle denendi. Sunucuda `.cache/epdk/` yoksa kart "dosya bulunamadı" der; sunucuda var mı bakılmadı.
-- **Sıradaki:** isteğe bağlı: YEKDEM'den çıkan santralleri il haritasına bindirmek (listede il yok, EPDK eşleştirmesi gerekir).
+- **Yapılan (üçüncü tur, 27.10):** push + deploy (`71a4159 → 90a27ad`, sayfalar 200); sunucuda sistem havuzu geriye doldurma (`system-sync.mts`, kullanıcı onayıyla); hidro konumları: `lib/epias-plant/hydro-location.ts` (+ test), `scripts/hydro-location-autofill.mts` (GEM Hydropower Tracker → OSM hidro (`scripts/tools/osm-hydro-overpass.py`, Overpass 27.10.2026, 520 kayıt) → EPDK ilçe merkezi `~`). Mac'te yazıldı: HES 0 → 195 / 210 konumlu (GEM 23, OSM 23, ilçe merkezi 149 proje HES'inde); Inavitas santral haritası 62 / 66. Kural: ad tek başına yetmez, güç oranı 0,7–1,4 ya da EPDK ilçesine ≤ 40 km; fazladan kelimeli aday güç de tutmalı.
+- **Yarım:** hidro konumları **sunucuya yazılmadı**: veri sahibi sunucu. Sunucuya gitmesi için kod yüklenmeli (`deploy.sh`), `.cache/osm/hydro-plants-tr.json` sunucuya konmalı ve betik orada `--write` ile çalıştırılmalı (kullanıcı onayı bekliyor).
+- **Sıradaki:** isteğe bağlı: YEKDEM'den çıkan santralleri il haritasına bindirmek (listede il yok, EPDK eşleştirmesi gerekir); hidroda konumu bulunamayan 45 santral (EPDK'da ilçesi yok ya da ad eşleşmedi) elle ya da GEM / OSM güncellenince.
 
 ## 27.10.2026 · Claude · Aşama 24: Günlük piyasa panosu (yerelde, `claude/gunluk-pano`)
 
