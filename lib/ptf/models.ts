@@ -150,7 +150,11 @@ function scheduled<M>(
  * seçildi: birleşim MAE 364 gün + gaz 338, 728 gün + gazsız 328; sınama 2026-04 – 10'da 413 → 415, fark yok). Gaz GRF serisi
  * 2024-11'den önce yok, önceki satırlarda yedek değer taşıyordu.
  */
-export const ENGINE_EXCLUDE: readonly string[] = ["gas"];
+/**
+ * Son 7 günün tahmin sapması özellikleri (lepBias7, windFBias7; 28.10.2026) de çıkarıldı: seçim döneminde birleşim 328,4 →
+ * 327,9 (gürültü), rüzgâr sapması sınamada LEAR'ı kötüleştirdi (425 → 435; seçim döneminde EPİAŞ rüzgâr tahmini yok).
+ */
+export const ENGINE_EXCLUDE: readonly string[] = ["gas", "lepBias7", "windFBias7"];
 export const LEAR_DEFAULTS: TrainOpts = { windowDays: 728, retrainDays: 7, minDays: 90 };
 const LAMBDAS = [0.3, 3, 30, 300];
 

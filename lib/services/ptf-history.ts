@@ -3,14 +3,17 @@
  *
  * PTF veri tabanından (doğrulanmış EPİAŞ / dosya kaynakları); yük tahmin planı, tüketim, gerçek zamanlı rüzgâr ve güneş,
  * kaynak bazında KGÜP sistem havuzundan (`data/pool/system/<yıl>`); EPİAŞ rüzgâr tahmini (2026-06'dan) ve doğal gaz GRF
- * EPİAŞ'tan (önbellekli). Eksik gün ya da saat null kalır; bilgi kuralı ve eksik yönetimi lib/ptf/history.ts'de.
+ * EPİAŞ'tan (önbellekli); kendi ülke güneş tahminimiz (bölge hava arşivi varsa). Eksik gün ya da saat null kalır; bilgi
+ * kuralı ve eksik yönetimi lib/ptf/history.ts'de.
  */
 
 import { daySlice } from "@/lib/analysis/daily-market";
 import { KGUP_SOURCES, type PtfDay } from "@/lib/ptf/history";
 import { prisma } from "@/lib/prisma";
 import { readSystemYear } from "@/lib/pool/system-store";
+import { forecastSolar, irradianceIndex } from "@/lib/ptf/solar";
 import { forecastDays } from "@/lib/services/pre-bid";
+import { loadRegionWeather } from "@/lib/services/ptf-solar";
 import { gasSeries } from "@/lib/services/pre-bid-effects";
 
 const DAY_MS = 86_400_000;
@@ -22,7 +25,7 @@ const full = (a: ReadonlyArray<number | null> | null | undefined): a is number[]
 export async function loadPtfHistory(
   from: string,
   to: string,
-  opts: { windForecast?: boolean; gas?: boolean } = {}
+  opts: { windForecast?: boolean; gas?: boolean; solar?: boolean } = {}
 ): Promise<Map<string, PtfDay>> {
   const rows = await prisma.marketData.findMany({
     where: {
@@ -88,6 +91,24 @@ export async function loadPtfHistory(
       windF: windF.get(d) ?? null,
       gas: gas.get(d) ?? null,
     });
+  }
+  // Kendi ülke güneş tahminimiz: her gün yalnız kendinden önceki günlerin KGÜP güneşiyle ve d2 havayla (lib/ptf/solar.ts)
+  if (opts.solar !== false) {
+    const regions = await loadRegionWeather(
+      Number(from.slice(0, 4)),
+      Number(to.slice(0, 4))
+    );
+    if (regions.length) {
+      const indexMemo = new Map<string, number[] | null>();
+      const index = (d: string) => {
+        if (!indexMemo.has(d)) indexMemo.set(d, irradianceIndex(regions, d));
+        return indexMemo.get(d)!;
+      };
+      for (const [d, day] of Array.from(out)) {
+        const before = (x: string) => (x < d ? (out.get(x)?.kgup.sun ?? null) : null);
+        day.sunF = forecastSolar(d, before, index);
+      }
+    }
   }
   return out;
 }

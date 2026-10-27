@@ -11,6 +11,7 @@
  *   lep        ≥ 0   yük tahmin planı: T'nin planı kesimden önce yayımlı sayılır (estimated_availability; yayım saati
  *                    anlık görüntü işiyle ölçülecek)
  *   windF      ≥ 0   EPİAŞ rüzgâr tahmini: aynı (estimated_availability; seri 2026-06'dan güvenilir)
+ *   sunF       ≥ 0   kendi güneş tahminimiz: d2 hava (kesimde elde) ve T-1'e kadar KGÜP güneşiyle kurulur
  *   kgup       ≥ 1   T-1'in KGÜP'ü T-2 akşamı yayımlı; havuzda son sürüm var (latest_only, küçük risk)
  *   cons, windRt, sunRt  ≥ 2   gerçek zamanlı ölçüm; temkinli olarak yalnız T-2 ve öncesi bütün gün
  *   gas        ≥ 2   doğal gaz GRF; temkinli
@@ -54,17 +55,29 @@ export interface PtfDay {
   windF: number[] | null;
   /** Doğal gaz GRF (TL / 1000 sm³) */
   gas: number | null;
+  /** Kendi ülke güneş tahminimiz (MW; lib/ptf/solar.ts), o günün kesiminde bilinenle kurulmuş; yoksa null */
+  sunF?: number[] | null;
 }
 
 /** `kgupSun`: KGÜP güneşi ayrı alan; kusursuz girdi tanısında yalnız güneşi açmak için (termik planlar fiyatın sonucudur) */
 export type PtfField =
-  "ptf" | "lep" | "cons" | "windRt" | "sunRt" | "kgup" | "kgupSun" | "windF" | "gas";
+  | "ptf"
+  | "lep"
+  | "cons"
+  | "windRt"
+  | "sunRt"
+  | "kgup"
+  | "kgupSun"
+  | "windF"
+  | "sunF"
+  | "gas";
 
 /** Hedef güne göre en az kaç gün önceki veri okunabilir */
 export const MIN_LAG_DAYS: Record<PtfField, number> = {
   ptf: 1,
   lep: 0,
   windF: 0,
+  sunF: 0,
   kgup: 1,
   kgupSun: 1,
   cons: 2,

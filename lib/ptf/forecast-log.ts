@@ -33,7 +33,7 @@ export interface PtfForecastLog {
   /** Birleşimi oluşturan modellerin saatlik tahminleri */
   members: Record<string, number[]>;
   /** Girdi notları: rüzgâr kaynağı (0 kalıcılık, 1 EPİAŞ tahmini), yedeğe düşen girdiler, canlı alınan alanlar */
-  inputs: { windKind: number; fallbacks: string[]; live: string[] };
+  inputs: { windKind: number; sunKind?: number; fallbacks: string[]; live: string[] };
   /** Aralığın dayandığı örneklem dışı gün sayısı ve son 60 günde birleşimin hatası (TL/MWh) */
   band: { days: number; recentMae: number | null };
   cap: number | null;

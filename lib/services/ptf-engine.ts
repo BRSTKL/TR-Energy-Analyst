@@ -7,7 +7,7 @@
  * Kesimden sonra bilinen hiçbir veri kullanılmaz (lib/ptf/history.ts kuralı).
  */
 
-import { buildFeatures } from "@/lib/ptf/features";
+import { buildFeatures, FEATURE_NAMES } from "@/lib/ptf/features";
 import {
   bandsFrom,
   cutoffMs,
@@ -28,6 +28,8 @@ import { DPP_FIELDS } from "@/lib/pool/system-codec";
 import { epiasRequest } from "@/lib/services/epias-service";
 import { liveDay } from "@/lib/services/pre-bid";
 import { loadPtfHistory } from "@/lib/services/ptf-history";
+import { forecastSolar, irradianceIndex, SOLAR_SCALE_DAYS } from "@/lib/ptf/solar";
+import { liveRegionWeather } from "@/lib/services/ptf-solar";
 
 export const ENGINE_MODEL_ID = "ptf-ens-v1";
 const BAND_DAYS = 60;
@@ -102,6 +104,28 @@ export async function forecastPtf(
     );
     if (Object.keys(k).length) ((p.kgup = { ...p.kgup, ...k }), live.push("kgupD1"));
   }
+  // Kendi ülke güneş tahmini: arşiv düne kadar; hedef gün ve ölçek günleri için d2 ışınımı canlı
+  if (!t.sunF) {
+    try {
+      const regions = await liveRegionWeather(
+        shiftDay(target, -(SOLAR_SCALE_DAYS + 3)),
+        target
+      );
+      if (regions.length) {
+        const index = (d: string) => irradianceIndex(regions, d);
+        t.sunF = forecastSolar(
+          target,
+          (d) => (d < target ? (days.get(d)?.kgup.sun ?? null) : null),
+          index
+        );
+        if (t.sunF) live.push("sunF");
+      }
+    } catch (e) {
+      notes.push(
+        `Güneş için hava tahmini alınamadı (vekile düşüldü): ${e instanceof Error ? e.message : e}`
+      );
+    }
+  }
   if (!t.lep) notes.push("Hedef günün yük planı yok: tahmin kurulamaz.");
   if (!p.ptf) notes.push("T-1 PTF'si yok: tahmin kurulamaz.");
 
@@ -152,7 +176,12 @@ export async function forecastPtf(
         q90: bands[h].q90,
       })),
       members: { "LEAR-ridge": pl, GBM: pg },
-      inputs: { windKind: f.rows[0][16], fallbacks: f.fallbacks, live },
+      inputs: {
+        windKind: f.rows[0][FEATURE_NAMES.indexOf("windKind")],
+        sunKind: f.rows[0][FEATURE_NAMES.indexOf("sunKind")],
+        fallbacks: f.fallbacks,
+        live,
+      },
       band: { days: errors.length, recentMae },
       cap: f.cap,
     },

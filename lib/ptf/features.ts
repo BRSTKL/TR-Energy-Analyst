@@ -48,6 +48,9 @@ export const FEATURE_NAMES = [
   "capRatioD1",
   "zeroShareD1",
   "eveningRampLep",
+  "lepBias7",
+  "windFBias7",
+  "sunKind",
 ] as const;
 
 export interface DayFeatures {
@@ -141,20 +144,28 @@ function windInput(v: PtfView): { wind: number[]; kind: number } | null {
   };
 }
 
-/** Güneş girdisi: KGÜP güneş vekili (son 7 günün ortancası); oracle'da hedef günün KGÜP güneşi */
-function sunInput(v: PtfView): number[] | null {
+/**
+ * Güneş girdisi: kendi ülke güneş tahminimiz varsa o (kind 1), yoksa KGÜP güneş vekili (son 7 günün ortancası, kind 0);
+ * oracle'da hedef günün KGÜP güneşi (kind 2)
+ */
+function sunInput(v: PtfView): { sun: number[]; kind: number } | null {
   try {
     const plan = v.kgup("sun", v.target);
-    if (plan) return plan;
+    if (plan) return { sun: plan, kind: 2 };
   } catch {
     /* canlı kural */
   }
+  const own = v.series("sunF", v.target);
+  if (own) return { sun: own, kind: 1 };
   const last = v.lastDay("kgupSun");
   const prev = Array.from({ length: 7 }, (_, i) =>
     v.kgup("sun", shiftDay(last, -i))
   ).filter((x): x is number[] => !!x);
   if (prev.length < 4) return null;
-  return Array.from({ length: H }, (_, h) => median(prev.map((x) => x[h])));
+  return {
+    sun: Array.from({ length: H }, (_, h) => median(prev.map((x) => x[h]))),
+    kind: 0,
+  };
 }
 
 /** Yük girdisi: plan; oracle "cons" ise gerçekleşen tüketim */
@@ -166,6 +177,28 @@ function loadInput(v: PtfView): number[] | null {
     /* canlı kural */
   }
   return v.series("lep", v.target);
+}
+
+/**
+ * EPİAŞ tahmininin son 7 bilinen günde (gerçekleşen T-2'ye kadar) saat bazında ortalama sapması (tahmin − gerçekleşen).
+ * İki seriden biri olmayan gün atlanır; hiç gün yoksa 0 (ör. rüzgâr tahmini 2026-06'dan önce yok).
+ */
+function recentBias(
+  v: PtfView,
+  forecast: "lep" | "windF",
+  actual: "cons" | "windRt"
+): number[] {
+  const last = v.lastDay(actual);
+  const diffs: number[][] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = shiftDay(last, -i);
+    const f = v.series(forecast, d);
+    const a = v.series(actual, d);
+    if (f && a) diffs.push(f.map((x, h) => x - a[h]));
+  }
+  return Array.from({ length: H }, (_, h) =>
+    diffs.length ? mean(diffs.map((x) => x[h])) : 0
+  );
 }
 
 export function buildFeatures(v: PtfView): DayFeatures | null {
@@ -181,7 +214,9 @@ export function buildFeatures(v: PtfView): DayFeatures | null {
   const w =
     windInput(v) ??
     (fallbacks.push("wind"), { wind: Array<number>(H).fill(0), kind: -1 });
-  const sun = sunInput(v) ?? (fallbacks.push("sun"), Array<number>(H).fill(0));
+  const sunIn =
+    sunInput(v) ?? (fallbacks.push("sun"), { sun: Array<number>(H).fill(0), kind: -1 });
+  const sun = sunIn.sun;
   const net = load.map((x, h) => x - w.wind[h] - sun[h]);
 
   // Geçmiş aynı sınıf günlerin yük ve net yük ortancası (net: gerçek zamanlı rüzgâr + o günün KGÜP güneşi; ≥ T-2)
@@ -225,6 +260,8 @@ export function buildFeatures(v: PtfView): DayFeatures | null {
   const d1Mean = mean(d1);
   const zero = d1.filter((x) => x <= 1).length / H;
   const ramp = load[19] - load[13];
+  const lepBias = recentBias(v, "lep", "cons");
+  const windBias = recentBias(v, "windF", "windRt");
 
   const rows = Array.from({ length: H }, (_, h) => [
     h,
@@ -257,6 +294,9 @@ export function buildFeatures(v: PtfView): DayFeatures | null {
     cap ? d1[h] / cap : 0,
     zero,
     ramp,
+    lepBias[h],
+    windBias[h],
+    sunIn.kind,
   ]);
   return { target: v.target, base, cap, rows, fallbacks };
 }
