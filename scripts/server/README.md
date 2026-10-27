@@ -14,7 +14,7 @@ Zamanlanmış işler ve uygulama Mac'te değil sunucuda çalışır. Mac kapalı
 |---|---|---|
 | `tr-energy-solar-forecast` | 09:30, 11:00 | `scripts/solar-forecast-daily.mts` |
 | `tr-energy-wind-forecast` | 10:00, 11:30 (Europe/Istanbul) | `scripts/wind-forecast-daily.mts --write`; kurulum sonrası etkin |
-| `tr-energy-epias-monthly` | saatte bir | `scripts/epias-monthly-sync.mts` (günlük küçük işler: piyasa fiyatları, sistem geneli seriler `system-sync.mts --recent`, arıza bildirimleri `umm-sync.mts --recent`: içinde bulunulan ay 6 saatte bir; DSİ baraj doluluğu `dsi-dam-sync.mts`: yagisbarajdoluluk.dsi.gov.tr yalnız Türkiye IP'sinden açılır, havuz `data/pool/dsi/`) |
+| `tr-energy-epias-monthly` | saatte bir | `scripts/epias-monthly-sync.mts` (günlük küçük işler: piyasa fiyatları, sistem geneli seriler `system-sync.mts --recent`, arıza bildirimleri `umm-sync.mts --recent`: içinde bulunulan ay 6 saatte bir; DSİ baraj doluluğu `dsi-dam-sync.mts`: yagisbarajdoluluk.dsi.gov.tr yalnız Türkiye IP'sinden açılır, havuz `data/pool/dsi/`; ENTSO-E komşu fiyat ve akış `entsoe-sync.mts`: `ENTSOE_TOKEN` .env'de, havuz `data/pool/entsoe/`) |
 | `tr-energy-snapshot` | 08:02–13:02 saatlik, 12:25, 13:30, 14:02 | `scripts/snapshot-capture.mts` (27.10.2026'dan beri kurulu, aşağıya bakın) |
 | `tr-energy-db-backup` | 03:00 | `scripts/backup-db.mts daily` (`prisma/backups/`, son 5) |
 | `tr-energy-forecast-check` | 12:15 | yarının güneş/rüzgâr tahmini yazılmadıysa bildirim (yeni dosyalar kurulunca) |
