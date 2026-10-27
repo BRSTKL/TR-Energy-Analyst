@@ -54,6 +54,16 @@ Bilinen durumlar:
 - Eski rüzgâr lisanslarında ilçe "-".
 - Rüzgârda lisans MWe, henüz kurulmamış genişlemeyi de içerebilir. Kurulu güç için işletmedeki MWe kullanılır.
 
+## geoBoundaries il sınırları (`geoboundaries/`)
+
+William & Mary geoLab; Türkiye il (ADM1) sınırları, sadeleştirilmiş, yıl 2021. Lisans: CC BY-SA 2.0; haritalarda atıf yazılır (kaynak adı ve lisans haritanın köşesinde). API: `https://www.geoboundaries.org/api/current/gbOpen/TUR/ADM1/`, dosya GitHub sürüm sayfasından (wmgeolab/geoBoundaries, `9469f09`) indirildi.
+
+| Dosya | Sürüm | İçerik | Çıkarıcı | Çıktı | Kullanıldığı yer |
+|---|---|---|---|---|---|
+| `geoBoundaries-TUR-ADM1_simplified-2021.geojson` | 2021, indirme 27.10.2026, SHA-256 `94f64008…b3117` | 81 il çokgeni (ad, `TR-<plaka>`) | `python3 -I scripts/tools/turkiye-harita-extract.py <dosya> components/ui/turkiye-map-data.ts` | `components/ui/turkiye-map-data.ts` (il yolları, bölge sınırı, `trProject`; elle düzenlenmez) | Santral haritası, sektör il haritası, il seçici (`components/ui/turkiye-il-secici.tsx`) |
+
+Bilinen sınırlar: sınırlar sadeleştirilmiş (küçük adalar yok); il adı kaynakta Türkçe karakterli ("Hakkâri" şapkalı yazılır, eşleştirmede şapka atılır).
+
 ## Doğrulama (17.10.2026)
 
 Altı dosya çıkarıcılarla yeniden işlendi. Sonuç `.cache` altındaki mevcut JSON'larla birebir aynı çıktı: kodun kullandığı veri bu dosyalardan.
