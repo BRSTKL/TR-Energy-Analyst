@@ -5,7 +5,7 @@
  * Her çalışmada önce küçük günlük işler: geçici üretim (12 saatte bir), piyasa fiyatları (`market-sync.mts --recent`,
  * veri dünü içerene kadar her saat; içeriyorsa bir saniyede çıkar) ve sistem geneli seriler (`system-sync.mts --recent`, her
  * Türkiye günü bir kez), arıza bildirimleri (`umm-sync.mts --recent`, içinde bulunulan ay 6 saatte bir). Piyasa sayfası ve
- * günlük pano böylece her gün dünün verisini gösterir.
+ * günlük pano böylece her gün dünün verisini gösterir. Ayrıca DSİ baraj doluluğu (`dsi-dam-sync.mts`; EPİAŞ'tan bağımsız).
  *   1. Ay tamamlandıysa ya da başka bir çalışma sürüyorsa hiçbir şey yapmaz.
  *   2. EPİAŞ veri uç noktasına erişilemiyorsa yapmaz; ayın 5'inden sonra günde bir kez bildirim (20.10.2026'dan beri VPN
  *      gerekmiyor, erişim yoksa internet bağlantısı ya da EPİAŞ kesintisi).
@@ -166,6 +166,23 @@ if (!dry) {
       clearTimeout(timer);
       const epias = out.split("\n").filter((l) => / epias /.test(l));
       if (epias.length || /HATA/.test(out)) console.log(`${stamp()} günlük arıza bildirimleri: ${out.trim().split("\n").slice(0, 6).join(" | ")}`);
+      resolve();
+    });
+  });
+}
+
+// DSİ baraj doluluğu (yagisbarajdoluluk.dsi.gov.tr; yalnız Türkiye IP'sinden açılır, yani sunucuda): havuz taze ise tek istekle çıkar.
+// EPİAŞ'tan bağımsız; hata kendi bildirimini gönderir (günde en çok bir), burada yalnız günlüğe yazılır.
+if (!dry) {
+  await new Promise<void>((resolve) => {
+    const c = spawn(process.execPath, ["--env-file=.env", "node_modules/.bin/tsx", "--tsconfig", "tsconfig.json", "scripts/dsi-dam-sync.mts"], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    c.stdout.on("data", (b) => (out += b));
+    c.stderr.on("data", (b) => (out += b));
+    const timer = setTimeout(() => c.kill("SIGTERM"), 5 * 60_000);
+    c.on("close", (code) => {
+      clearTimeout(timer);
+      if (code !== 0 || !/güncel \(/.test(out)) console.log(`${stamp()} DSİ baraj doluluğu: ${out.trim().split("\n").join(" | ")}`);
       resolve();
     });
   });
