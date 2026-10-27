@@ -14,5 +14,5 @@ export async function GET(request: Request) {
   const date = new URL(request.url).searchParams.get("date");
   const result = await loadDailyMarket(date);
   if (!result.ok) return NextResponse.json({ success: false, error: result.error }, { status: result.status });
-  return NextResponse.json({ success: true, day: result.data, available: result.available });
+  return NextResponse.json({ success: true, day: result.data, available: result.available, limit: result.limit });
 }

@@ -484,6 +484,31 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
               </li>
             </ul>
             <p>
+              <b>Bugün sekmesi.</b> Aynı hesap, EPİAŞ&apos;tan istek anında alınan bugünün verisiyle (5 dakikada bir yenilenir): PTF bütün gün
+              için açıklanmıştır; tüketim, gerçek zamanlı üretim, SMF, sistem yönü, GİP ve talimatlar geçmiş saatler için vardır. Gün
+              tamamlanmadığı için akşam rampası ve günün özeti eksik hesaplanır; değerler doğrulanmamıştır, EPİAŞ düzeltebilir. Bir uç nokta
+              yanıt vermezse o seri boş kalır ve ekranda not düşer.
+            </p>
+            <p>
+              <b>Yarın sekmesi.</b> Yarının açıklanmış PTF&apos;si (gün öncesi piyasası sonuçları genelde 13:00–14:00), yük tahmini ve GÖP
+              eşleşme hacmi; aynı sınıftaki son 28 günün ortancasıyla ve fiyat limitiyle kıyaslanır. <b>Fiyat tahmini değildir:</b> PTF zaten
+              açıklanmıştır. Ölçüm (27.10.2026, 626 gün, doğrulanmış PTF; her gün için önceki 28 günün aynı sınıf günleriyle, saat bazında
+              ortanca; <code className="break-all">scripts/analysis/ptf-load-evidence.mts</code>): yük tahmini tek başına fiyat hatasını ortancaya göre yalnız %2,3
+              azalttı (431 → 421 TL/MWh; günlerin %49,7&apos;sinde daha iyi, yani yazı tura); gerçekleşen rüzgâr ve KGÜP güneşiyle net yük %12
+              azalttı (431 → 379; günlerin %61&apos;inde daha iyi) ama yarının rüzgâr ve güneşi 14:00&apos;te bilinmediği için net yük yarın için
+              hesaplanmaz (yarının KGÜP&apos;ü EPİAŞ&apos;tan sorulamıyor). Etki aya göre tutarsız: Mayıs–Haziran 2026&apos;da net yük modeli ortancadan
+              kötüydü. Yük tahmininin gerçekleşen tüketimden ortalama mutlak sapması %2,9, eğilimi −%0,4 (15.912 saat). Akşam rampası ile
+              akşam–öğle fiyat farkı korelasyonu 0,56, günlük ortalama net yük ile ortalama PTF korelasyonu 0,56 (gerçekleşen değerlerle).
+              Arife ve bayram gibi yarım gün ve tatil günlerinde son 28 günde aynı sınıftan gün yoktur; kıyas bandı çıkmaz, ekran bunu söyler.
+            </p>
+            <p>
+              <b>Fiyat limiti.</b> Resmî bir limit tablosu elimizde olmadığı için limit verideki platodan çıkarılır: son 60 günde en az 3 saat
+              görülen en yüksek PTF. Doğrulanmış PTF&apos;de 2026 Ocak–Mart 3.400 TL/MWh, 4 Nisan&apos;dan beri 4.500 TL/MWh (ilk görüldüğü gün; kararın
+              yürürlük tarihi olmayabilir). Ekranda her zaman &quot;veriden çıkarıldı, EPDK kararıyla doğrulanmadı&quot; yazar. Tavanın %90&apos;ı ve
+              üstü &quot;limite yakın&quot;, tavanda olan &quot;limitte&quot; sayılır; 1 TL/MWh ve altı &quot;sıfır fiyat&quot;. Tavandaki saatte sistem açığı için
+              dengesizlik fiyatı azami fiyat limiti × 1,05 kuralına döner (yukarıdaki 2026 fiyat kuralları, md. 110).
+            </p>
+            <p>
               Gerçek zamanlı değerler ölçümdür ve EPİAŞ sonradan düzeltebilir. Veri günde bir kez sunucuda güncellenir; dünün verisi ertesi
               sabah hazırdır. Cümleler yalnız gözlemi söyler (örn. PTF zirvesi net yük zirvesine bir saat yakın); tek günlük gözlem bir
               ilişkinin kanıtı değildir.

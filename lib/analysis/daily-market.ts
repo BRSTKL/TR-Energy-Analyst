@@ -30,6 +30,9 @@ import { nf } from "@/lib/format";
 import { SYSTEM_SOURCES, type SystemSource, type SystemYear } from "@/lib/pool/system-codec";
 import { ZERO_PRICE_MAX, type MarketHour } from "./market-summary";
 
+/** Günün bir saati: canlı günde SMF ve sistem yönü henüz yayımlanmamış olabilir */
+export type DailyMarketHour = Omit<MarketHour, "smf" | "systemDirection"> & { smf: number | null; systemDirection: string | null };
+
 /** 24 saatlik seri (saat 0..23); verisi olmayan saat null */
 export type Series24 = Array<number | null>;
 
@@ -309,7 +312,7 @@ export interface DailyInput {
   /** YYYY-AA-GG */
   date: string;
   /** 24 saat; verisi olmayan saat null */
-  market: Array<MarketHour | null>;
+  market: Array<DailyMarketHour | null>;
   system: DailySystem;
   /** Önceki günlerin saatlik PTF'si (kıyas bandı için) */
   history: Map<string, Series24>;
