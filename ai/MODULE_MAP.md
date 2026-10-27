@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-433 dosya, 38 grup; baş açıklaması olmayan (sayfalar hariç): 30.
+441 dosya, 38 grup; baş açıklaması olmayan (sayfalar hariç): 30.
 
 ## Sayfalar (app/**/page.tsx) (22)
 
@@ -31,7 +31,7 @@
 - `/sector/aggregators/[id]` (`app/sector/aggregators/[id]/page.tsx`) — Toplayıcı ayrıntısı (PLAN 9.2): kıyas tablosundaki bir satırın içi.
 - `/sector` (`app/sector/page.tsx`) — "2025" ya da "2026 (Ocak–Ağustos)"
 
-## API (app/api/**/route.ts) (62)
+## API (app/api/**/route.ts) (63)
 
 - `GET, PUT, DELETE /api/account/epias` — GET /api/account/epias: hesap e-postası ve kayıtlı EPİAŞ hesabının özeti (şifre dönmez).
 - `POST /api/account/epias/test` — POST /api/account/epias/test: kayıtlı (yoksa .env) EPİAŞ hesabıyla yeni bilet alarak bağlantıyı dener.
@@ -92,6 +92,7 @@
 - `GET /api/sector/aggregators/[id]/summary` — GET /api/sector/aggregators/[id]/summary?year=2026&name=&title=&email=&linkedin= → toplayıcının 1 sayfalık özeti (PPTX; PLAN 9.3).
 - `GET /api/sector/aggregators` — GET /api/sector/aggregators?year=2026 → toplayıcılar arası kıyas (scripts/aggregator-benchmark.mts ile üretilen .cache/epias/aggregator-benchmark-<yıl>.json).
 - `GET /api/sector/curtailment` — GET /api/sector/curtailment?tech=GES|RES|HES: Sektörde kayıp üretim: güneşte uyduyla (PLAN 20.4; grup bütün / YEKA / diğer), rüzgârda geçmiş rüzgârla (18.10.2026; kalite eşiğini geçen santraller), hidroda bildirilen kullanılamayan kapasite…
+- `GET /api/sector/epdk-il` — GET /api/sector/epdk-il: EPDK üretim lisanslarının il bazında toplamı (RES / GES / HES; dosya yoksa o tür null)
 - `GET /api/sector` — GET /api/sector?year=2025&view=k1: Sektör karnesi: teknoloji başına dağılım, kıyaslamadaki santraller (sektördeki sırasıyla) ve şirket toplamları.
 - `GET /api/sector/system-attribution` — GET /api/sector/system-attribution?year=2026&month=01..12&side=deficit|surplus&source=wind|sun|river&level=company|aggregator|region|plant (month verilmezse bütün dönem) Sistem yönü "Kimden geldi?": seçilen kaynağın o yöne itmesinin şirket…
 - `GET /api/sector/system-drivers` — GET /api/sector/system-drivers: Sistem yönünü ne belirledi: kaynak türüne göre plan sapması (UEVM − KGÜP) ve tüketim tahmini hatası, açık ve fazla saatlerde; ay ay, günün saatine göre ve önceki yılın aynı aylarıyla (lib/analysis/system-dri…
@@ -269,16 +270,17 @@
 - `lib/report/plant-report.ts` — Santral / şirket dengesizlik raporu (dışarıya gönderilecek kısa rapor) için veri: Okuyucu, santrallerin sahibi olan şirketin yöneticisidir.
 - `lib/report/report-checks.ts` — Rapor tutarlılık denetimi.
 
-## lib/sector (6)
+## lib/sector (7)
 
 - `lib/sector/benchmark.ts` — Sektör karnesi (kıyaslama): EPİAŞ'ta üretimi yayımlanan lisanslı santrallerin aynı yıl için dengesizlik göstergeleri.
+- `lib/sector/epdk-by-province.ts` — EPDK üretim lisanslarının il bazında toplamı (sektör haritası): Kaynak: kullanıcının lisans.epdk.gov.tr dışa aktarımı (.cache/epdk/<tür>-licenses.json).
 - `lib/sector/epdk-licenses.ts` — EPDK lisans listeleri (kullanıcının EPDK sorgu dışa aktarımları; Bekleyen işler: EPDK ↔ karne)
 - `lib/sector/hourly-store.ts` — Sektör karnesinin saatlik serisi (PLAN 4.1): Karne yalnızca yıllık özet tutarsa aday santral taraması (portföye eklenince netleşme kazancı) ve arıza saatleri hariç karne (K1) yeniden EPİAŞ'a gitmeden hesaplanamaz.
 - `lib/sector/hydro-kind.ts` — Hidro alt türü kayıttan (kullanıcı kararı 17.10.2026: alt türe göre ayrı dağılım, adil kıyas)
 - `lib/sector/period.ts` — Sektör analizlerinin dönemi: içinde bulunulan yılın sektör karnesinin dönem sonu (scripts/sector-collect.mts; piyasa verisi olan son gün).
 - `lib/sector/plant-technology.ts` — Sektör taramasında santral teknolojisi (PLAN Bekleyen işler: EPDK ↔ karne, adım 2b): Eskiden tür yalnız addan tahmin ediliyordu (`guessTechnologyFromName`); adında tür eki olmayan santraller ("OYMAPINAR", "BORÇKA", "HASAN UĞURLU") ve tanın…
 
-## lib/services (40)
+## lib/services (41)
 
 - `lib/services/aggregator-data.ts` — Toplayıcı kıyası ve ayrıntısı için veri okuma (PLAN 8.7, 9.2): Santral saatleri veri havuzundan (ilk KGÜP ve UEVM), türü ve sahibi sektör karnesi dosyalarından ya da havuz tanımından, fiyatlar veritabanındaki EPİAŞ resmi dengesizlik fiyatl…
 - `lib/services/aggregator-membership.ts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" ekiyle kayıtlı tüm katılımcıların santral listesi çekilir ve .cache/epias/ aggregator-membership.json'a yazılır.
@@ -313,6 +315,7 @@
 - `lib/services/response-cache.ts` — Proje hesaplarının önbelleği (PLAN 10.2): Sayfalar her açılışta aynı ağır hesabı yapıyordu (61 santrallik portföyde sonuç 5 sn, DSG 15 sn, ana sayfa 20 sn).
 - `lib/services/sector-capture.ts` — Sektör capture rate önbelleği (PLAN 19.3): scripts/sector-capture.mts çıktısını okur (.cache/epias/sector-capture.json) ve bir projenin santrallerinin ve teknoloji toplamlarının sektördeki yerini (yüzdelik; yüksek capture rate = iyi) verir.
 - `lib/services/sector-curtailment.ts` — Sektörde uyduyla kayıp üretim önbelleği (PLAN 20.4): Güneş: `scripts/sector-curtailment.mts` çıktısı `.cache/epias/sector-curtailment.json`.
+- `lib/services/sector-epdk-map.ts` — Sektör il haritası verisi: EPDK lisanslarının il toplamları (hesap lib/sector/epdk-by-province.ts) Dosya yoksa o tür null döner (kaynak: scripts/tools/epdk-licenses-extract.py).
 - `lib/services/sector.ts` — Sektör karnesi verisi (diskten): Sektör karnesi scripts/sector-collect.mts ile toplanır ve .cache/epias/sector-<yıl>.json'a yazılır; bu modül onu okur ve santralleri şirket dizinindeki (plant-owners-<yıl>.json) şirket kimliğiyle zenginleşt…
 - `lib/services/system-attribution.ts` — Sistem yönü "Kimden geldi?": scripts/system-attribution.mts çıktısını (.cache/epias/system-attribution.json) okur, seçilen yıl, yön ve kaynak için şirket, toplayıcı ya da santral düzeyinde toplar (lib/analysis/system-attribution.ts).
 - `lib/services/system-drivers.ts` — Sistem yönünü ne belirledi? Veri toplama (hesap lib/analysis/system-drivers.ts'te): Havuzdaki sistem geneli serileri (data/pool/system/<yıl>.json.gz; scripts/system-sync.mts) ile MarketData'daki doğrulanmış sistem yönü saat saat birleştiri…
@@ -393,7 +396,7 @@
 - `lib/wind-engine/pipeline.ts` — RES günlük akışı: taze girdiler, kanıtla sürüm seçimi, kesimden önce değişmez kayıt.
 - `lib/wind-engine/registry.ts` — Rüzgâr günlük kayıt sürümleri.
 
-## components (45)
+## components (50)
 
 - `components/aggregator-benchmark-tab.tsx` — Sektör karnesi · Toplayıcılar sekmesi (PLAN 9.1): EPİAŞ'taki toplayıcıların aynı yöntemle kıyası.
 - `components/budget-tab.tsx` — Planlama sayfasının "2027 bütçesi" sekmesi (PLAN 17.3): gelecek yılın aylık dengesizlik + KÜPST bütçesi, senaryolar ve kötü durum aralığı.
@@ -415,6 +418,7 @@
 - `components/method-link.tsx` — Metodoloji sayfasındaki ilgili bölüme küçük bağlantı ("Bu rakam nereden geliyor?")
 - `components/netting-card.tsx` — Dengeden sorumlu grup (DSG) netleştirme faydası: santrallerin tek başına ve grup halinde netleşmiş dengesizlik maliyetlerini karşılaştırır.
 - `components/plant-comparison-card.tsx` — Santralleri, teknoloji gruplarını (RES / HES / GES) ve portföyü aynı birim metriklerle yan yana gösterir.
+- `components/plant-map-card.tsx` — Projedeki santrallerin haritası.
 - `components/plant-scope-picker.tsx` — Bu sayıdan fazla santralde düğmeler yerine açılır liste (toplayıcı portföyünde 60+ düğme sayfayı dolduruyordu)
 - `components/pricing-profile-dialog.tsx`
 - `components/print-button.tsx` — Sayfayı tarayıcının yazdırma penceresiyle PDF'e çevirir (baskı düzeni globals.css'teki @media print kurallarıyla)
@@ -424,6 +428,7 @@
 - `components/report-download-dialog.tsx` — Tutarlılık denetimi bulgusu (lib/report/report-checks.ts)
 - `components/sapma-yuku-card.tsx` — Sonuç API'sinin `sapma` alanı: Dengesizlik Karnesi ile aynı motordan
 - `components/sector-loss-card.tsx` — Piyasa sayfasıyla aynı: son yıl vurgulu mavi, önceki yıl gri
+- `components/sector-province-map-card.tsx` — Sektör sayfası harita sekmesi: EPDK üretim lisanslarının il bazında kurulu gücü (RES / GES / HES).
 - `components/settlement-unit-card.tsx` — Projenin uzlaştırma birimi: her santral sahibinin dengesinde (varsayılan) ya da tek bir toplayıcı portföyünde.
 - `components/slow-loading.tsx` — Ağır hesap sayfalarının yükleme göstergesi (hata ayıklama testi, 16.10.2026: geriye dönük test önbelleksiz 11–67 sn, DSG 14–17 sn sürüyordu ve yalnız düz yazı vardı).
 - `components/system-attribution-card.tsx` — Sistem yönü kartıyla aynı kaynak renkleri
@@ -436,6 +441,9 @@
 - `components/ui/skeleton.tsx`
 - `components/ui/table.tsx`
 - `components/ui/tabs.tsx`
+- `components/ui/turkiye-il-secici.tsx` — Türkiye il seçici: bölge → il, posta kodu (ilk iki hane = plaka kodu) ile arama.
+- `components/ui/turkiye-map-data.ts` — Enlem / boylam (WGS84, derece) → harita birimi; paftalarla aynı izdüşüm
+- `components/ui/use-element-width.ts` — Bir öğenin güncel genişliği (px); harita ölçeğini ekrana göre ayarlamak için
 - `components/use-market-coverage.ts` — /api/projects/[id]/data-quality yanıtının piyasa verisi kapsamıyla ilgili kısmı
 - `components/weather-day-chart.tsx` — Renkler: seriler referans kategorik paletin ilk üç yuvası (mavi, turuncu, su yeşili; doğrulayıcıdan geçti); kayıp durumu referans durum paleti (planlı = uyarı, plansız = kritik), her zaman etiketle.
 - `components/wind-day-chart.tsx` — Rüzgâr santralinin bir günü: üretim (kayıp durumuna göre renkli), ilk KGÜP, beklenen üretim (MWh); altta 100 m rüzgâr (m/s)

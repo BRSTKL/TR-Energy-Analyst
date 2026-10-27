@@ -13,6 +13,15 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
 
 ---
 
+## 27.10.2026 · Claude · Türkiye haritası: il seçici ve santral haritası (yerelde, `claude/gunluk-pano`, commit yok)
+
+- **Yapılan:** `components/ui/turkiye-il-secici.tsx` (bölge → il seçici, Nepal adres seçicisinin tasarım dilinde, posta kodunun ilk iki hanesi = plaka), `components/ui/turkiye-map-data.ts` (geoBoundaries TUR ADM1 simplified, CC BY-SA 2.0; 81 il yolu, bölge sınırı, `trProject(lat, lon)`; elle düzenlenmez, üreten betik henüz projede değil), `components/ui/use-element-width.ts`. `components/plant-map-card.tsx`: Santraller sayfasında (`/projects/[id]/plants`) santral haritası: nokta rengi tür, boyutu kurulu güç, içi boş kesikli halka = ilçe merkezi tahmini (`~`); konumu olmayan santral haritaya konmaz, altta listelenir. `GET /api/projects/[id]` santral konum alanlarını da verir.
+- **Karar:** konum kaynağı her seçimde gösterilir; il seçimi koordinat sayılmaz (tahmin kuralı `lib/epias-plant/location.ts`). Inavitas'ta 31 / 66 santralin konumu var, 34 hidronun hiçbirinde yok.
+- **Yarım:** commit yok (sonradan commit edildi; önizleme sayfası silindi). Harita verisini üreten betik `scripts/tools/` altına alınıp `kaynaklar/README.md`'ye yazılmalı.
+- **Yapılan (ikinci tur):** sektör sayfasında "Harita" sekmesi: `components/sector-province-map-card.tsx`, EPDK lisanslarından il başına lisanslı güç (RES / GES / HES / hepsi; yürürlükteki ana kaynak; işletmedeki MWe, yoksa lisans MWe; GES lisans MWe). Hesap `lib/sector/epdk-by-province.ts` (+ `__tests__/epdk-by-province.test.ts`), veri `lib/services/sector-epdk-map.ts`, API `GET /api/sector/epdk-il`. Kart kaynağı, tarihi ve kapsamı (kurulmamış tesis içerebilir, lisanssız yok) yazar.
+- **Yarım:** harita sekmesi duman testinde yok (sektör sayfası varsayılan sekmeyle açılıyor); elle denendi. Sunucuda `.cache/epdk/` yoksa kart "dosya bulunamadı" der; sunucuda var mı bakılmadı.
+- **Sıradaki:** isteğe bağlı: YEKDEM'den çıkan santralleri il haritasına bindirmek (listede il yok, EPDK eşleştirmesi gerekir).
+
 ## 27.10.2026 · Claude · Aşama 24: Günlük piyasa panosu (yerelde, `claude/gunluk-pano`)
 
 - **Yapılan:** sistem havuzu biçim 3 (gerçek zamanlı üretim `rt` + `rtImportExport`), günlük kısmi yenileme kuralı (`systemNeedsFetch`: ay içinde çekilmiş ay her Türkiye günü bir kez), `system-sync.mts --recent` ve `epias-monthly-sync.mts` günlük bloğu; yeni pano: `lib/analysis/daily-market.ts`, `lib/services/daily-market.ts`, `app/api/market/daily/route.ts`, `app/market/gunluk/page.tsx`, `components/market/chart-card.tsx` (Piyasa sayfasından çıkarıldı); yöntem sayfasında "Günlük piyasa panosu". 783 test, tsc, lint, 60 rapor 0 hata, duman testi market + sector + ana sayfa 0 hata. Mac'te piyasa ve sistem havuzu EPİAŞ'tan 26.10'a güncellendi (Mac kopyası; sunucuya dokunulmadı).
