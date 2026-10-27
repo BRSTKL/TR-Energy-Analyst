@@ -12,6 +12,7 @@ import type { SectorPlant } from "@/lib/services/sector";
 import { MethodLink } from "@/components/method-link";
 import { AggregatorBenchmarkTab } from "@/components/aggregator-benchmark-tab";
 import { SectorLossCard } from "@/components/sector-loss-card";
+import { SectorProvinceMapCard } from "@/components/sector-province-map-card";
 import { SystemDriversCard } from "@/components/system-drivers-card";
 type Tech = SectorTech;
 type HydroFilter = "all" | HydroKind | "unknown";
@@ -211,7 +212,7 @@ export default function SectorPage() {
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: "unitTl", asc: true });
   const [selected, setSelected] = useState<string[]>([]);
   /** Santraller (karne), Toplayıcılar (toplayıcılar arası kıyas; PLAN 9.1), Kayıp üretim (uyduyla; PLAN 20.4) ya da Sistem yönü (20.10.2026) */
-  const [tab, setTab] = useState<"plants" | "aggregators" | "loss" | "system">("plants");
+  const [tab, setTab] = useState<"plants" | "aggregators" | "map" | "loss" | "system">("plants");
 
   useEffect(() => {
     setError(null);
@@ -344,10 +345,11 @@ export default function SectorPage() {
         <div className="inline-flex max-w-full flex-wrap rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
           {(
             [
+              ["system", "Sistem yönü"],
+              ["loss", "Kayıp üretim"],
+              ["map", "Harita"],
               ["plants", "Santraller"],
               ["aggregators", "Toplayıcılar"],
-              ["loss", "Kayıp üretim"],
-              ["system", "Sistem yönü"],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -362,6 +364,8 @@ export default function SectorPage() {
         </div>
         {tab === "aggregators" ? (
           <AggregatorBenchmarkTab year={data.year} />
+        ) : tab === "map" ? (
+          <SectorProvinceMapCard />
         ) : tab === "loss" ? (
           <SectorLossCard />
         ) : tab === "system" ? (
