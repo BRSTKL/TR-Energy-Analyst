@@ -8,6 +8,7 @@ import { AlertCircle, AlertTriangle, ArrowLeft, CheckCircle2, CloudDownload, Fac
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SettlementUnitCard } from "@/components/settlement-unit-card";
+import { PlantMapCard } from "@/components/plant-map-card";
 import { PLANT_TYPES } from "@/lib/plants/validation";
 
 interface Plant {
@@ -18,6 +19,11 @@ interface Plant {
   /** Kurulu gücün kaynağı (lib/epias-plant/installed-capacity.ts); null: belirlenmemiş eski kayıt (tahmin) */
   capacitySource?: string | null;
   capacityRef?: string | null;
+  /** Konum (lib/epias-plant/location.ts); null: kayıt yok */
+  latitude?: number | null;
+  longitude?: number | null;
+  locationSource?: string | null;
+  locationRef?: string | null;
   recordCount: number;
 }
 
@@ -208,6 +214,8 @@ export default function PlantsPage() {
         ) : (
           <>
           {settlement && <SettlementUnitCard projectId={projectId} initial={settlement} />}
+
+          {!loading && <PlantMapCard plants={plants} />}
 
           <Card className="shadow-sm">
             <CardHeader className="pb-3">
