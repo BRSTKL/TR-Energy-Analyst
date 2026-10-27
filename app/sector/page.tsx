@@ -212,7 +212,7 @@ export default function SectorPage() {
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: "unitTl", asc: true });
   const [selected, setSelected] = useState<string[]>([]);
   /** Santraller (karne), Toplayıcılar (toplayıcılar arası kıyas; PLAN 9.1), Kayıp üretim (uyduyla; PLAN 20.4) ya da Sistem yönü (20.10.2026) */
-  const [tab, setTab] = useState<"plants" | "aggregators" | "map" | "loss" | "system">("plants");
+  const [tab, setTab] = useState<"plants" | "aggregators" | "map" | "loss" | "system">("system");
 
   useEffect(() => {
     setError(null);
