@@ -27,20 +27,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  ComposedChart,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts";
+import { LineChart, BarChart, ComposedChart, ResponsiveContainer } from "recharts";
+import { ChartBar as Bar, ChartGrid as CartesianGrid, ChartLegend as Legend, ChartLine as Line, ChartTip as Tooltip, ChartXAxis as XAxis, ChartYAxis as YAxis } from "@/components/ui/chart";
 import { BudgetTab } from "@/components/budget-tab";
+import { HeatmapSkyline, type SkylineCell } from "@/components/ui/heatmap-skyline";
 import {
   Activity,
   AlertCircle,
@@ -102,6 +92,18 @@ const MONTH_NAMES_TR = [
   "Kasım",
   "Aralık",
 ];
+
+/** Isı haritası: haftanın günleri (kısaltma Pzt/Paz ve Cum/Cmt'yi ayırt eder) ve verimlilik bantları (eşik, renk) */
+const HEAT_DAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
+const HEAT_BANDS = [
+  { min: 0.985, hex: "#059669", label: "> %98,5" },
+  { min: 0.96, hex: "#10b981", label: "%96 - %98,5" },
+  { min: 0.93, hex: "#a3e635", label: "%93 - %96" },
+  { min: 0.9, hex: "#fbbf24", label: "%90 - %93" },
+  { min: 0.85, hex: "#f97316", label: "%85 - %90" },
+  { min: -Infinity, hex: "#e11d48", label: "< %85" },
+];
+const heatBand = (ratio: number) => HEAT_BANDS.find((b) => ratio >= b.min)!;
 
 interface HeatmapCell {
   dayOfWeekIndex: number;
@@ -229,7 +231,6 @@ export default function PlanningEfficiencyPage() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   // Isı Haritası Hover Tooltip State
-  const [hoveredCell, setHoveredCell] = useState<HeatmapCell | null>(null);
 
   /** Son istenen santral ayrıntısı (aynı santral için tekrar istek atılmaz) */
   const requestedDetail = React.useRef<string | null>(null);
@@ -447,46 +448,38 @@ export default function PlanningEfficiencyPage() {
     }));
   }, [currentView, divergenceMode]);
 
-  // Gün x Saat Isı Haritası Matrisi Düzeni (7 gün x 24 saat)
-  const heatmapRows = useMemo(() => {
-    if (!currentView) return [];
-    const days = [
-      "Pazartesi",
-      "Salı",
-      "Çarşamba",
-      "Perşembe",
-      "Cuma",
-      "Cumartesi",
-      "Pazar",
-    ];
-
-    // İlk üç harf Pazartesi/Pazar ve Cuma/Cumartesi'yi ayırt etmez: kısaltmalar açıkça verilir
-    const shortNames = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
-    return days.map((dayName, dayIndex) => {
-      const cells = currentView.heatmap.filter(
-        (c) => c.dayOfWeekIndex === dayIndex
-      );
-      // Saat 0'dan 23'e sıralı
-      cells.sort((a, b) => a.hour - b.hour);
-      return {
-        dayName,
-        shortName: shortNames[dayIndex],
-        dayIndex,
-        cells,
-      };
-    });
+  // Gün x Saat ısı haritası (7 gün x 24 saat): renk verimlilik oranı, 3B'de sütun yüksekliği kayıp (TL)
+  const heatmapSkyline = useMemo(() => {
+    if (!currentView) return null;
+    const withData = currentView.heatmap.filter((c) => c.count > 0);
+    const maxLoss = Math.max(1, ...withData.map((c) => c.totalLossTl));
+    const cells: SkylineCell[] = currentView.heatmap.map((c) => ({
+      row: c.dayOfWeekIndex,
+      col: c.hour,
+      height: c.count ? c.totalLossTl / maxLoss : 0,
+      color: c.count ? heatBand(c.efficiencyRatio).hex : "#f1f5f9",
+      empty: c.count === 0,
+      title: `${c.dayName} ${c.hourStr}`,
+      lines: c.count
+        ? [
+            ["Verimlilik", `%${nf(c.efficiencyRatio * 100, 1)}`],
+            ["Gerçekleşen", `${c.totalActualMwh.toLocaleString("tr-TR")} MWh`],
+            ["Kayıp", `${c.totalLossTl.toLocaleString("tr-TR")} ₺`],
+          ]
+        : [["Veri", "yok"]],
+    }));
+    const worst = [...withData].sort((a, b) => b.totalLossTl - a.totalLossTl)[0];
+    const lowest = [...withData].sort((a, b) => a.efficiencyRatio - b.efficiencyRatio)[0];
+    const total = withData.reduce((sum, c) => sum + c.totalLossTl, 0);
+    return {
+      cells,
+      stats: [
+        { label: "Toplam kayıp", value: `${total.toLocaleString("tr-TR", { maximumFractionDigits: 0 })} ₺` },
+        { label: "En çok kayıp", value: worst ? `${worst.dayName} ${worst.hourStr}` : "–" },
+        { label: "En düşük verimlilik", value: lowest ? `${lowest.dayName} ${lowest.hourStr} · %${nf(lowest.efficiencyRatio * 100, 1)}` : "–" },
+      ],
+    };
   }, [currentView]);
-
-  // Isı Haritası Hücre Rengi Fonksiyonu
-  const getCellColorClass = (ratio: number, count: number) => {
-    if (count === 0) return "bg-slate-100 text-slate-300";
-    if (ratio >= 0.985) return "bg-emerald-600 text-white";
-    if (ratio >= 0.96) return "bg-emerald-500 text-white";
-    if (ratio >= 0.93) return "bg-lime-400 text-slate-900";
-    if (ratio >= 0.9) return "bg-amber-400 text-slate-900";
-    if (ratio >= 0.85) return "bg-orange-500 text-white";
-    return "bg-rose-600 text-white";
-  };
 
   // 1. Loading State
   if (loading && !data) {
@@ -1164,7 +1157,7 @@ export default function PlanningEfficiencyPage() {
             </CardContent>
           </Card>
 
-          {/* Sağ: Gün x Saat Verimlilik Isı Haritası */}
+          {/* Sağ: Gün x Saat Verimlilik Isı Haritası (2B ısı haritası ve 3B silüet) */}
           <Card className="border-slate-200 shadow-sm">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
@@ -1173,118 +1166,24 @@ export default function PlanningEfficiencyPage() {
                     Gün × Saat Verimlilik Isı Haritası
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    Haftanın günleri ve günün saatlerine göre verimlilik oranı yoğunluğu
+                    Haftanın günleri ve günün saatlerine göre verimlilik oranı yoğunluğu; 3B görünümde sütun yüksekliği o saatteki kayıp (₺)
                   </CardDescription>
                 </div>
                 <Clock className="h-4 w-4 text-slate-400" />
               </div>
             </CardHeader>
             <CardContent>
-              {/* 24 Saat Başlıkları */}
-              <div className="overflow-x-auto pb-2">
-                <div className="min-w-[500px]">
-                  {/* Saat Numaraları */}
-                  <div className="flex items-center text-2xs text-slate-400 mb-1">
-                    <span className="w-16 shrink-0 text-slate-400">Gün / Saat</span>
-                    <div className="grid grid-cols-24 flex-1 gap-0.5 text-center">
-                      {Array.from({ length: 24 }, (_, i) => (
-                        <div key={i} className="text-3xs truncate">
-                          {i % 3 === 0 ? `${i}` : ""}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* 7 Günün Satırları */}
-                  <div className="space-y-1">
-                    {heatmapRows.map((row) => (
-                      <div key={row.dayIndex} className="flex items-center gap-1.5">
-                        <span className="w-16 shrink-0 text-2xs font-medium text-slate-600">
-                          {row.shortName}
-                        </span>
-                        <div className="grid grid-cols-24 flex-1 gap-0.5">
-                          {row.cells.map((cell) => (
-                            <button
-                              key={cell.hour}
-                              type="button"
-                              onMouseEnter={() => setHoveredCell(cell)}
-                              onMouseLeave={() => setHoveredCell(null)}
-                              className={`h-6 rounded-xs transition-transform hover:scale-125 hover:z-10 focus:outline-none ${getCellColorClass(
-                                cell.efficiencyRatio,
-                                cell.count
-                              )}`}
-                              title={`${cell.dayName} ${cell.hourStr} — Verimlilik: %${nf(cell.efficiencyRatio * 100, 1)}`}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Hover Detay Kutusu */}
-                  <div className="mt-3 min-h-[38px] rounded-md bg-slate-50 p-2 text-2xs text-slate-700 border border-slate-200 flex items-center justify-between">
-                    {hoveredCell ? (
-                      <>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900">
-                            {hoveredCell.dayName} {hoveredCell.hourStr}
-                          </span>
-                          <span>•</span>
-                          <span>
-                            Verimlilik:{" "}
-                            <strong className="text-slate-900">
-                              %{nf(hoveredCell.efficiencyRatio * 100, 1)}
-                            </strong>
-                          </span>
-                          <span>•</span>
-                          <span>
-                            Gerçekleşen:{" "}
-                            <strong>{hoveredCell.totalActualMwh.toLocaleString("tr-TR")} MWh</strong>
-                          </span>
-                        </div>
-                        <div className="font-semibold text-rose-600">
-                          Kayıp: {hoveredCell.totalLossTl.toLocaleString("tr-TR")} ₺
-                        </div>
-                      </>
-                    ) : (
-                      <span className="text-slate-400 italic">
-                        Detay görmek için fareyi ısı haritası kutucukları üzerine getirin.
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Renk Lejantı */}
-                  <div className="mt-3 flex flex-wrap items-center justify-between text-2xs text-slate-500">
-                    <span className="font-semibold text-slate-600">Verimlilik Skalası:</span>
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1">
-                        <span className="h-2.5 w-2.5 rounded-xs bg-rose-600" />
-                        <span>&lt; %85</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="h-2.5 w-2.5 rounded-xs bg-orange-500" />
-                        <span>%85 - %90</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="h-2.5 w-2.5 rounded-xs bg-amber-400" />
-                        <span>%90 - %93</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="h-2.5 w-2.5 rounded-xs bg-lime-400" />
-                        <span>%93 - %96</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="h-2.5 w-2.5 rounded-xs bg-emerald-500" />
-                        <span>%96 - %98,5</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="h-2.5 w-2.5 rounded-xs bg-emerald-600" />
-                        <span>&gt; %98,5</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              {heatmapSkyline && (
+                <HeatmapSkyline
+                  rowLabels={HEAT_DAYS}
+                  cols={24}
+                  colLabel={(c) => String(c)}
+                  cells={heatmapSkyline.cells}
+                  legend={[...HEAT_BANDS].reverse().map((b) => ({ label: b.label, color: b.hex }))}
+                  heightCaption="kayıp (₺)"
+                  stats={heatmapSkyline.stats}
+                />
+              )}
             </CardContent>
           </Card>
         </section>
