@@ -9,6 +9,16 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
 
 | Ajan | Dal | Dosyalar / klasörler | Başlangıç |
 |---|---|---|---|
+| Claude | `claude/ptf-motoru` | `lib/ptf/`, `lib/services/ptf-*.ts`, `scripts/ptf/`, `scripts/epias-monthly-sync.mts` (PTF bloğu), `docs/ptf-motoru-yol-plani.md` | 27.10.2026 |
+
+---
+
+## 27.10.2026 · Claude · PTF tahmin motoru, ilk sürüm (`claude/ptf-motoru`, commit yok)
+
+- **Yapılan:** `lib/ptf/` (bilgi kuralı `PtfView` + `LeakageError`, özellikler, R1–R3 referanslar, LEAR, GBM, birleşim, günlük yeniden oynatma, haftalık blok bootstrap, değişmeyen günlük kayıt), `lib/services/ptf-{history,engine}.ts`, `scripts/ptf/{replay,forecast-daily,scorecard}.mts`, saatlik işte 08:00–11:30 günlük kayıt bloğu, testler (`ptf-engine`). Plan ve sonuçlar `docs/ptf-motoru-yol-plani.md`.
+- **Sonuç (482 gün, 2025-07 – 2026-10, kesim T-1 11:30):** birleşim MAE 366 TL/MWh, R2'den −%21,2; Haziran–Ekim 425 (teklif öncesi modeli 491). Aralık %5/%95 ile %83 kapsama. Hata bütçesi: kusursuz rüzgâr −%12, güneş −%5, tüketim −%5, üçü −%22. Sistem havuzu Mac'te 2024'e uzatıldı (`system-sync.mts 2024-01 2024-12`, 84 istek); eğitim penceresi 728 gün, gaz özelliği çıkarıldı (seçim döneminde seçildi: 338 → 328, sınamada 413 → 415). Sunucu havuzu hâlâ 2025'ten.
+- **Yarım:** commit var, push / sunucu yok; günlük kayıt sunucuda başlamadı. Sunucuda sistem havuzu 2024'e uzatılmalı (728 günlük pencere için; onay gerekir). Ülke güneşi, kendi rüzgâr / talep modeli, limit ve sıfır saatleri sınıflandırıcısı yok.
+- **Sıradaki:** onayla commit + yükleme (günlük kayıt başlasın); 2024 sistem verisi; aşama 2 (ülke güneşi); özellik ablation; birleşimi karar sayfasına bağlamak.
 
 ---
 
