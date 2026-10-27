@@ -33,6 +33,8 @@ const FRESH_MINUTES = 45;
 const CHUNK_DAYS = 60;
 const REVISION_DAYS = 3;
 const MAX_CATCHUP_DAYS = 60;
+/** Bir çalışmanın en uzun süresi: ilk doldurma (yaklaşık 100 istek, 10 dakikadan uzun) saatlik işi uzun tutmasın */
+const TIME_BUDGET_MS = 8 * 60_000;
 const FIRST_DAY = "2024-01-01";
 
 const shift = (d: string, n: number) =>
@@ -118,7 +120,8 @@ function params(
 }
 
 export interface EntsoeSyncResult {
-  status: "fresh" | "synced";
+  /** partial: zaman bütçesi doldu (ilk doldurma), kaldığı yerden sonraki çalışmada sürer */
+  status: "fresh" | "synced" | "partial";
   from?: string;
   to?: string;
   requests?: number;
@@ -135,12 +138,14 @@ export async function syncEntsoe({
   read = readEntsoe,
   write = writeEntsoe,
   now = new Date(),
+  budgetMs = TIME_BUDGET_MS,
 }: {
   get?: TextGet;
   token?: string;
   read?: () => Promise<EntsoeDoc | null>;
   write?: (doc: EntsoeDoc) => Promise<void>;
   now?: Date;
+  budgetMs?: number;
 } = {}): Promise<EntsoeSyncResult> {
   if (!token) throw new Error("ENTSOE_TOKEN tanımlı değil (.env)");
   const doc = (await read()) ?? emptyEntsoeDoc();
@@ -152,27 +157,34 @@ export async function syncEntsoe({
 
   const today = trDay(now);
   const tomorrow = shift(today, 1);
-  const lastFull = [
-    latestFullDay(doc.prices.BG),
-    latestFullDay(doc.prices.GR),
-    latestFullDay(doc.flows.TR_BG),
-  ]
-    .filter((d): d is string => !!d)
-    .sort()[0];
-  // Geriden doldurma sınırı: seri hiç tam gün vermiyorsa (ya da çok gerideyse) her saat 2024'ten yeniden çekilmesin
+  // Geriden doldurma sınırı: seri hiç tam gün vermiyorsa (ya da çok gerideyse) her saat 2024'ten yeniden çekilmesin. Havuz ilk
+  // doldurma bitene kadar `fetchedAt` taşımaz; her parça yazıldığı için kesilen çalışma kaldığı yerden sürer.
   const floor = doc.fetchedAt ? shift(today, -MAX_CATCHUP_DAYS) : FIRST_DAY;
-  const wanted = lastFull ? shift(lastFull, -REVISION_DAYS) : FIRST_DAY;
-  const from = wanted < floor ? floor : wanted;
   const to = tomorrow;
+  const lastOf = (s: SeriesRef) =>
+    latestFullDay(s.kind === "price" ? doc.prices[s.zone] : doc.flows[s.key]);
 
   const merge: EntsoeMergeResult = { added: 0, changed: 0 };
   let requests = 0;
   let noData = 0;
   let dataResponses = 0;
+  let from = to;
+  const t0 = Date.now();
+  let partial = false;
   for (const s of SERIES) {
-    for (let a = from; a <= to; a = shift(a, CHUNK_DAYS)) {
+    if (partial) break;
+    // Her seri kendi son tam gününden (3 gün geriden: düzeltmeler ve eksik saatler) sürer
+    const last = lastOf(s);
+    const wanted = last ? shift(last, -REVISION_DAYS) : FIRST_DAY;
+    const start = wanted < floor ? floor : wanted;
+    if (start < from) from = start;
+    for (let a = start; a <= to; a = shift(a, CHUNK_DAYS)) {
       const b =
         shift(a, CHUNK_DAYS) <= shift(to, 1) ? shift(a, CHUNK_DAYS) : shift(to, 1);
+      if (Date.now() - t0 > budgetMs) {
+        partial = true;
+        break;
+      }
       requests++;
       const parsed = parseEntsoe(
         await get(ENTSOE_API, params(s, token, a, b)),
@@ -189,8 +201,20 @@ export async function syncEntsoe({
       const r = mergeHours(target, parsed.hours);
       merge.added += r.added;
       merge.changed += r.changed;
+      if (r.added || r.changed) await write(doc);
     }
   }
+  if (partial)
+    return {
+      status: "partial",
+      from,
+      to,
+      requests,
+      noData,
+      merge,
+      latestBgDay: latestBg(),
+      latestFlowDay: latestFlow(),
+    };
   if (!dataResponses)
     throw new Error(
       `ENTSO-E: ${requests} isteğin hiçbiri veri döndürmedi (${from} – ${to}); API değişmiş olabilir`

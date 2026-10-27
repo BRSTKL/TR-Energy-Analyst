@@ -200,9 +200,11 @@ describe("syncEntsoe", () => {
       (c) => c.documentType === "A11" && c.in_Domain === "10YCA-BULGARIA-R"
     )!;
     expect(flow.out_Domain).toBe("10YTR-TEIAS----W"); // TR_BG: Türkiye'den Bulgaristan'a
-    expect(h.written).toHaveLength(1);
-    expect(h.written[0].fx["2026-10-27"]).toBe(55.5);
-    expect(h.written[0].prices.BG["2026-10-27"][5]).toBe(100);
+    const last = h.written.at(-1)!;
+    expect(last.fetchedAt).toBe(now.toISOString());
+    expect(last.fx["2026-10-27"]).toBe(55.5);
+    expect(last.prices.BG["2026-10-27"][5]).toBe(100);
+    expect(h.written.slice(0, -1).every((d) => d.fetchedAt === null)).toBe(true); // ara kayıtlar tamamlanmış sayılmaz
   });
 
   it("havuz yeniyse çekmez; anahtar yoksa hata verir", async () => {
@@ -239,7 +241,12 @@ describe("syncEntsoe", () => {
       write: h.write,
       now,
     });
-    expect(r.from).toBe("2026-10-22");
+    // fiyat serileri ve TR_BG kendi son tam gününden (25'i) 3 gün geriden; akış serilerinin geri kalanı boş: 60 gün sınırı
+    expect(r.from).toBe("2026-08-28");
+    const bg = h.calls.find(
+      (c) => c.documentType === "A44" && c.in_Domain === "10YCA-BULGARIA-R"
+    )!;
+    expect(bg.periodStart).toBe("202610212100");
     const old = emptyEntsoeDoc();
     old.fetchedAt = "2026-01-01T00:00:00.000Z";
     const r2 = await syncEntsoe({
@@ -289,6 +296,59 @@ describe("syncEntsoe", () => {
     });
     expect(r.status).toBe("synced");
     expect(r.noData).toBeGreaterThan(0);
-    expect(h.written).toHaveLength(1);
+    expect(h.written.length).toBeGreaterThan(0);
+  });
+
+  it("ilk doldurma yarıda kesilirse kaldığı yerden sürer (ara kayıtlar tamamlanmış sayılmaz)", async () => {
+    const saved: EntsoeDoc[] = [];
+    const days = ["2024-01-02", "2024-02-02", "2024-03-02"];
+    let n = 0;
+    const flaky: TextGet = async (url, params) => {
+      if (url.includes("ecb.europa.eu")) return ecb;
+      // ilk iki parça (BG fiyatı) gelir, üçüncüde kesilir
+      if (++n > 2) throw new Error("bağlantı koptu");
+      return priceXml(days[n - 1]);
+    };
+    await expect(
+      syncEntsoe({
+        get: flaky,
+        token: "t",
+        read: async () => (saved.length ? saved.at(-1)! : null),
+        write: async (d) => void saved.push(structuredClone(d)),
+        now,
+      })
+    ).rejects.toThrow("bağlantı koptu");
+    expect(saved.length).toBe(2);
+    expect(saved.at(-1)!.fetchedAt).toBeNull();
+    expect(Object.keys(saved.at(-1)!.prices.BG).length).toBeGreaterThan(0);
+    // ikinci çalışma: BG'nin son tam gününden (2024-03-02 civarı) devam eder, 2024-01-01'e dönmez
+    const second = make(() => priceXml("2026-10-27"));
+    const r = await syncEntsoe({
+      get: second.get,
+      token: "t",
+      read: async () => saved.at(-1)!,
+      write: second.write,
+      now,
+    });
+    const bg = second.calls.find(
+      (c) => c.documentType === "A44" && c.in_Domain === "10YCA-BULGARIA-R"
+    )!;
+    expect(bg.periodStart > "202401010000").toBe(true);
+    expect(r.status).toBe("synced");
+  });
+
+  it("zaman bütçesi dolarsa 'partial' döner, fetchedAt koymaz, hata vermez", async () => {
+    const h = make(() => priceXml("2026-10-27"));
+    const r = await syncEntsoe({
+      get: h.get,
+      token: "t",
+      read: async () => null,
+      write: h.write,
+      now,
+      budgetMs: -1,
+    });
+    expect(r.status).toBe("partial");
+    expect(h.calls).toHaveLength(0);
+    expect(h.written).toHaveLength(0);
   });
 });

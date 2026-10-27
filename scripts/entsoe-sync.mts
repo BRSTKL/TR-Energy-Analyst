@@ -26,7 +26,11 @@ const readState = (): { lastAlertAt?: string } => {
 
 try {
   const r = await syncEntsoe({ write: dry ? async () => undefined : undefined });
-  if (r.status === "fresh")
+  if (r.status === "partial")
+    console.log(
+      `ENTSO-E ilk doldurma sürüyor: ${r.requests} istek, ${r.merge?.added} yeni saat; Bulgaristan fiyatı en son ${r.latestBgDay}. Sonraki saatlik çalışma kaldığı yerden sürer.`
+    );
+  else if (r.status === "fresh")
     console.log(
       `ENTSO-E güncel (Bulgaristan fiyatı en son ${r.latestBgDay}, akış en son ${r.latestFlowDay}).`
     );
