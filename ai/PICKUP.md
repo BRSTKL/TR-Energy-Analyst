@@ -23,8 +23,19 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
   proje adlarını takma adla değiştirerek tam boy ekran görüntüsü alır (`.cache/video-screens/<proje>/`). Yalnız okur;
   oturum duman testi gibi (`SMOKE_COOKIE` / `AUTH_SECRET`). Sahte sunucuyla uçtan uca denendi; gerçek sunucuda
   çalıştırılmadı (bu ortamdan erişim yok).
-- Sıradaki: kullanıcı betiği sunucuya karşı çalıştırıp görüntüleri verecek; bütün sayfaları gezen "uygulama turu"
-  videosu bu görüntülerden çizilecek. Yayından önce rakamlar sunucuda yeniden okunmalı (FACTS listesi).
+- Uygulama turu (aynı gün): kullanıcı betiği sunucuya karşı çalıştırdı (Atam projesi); 22 sayfanın gerçek, anonim
+  görüntüleriyle 3 dk'lık ikinci film (Sayaç kutudan kutuya, altyazı, müzik). Film kaynağı yine repoda değil.
+  `iddia-denetcisi`: ekranlarla çelişen rakam yok; dönem / kesinlik ifadeleri ve kapanıştaki atıf (Open-Meteo, ERA5,
+  GEM, OSM) düzeltildi.
+- Betik düzeltmeleri: uzun sayfalar 1440×900 parçalar hâlinde de kaydedilir; "çalıştırılıyor / hesaplanıyor" büyük-küçük
+  harf duyarsız beklenir; kurulu güç / konum notlarındaki YEKDEM, EPDK, GEM adları, il / ilçe, GEM kimliği, koordinat ve
+  toplayıcı sayfasındaki kısaltılmış büyük harfli şirket adları maskelenir; üretim tahmini güneş yoksa Rüzgâr sekmesi.
+- Açık (betik yakalamıyor): Metodoloji sayfasının alt bölümlerinde kodda yazılı gerçek adlar (GİP katılım tablosu,
+  "Doğuş'ta kalıcılık …", "Viranşehir-7"), aday dipnotunda "ör. ENERJİSA", santraller arama ipucunda "ör. gain",
+  sektörde "K3_DİCLE". Filmde gösterilmediler / boyandı; görüntüleri paylaşmadan önce bunlara dikkat.
+- Denetçinin uygulamada gördükleri (düzeltilmedi): Santraller ve PowerPoint diyaloğunda "VPN açık olmalı" (20.10'dan beri
+  gereksiz); toplayıcı ayrıntısında aylık netleşme çubukları çizilmemiş (yalnız TL/MWh noktaları); planlamada 8 aylık
+  kayıp "Yıllık Kayıp" etiketli.
 
 ## 26.10.2026 · Claude · Canlı hava: Next.js fetch önbelleği (yüklendi)
 
