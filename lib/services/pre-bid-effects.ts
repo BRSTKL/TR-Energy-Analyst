@@ -32,7 +32,7 @@ export interface PreBidEffects {
   notes: string[];
 }
 
-async function gasSeries(from: string, to: string): Promise<Map<string, number>> {
+export async function gasSeries(from: string, to: string): Promise<Map<string, number>> {
   const out = new Map<string, number>();
   for (let a = from; a <= to; a = shift(a, 60)) {
     const b = shift(a, 59) < to ? shift(a, 59) : to;

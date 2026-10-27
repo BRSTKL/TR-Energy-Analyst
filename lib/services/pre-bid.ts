@@ -75,7 +75,7 @@ async function forecastMonth(month: string): Promise<Map<string, number[]>> {
   return days;
 }
 
-async function forecastDays(from: string, to: string): Promise<Map<string, number[]>> {
+export async function forecastDays(from: string, to: string): Promise<Map<string, number[]>> {
   const out = new Map<string, number[]>();
   const first = from < PREBID_FORECAST_FROM ? PREBID_FORECAST_FROM : from;
   for (
@@ -90,7 +90,7 @@ async function forecastDays(from: string, to: string): Promise<Map<string, numbe
 }
 
 /** Bir günün (EPİAŞ) PTF, yük tahmini ve rüzgâr tahmini: hedef yarın / bugün ise canlı */
-async function liveDay(date: string) {
+export async function liveDay(date: string) {
   const q = { startDate: `${date}T00:00:00+03:00`, endDate: `${date}T23:00:00+03:00` };
   const get = async (path: string) =>
     ((await epiasRequest<{ items?: Array<Record<string, unknown>> }>(path, q)).items ??

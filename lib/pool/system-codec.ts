@@ -88,7 +88,7 @@ const mm = (month: number) => String(month).padStart(2, "0");
 const round = (v: number) => Math.round(v * 100) / 100;
 
 /** KGÜP (dpp) alanı → kaynak */
-const DPP_FIELDS: Record<string, SystemSource> = {
+export const DPP_FIELDS: Record<string, SystemSource> = {
   ruzgar: "wind",
   gunes: "sun",
   akarsu: "river",

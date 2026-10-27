@@ -5,7 +5,7 @@
  * Her çalışmada önce küçük günlük işler: geçici üretim (12 saatte bir), piyasa fiyatları (`market-sync.mts --recent`,
  * veri dünü içerene kadar her saat; içeriyorsa bir saniyede çıkar) ve sistem geneli seriler (`system-sync.mts --recent`, her
  * Türkiye günü bir kez), arıza bildirimleri (`umm-sync.mts --recent`, içinde bulunulan ay 6 saatte bir). Piyasa sayfası ve
- * günlük pano böylece her gün dünün verisini gösterir. Ayrıca DSİ baraj doluluğu (`dsi-dam-sync.mts`) ve ENTSO-E komşu fiyatları (`entsoe-sync.mts`); ikisi de EPİAŞ'tan bağımsız.
+ * günlük pano böylece her gün dünün verisini gösterir. Ayrıca DSİ baraj doluluğu (`dsi-dam-sync.mts`) ve ENTSO-E komşu fiyatları (`entsoe-sync.mts`); ikisi de EPİAŞ'tan bağımsız. 08:00–11:30 arası yarının PTF tahmini (`ptf/forecast-daily.mts --auto`).
  *   1. Ay tamamlandıysa ya da başka bir çalışma sürüyorsa hiçbir şey yapmaz.
  *   2. EPİAŞ veri uç noktasına erişilemiyorsa yapmaz; ayın 5'inden sonra günde bir kez bildirim (20.10.2026'dan beri VPN
  *      gerekmiyor, erişim yoksa internet bağlantısı ya da EPİAŞ kesintisi).
@@ -203,6 +203,27 @@ if (!dry) {
       resolve();
     });
   });
+}
+
+// PTF motoru: yarının saatlik PTF tahmini, değişmeyen kayıt (scripts/ptf/forecast-daily.mts --auto). Yalnız 08:00–11:30 arası;
+// kayıt varsa tek okumayla çıkar. Hata sonraki saatte yeniden denenir.
+{
+  const w = new Date(Date.now() + 3 * 3_600_000);
+  const minutes = w.getUTCHours() * 60 + w.getUTCMinutes();
+  if (!dry && minutes >= 8 * 60 && minutes <= 11 * 60 + 30) {
+    await new Promise<void>((resolve) => {
+      const c = spawn(process.execPath, ["--env-file=.env", "node_modules/.bin/tsx", "--tsconfig", "tsconfig.json", "scripts/ptf/forecast-daily.mts", "--auto"], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
+      let out = "";
+      c.stdout.on("data", (b) => (out += b));
+      c.stderr.on("data", (b) => (out += b));
+      const timer = setTimeout(() => c.kill("SIGTERM"), 10 * 60_000);
+      c.on("close", () => {
+        clearTimeout(timer);
+        if (!/zaten var/.test(out)) console.log(`${stamp()} PTF tahmini: ${out.trim().split("\n").slice(0, 3).join(" | ")}`);
+        resolve();
+      });
+    });
+  }
 }
 
 if (state.status === "done") process.exit(0);
