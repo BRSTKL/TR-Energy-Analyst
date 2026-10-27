@@ -51,7 +51,7 @@ if (auto && log.inputs.windKind !== 1 && nowTrMin < 11 * 60) {
 const nf = (v: number | null) =>
   v === null ? "—" : Math.round(v).toLocaleString("tr-TR");
 console.log(
-  `${target} PTF tahmini (${log.modelId}, ${((Date.now() - t0) / 1000).toFixed(0)} sn; kesimden önce: ${log.onTime ? "evet" : "HAYIR"}; rüzgâr: ${log.inputs.windKind === 1 ? "EPİAŞ tahmini" : "kalıcılık"}; güneş: ${log.inputs.sunKind === 1 ? "kendi tahmin" : "vekil"}; canlı: ${log.inputs.live.join(", ") || "—"}; yedek: ${log.inputs.fallbacks.join(", ") || "—"})`
+  `${target} PTF tahmini (${log.modelId}, ${((Date.now() - t0) / 1000).toFixed(0)} sn; kesimden önce: ${log.onTime ? "evet" : "HAYIR"}; rüzgâr: ${log.inputs.windKind === 1 ? "EPİAŞ tahmini" : "kalıcılık"}; güneş: ${log.inputs.sunKind === 1 ? "kendi tahmin" : "vekil"}; gölge: ${Object.keys(log.shadow ?? {}).join(", ") || "—"}; canlı: ${log.inputs.live.join(", ") || "—"}; yedek: ${log.inputs.fallbacks.join(", ") || "—"})`
 );
 console.log(
   `ortalama ${nf(log.hours.reduce((s, h) => s + h.p50, 0) / 24)} TL/MWh; son ${log.band.days} gün birleşim hatası ${nf(log.band.recentMae)} TL/MWh; tavan ${nf(log.cap)}`

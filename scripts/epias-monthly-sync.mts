@@ -222,6 +222,23 @@ if (!dry) {
   });
 }
 
+// PTF motoru, ülke rüzgârı: bölge noktalarının 100 m rüzgâr arşivi günde bir güncellenir (taze ise istek atmadan çıkar).
+if (!dry) {
+  await new Promise<void>((resolve) => {
+    const c = spawn(process.execPath, ["--env-file=.env", "node_modules/.bin/tsx", "--tsconfig", "tsconfig.json", "scripts/ptf/wind-regions.mts", "--fetch"], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    c.stdout.on("data", (b) => (out += b));
+    c.stderr.on("data", (b) => (out += b));
+    const timer = setTimeout(() => c.kill("SIGTERM"), 10 * 60_000);
+    c.on("close", () => {
+      clearTimeout(timer);
+      const req = /(\d+) istek/.exec(out)?.[1];
+      if (req !== "0") console.log(`${stamp()} rüzgâr bölge havası: ${out.trim().split("\n").slice(-2).join(" | ")}`);
+      resolve();
+    });
+  });
+}
+
 // PTF motoru: yarının saatlik PTF tahmini, değişmeyen kayıt (scripts/ptf/forecast-daily.mts --auto). Yalnız 08:00–11:30 arası;
 // kayıt varsa tek okumayla çıkar. Hata sonraki saatte yeniden denenir.
 {

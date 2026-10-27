@@ -32,6 +32,8 @@ export interface PtfForecastLog {
   hours: PtfLogHour[];
   /** Birleşimi oluşturan modellerin saatlik tahminleri */
   members: Record<string, number[]>;
+  /** Gölge sürümler (ana tahmin değil; ileriye dönük karşılaştırma için): sürüm adı → 24 saat */
+  shadow?: Record<string, number[]>;
   /** Girdi notları: rüzgâr kaynağı (0 kalıcılık, 1 EPİAŞ tahmini), yedeğe düşen girdiler, canlı alınan alanlar */
   inputs: { windKind: number; sunKind?: number; fallbacks: string[]; live: string[] };
   /** Aralığın dayandığı örneklem dışı gün sayısı ve son 60 günde birleşimin hatası (TL/MWh) */

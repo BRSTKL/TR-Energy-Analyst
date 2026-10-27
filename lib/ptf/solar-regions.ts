@@ -56,3 +56,6 @@ export function pickSolarRegions(plants: SolarPlantPoint[], n = 30): SolarRegion
     weight: c.mw / total,
   }));
 }
+
+/** Aynı seçim rüzgârda da kullanılır (RES noktaları, GEM Global Wind Power Tracker) */
+export const pickRegions = pickSolarRegions;

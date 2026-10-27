@@ -14,6 +14,8 @@ import { readSystemYear } from "@/lib/pool/system-store";
 import { forecastSolar, irradianceIndex } from "@/lib/ptf/solar";
 import { forecastDays } from "@/lib/services/pre-bid";
 import { loadRegionWeather } from "@/lib/services/ptf-solar";
+import { forecastWind, windIndex } from "@/lib/ptf/wind";
+import { loadRegionWind } from "@/lib/services/ptf-wind";
 import { gasSeries } from "@/lib/services/pre-bid-effects";
 
 const DAY_MS = 86_400_000;
@@ -25,7 +27,7 @@ const full = (a: ReadonlyArray<number | null> | null | undefined): a is number[]
 export async function loadPtfHistory(
   from: string,
   to: string,
-  opts: { windForecast?: boolean; gas?: boolean; solar?: boolean } = {}
+  opts: { windForecast?: boolean; gas?: boolean; solar?: boolean; wind?: boolean } = {}
 ): Promise<Map<string, PtfDay>> {
   const rows = await prisma.marketData.findMany({
     where: {
@@ -107,6 +109,25 @@ export async function loadPtfHistory(
       for (const [d, day] of Array.from(out)) {
         const before = (x: string) => (x < d ? (out.get(x)?.kgup.sun ?? null) : null);
         day.sunF = forecastSolar(d, before, index);
+      }
+    }
+  }
+  // Kendi ülke rüzgâr tahminimiz: her gün yalnız T-2'ye kadarki gerçek zamanlı rüzgârla ve d2 100 m rüzgârla (lib/ptf/wind.ts)
+  if (opts.wind !== false) {
+    const regions = await loadRegionWind(
+      Number(from.slice(0, 4)),
+      Number(to.slice(0, 4))
+    );
+    if (regions.length) {
+      const memo = new Map<string, number[] | null>();
+      const index = (d: string) => {
+        if (!memo.has(d)) memo.set(d, windIndex(regions, d));
+        return memo.get(d)!;
+      };
+      for (const [d, day] of Array.from(out)) {
+        const known = (x: string) =>
+          x <= shift(d, -2) ? (out.get(x)?.windRt ?? null) : null;
+        day.windOwn = forecastWind(d, known, index);
       }
     }
   }

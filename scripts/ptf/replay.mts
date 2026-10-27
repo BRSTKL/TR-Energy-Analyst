@@ -3,7 +3,7 @@
  *
  *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/ptf/replay.mts [--from 2025-07-01] [--to dün] [--oracle cons,windRt,kgup]
  *       [--models R,LEAR,GBM] [--no-windf] [--history-from 2024-01-01] [--lear-window 728] [--gbm-window 728]
- *       [--no-solar] (kendi ülke güneş tahminini kapat, vekile dön) [--exclude gas,cap] (varsayılan motorunki: gas; hiçbir şey çıkarmamak için --exclude none) [--label ad]
+ *       [--no-solar] (kendi ülke güneş tahminini kapat, vekile dön) [--no-ownwind] [--wind-policy forecastFirst|average|ownFirst|noOwn] [--exclude gas,cap] (varsayılan motorunki: gas; hiçbir şey çıkarmamak için --exclude none) [--label ad]
  *
  * `--oracle`: kusursuz girdi tanısı (hata bütçesi): verilen alanlar hedef günün gerçekleşeniyle değiştirilir, eğitimde de.
  * Sonuç canlı başarı değildir. Çıktı: model skorları, R2'ye ve en iyi referansa göre farklar (haftalık blok bootstrap),
@@ -46,11 +46,13 @@ const t0 = Date.now();
 const days = await loadPtfHistory(arg("history-from", "2024-01-01")!, to, {
   windForecast: !process.argv.includes("--no-windf"),
   solar: !process.argv.includes("--no-solar"),
+  wind: !process.argv.includes("--no-ownwind"),
 });
 const exclude = new Set(
   (arg("exclude", ENGINE_EXCLUDE.join(",")) ?? "").split(",").filter(Boolean)
 );
-const ctx: ModelContext = { days, oracle, exclude };
+const windPolicy = arg("wind-policy") as ModelContext["windPolicy"];
+const ctx: ModelContext = { days, oracle, exclude, windPolicy };
 const cache = new FeatureCache(ctx);
 const models: PtfModel[] = [];
 if (which.has("R")) models.push(...referenceModels(ctx, cache));

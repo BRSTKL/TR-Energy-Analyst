@@ -30,8 +30,12 @@ import { liveDay } from "@/lib/services/pre-bid";
 import { loadPtfHistory } from "@/lib/services/ptf-history";
 import { forecastSolar, irradianceIndex, SOLAR_SCALE_DAYS } from "@/lib/ptf/solar";
 import { liveRegionWeather } from "@/lib/services/ptf-solar";
+import { forecastWind, WIND_SCALE_DAYS, windIndex } from "@/lib/ptf/wind";
+import { liveRegionWind, loadRegionWind } from "@/lib/services/ptf-wind";
 
 export const ENGINE_MODEL_ID = "ptf-ens-v1";
+/** Gölge sürüm: rüzgârda EPİAŞ ve kendi tahminin ortalaması */
+export const SHADOW_AVG_WIND_ID = "ptf-ens-v1-ruzgar-ortalama";
 const BAND_DAYS = 60;
 const HISTORY_FLOOR = "2024-01-01";
 /** Eğitim penceresi (728) + aralık günleri (60) + referans (28) + pay */
@@ -126,6 +130,33 @@ export async function forecastPtf(
       );
     }
   }
+  // Kendi ülke rüzgâr tahmini: arşiv düne kadar (ölçek günleri), hedef gün için d2 100 m rüzgâr canlı
+  if (!t.windOwn) {
+    try {
+      const regions = await loadRegionWind(
+        Number(shiftDay(target, -(WIND_SCALE_DAYS + 5)).slice(0, 4)),
+        Number(target.slice(0, 4))
+      );
+      const fresh = await liveRegionWind(shiftDay(target, -3), target);
+      fresh.forEach((r, i) => {
+        if (!regions[i]) return;
+        for (const [d, v] of Array.from(r.ws)) regions[i].ws.set(d, v);
+      });
+      if (regions.length) {
+        const index = (d: string) => windIndex(regions, d);
+        t.windOwn = forecastWind(
+          target,
+          (d) => (d <= shiftDay(target, -2) ? (days.get(d)?.windRt ?? null) : null),
+          index
+        );
+        if (t.windOwn) live.push("windOwn");
+      }
+    } catch (e) {
+      notes.push(
+        `Rüzgâr için hava tahmini alınamadı: ${e instanceof Error ? e.message : e}`
+      );
+    }
+  }
   if (!t.lep) notes.push("Hedef günün yük planı yok: tahmin kurulamaz.");
   if (!p.ptf) notes.push("T-1 PTF'si yok: tahmin kurulamaz.");
 
@@ -159,6 +190,28 @@ export async function forecastPtf(
       `Tahmin kurulamadı (${target}): ${notes.join(" ") || "özellik ya da model eksik"}`
     );
   const p50 = pl.map((v, h) => (v + pg[h]) / 2);
+  // Gölge sürüm: rüzgârda EPİAŞ ve kendi tahminin ortalaması (sınama döneminde %2,9 daha iyi göründü; seçim döneminde
+  // ölçülemedi, bu yüzden ana sürüm değil). İleriye dönük kayıtla karşılaştırılır.
+  const shadow: Record<string, number[]> = {};
+  try {
+    const sctx = {
+      days,
+      exclude: new Set(ENGINE_EXCLUDE),
+      windPolicy: "average" as const,
+    };
+    const scache = new FeatureCache(sctx);
+    const sl = learModel(sctx, scache);
+    const sg = gbmModel(sctx, scache);
+    replay([sl, sg], days, shiftDay(target, -BAND_DAYS), shiftDay(target, -1)); // yeniden kurma takvimi ana sürümle aynı kalsın
+    const a = sl.predict(target);
+    const b = sg.predict(target);
+    if (a && b)
+      shadow[SHADOW_AVG_WIND_ID] = a.map(
+        (v, h) => Math.round(((v + b[h]) / 2) * 100) / 100
+      );
+  } catch (e) {
+    notes.push(`Gölge sürüm kurulamadı: ${e instanceof Error ? e.message : e}`);
+  }
   const bands = bandsFrom(errors, p50, f.cap);
   const cutoff = cutoffMs(target);
   return {
@@ -176,6 +229,7 @@ export async function forecastPtf(
         q90: bands[h].q90,
       })),
       members: { "LEAR-ridge": pl, GBM: pg },
+      shadow,
       inputs: {
         windKind: f.rows[0][FEATURE_NAMES.indexOf("windKind")],
         sunKind: f.rows[0][FEATURE_NAMES.indexOf("sunKind")],

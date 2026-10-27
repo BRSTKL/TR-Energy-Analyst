@@ -123,8 +123,20 @@ export function baseline(v: PtfView): number[] | null {
   return Array.from({ length: H }, (_, h) => median(s.map((x) => x[h])));
 }
 
-/** Rüzgâr girdisi: tahmin ya da kalıcılık; oracle'da gerçekleşen */
-function windInput(v: PtfView): { wind: number[]; kind: number } | null {
+/**
+ * Rüzgâr girdisi seçimi (`WindPolicy`):
+ *   forecastFirst: EPİAŞ tahmini → kendi tahminimiz → kalıcılık
+ *   average      : ikisi de varsa ortalaması, yoksa hangisi varsa o, yoksa kalıcılık
+ *   ownFirst     : kendi tahminimiz → EPİAŞ → kalıcılık
+ *   noOwn        : EPİAŞ → kalıcılık (kendi tahmin yokken)
+ * kind: 0 kalıcılık, 1 EPİAŞ, 2 kusursuz girdi (oracle), 3 kendi tahmin, 4 ortalama.
+ */
+export type WindPolicy = "forecastFirst" | "average" | "ownFirst" | "noOwn";
+
+function windInput(
+  v: PtfView,
+  policy: WindPolicy
+): { wind: number[]; kind: number } | null {
   try {
     const actual = v.series("windRt", v.target); // yalnız oracle'da izinli
     if (actual) return { wind: actual, kind: 2 };
@@ -132,7 +144,12 @@ function windInput(v: PtfView): { wind: number[]; kind: number } | null {
     /* canlı kural: gerçekleşen yok */
   }
   const f = v.series("windF", v.target);
+  const own = policy === "noOwn" ? null : v.series("windOwn", v.target);
+  if (policy === "average" && f && own)
+    return { wind: f.map((x, h) => (x + own[h]) / 2), kind: 4 };
+  if (policy === "ownFirst" && own) return { wind: own, kind: 3 };
   if (f) return { wind: f, kind: 1 };
+  if (own) return { wind: own, kind: 3 };
   const last = v.lastDay("windRt");
   const prev = [0, 1, 2]
     .map((i) => v.series("windRt", shiftDay(last, -i)))
@@ -201,7 +218,13 @@ function recentBias(
   );
 }
 
-export function buildFeatures(v: PtfView): DayFeatures | null {
+/** Motorun rüzgâr seçimi (lib/ptf/models.ts ENGINE_WIND_POLICY ile aynı tutulur) */
+export const DEFAULT_WIND_POLICY: WindPolicy = "forecastFirst";
+
+export function buildFeatures(
+  v: PtfView,
+  opts: { windPolicy?: WindPolicy } = {}
+): DayFeatures | null {
   const base = baseline(v);
   const d1 = v.series("ptf", shiftDay(v.target, -1));
   const load = loadInput(v);
@@ -212,7 +235,7 @@ export function buildFeatures(v: PtfView): DayFeatures | null {
   const d2 = v.series("ptf", shiftDay(v.target, -2)) ?? (fallbacks.push("ptfD2"), d1);
   const d7 = v.series("ptf", shiftDay(v.target, -7)) ?? (fallbacks.push("ptfD7"), base);
   const w =
-    windInput(v) ??
+    windInput(v, opts.windPolicy ?? DEFAULT_WIND_POLICY) ??
     (fallbacks.push("wind"), { wind: Array<number>(H).fill(0), kind: -1 });
   const sunIn =
     sunInput(v) ?? (fallbacks.push("sun"), { sun: Array<number>(H).fill(0), kind: -1 });

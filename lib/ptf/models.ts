@@ -14,7 +14,12 @@
 
 import { fitRidge, predictRidge, type RidgeModel } from "@/lib/analysis/direction-model";
 import { fitGbm, type GbmModel, type GbmOptions } from "@/lib/forecast/gbm";
-import { buildFeatures, FEATURE_NAMES, type DayFeatures } from "./features";
+import {
+  buildFeatures,
+  FEATURE_NAMES,
+  type DayFeatures,
+  type WindPolicy,
+} from "./features";
 import { H, PtfView, shiftDay, type PtfDay, type PtfField } from "./history";
 
 export interface PtfModel {
@@ -29,6 +34,8 @@ export interface ModelContext {
   oracle?: ReadonlySet<PtfField>;
   /** Modellerden çıkarılan özellikler (ablation; FEATURE_NAMES adlarıyla; "hour" çıkarılamaz) */
   exclude?: ReadonlySet<string>;
+  /** Rüzgâr girdisi seçimi (lib/ptf/features.ts) */
+  windPolicy?: WindPolicy;
 }
 
 const clamp = (v: number, cap: number | null) => Math.max(0, cap ? Math.min(cap, v) : v);
@@ -48,7 +55,9 @@ export class FeatureCache {
   private keep: number[] | null;
   get(target: string): DayFeatures | null {
     if (!this.memo.has(target)) {
-      const f = buildFeatures(new PtfView(this.ctx.days, target, this.ctx.oracle));
+      const f = buildFeatures(new PtfView(this.ctx.days, target, this.ctx.oracle), {
+        windPolicy: this.ctx.windPolicy,
+      });
       const keep = this.keep;
       this.memo.set(
         target,

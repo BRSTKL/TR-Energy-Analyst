@@ -29,6 +29,7 @@ let sumR = 0;
 let bias = 0;
 let inside = 0;
 let banded = 0;
+const shadow = new Map<string, number>();
 for (const t of targets) {
   const log = await readPtfLog(t);
   if (!log) continue;
@@ -43,6 +44,11 @@ for (const t of targets) {
   }
   const ref = baseline(new PtfView(days, t));
   n++;
+  for (const [id, p] of Object.entries(log.shadow ?? {}))
+    shadow.set(
+      id,
+      (shadow.get(id) ?? 0) + p.reduce((x, v, h) => x + Math.abs(v - actual[h]), 0)
+    );
   for (const h of log.hours) {
     sumM += Math.abs(h.p50 - actual[h.hour]);
     bias += h.p50 - actual[h.hour];
@@ -63,6 +69,8 @@ if (n) {
   console.log(
     `MAE ${f0(m)} TL/MWh (referans R2 ${f0(r)}, %${(((r - m) / r) * 100).toFixed(1)} daha iyi); sapma ${f0(bias / (n * 24))}; aralık kapsaması %${banded ? ((inside / banded) * 100).toFixed(1) : "—"} (hedef %80).`
   );
+  for (const [id, sum] of Array.from(shadow))
+    console.log(`gölge ${id}: MAE ${f0(sum / (n * 24))} TL/MWh (ana ${f0(m)})`);
   if (n < 30) console.log(`Not: ${n} gün az; karar için en az 30, tercihen 60 gün.`);
 }
 process.exit(0);
