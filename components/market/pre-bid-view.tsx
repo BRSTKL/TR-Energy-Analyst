@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { AlertTriangle, FlaskConical } from "lucide-react";
 import { BarChart, ComposedChart, ReferenceLine } from "recharts";
 import {
@@ -205,7 +206,11 @@ export function PreBidPanel({
             minute: "2-digit",
             timeZone: "Europe/Istanbul",
           })}
-          .
+          . Daha sade bir özet için{" "}
+          <Link href="/market/teklif" className="font-medium underline">
+            yeni karar sayfasına
+          </Link>{" "}
+          bakın.
         </p>
       </div>
       <PriceLimitNote limit={limit} />
