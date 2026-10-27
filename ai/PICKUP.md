@@ -9,8 +9,19 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
 
 | Ajan | Dal | Dosyalar / klasörler | Başlangıç |
 |---|---|---|---|
+| Claude | claude/gunluk-pano (çalışma ağacı `.claude/worktrees/gunluk-pano`) | `lib/pool/system-*`, `lib/pool/system-sync.ts`, `scripts/system-sync.mts`, `scripts/epias-monthly-sync.mts` (yalnız günlük adım), `lib/analysis/daily-market.ts`, `lib/services/daily-market.ts`, `app/api/market/daily/`, `app/market/gunluk/`, `components/market/`, `app/market/page.tsx` (yalnız bağlantı), `app/methodology/page.tsx` (yalnız piyasa bölümü) | 27.10.2026 |
 
 ---
+
+## 27.10.2026 · Claude · Aşama 24: Günlük piyasa panosu (yerelde, `claude/gunluk-pano`)
+
+- **Yapılan:** sistem havuzu biçim 3 (gerçek zamanlı üretim `rt` + `rtImportExport`), günlük kısmi yenileme kuralı (`systemNeedsFetch`: ay içinde çekilmiş ay her Türkiye günü bir kez), `system-sync.mts --recent` ve `epias-monthly-sync.mts` günlük bloğu; yeni pano: `lib/analysis/daily-market.ts`, `lib/services/daily-market.ts`, `app/api/market/daily/route.ts`, `app/market/gunluk/page.tsx`, `components/market/chart-card.tsx` (Piyasa sayfasından çıkarıldı); yöntem sayfasında "Günlük piyasa panosu". 783 test, tsc, lint, 60 rapor 0 hata, duman testi market + sector + ana sayfa 0 hata. Mac'te piyasa ve sistem havuzu EPİAŞ'tan 26.10'a güncellendi (Mac kopyası; sunucuya dokunulmadı).
+- **Yapılan (ikinci tur):** akşam rampası iki tanımla (tüketim taraflı A, arz taraflı B = gerçek zamanlı termik + hidro + diğer + net ithalat): ortalama ve aralık; KGÜP güneş planı eksik günleri (77 gün) plan / gerçek zamanlı güneş oranıyla yakalayıp A'yı gizler (`sunPlanSuspect`); `lib/analysis/daily-market-accuracy.ts` + `scripts/analysis/daily-market-accuracy.mts` (UEVM gelen ayları yeniden ölçer, `.cache/epias/daily-market-accuracy.json`). 21 ayda (631 gün) gün ağırlıklı medyan rampa hatası: A 957, B 414, ortalama 512, pano 285 MW; aralık güven aralığı değil (%58).
+- **Yapılan (üçüncü tur):** kullanıcının verdiği grafik tasarımı (shadcn line chart stili) bütün grafiklere uygulandı: `components/ui/chart.tsx` (ChartContainer, ChartTooltipCard, RingDot ve recharts yerine kullanılan ChartGrid / ChartXAxis / ChartYAxis / ChartTip / ChartLegend / ChartLine / ChartArea / ChartBar sarmalayıcıları); 16 dosyada recharts içe aktarımı bu sarmalayıcılara yönlendirildi, özel ipucu kutuları aynı kart biçimine getirildi. Önizleme sayfası silindi. Tam duman testi 50 sayfa 0 hata.
+- **Yapılan (dördüncü tur):** planlama sayfasındaki Gün × Saat ısı haritası `components/ui/heatmap-skyline.tsx` ile değişti (2B ısı haritası ve 3B silüet; sütun yüksekliği kayıp ₺, renk verimlilik bandı; sürükle-döndür, ok tuşları, ipucu kartı). 21st.dev contribution-skyline'ın kodu elde olmadığı için bileşen kendi kodumuzla yazıldı. Düğmeler projenin düğme gruplarına uygun (28 px). Duman testi planlama 6 sayfa 0 hata.
+- **Karar:** net yük = gerçek zamanlı tüketim − gerçek zamanlı rüzgâr − KGÜP güneşi (gerekçe `context/decisions.md`). Pano tahmin etmez.
+- **Yarım:** commit / push / deploy yok (kullanıcı önce yerelde görecek). Sunucuda yükleme sonrası: `system-sync.mts` argümansız (2025-01'e geriye doldurma, sunucu havuzuna yazar, kullanıcı onayıyla), sonra gerçek günle doğrulama. `/graphify --update` ana klasörde (çalışma ağacında değil). Çalışma ağacında 3100 için ek `.claude/launch.json` config'i var, commit'e alınmaz (skip-worktree).
+- **Sıradaki:** doğruluk betiğini aylık işe bağlamak (UEVM gelince kendiliğinden); Aşama 24b yarın görünümü (yük tahmini + KGÜP + fiyat öğleden sonra yayımlanınca); fiyat sınırı uyarısı (EPDK kararı doğrulanınca).
 
 ## 26.10.2026 · Claude · Proje düzeni
 

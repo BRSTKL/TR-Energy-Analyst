@@ -51,6 +51,7 @@ yeniden üretin. Ayrıntılı geçmiş `PLAN.md` (süren aşamalar, son kayıtla
 - **Tam 2026 sahip taraması yapılmaz** (05.10): toplayıcıya geçen santraller EPİAŞ'ta toplayıcının altında listelenir;
   tam tarama sahiplerin çoğunu sessizce siler. 2025 sahip dizini esas, yeniler yalnız boşluk doldurur.
 - **Lisanssız toplamlar (K3_, LÜM_, LÜY) kıyas dışı** (17.10): EPİAŞ ilk KGÜP'ü sonradan yeniden yazıyor.
+- **UEVM haftalarca gecikir, dünün üretimi gerçek zamanlı üretim ucundan** (27.10): `/generation/data/injection-quantity` ve UEÇM 1–26 Ekim için boş (en son 30 Eylül); gerçek zamanlı üretim, KGÜP, tüketim, talimatlar dünün 23:00'ine kadar, yük tahmini yarına kadar. Gerçek zamanlı tüketim lisanssız güneşi içerir, gerçek zamanlı üretim içermez (öğlen ≈ 3,3 GW, KGÜP güneşi ≈ 16,9 GW): net yükte güneş KGÜP planından alınır, yoksa akşam rampası 13,6 yerine 5,6 GW çıkar.
 - **Hidro alt türü kayıttan** (17.10): GEM ya da "Barajı" / "Regülatörü" eki; addan tahmin yalnız etiket. Desen
   tahmini büyük barajları nehir tipine koyuyordu.
 - **Sektör kalite süzgeci gevşetildi** (03.10): plan / gerçekleşen oranı 0,5–2; eski süzgeç en kötüleri atıp medyanı
@@ -68,6 +69,9 @@ yeniden üretin. Ayrıntılı geçmiş `PLAN.md` (süren aşamalar, son kayıtla
   `.cache/arsiv/depolama-2026-10-14/`. İstenmedikçe geri eklenmez.
 - **Çevrimiçi demo yok** (28.09): video + PDF. Sonradan sunucu + Tailscale ile özel erişim geldi (22.10).
 - **PTF seviye tahmini kapsam dışı.**
+- **Panonun akşam rampası iki tanımın ortalaması, plan eksik günde yalnız arz taraflı** (27.10): 21 ayda (631 gün) tüketim taraflı rampa medyan hata 957 MW, arz taraflı 414, ortalama 512, plan kontrollü pano 285. KGÜP güneş planı 77 günde eksikti (Ocak – Mart 2025, 1–21 Mayıs 2026): plan / gerçek zamanlı güneş oranı 1'in altı ya da 4 haftalık medyanın %70'inin altı. Aralık güven aralığı sayılmaz (%58). Seviye farkı 2,3–2,8 GW tanım farkı, düzeltilmez. Rüzgârı katsayıyla kalibre etmek rampayı kötüleştirdi, bırakıldı. Ölçüm betiği `scripts/analysis/daily-market-accuracy.mts`.
+- **Grafik tasarımı tek yerden** (27.10, kullanıcı onayı): bütün grafikler `components/ui/chart.tsx` sarmalayıcılarıyla çizilir (kesikli yatay ızgara, eksen çizgisi ve tik yok, yumuşak çizgi, halkalı renk noktalı gösterge, kart biçiminde ipucu). Yeni grafikte `CartesianGrid`, `XAxis`, `YAxis`, `Tooltip`, `Legend`, `Line`, `Area`, `Bar` recharts'tan değil `ChartGrid as CartesianGrid` gibi aynı dosyadan alınır; eski stil ayarları (stroke, tick nesnesi, contentStyle) yok sayılır, veri ve biçim ayarları (dataKey, formatter, domain) geçer. Renk paleti `CHART_COLOR`.
+- **Günlük pano betimler, tahmin etmez** (27.10): `/market/gunluk` dünün fiyatlarını, net yükü, akşam rampasını ve son 28 günün aynı sınıftaki (tatil / yarım gün / hafta sonu / hafta içi) günlerinin PTF bandını gösterir; yarının fiyatı yok. Tek günlük "PTF zirvesi net yük zirvesine yakın" gözlemi ilişki kanıtı sayılmaz. Fiyat sınırı uyarısı resmî kaynak doğrulanana kadar yok (veride 3.000 → 3.400 → 4.500 TL/MWh).
 - **Mevcut özellikler yeniden kullanılır, baştan yazılmaz** (kullanıcı kuralı).
 - **Sunucu İstanbul'da** (22.10): EPİAŞ coğrafi engel riski olmasın diye Almanya reddedildi. Docker yok, alan adı yok,
   Tailscale ile özel erişim.

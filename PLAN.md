@@ -37,6 +37,7 @@ Kapanan aşamaların ayrıntısı [`docs/plan-arsiv.md`](docs/plan-arsiv.md)'de;
 | 21 | Tahmin motoru (güneş ve rüzgâr ayrı) ⏸ plan · karar 18.10.2026 (aşağıda) |
 | 22 | Gelişmiş güneş tahmin motoru (19.10.2026, kullanıcı: "en gelişmiş şekilde geliştirir misin … modelin daha düzenli olmasını istiyorum") (aşağıda) |
 | 23 | Rüzgâr tahmin motoru (19.10.2026, kullanıcı: "rüzgâr için de bir tahmin motoru oluşturmak istiyorum … rüzgâr enerjisinin kimliğine uygun olarak") (aşağıda) |
+| 24 | Günlük piyasa panosu ▶ yerelde (27.10.2026, kullanıcı: bir enerji ticareti uzmanının günlük rutini) (aşağıda) |
 
 ## 2. Plan
 
@@ -524,6 +525,17 @@ Sıra: 23.0 → 23.1 → 23.2 (kayıt ve karne erken başlasın, kanıt birikir)
 - ECMWF / ICON / GFS: 111'er santral, 222'şer dosya; son damga 22.10.2026. ECMWF ek alanları ve GFS alanları tam zaman kapsamına geldi. ICON 120 m'de santral başına 95 saatlik kaynak boşluğu var; örnek doğrudan sağlayıcıdan null doğrulandı, doldurulmadı. ERA5 gecikmeli, son dolu damga 18.10.2026 02:00; IFS gerçekleşen etiketi 22.10.2026 23:00.
 - Sunucudaki mevcut sürümde 682 test ve 60 rapor geçti (0 hata/uyarı). Yeni yerel kod 704 test ve üretim derlemesinden geçti.
 - 23.0'ın proje arşivi tamamlama kısmı yapıldı; kaynak başlangıçlarının tüm model/değişkenler için tarihsel araştırması ayrı doğrulama maddesidir. Yeni modellerin güncel sunucu verisiyle sınanması ve gerçek günlük gölge kaydı için yeni kodun onaylı yüklenmesi gerekiyor. En az 28 gün kanıt henüz başlamadı.
+
+### Aşama 24: Günlük piyasa panosu ▶ yerelde (27.10.2026) · karar 27.10.2026
+
+Kullanıcı bir enerji ticareti uzmanının analiz yöntemleri ve günlük rutinini projeyle karşılaştırmamı istedi; açık kalan parçalardan "dünün piyasasını tek ekranda okumak" ilk adım seçildi. Dal `claude/gunluk-pano` (çalışma ağacı); yerelde gösterildi, push / yükleme kullanıcı onayında.
+
+- **24.1 Sistem havuzu biçim 3:** `lib/pool/system-codec.ts` gerçek zamanlı üretim (`rt`, kaynağa göre) ve ithalat / ihracat (`rtImportExport`, eksi: ihracat). UEVM haftalarca sonra yayımlandığı için (1–26 Ekim için kayıt yok) dünün üretimi yalnız buradan gelir; KGÜP, tüketim ve talimatlar dünün 23:00'ine kadar yayımlı, yük tahmini yarına kadar. Geçmiş en az Temmuz 2023'e kadar tam.
+- **24.2 Günlük çekim:** `scripts/system-sync.mts --recent` (geçen ay + içinde bulunulan ay), `scripts/epias-monthly-sync.mts` günlük küçük işler bloğundan; ay içinde çekilmiş ay her Türkiye günü bir kez yenilenir, dünün son saati boşsa saat sonra yeniden denenir (eski 24 saatlik bekleme saatlik işte her gün bir saat kayardı). Sunucuda 2025-01'e geriye doldurma için `system-sync.mts` (argümansız) ayrıca çalıştırılır.
+- **24.3 Pano:** `/market/gunluk` (`lib/analysis/daily-market.ts` saf, `lib/services/daily-market.ts`, `app/api/market/daily/route.ts`, `components/market/chart-card.tsx`). Net yük = gerçek zamanlı tüketim − gerçek zamanlı rüzgâr − **KGÜP güneşi** (gerçek zamanlı tüketim lisanssız güneşi içerir, gerçek zamanlı üretim içermez; güneşi gerçek zamanlıdan almak 26.10.2026 akşam rampasını 13,6 GW yerine 5,6 GW gösterirdi). Seviye ±2 GW belirsiz, rampa sağlam. Kıyas bandı: son 28 günün aynı sınıftaki (tatil / yarım gün / hafta sonu / hafta içi) günlerinin saatlik PTF çeyrekleri; tahmin değil.
+- **24.4 Akşam rampası iki tanımla + doğruluk ölçümü (27.10.2026):** tüketim taraflı (A) ve arz taraflı (B: gerçek zamanlı termik + hidro + diğer + net ithalat) net yükün rampası, ortalama ve aralıkla gösterilir; aralık güven aralığı değil (gerçek rampa 21 ayda günlerin %58'inde arada). Bütün aylarda (Ocak 2025 – Eylül 2026, 631 gün) resmî sayaç üretimiyle ölçüldü: gün ağırlıklı aylık medyan rampa hatası A 957, B 414, ortalama 512, pano 285 MW. Sebep: KGÜP güneş planı 77 günde eksik (Ocak – Mart 2025, 1–21 Mayıs 2026; plan gerçekleşenin yarısından az), bu günlerde A 5 GW'a kadar sapıyor; plan / gerçek zamanlı güneş oranı 1'in altı ya da son 4 haftanın %70'inin altıysa pano A'yı, lisanssız güneş bandını ve güneş planını göstermez, rampa yalnız B (`sunPlanSuspect`). `scripts/analysis/daily-market-accuracy.mts` UEVM gelen her ayı yeniden ölçer (`.cache/epias/daily-market-accuracy.json`); kış ve yeni aylar zamanla birikir.
+- **Kontroller (27.10.2026):** 783 test, tsc, lint, 60 rapor 0 hata, duman testi market ve sector (masaüstü + 375 px) 0 hata. 26 Ekim sunucu ölçümü ile yerel pano aynı: net yük 24,7 – 40,7 GW, rampa +7,3 GW, PTF 16:00–18:00'de 4.500.
+- **Sınırlar / sıradaki:** yarın görünümü (yük tahmini yarına kadar yayımlı; KGÜP ve fiyat öğleden sonra) ayrı iş. Fiyat sınırı uyarısı resmî kaynak (EPDK kararı) doğrulanana kadar yok: veride 3.000 → 3.400 (7.4.2025) → 4.500 TL/MWh (4.4.2026). Lisanssız güneşin gerçeği UEVM ile aylar sonra görünür.
 
 ## 3. Karar noktaları (sizin onayınız gerekiyor)
 1. **Aşama sırası:** Önerim 1 → 2 → 3 → 5 → 4 → 6. Aşama 5 (başvuru paketi), 2 ve 3 bittiğinde en güçlü halindedir; 4 büyük bir veri işidir.
