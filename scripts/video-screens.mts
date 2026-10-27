@@ -10,7 +10,7 @@
  *   SMOKE_COOKIE=$(ssh … 'cd /srv/tr-energy && sudo -u tre node --env-file=.env node_modules/.bin/tsx --tsconfig tsconfig.json scripts/auth-token.mts') \
  *   SMOKE_BASE=https://<sunucu> npx tsx --tsconfig tsconfig.json scripts/video-screens.mts --project <id>
  *
- * Çıktı: .cache/video-screens/<proje-id>/NN-<sayfa>.png (git dışı). Takma adlar: seçilen projenin santralleri
+ * Çıktı: .cache/video-screens/<proje-id>/NN-<sayfa>.png (git dışı); uzun sayfalar ayrıca NN-<sayfa>-parcaK.png (1440×900). Takma adlar: seçilen projenin santralleri
  * "Santral 01…", projesi "Örnek portföy"; diğer santraller "Santral S001…", şirketler "Şirket A…", toplayıcılar
  * "Toplayıcı 1…". Ad listesi API yanıtlarından toplanır (sektör karnesi, toplayıcılar, proje ve sayfanın yüklediği her
  * /api/ yanıtı); ayrıca EIC kodu, lisans numarası ve "… A.Ş." / "… LTD. ŞTİ." kalıpları maskelenir. Görüntü alındıktan
@@ -23,7 +23,8 @@ import { chromium, type Page } from "playwright-core";
 const BASE = (process.env.SMOKE_BASE ?? "http://localhost:3000").replace(/\/$/, "");
 const SESSION_COOKIE = "tre_session";
 const LOAD_TIMEOUT_MS = 120_000;
-const BUSY_TEXT = /Yükleniyor…|Yükleniyor\.\.\.|Hesaplanıyor\.\.\.|Test çalıştırılıyor|Model kuruluyor/;
+// büyük-küçük harf farkı gözetmeden (bazı başlıklar CSS ile büyük harfe çevriliyor; "Geriye dönük test çalıştırılıyor…")
+const BUSY_TEXT = /yükleniyor|hesaplanıyor|çalıştırılıyor|model kuruluyor/;
 
 async function sessionCookie(): Promise<string> {
   if (process.env.SMOKE_COOKIE) return process.env.SMOKE_COOKIE.trim();
@@ -112,7 +113,8 @@ for (const path of ["/api/sector", "/api/sector/aggregators"]) harvest(await get
 console.log(`${alias.size} ad toplandı (sayfa yüklendikçe artar).`);
 
 // --- Gezilecek sayfalar ---
-type Shot = { file: string; url: string; label: string; click?: string };
+// click: diyaloğu açan düğme (yalnız görünen alan alınır); emptyTab: sayfa boş türle açılırsa basılacak sekme
+type Shot = { file: string; url: string; label: string; click?: string; emptyTab?: string };
 const P = `/projects/${projectId}`;
 const shots: Shot[] = [
   { file: "01-ana-sayfa", url: "/", label: "Ana sayfa" },
@@ -130,7 +132,7 @@ const shots: Shot[] = [
   { file: "13-geriye-donuk-test", url: `${P}/backtest`, label: "Geriye Dönük Test" },
   { file: "14-dogrulama-paketi", url: `${P}/validation`, label: "Doğrulama paketi" },
   { file: "15-kayip-uretim", url: `${P}/losses`, label: "Kayıp üretim" },
-  { file: "16-uretim-tahmini", url: `${P}/forecast`, label: "Üretim tahmini" },
+  { file: "16-uretim-tahmini", url: `${P}/forecast`, label: "Üretim tahmini", emptyTab: "Rüzgâr" },
   { file: "17-santraller", url: `${P}/plants`, label: "Santraller" },
   { file: "18-uretim-verisi-yukle", url: `${P}/import`, label: "Üretim verisi yükle" },
   { file: "19-sektor-karnesi", url: "/sector", label: "Sektör karnesi" },
@@ -149,7 +151,7 @@ async function waitLoaded(page: Page): Promise<boolean> {
   while (Date.now() - t0 < LOAD_TIMEOUT_MS) {
     const { busy, len } = await page.evaluate((busyRe) => {
       const t = document.body?.innerText ?? "";
-      return { busy: document.querySelectorAll(".animate-spin").length > 0 || new RegExp(busyRe).test(t), len: t.length };
+      return { busy: document.querySelectorAll(".animate-spin").length > 0 || new RegExp(busyRe).test(t.toLocaleLowerCase("tr-TR")), len: t.length };
     }, BUSY_TEXT.source);
     stable = !busy && len === last ? stable + 1 : 0;
     last = len;
@@ -171,6 +173,16 @@ const ANONYMIZE_JS = `(pairs) => {
   const extra = [
     [/\\b\\d{2}[A-Z][A-Z0-9-]{12}[A-Z0-9]\\b/g, "EIC ••••"],
     [/\\bE[ÜU]\\/\\d+[-\\/\\d]*/g, "Lisans ••••"],
+    // kurulu güç / konum notlarındaki kayıt adları: YEKDEM ve EPDK adı ("Arpa HES", "KOCATEPE RES", "Çermikler Barajı ve HES"),
+    // GEM adı ("Atik wind farm, Hatay"), il / ilçe, GEM kimliği, koordinat; toplayıcı sayfasında kısaltılmış büyük harfli şirket adları
+    // yalnız ": " ya da "(" sonrası (notlardaki kayıt adı); "Toplam RES" gibi ekran metni kalır
+    [/(?<=: |\\()(?:[A-ZÇĞİÖŞÜ][A-Za-zÇĞİÖŞÜçğıöşüâî.'-]*\\s){1,4}(?:Barajı ve |BARAJI VE |REG\\. VE |Regülatörü ve |REGÜLATÖRÜ VE )?(?:RES|HES|GES)\\b/g, "Santral"],
+    [/(?:[A-Z][A-Za-z'.-]*\\s){1,4}(?:wind farm|solar (?:power )?(?:plant|farm|project)|hydroelectric (?:plant|power station|power plant)|power station)(?:, [A-ZÇĞİÖŞÜ][a-zçğıöşü]+)?/g, "Santral"],
+    [/\\bGEM [A-Z]\\d{6,}/g, "GEM ••••"],
+    [/\\(([A-ZÇĞİÖŞÜ]{3,}) \\/ [A-ZÇĞİÖŞÜ ]{3,}\\)/g, "(il / ilçe)"],
+    [/\\b[A-ZÇĞİÖŞÜ]{3,} (Santral S?\\d+)/g, "$1"],
+    [/\\d{1,3},\\d{3,}°/g, "••,••••°"],
+    [/[A-ZÇĞİÖŞÜ0-9][A-ZÇĞİÖŞÜ0-9.&'\\- ]{2,80}\\b(?:ENERJİ|ELEKTRİK|ÜRETİM)(?=[\\s.…]|$)[A-ZÇĞİÖŞÜ0-9.&'\\- ]*(?:\\.\\.\\.|…)?/g, "Şirket"],
     [/[A-ZÇĞİÖŞÜ0-9][A-ZÇĞİÖŞÜa-zçğıöşü0-9.&'\\- ]{2,90}?\\s(?:A\\.?\\s?Ş\\.?|ANONİM ŞİRKETİ|Anonim Şirketi|LTD\\.?\\s?ŞTİ\\.?|Ltd\\.?\\s?Şti\\.?|LİMİTED ŞİRKETİ)/g, "Şirket"],
   ];
   const fix = (s) => { let t = s; for (const re of chunks) t = t.replace(re, (m) => map.get(m) ?? m); for (const [re, r] of extra) t = t.replace(re, r); return t; };
@@ -209,6 +221,10 @@ for (const s of shots) {
   try {
     await page.goto(BASE + s.url, { waitUntil: "domcontentloaded", timeout: LOAD_TIMEOUT_MS });
     let ok = await waitLoaded(page);
+    if (s.emptyTab && (await page.getByText("seçilen türde santral yok").count())) {
+      await page.getByRole("button", { name: s.emptyTab, exact: true }).first().click();
+      ok = (await waitLoaded(page)) && ok;
+    }
     if (s.click) {
       await page.getByRole("button", { name: s.click }).first().click();
       await page.waitForTimeout(1500);
@@ -218,11 +234,20 @@ for (const s of shots) {
     await page.waitForTimeout(150);
     // diyalog açıksa yalnız görünen alan, değilse tam sayfa
     await page.screenshot({ path: `${OUT}/${s.file}.png`, fullPage: !s.click });
+    // Uzun sayfa ayrıca ekran boyunda parçalar hâlinde: sohbete yüklenen tam boy görüntü küçültülüyor, rakamlar okunmuyor
+    let parts = 0;
+    if (!s.click) {
+      const height = await page.evaluate(() => document.documentElement.scrollHeight);
+      const step = 900;
+      if (height > step * 1.5)
+        for (let y = 0, i = 1; y < height; y += step, i++, parts++)
+          await page.screenshot({ path: `${OUT}/${s.file}-parca${i}.png`, fullPage: true, clip: { x: 0, y, width: 1440, height: Math.min(step, height - y) } });
+    }
     // ekran görüntüsünden sonra React yeniden çizmiş olabilir: bir kez daha denetle
     const after = await anonymize(page);
     const warn = [...new Set([...left, ...after])];
     if (warn.length) problems++;
-    console.log(`${ok && !warn.length ? "✓" : "!"} ${s.label.padEnd(30)} ${((Date.now() - t0) / 1000).toFixed(1).padStart(5)} sn  ${s.file}.png${ok ? "" : "  (yükleme süresi aşıldı)"}`);
+    console.log(`${ok && !warn.length ? "✓" : "!"} ${s.label.padEnd(30)} ${((Date.now() - t0) / 1000).toFixed(1).padStart(5)} sn  ${s.file}.png${parts ? ` + ${parts} parça` : ""}${ok ? "" : "  (yükleme süresi aşıldı)"}`);
     if (warn.length) console.log(`    ! sayfada maskelenmemiş ad kalmış olabilir: ${warn.length} adet; görüntüyü kontrol edin`);
     index.push(`${s.file}.png\t${s.label}\t${s.url.replace(projectId, "<proje>")}`);
   } catch (e) {
