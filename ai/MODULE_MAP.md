@@ -4,9 +4,9 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-459 dosya, 38 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+484 dosya, 38 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
-## Sayfalar (app/**/page.tsx) (22)
+## Sayfalar (app/**/page.tsx) (23)
 
 - `/projects/[id]/backtest` (`app/(dashboard)/projects/[id]/backtest/page.tsx`) — Aşama 14: yön tahminiyle plan ayarı (projenin fiyat profiliyle, KÜPST dahil)
 - `/projects/[id]/candidates` (`app/(dashboard)/projects/[id]/candidates/page.tsx`) — YEKDEM çıkışı rozeti: bu yıl çıkan ya da süresi bu yıl / yakında dolan
@@ -24,6 +24,7 @@
 - `/login` (`app/login/page.tsx`) — Yalnız uygulama içi yol ("/..." ama "//..." değil): dışarıya yönlendirme olmasın.
 - `/market/gunluk` (`app/market/gunluk/page.tsx`)
 - `/market` (`app/market/page.tsx`) — Türkçe yüzde: "+%45"
+- `/market/teklif` (`app/market/teklif/page.tsx`)
 - `/methodology` (`app/methodology/page.tsx`) — Metodoloji: uygulamadaki ve rapordaki her rakamın nereden geldiği.
 - `/` (`app/page.tsx`) — Ana sayfa: uygulamayı ilk açan kişinin gördüğü özet.
 - `/projects/epias` (`app/projects/epias/page.tsx`) — Bir santralin EPİAŞ çekim durumu
@@ -31,7 +32,7 @@
 - `/sector/aggregators/[id]` (`app/sector/aggregators/[id]/page.tsx`) — Toplayıcı ayrıntısı (PLAN 9.2): kıyas tablosundaki bir satırın içi.
 - `/sector` (`app/sector/page.tsx`) — "2025" ya da "2026 (Ocak–Ağustos)"
 
-## API (app/api/**/route.ts) (64)
+## API (app/api/**/route.ts) (67)
 
 - `GET, PUT, DELETE /api/account/epias` — GET /api/account/epias: hesap e-postası ve kayıtlı EPİAŞ hesabının özeti (şifre dönmez).
 - `POST /api/account/epias/test` — POST /api/account/epias/test: kayıtlı (yoksa .env) EPİAŞ hesabıyla yeni bilet alarak bağlantıyı dener.
@@ -57,6 +58,9 @@
 - `GET /api/market/direction` — GET /api/market/direction: Sistem yönü tahmininin geçmişle sınaması (Aşama 14.3): iki karar anı için model ve rakiplerin aylık ve toplam skorları, kalibrasyon ve kapı sonucu.
 - `GET /api/market/gip` — GET /api/market/gip: GİP likiditesi (PLAN 18.4): saatlik hacmin aya ve günün saatine göre dağılımı, toplayıcıların gerçekleşen katılımı (scripts/gip-participation.mts) ve uygulamanın saatlik işlem sınırı.
 - `GET /api/market/live` — GET /api/market/live?day=today|tomorrow: today: bugünün şu ana kadarki piyasa ve sistem verisi (günlük pano hesabıyla); tomorrow: yarının açıklanmış PTF'si, yük tahmini ve GÖP hacmi (yarın görünümü).
+- `GET /api/market/pre-bid-context` — GET /api/market/pre-bid-context?date=YYYY-AA-GG (ÖNİZLEME): Teklif öncesi görünümün bağlam verileri: doğal gaz GRF, arz–talep eğrisi, teklif miktarları, gün içi işlem özeti (lib/services/pre-bid-context.ts).
+- `GET /api/market/pre-bid-effects` — GET /api/market/pre-bid-effects (ÖNİZLEME): Yeni bulunan verilerin (doğal gaz GRF, gerçekleşen güneş) teklif öncesi fiyat modeline etkisi: aynı yürüyen geriye test, mevcut modelle günlük eşleştirilmiş hata farkı (lib/analysis/pre-bid-effec…
+- `GET /api/market/pre-bid` — GET /api/market/pre-bid?date=YYYY-AA-GG (ÖNİZLEME): Teklif öncesi görünüm: hedef gün için saatlik PTF beklentisi ve ± aralık (lib/analysis/pre-bid.ts).
 - `GET /api/market` — "2026 (Ocak–Ağustos)", tam yıl için "2025"; ay ortasında biten dönem "2026 (Ocak – 19 Ekim)" ya da "1–19 Ekim 2026"; ay başında başlamayan ya da yıl aşan dönemde tarih aralığı
 - `POST /api/pool/plant` — POST /api/pool/plant { powerPlantId, startDay, endDay, kgupVersion?
 - `GET /api/projects/[id]/backtest` — GET /api/projects/[id]/backtest: Her santral için kaydırmalı geriye dönük testi iki fiyat rejiminde çalıştırır: - "project": projenin fiyat profili (mevzuat modunda her saat kendi tarihinin kuralıyla) - "rules2026": tüm veri 2026 kuralları…
@@ -107,7 +111,7 @@
 - `app/not-found.tsx` — Türkçe 404 (hata ayıklama testi 16.10.2026: Next'in İngilizce varsayılan sayfası çıkıyordu)
 - `app/projects/loading.tsx`
 
-## lib/analysis (41)
+## lib/analysis (47)
 
 - `lib/analysis/aggregator-benchmark.ts` — Toplayıcılar arası kıyas (PLAN 8.7): EPİAŞ'taki her toplayıcının portföyündeki lisanslı santraller için aynı yöntem: saatlik sapma (UEVM − ilk KGÜP), EPİAŞ resmi dengesizlik fiyatı.
 - `lib/analysis/aggregator-detail.ts` — Toplayıcı ayrıntısı (PLAN 9.2): Kıyas tablosundaki bir toplayıcının içi: santraller (tek başına maliyet, sektör medyanına göre), aylık netleşme ve sahiplerin (üreticilerin) portföye katkısı.
@@ -125,6 +129,7 @@
 - `lib/analysis/direction-model.ts` — Sistem yönü ve makas tahmini: model ve rakipler (Aşama 14.2): - Yön: L2 düzenlemeli lojistik regresyon (Newton / IRLS, sabit iterasyon; rastgelelik yok).
 - `lib/analysis/direction-strategy.ts` — Yön tahminiyle plan ayarı: karar testi (Aşama 14.4): Mantık (DUY md. 110 fiyatları): sistem açıkken (SMF > PTF) eksik üretim SMF·(1+k) ile pahalıya, fazla üretim PTF·(1−l) ile az kayıpla uzlaşır; sistem fazlayken tersi.
 - `lib/analysis/dsg-scenarios.ts` — DSG Senaryo Analizi: Kullanıcının seçtiği santral grubu için: - netleşmiş maliyet ve fayda, aylık istikrar - marjinal değer: gruptaki her santral ayrılırsa / grup dışındaki her santral eklenirse fayda nasıl değişir - en faydalı alt gruplar…
+- `lib/analysis/dsi-dam.ts` — DSİ baraj doluluğu görünümü (havuz: lib/pool/dsi-dam-codec.ts; SAF, I/O yok): Amaca göre ülke ortalaması doluluk, bir hafta ve bir yıl önceye göre değişim, mevsim karşılaştırması (aynı gün, yıllar) ve dört büyük ilin içme suyu doluluğu.
 - `lib/analysis/forecast-accuracy.ts` — Fiyattan Bağımsız Tahmin Doğruluğu Analizi: Yalnızca gün öncesi tahmin (KGÜP) ve gerçekleşen üretimi (MWh) kullanır; piyasa fiyatı gerektirmez.
 - `lib/analysis/gip-liquidity.ts` — GİP likiditesi ve gerçekleşen katılım (PLAN 18.1): Soru: bir portföy GİP'te saatte gerçekçi olarak ne kadar işlem yapabilir?
 - `lib/analysis/hour-profile.ts` — Günün saatlerine göre sapma profili (sonuç sayfası "Saatlik Dengesizlik Dağılımı"): Sonuç API'si santral başına saatlik seriyi göndermez (61 santralde ~225 MB); sayfa yalnız bu 24 kovayı kullanır.
@@ -134,12 +139,17 @@
 - `lib/analysis/intraday-arbitrage.ts` — — Gün İçi Piyasası (GİP) Arbitraj Analiz Motoru: SAF (pure) fonksiyonlar: - Dışsal yan etkisi yoktur (No side-effects, no I/O, no DB).
 - `lib/analysis/intraday-trade.ts` — Gün içi düzeltmenin işlem maliyeti (GİP ağırlıklı ortalama fiyatıyla tahmin): İlk KGÜP gün öncesinde PTF'den taahhüt edilen pozisyondur; son KGÜP gün içi piyasası kapandıktan sonraki pozisyondur.
 - `lib/analysis/market-summary.ts` — Piyasa özeti: Bir ticaret masasının her sabah baktığı piyasa göstergeleri, saatlik EPİAŞ verisinden: PTF ve SMF dağılımı, SMF–PTF makası (dengesizlik fiyatının gün öncesi fiyattan ne kadar uzaklaştığı), sistem yönü, sıfır ve düşük fiyatlı …
+- `lib/analysis/neighbors.ts` — Komşu ülke fiyatları ve sınır akışları görünümü (havuz: lib/pool/entsoe-codec.ts; SAF, I/O yok)
 - `lib/analysis/outage-capacity.ts` — Piyasa geneli arızalı kapasite (Aşama 14: yön modelinin dış girdisi): Kaynak: EPİAŞ piyasa mesaj sistemi bildirimleri (havuz: data/pool/umm).
 - `lib/analysis/outage-detection.ts` — Olası arıza / kısıntı saatleri: Tahmin yüksekken üretimin sıfıra yakın olduğu kesintisiz bloklar çoğunlukla tahmin hatası değildir: santral arızası, bakım ya da TEİAŞ yük atma talimatıdır (YAT, santral bazında yayımlanmaz).
 - `lib/analysis/outage-validation.ts` — Olası arıza bloklarının resmi bildirimlerle doğrulanması (Aşama 12.4): detectOutages (outage-detection.ts) planın yüksek, üretimin sıfıra yakın olduğu blokları işaretler; neden bilinmez.
 - `lib/analysis/planning-efficiency.ts` — — Planlama Verimliliği & "Ne Olurdu?" Simülasyon Motoru: Tüm fonksiyonlar SAF (pure) olarak tasarlanmıştır: - Dışsal yan etkisi yoktur (No side-effects, no I/O, no DB).
 - `lib/analysis/plant-comparison.ts` — Santral / Teknoloji Karşılaştırma ve Capture Price Analizi: Her santral, teknoloji grubu (RES, HES, GES) ve portföy için aynı birim metrikleri üretir.
 - `lib/analysis/portfolio-netting.ts` — Dengeden Sorumlu Grup (DSG) Netleştirme Analizi: Santraller aynı dengeden sorumlu grupta olsaydı, dengesizlikler saat bazında grup düzeyinde netleşirdi: bir santralin fazlası diğerinin açığını kapatır.
+- `lib/analysis/pre-bid-brief.ts` — Teklif öncesi karar sayfası: sinyal kuralları (ÖNİZLEME; saf, I/O yok): Önizleme ekranındaki verileri (model çıktısı, bağlam kartları, etki ölçümü) sade bir özete çevirir: bir başlık şeridi ve her veri için tek satırlık bir sinyal kartı.
+- `lib/analysis/pre-bid-context.ts` — Teklif öncesi görünüm için bağlam analizleri (ÖNİZLEME; EPİAŞ'ta bulunan ek veriler, 27.10.2026)
+- `lib/analysis/pre-bid-effects.ts` — Teklif öncesi görünüm: yeni bulunan verilerin etkisi (ÖNİZLEME; saf, I/O yok): Aynı yürüyen geriye test (her gün yalnız o günden önceki verilerle, lib/analysis/pre-bid.ts içindeki Model) birkaç değişkenle tekrarlanır ve saatlik ortalama mu…
+- `lib/analysis/pre-bid.ts` — Teklif öncesi görünüm (ÖNİZLEME; saatlik fiyat beklentisi ve ± aralık): Bir hedef gün T+1 için, teklif öncesi (12:30) bilinebilen girdilerle her saatin PTF beklentisi: beklenti(h) = referans(h) + k × dünkü artık(h) + b × (net yük(h) − net …
 - `lib/analysis/price-limit.ts` — PTF fiyat limiti (tavan) uyarısı: Limitin kendisi EPDK / EPİAŞ kararıyla değişir ve elimizde resmî bir tablo yoktur; bu yüzden limit verideki platodan çıkarılır: son `PRICE_LIMIT_WINDOW_DAYS` günde en az `PRICE_LIMIT_MIN_HOURS` saat görüle…
 - `lib/analysis/river-curtailment.ts` — Akarsu santrallerinde olası kısıntı (sistem yönü sekmesi; 20.10.2026): Akarsuda su ya da hava modeli yok; rüzgâr ve güneşteki gibi "üretebileceği" hesaplanamaz.
 - `lib/analysis/scaling-impact.ts` — Tahmin Ölçeklemesinin Dengesizlik Maliyetine Etkisi: Tahmin serisi tek bir katsayıyla (Σ gerçekleşen / Σ tahmin) çarpılsaydı dengesizlik maliyeti ne olurdu?
@@ -244,8 +254,12 @@
 
 - `lib/plants/validation.ts` — Santral tanımı doğrulaması: proje oluşturma, santral ekleme ve santral düzenleme aynı kuralları kullanır.
 
-## lib/pool (12)
+## lib/pool (16)
 
+- `lib/pool/dsi-dam-codec.ts` — Veri havuzu: DSİ baraj doluluğu (yagisbarajdoluluk.dsi.gov.tr, 27.10.2026): Site herkese açık bir JSON API kullanır (https://yagisbarajdolulukapi.dsi.gov.tr; kimlik yok, Türkiye IP'sinden erişilir): /api/DamMetrics/national/purpose-daily?f…
+- `lib/pool/dsi-dam-store.ts` — Veri havuzu: DSİ baraj doluluğu dosyası (biçim dsi-dam-codec.ts): `<havuz>/dsi/dam-occupancy.json.gz`.
+- `lib/pool/entsoe-codec.ts` — Veri havuzu: ENTSO-E komşu ülke fiyatları ve sınır akışları (27.10.2026): ENTSO-E Transparency Platform REST API (https://web-api.tp.entsoe.eu/api, `ENTSOE_TOKEN`; yanıt XML): A44 gün öncesi fiyat (EUR/MWh): Bulgaristan (10YCA-BULGARIA-R),…
+- `lib/pool/entsoe-store.ts` — Veri havuzu: ENTSO-E komşu fiyat ve akış dosyası (biçim entsoe-codec.ts): `<havuz>/entsoe/neighbors.json.gz`.
 - `lib/pool/pool-codec.ts` — Veri havuzu: santral-yıl dosyasının biçimi (PLAN 7.1): EPİAŞ santral verisi bir kez çekilir ve havuzda durur; projeler, sektör karnesi ve toplayıcı analizleri aynı veriyi kullanır.
 - `lib/pool/pool-hours.ts` — Proje santralinin saatleri veri havuzundan (PLAN 7.7): Havuzdan okunan (poolBacked) santral için saatlik plan ve gerçekleşen, projenin dönemi içinde, santralin KGÜP sürümüyle alınır.
 - `lib/pool/pool-store.ts` — Veri havuzu: dosya okuma/yazma (PLAN 7.1): Havuz `data/pool/<epiasPlantId>/<yıl>.json.gz` dosyalarıdır (git dışı).
@@ -286,7 +300,7 @@
 - `lib/sector/period.ts` — Sektör analizlerinin dönemi: içinde bulunulan yılın sektör karnesinin dönem sonu (scripts/sector-collect.mts; piyasa verisi olan son gün).
 - `lib/sector/plant-technology.ts` — Sektör taramasında santral teknolojisi (PLAN Bekleyen işler: EPDK ↔ karne, adım 2b): Eskiden tür yalnız addan tahmin ediliyordu (`guessTechnologyFromName`); adında tür eki olmayan santraller ("OYMAPINAR", "BORÇKA", "HASAN UĞURLU") ve tanın…
 
-## lib/services (43)
+## lib/services (48)
 
 - `lib/services/aggregator-data.ts` — Toplayıcı kıyası ve ayrıntısı için veri okuma (PLAN 8.7, 9.2): Santral saatleri veri havuzundan (ilk KGÜP ve UEVM), türü ve sahibi sektör karnesi dosyalarından ya da havuz tanımından, fiyatlar veritabanındaki EPİAŞ resmi dengesizlik fiyatl…
 - `lib/services/aggregator-membership.ts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" ekiyle kayıtlı tüm katılımcıların santral listesi çekilir ve .cache/epias/ aggregator-membership.json'a yazılır.
@@ -297,6 +311,8 @@
 - `lib/services/cost-change.ts` — "Maliyet neden değişti?" için projeleri yükler ve eşler: İki proje (ör. aynı santrallerin 2025 ve 2026 projeleri) saatlik veriyle yüklenir, santraller EPİAŞ kimliğiyle (yoksa adla) eşlenir ve decomposeCostChange'e verilir.
 - `lib/services/daily-market.ts` — Günlük piyasa panosu: veri toplama (hesap lib/analysis/daily-market.ts'te): Günün doğrulanmış fiyatları (MarketData: EPİAŞ ya da dosya) ve önceki 28 günün PTF'si veri tabanından, sistem geneli seriler (tüketim, gerçek zamanlı üretim, KGÜP,…
 - `lib/services/direction-forecast.ts` — Sistem yönü tahmini: veri okuma ve walk-forward olasılıklar (Aşama 14).
+- `lib/services/dsi-dam.ts` — DSİ baraj doluluğu çekimi (yagisbarajdoluluk.dsi.gov.tr; havuz biçimi lib/pool/dsi-dam-codec.ts)
+- `lib/services/entsoe.ts` — ENTSO-E çekimi: komşu ülke fiyatları ve sınır akışları (havuz biçimi lib/pool/entsoe-codec.ts)
 - `lib/services/epias-account.ts` — Kayıtlı EPİAŞ hesabı ("Hesabım" sayfası).
 - `lib/services/epias-plants.ts` — EPİAŞ'tan santral bazında KGÜP ve UEVM çekme (I/O): Zincir (EPİAŞ Şeffaflık 2.0 servis belgesine göre): 1.
 - `lib/services/epias-service.ts` — EPİAŞ Şeffaflık Platformu 2.0 Web Servisleri Entegrasyonu: EPİAŞ CAS Kimlik Doğrulama (TGT) ve Elektrik Piyasası Servisleri: - PTF (MCP): Gün Öncesi Piyasası Piyasa Takas Fiyatı - SMF (SMP): Dengeleme Güç Piyasası Sistem Marjinal Fiyatı - …
@@ -308,6 +324,9 @@
 - `lib/services/outage-notices.ts` — Rapor için EPİAŞ arıza / bakım bildirimleri (Aşama 12.4): havuzdaki bildirimler (data/pool/umm) santral havuzundaki UEVÇB listesiyle (readPoolPlantInfo) proje santrallerine eşleştirilir.
 - `lib/services/plant-change-warnings.ts` — Güneş santrallerinde değişim uyarıları (Aşama 22.7 bağlaması; kural lib/forecast/change-detection.ts)
 - `lib/services/plant-location.ts` — Santral konumunu kaydetme (PLAN 15.1): Konum EPİAŞ santral kimliğiyle havuzdaki santral tanımına yazılır (projede olmayan sektör santralleri dahil) ve aynı kimlikteki proje santrallerine (`PowerPlant`) kopyalanır.
+- `lib/services/pre-bid-context.ts` — Teklif öncesi görünüm bağlamı: EPİAŞ'ta bulunan ek veriler (ÖNİZLEME; hesap lib/analysis/pre-bid-context.ts)
+- `lib/services/pre-bid-effects.ts` — Teklif öncesi görünüm: yeni verilerin etkisi, veri toplama (hesap lib/analysis/pre-bid-effects.ts; ÖNİZLEME)
+- `lib/services/pre-bid.ts` — Teklif öncesi görünüm: veri toplama (hesap lib/analysis/pre-bid.ts; ÖNİZLEME): Girdiler: veri tabanından doğrulanmış PTF (son ~150 gün), veri havuzundan yük tahmini, gerçek zamanlı rüzgâr ve KGÜP güneşi, EPİAŞ'tan rüzgâr tahmini geçmişi (/…
 - `lib/services/production-loss.ts` — Santral kayıp üretimi (PLAN 20.3; proje "Üretim tahmini" sayfası): Uydu ışınımıyla (gerçekleşen, SARAH3) santralin üretebileceği ile ürettiği arasındaki fark: lib/forecast/curtailment.ts (`detectLostHours` devreye alma süzgeciyle, `monthly…
 - `lib/services/project-data-sync.ts` — Projenin EPİAŞ verisini tamamlama (PLAN 10.1): Tek çağrıyla bir projenin ihtiyaç duyduğu bütün açık veri tamamlanır: 1.
 - `lib/services/project-hourly.ts` — Proje bir toplayıcı portföyüyse: santraller bu adla tek dengede uzlaştırılır (organizationId = AGGREGATOR_ORG_ID)
@@ -404,7 +423,7 @@
 - `lib/wind-engine/pipeline.ts` — RES günlük akışı: taze girdiler, kanıtla sürüm seçimi, kesimden önce değişmez kayıt.
 - `lib/wind-engine/registry.ts` — Rüzgâr günlük kayıt sürümleri.
 
-## components (53)
+## components (57)
 
 - `components/aggregator-benchmark-tab.tsx` — Sektör karnesi · Toplayıcılar sekmesi (PLAN 9.1): EPİAŞ'taki toplayıcıların aynı yöntemle kıyası.
 - `components/budget-tab.tsx` — Planlama sayfasının "2027 bütçesi" sekmesi (PLAN 17.3): gelecek yılın aylık dengesizlik + KÜPST bütçesi, senaryolar ve kötü durum aralığı.
@@ -421,9 +440,13 @@
 - `components/low-price-exposure-card.tsx` — Büyük tutarlar M ₺, orta tutarlar bin ₺
 - `components/market-data-status.tsx` — Sonuç sayfasında her zaman görünen piyasa verisi göstergesi: projenin saatlerinin ne kadarının EPİAŞ'tan çekilmiş (veya dosyadan yüklenmiş) fiyatla hesaplandığı, son çekim zamanı ve ay ay durum.
 - `components/market-data-upload-dialog.tsx` — EPİAŞ web servislerine erişilemediğinde (örn. yurt dışı IP engeli), Şeffaflık Platformu'ndan indirilen PTF / SMF / Sistem Yönü / GİP AÖF raporlarını dosya olarak yükleme diyaloğu.
+- `components/market/brief.tsx` — Teklif kapanışına (Türkiye 12:30, hedef günden bir önceki gün) kalan süre; geçmişse null
 - `components/market/chart-card.tsx` — Doğrulanmış renk seti: seçilen dönem vurgulu, önceki yıl gri; sistem yönü kırmızı (açık) ↔ mavi (fazla), dengede gri
 - `components/market/daily-dashboard.tsx` — Karma renkleri: rüzgâr / güneş / lisanssız güneş açık tonlar, termik koyu
 - `components/market/daily-table.tsx` — Günlük piyasa panosunun saatlik tablosu (ana sayfada ve /market/gunluk'te aynı).
+- `components/market/pre-bid-context.tsx` — Bulunan EPİAŞ verileriyle bağlam analizleri (ÖNİZLEME).
+- `components/market/pre-bid-effects.tsx` — Ölçülmeyen verilerin neden ölçülmediği; sayı yok, yalnız durum
+- `components/market/pre-bid-view.tsx` — Neleri bilsek daha iyi ölçerdik: etki ölçümde görülene dayanır; kaynak ve durum yanında
 - `components/market/price-limit-note.tsx` — Fiyat limiti notu.
 - `components/market/tomorrow-view.tsx`
 - `components/method-link.tsx` — Metodoloji sayfasındaki ilgili bölüme küçük bağlantı ("Bu rakam nereden geliyor?")
@@ -460,7 +483,7 @@
 - `components/wind-day-chart.tsx` — Rüzgâr santralinin bir günü: üretim (kayıp durumuna göre renkli), ilk KGÜP, beklenen üretim (MWh); altta 100 m rüzgâr (m/s)
 - `components/wind-loss-card.tsx` — "Son 12 ay"; verisi daha kısa santralde ay sayısı ("Verisi olan 6 ay")
 
-## scripts (kök) (60)
+## scripts (kök) (62)
 
 - `scripts/aggregator-benchmark.mts` — Toplayıcılar arası kıyası üretir (PLAN 8.7): .cache/epias/aggregator-benchmark-<yıl>.json: npx tsx --tsconfig tsconfig.json scripts/aggregator-benchmark.mts [yıl=2026] [bitiş=karnenin dönem sonu]
 - `scripts/aggregator-collect.mts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" olarak kayıtlı tüm katılımcıların santralleri .cache/epias/aggregator-membership.json'a yazılır.
@@ -473,6 +496,8 @@
 - `scripts/budget-backtest.mts` — Bütçe yönteminin geçmişle sınaması (PLAN 17.2, kapı): 2026 bütçesi yalnız 2025 sonuna kadarki veriyle kurulur (sapma ve fiyat 2025, 2026 kuralı, makas 2025 düzeyinde ve +%20) ve 2026 Ocak–<sonAy> gerçekleşenle karşılaştırılır.
 - `scripts/check-reports.mts` — Bütün projelerin PowerPoint raporunu (tam, anonim, özet, anonim özet) üretir ve tutarlılık denetiminden geçirir (lib/report/report-checks.ts).
 - `scripts/clean-project-descriptions.mts` — Proje açıklamalarındaki eski EPİAŞ kaynak notlarını santral kayıtlarına taşır ve açıklamayı kullanıcı metnine indirir.
+- `scripts/dsi-dam-sync.mts` — DSİ baraj doluluğunu (yagisbarajdoluluk.dsi.gov.tr) havuza çeker: `data/pool/dsi/dam-occupancy.json.gz`.
+- `scripts/entsoe-sync.mts` — ENTSO-E komşu ülke fiyatlarını (Bulgaristan, Yunanistan; gün öncesi, EUR/MWh) ve Türkiye sınır akışlarını (MW) havuza çeker: `data/pool/entsoe/neighbors.json.gz`.
 - `scripts/epias-monthly-sync.mts` — Aylık EPİAŞ eşitlemesi, kendiliğinden (güneş motoru yol haritası 2.
 - `scripts/forecast-info-age.mts` — Bilgi yaşının etkisi (PLAN 15.5 ek): donmuş sürüm 2, aynı walk-forward düzeniyle üç hava sürümüyle çalıştırılır.
 - `scripts/forecast-preview.mts` — Üretim tahmini ön denemesi (PLAN 15.4): bir santral, bir test ayı; model önceki 4 ayla eğitilir.
