@@ -1,0 +1,17 @@
+[Unit]
+Description=tr-energy-snapshot zamanlayici
+[Timer]
+OnCalendar=*-*-* 08:02:00 Europe/Istanbul
+OnCalendar=*-*-* 09:02:00 Europe/Istanbul
+OnCalendar=*-*-* 10:02:00 Europe/Istanbul
+OnCalendar=*-*-* 11:02:00 Europe/Istanbul
+OnCalendar=*-*-* 12:02:00 Europe/Istanbul
+OnCalendar=*-*-* 12:25:00 Europe/Istanbul
+OnCalendar=*-*-* 13:02:00 Europe/Istanbul
+OnCalendar=*-*-* 13:30:00 Europe/Istanbul
+OnCalendar=*-*-* 14:02:00 Europe/Istanbul
+# Kacirilan cekim sonradan yapilmaz: gec cekim yanlis saat etiketi tasirdi
+Persistent=false
+AccuracySec=10s
+[Install]
+WantedBy=timers.target

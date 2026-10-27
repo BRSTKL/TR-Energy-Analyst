@@ -1,0 +1,11 @@
+[Unit]
+Description=EPIAS anlik goruntusu (yarinin ruzgar ve yuk tahmini, PTF, KGUP durumu)
+OnFailure=tr-energy-failed@%n.service
+[Service]
+Type=oneshot
+User=tre
+WorkingDirectory=/srv/tr-energy
+ExecStart=/usr/bin/node --env-file=.env node_modules/.bin/tsx --tsconfig tsconfig.json scripts/snapshot-capture.mts
+TimeoutStartSec=5min
+StandardOutput=append:/var/log/tr-energy/tr-energy-snapshot.log
+StandardError=append:/var/log/tr-energy/tr-energy-snapshot.log
