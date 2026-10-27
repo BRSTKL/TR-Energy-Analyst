@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-501 dosya, 40 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+505 dosya, 40 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
 ## Sayfalar (app/**/page.tsx) (23)
 
@@ -283,7 +283,7 @@
 - `lib/projects/description.ts` — Proje açıklaması: Eski sürümler EPİAŞ'tan eklenen santrallerin kaynak bilgisini proje açıklamasına not olarak ekliyordu: "EPİAŞ açık verisi: KGÜP ilk versiyon (plan) ve UEVM (gerçekleşen).
 - `lib/projects/name.ts` — Proje adı: Proje adı rapor kapağında, dosya adında ve proje kartında görünür.
 
-## lib/ptf (8)
+## lib/ptf (9)
 
 - `lib/ptf/features.ts` — PTF motoru: özellikler (saf, I/O yok; bütün erişim PtfView üzerinden, bilgi kuralı history.ts)
 - `lib/ptf/forecast-log-store.ts` — PTF tahmin kaydının dosyası (biçim lib/ptf/forecast-log.ts): data/pool/forecast-log/ptf/<YYYY-MM>/<YYYY-MM-DD>.json.gz: hedef gün başına bir dosya, yalnız yoksa yazılır (geçici dosya + `link`, salt okunur).
@@ -293,6 +293,7 @@
 - `lib/ptf/replay.ts` — PTF motoru: günlük yeniden oynatma ve skor (saf, I/O yok): `replay`: hedef günleri sırayla gezer, her modelden 24 saatlik tahmin alır (model kendi eğitimini yalnız geçmişle yapar) ve gerçekleşenle karşılaştırır.
 - `lib/ptf/solar-regions.ts` — PTF motoru: ülke güneşi için bölge noktaları (saf, I/O yok): İşletmedeki GES'ler (Global Energy Monitor Global Solar Power Tracker, koordinat + MW) 1°×1° hücrelere toplanır; hücre noktası kapasite ağırlıklı merkez.
 - `lib/ptf/solar.ts` — PTF motoru: ülke güneş tahmini (saf, I/O yok): Hedef: hedef gün T'nin saatlik KGÜP güneşi (lisanssız dahil, MW).
+- `lib/ptf/wind.ts` — PTF motoru: ülke rüzgâr tahmini (saf, I/O yok): Hedef: hedef gün T'nin saatlik gerçek zamanlı rüzgâr üretimi (MW).
 
 ## lib/report (4)
 
@@ -311,7 +312,7 @@
 - `lib/sector/period.ts` — Sektör analizlerinin dönemi: içinde bulunulan yılın sektör karnesinin dönem sonu (scripts/sector-collect.mts; piyasa verisi olan son gün).
 - `lib/sector/plant-technology.ts` — Sektör taramasında santral teknolojisi (PLAN Bekleyen işler: EPDK ↔ karne, adım 2b): Eskiden tür yalnız addan tahmin ediliyordu (`guessTechnologyFromName`); adında tür eki olmayan santraller ("OYMAPINAR", "BORÇKA", "HASAN UĞURLU") ve tanın…
 
-## lib/services (51)
+## lib/services (52)
 
 - `lib/services/aggregator-data.ts` — Toplayıcı kıyası ve ayrıntısı için veri okuma (PLAN 8.7, 9.2): Santral saatleri veri havuzundan (ilk KGÜP ve UEVM), türü ve sahibi sektör karnesi dosyalarından ya da havuz tanımından, fiyatlar veritabanındaki EPİAŞ resmi dengesizlik fiyatl…
 - `lib/services/aggregator-membership.ts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" ekiyle kayıtlı tüm katılımcıların santral listesi çekilir ve .cache/epias/ aggregator-membership.json'a yazılır.
@@ -347,6 +348,7 @@
 - `lib/services/ptf-history.ts` — PTF motoru: gün verisini toplar (hesap lib/ptf/*): PTF veri tabanından (doğrulanmış EPİAŞ / dosya kaynakları); yük tahmin planı, tüketim, gerçek zamanlı rüzgâr ve güneş, kaynak bazında KGÜP sistem havuzundan (`data/pool/system/<yıl>`); EPİ…
 - `lib/services/ptf-recent.ts` — Son günlerin PTF'si (Aşama 22.6 kısıntı gölge sürümü için): MarketData'ya piyasa eşitlemesi (scripts/market-sync.mts --recent) düne kadar yazar: SMF uç noktası bitişin geçmişte olmasını ister.
 - `lib/services/ptf-solar.ts` — PTF motoru: ülke güneşi bölge hava verisini okur (hesap lib/ptf/solar.ts): data/pool/ptf/solar-regions.json (bölge noktaları ve ağırlıkları) ve data/pool/ptf/solar-weather/<nokta>/<yıl>.json.gz (ECMWF "2 gün önceki" küresel ışınım; scripts…
+- `lib/services/ptf-wind.ts` — PTF motoru: ülke rüzgârı bölge hava verisini okur (hesap lib/ptf/wind.ts): data/pool/ptf/wind-regions.json ve data/pool/ptf/wind-weather/<nokta>/<yıl>.json.gz (ECMWF 100 m, d2; scripts/ptf/wind-regions.mts).
 - `lib/services/realized-production.ts` — Gerçekleşen üretim, kaynağıyla (karne, PLAN 21.4; kural lib/pool/provisional.ts): Saat başına UEVM (kesin) ya da UEVM henüz yayımlanmamışsa EPİAŞ gerçek zamanlı üretimi (geçici, "GZÜ").
 - `lib/services/realtime-generation.ts` — EPİAŞ gerçek zamanlı üretimini (GZÜ) geçici üretim olarak havuza çeker (kural lib/pool/provisional.ts)
 - `lib/services/realtime-history.ts` — Geçmiş aylar için EPİAŞ gerçek zamanlı üretimi (GZÜ), yalnız geriye dönük test girdisi: (scripts/realtime-history.mts çeker, scripts/analysis/forecast-backtest-gzu.mts okur).
@@ -581,7 +583,7 @@
 - `scripts/analysis/wind-forecast-backtest.mts` — Rüzgâr üretim tahmini geriye dönük testi (kullanıcı 18.10.2026; güneşteki scripts/analysis/forecast-backtest.mts'in rüzgâr karşılığı).
 - `scripts/analysis/wind-live-backtest.mts` — Güncel sunucu kopyasında 120 günlük, günlük kayan RES temel sınaması.
 
-## scripts/ptf (6)
+## scripts/ptf (8)
 
 - `scripts/ptf/forecast-daily.mts` — PTF motoru: yarının saatlik PTF tahmini, değişmeyen kayıt (data/pool/forecast-log/ptf/<ay>/<gün>.json.gz).
 - `scripts/ptf/replay.mts` — PTF motoru: günlük yeniden oynatma (lib/ptf/replay.ts).
@@ -589,6 +591,8 @@
 - `scripts/ptf/solar-eval.mts` — PTF motoru: ülke güneş tahmininin kendi hatası.
 - `scripts/ptf/solar-regions.mts` — PTF motoru: ülke güneşi bölge noktaları ve hava arşivi.
 - `scripts/ptf/summary.mts` — PTF motoru: kayıtlı yeniden oynatma sonuçlarını (.cache/ptf/replay-<etiket>.json) seçim ve sınama dönemlerinde karşılaştırır.
+- `scripts/ptf/wind-eval.mts` — PTF motoru: ülke rüzgâr tahmininin kendi hatası.
+- `scripts/ptf/wind-regions.mts` — PTF motoru: ülke rüzgârı için bölge noktaları ve 100 m rüzgâr arşivi.
 
 ## scripts/server (1)
 

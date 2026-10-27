@@ -12,6 +12,15 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
 
 ---
 
+## 28.10.2026 · Claude · PTF motoru: ülke rüzgâr tahmini (`claude/ptf-motoru`, commit yok)
+
+- **Yapılan:** `lib/ptf/wind.ts`, `lib/services/ptf-wind.ts`, `scripts/ptf/{wind-regions,wind-eval}.mts`, `__tests__/ptf-wind.test.ts`; rüzgâr seçim kuralı `WindPolicy` (features.ts); motor yarının 100 m rüzgârını canlı çeker; günlük kayda gölge sürüm (rüzgârda EPİAŞ + kendi ortalaması) ve karnede gölge karşılaştırması; saatlik işe günde bir rüzgâr arşivi güncellemesi. Mac'te `data/pool/ptf/wind-regions.json` ve 30 noktanın arşivi (90 istek).
+- **Sonuç:** fiyat birleşimi 357 → 330 TL/MWh (seçim −%10,8, sınama −%3,9; anlamlı), R2'den −%28,9; Haziran–Ekim 399. EPİAŞ rüzgâr tahmini kendi modelimizden çok iyi (692 vs 2.122 MW); kendi tahminimiz yalnız EPİAŞ tahmini yokken kullanılıyor.
+- **Yarım:** commit / push / sunucu yok. Sunucuya `wind-regions.json` kopyalanmalı; arşivi saatlik iş kendisi çeker (güneşte olduğu gibi). Sunucuda tahmin süresi gölge sürümle yaklaşık iki katına çıkar (~80 sn).
+- **Sıradaki:** adım 4 (talep), EPİAŞ rüzgâr tahmininin gün içi güncellemesini anlık görüntülerle ölçmek.
+
+---
+
 ## 28.10.2026 · Claude · PTF motoru: ülke güneş tahmini (yüklendi)
 
 - **Yapılan:** adım 1 (tahmin sapması özellikleri) kazanç vermedi, çıkarıldı. Adım 2: `lib/ptf/solar.ts`, `lib/ptf/solar-regions.ts`, `lib/services/ptf-solar.ts`, `scripts/ptf/{solar-regions,solar-eval,summary}.mts`, `__tests__/ptf-solar.test.ts`; Mac'te `data/pool/ptf/solar-regions.json` ve 30 noktanın hava arşivi (90 Open-Meteo isteği). Motor canlıda yarının ışınımını çeker.

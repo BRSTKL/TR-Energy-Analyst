@@ -38,6 +38,22 @@ Ayar seçimi (seçim dönemi 2025-07 – 2026-03, birleşim MAE; sınama 2026-04
   Open-Meteo'dan anlık çekilir (`liveRegionWeather`).
 - **Son durum** (482 gün): birleşim 357 TL/MWh, R2'den −%23,2; Haziran–Ekim 410 (−%30). Aralık kapsaması %83,7.
 
+### Adım 3: ülke rüzgâr tahmini (28.10.2026)
+
+- `lib/ptf/wind.ts`: 359 işletmedeki RES'ten (GEM) 30 bölge noktası (`data/pool/ptf/wind-regions.json`, 13,8 GW),
+  noktalarda ECMWF "2 gün önceki" 100 m rüzgâr hızı (2024-03'ten arşiv, `scripts/ptf/wind-regions.mts --fetch`), genel
+  güç eğrisi (3 / 12 / 25 m/s), güç ağırlıklı toplam × son 56 bilinen günden öğrenilen ölçek (gerçek zamanlı rüzgâr T-2'ye
+  kadar). Ölçek seçimde seçildi (7 gün 1.948, 56 gün 1.788 MW).
+- Kendi hatası (saatlik MAE, MW): kalıcılık 2.196, kendi tahmin 1.788 (seçim); EPİAŞ tahmininin olduğu 148 günde EPİAŞ
+  692, kendi 2.122. EPİAŞ tahmini bizimkinden çok iyi (TEİAŞ izleme merkezi santral ölçümlerini görüyor); dün 17:54
+  sürümüyle gece sürümü aynı, gün içi güncelleme anlık görüntü işiyle ölçülecek.
+- Fiyat (birleşim): kendi rüzgâr yalnız EPİAŞ tahmini yokken (2026-06 öncesi ve yedek) kullanılınca seçim 319,3 → 284,7
+  (−%10,8), sınama 405,8 → 390,1 (−%3,9), ikisi de anlamlı; "rüzgârı tam bilseydik" açığının seçimde %70'i kapandı.
+  Kazanç büyük ölçüde eğitim geçmişinin tutarlı rüzgâr girdisiyle kurulmasından. EPİAŞ ile kendi tahminin ortalaması
+  sınamada %2,9 daha iyi, ama seçim döneminde ölçülemediği için ana sürüm değil: günlük kayıtta gölge sürüm
+  (`ptf-ens-v1-ruzgar-ortalama`).
+- **Son durum** (482 gün): birleşim 330 TL/MWh, R2'den −%28,9; Haziran–Ekim 399. Aralık kapsaması %83,8.
+
 Hata bütçesi (kusursuz girdi tanısı, GBM, bütün dönem MAE; canlı 394): tüketim tam bilinseydi 375 (−%5), rüzgâr 348
 (−%12), güneş 373 (−%5), üçü birden 309 (−%22). Rüzgârın büyük kısmı EPİAŞ tahmini olmayan 2025'ten; Haziran–Ekim'de
 (EPİAŞ tahmini var) kusursuz rüzgâr −%5. EPİAŞ rüzgâr tahmini Haziran–Ekim'de birleşime ~%6 katkı veriyor (434 → 460
