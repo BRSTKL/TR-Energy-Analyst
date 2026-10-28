@@ -253,7 +253,10 @@ if (!dry) {
       const timer = setTimeout(() => c.kill("SIGTERM"), 10 * 60_000);
       c.on("close", () => {
         clearTimeout(timer);
-        if (!/zaten var/.test(out)) console.log(`${stamp()} PTF tahmini: ${out.trim().split("\n").slice(0, 3).join(" | ")}`);
+        // tsx hata çıktısı derlenmiş kaynağın dökümüyle başlar (data:text/javascript…); asıl hata satırı yazılır
+        const lines = out.split("\n").filter((l) => l.trim() && !l.includes("data:text/") && !/^\s+at /.test(l));
+        const err = lines.find((l) => /^\w*Error: /.test(l));
+        if (!/zaten var/.test(out)) console.log(`${stamp()} PTF tahmini: ${(err ? [err] : lines.slice(0, 3)).join(" | ").slice(0, 600)}`);
         resolve();
       });
     });
