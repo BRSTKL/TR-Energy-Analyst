@@ -12,12 +12,14 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
 
 ---
 
-## 28.10.2026 · Claude · PTF motoru: ülke rüzgâr tahmini (`claude/ptf-motoru`, commit yok)
+## 28.10.2026 · Claude · PTF motoru: ülke rüzgâr tahmini (yüklendi; sabah kaydı yazılamadı)
 
 - **Yapılan:** `lib/ptf/wind.ts`, `lib/services/ptf-wind.ts`, `scripts/ptf/{wind-regions,wind-eval}.mts`, `__tests__/ptf-wind.test.ts`; rüzgâr seçim kuralı `WindPolicy` (features.ts); motor yarının 100 m rüzgârını canlı çeker; günlük kayda gölge sürüm (rüzgârda EPİAŞ + kendi ortalaması) ve karnede gölge karşılaştırması; saatlik işe günde bir rüzgâr arşivi güncellemesi. Mac'te `data/pool/ptf/wind-regions.json` ve 30 noktanın arşivi (90 istek).
 - **Sonuç:** fiyat birleşimi 357 → 330 TL/MWh (seçim −%10,8, sınama −%3,9; anlamlı), R2'den −%28,9; Haziran–Ekim 399. EPİAŞ rüzgâr tahmini kendi modelimizden çok iyi (692 vs 2.122 MW); kendi tahminimiz yalnız EPİAŞ tahmini yokken kullanılıyor.
-- **Yarım:** commit / push / sunucu yok. Sunucuya `wind-regions.json` kopyalanmalı; arşivi saatlik iş kendisi çeker (güneşte olduğu gibi). Sunucuda tahmin süresi gölge sürümle yaklaşık iki katına çıkar (~80 sn).
-- **Sıradaki:** adım 4 (talep), EPİAŞ rüzgâr tahmininin gün içi güncellemesini anlık görüntülerle ölçmek.
+- **Yüklendi:** `79d20d9` main'e push, sunucuya yüklendi; `wind-regions.json` sunucuya kopyalandı, arşivi saatlik iş 02:08'de çekti (90 istek). Sunucuda kuru çalışma (29.10 hedefi, 16:00) 73 sn, rüzgâr EPİAŞ, güneş kendi tahmin, gölge sürüm var. Önceki "10 dakikayı aştı" görüntüsü betik değil, Mac'ten uzun ssh bağlantısının kopmasıydı (uzun işleri sunucuda `nohup` ile çalıştırıp dosyadan okuyun).
+- **Engel (önemli):** 29.10 için sabah kaydı yazılmadı. Saatlik iş 08:04–11:04 her denemede hata verdi; günlükte yalnız tsx'in kaynak dökümü görünüyor (ilk 3 satır alınıyor, hata satırı kesiliyor). Neden anlık görüntülerde: yarının **yük tahmini (LEP) ilk kez 12:02 çekiminde** görüldü (11:02'de yoktu); rüzgâr tahmini 08:02'de vardı, 09:02'de saatte ortalama 483 MW değişti, sonra sabit. Motor LEP'i hedef günde kesimde (11:30) elde sayıyor (`MIN_LAG_DAYS.lep = 0`); tek gün kanıt (29.10 bayram, 28.10 arife, gecikme olabilir) ama doğruysa geçmiş ölçüm LEP'te iyimser.
+- **Yapılan (sonra):** `scripts/epias-monthly-sync.mts` PTF bloğu artık tsx kaynak dökümünü atlayıp `Error:` satırını (en çok 600 karakter) günlüğe yazar; yerelde zorlanmış hatayla denendi. Commit / yükleme yok.
+- **Sıradaki:** kullanıcı kararı (28.10): birkaç gün anlık görüntüyle LEP yayım saati izlenir, sonra kesim saati birlikte seçilir (seçenekler: 12:05–12:25 arası GÖP kapanışından önce çalışmak ya da LEP'siz / T-1 LEP'li modeli ölçmek). Rapor: sunucuda `scripts/analysis/snapshot-report.mts` (nohup ile dosyaya yazıp okuyun). Çekimler 11:02 ve 12:02'de; arada çekim yok, 11:30 sorusu bu çözünürlükle sınırlı. Sonra adım 4 (talep).
 
 ---
 
