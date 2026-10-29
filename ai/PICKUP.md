@@ -12,6 +12,15 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
 
 ---
 
+## 29.10.2026 · Claude · Teklif öncesi sayfası PTF motorunu gösteriyor (commit yok)
+
+- **Yapılan (kullanıcı isteği):** `/market/teklif` üstünde PTF motoru (ptf-ens-v1) tahmini: ortalama, olası aralık, en pahalı / ucuz saat, benzer günlere fark, limite yakın saat, son 60 gün hatası, iki modelin ve gölge sürümün ortalaması, sabah kaydı durumu; saatlik fiyat grafiği (aralık, benzer günler, önceki gün, geçmiş günde gerçekleşen), yük / net yük / rüzgâr / güneş grafiği, beş girdi kartı (Alındı / Yedek kullanıldı / Alınamadı), eksik ve yedekle tamamlanan veriler kutusu, saatlik tablo. Eski önizleme modeli yalnız "Tüm ayrıntılar"da karşılaştırma için; sinyal kartları bağlam (`buildBrief({ engine: true })`, eski "güneş bilinmiyor" kartı yok).
+- **Nasıl:** `forecastPtf` artık girdi durumu (`inputs`) ve ekran serilerini (`display`) döndürür, kurulamazsa `PtfForecastError` (zorunlu girdi yoksa modelleri eğitmeden). Hesap uygulama sürecini dondurmasın diye ayrı süreçte: `scripts/ptf/forecast-preview.mts` → `.cache/ptf/preview/<gün>.json`; `lib/services/ptf-forecast-page.ts` (30 dk taze, aynı gün için tek hesap, 8 dk zaman aşımı), `GET /api/market/ptf-forecast?date=&refresh=1`; panel 4 sn'de bir sorar. Mac'te hesap ~26 sn (sunucuda ~75 sn).
+- **Sınama:** 890 test; duman `--only teklif` geçti (masaüstü + telefon, taşma yok); tarayıcıda yarın (30.10), bugün denemesi (29.10, gerçekleşenle: saatlik hata 561, bayram) ve kurulamadı görünümü denendi.
+- **Açık:** Mac verisi eski olduğu için yerelde "iki gün önceki PTF yok" yedeği görünüyor; sunucuda olmamalı. Yük tahmini ~12:00'de yayımlandığı için sayfa çoğu gün 12:00–12:30 arası tam tahmin verir; öncesinde "Alınamadı" der.
+
+---
+
 ## 29.10.2026 · Claude · Günlük pano: eski önizleme sekmesi kaldırıldı, 14:00 öncesi GÖP isteği (commit yok)
 
 - **Yapılan:** `/market/gunluk` "Teklif öncesi (önizleme)" sekmesi kaldırıldı, yerine `/market/teklif` bağlantısı (kullanıcı isteği); kullanılmayan `PreBidPanel` silindi. GÖP uç noktalarında (`mcp`, `submitted-*-order-volume`) bitiş "gün 23:00" yerine "gün 00:00": EPİAŞ bitişi gün olarak okuyor, "bugün 23:00" 14:00'ten önce HTTP 400 dönüyor (29.10 11:29'da denendi; 00:00 bitişi 24 saati veriyor). Düzeltilen yerler: `live-day.ts` (Bugün sekmesi), `pre-bid-context.ts` (teklif miktarları, komşu karşılaştırmasındaki PTF), `pre-bid.ts` `liveDay` (PTF motorunun T-1 PTF'si de buradan; sabah kaydının ikinci engeli olabilirdi).
