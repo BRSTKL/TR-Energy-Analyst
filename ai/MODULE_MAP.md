@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-510 dosya, 40 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+514 dosya, 40 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
 ## Sayfalar (app/**/page.tsx) (23)
 
@@ -284,13 +284,14 @@
 - `lib/projects/description.ts` — Proje açıklaması: Eski sürümler EPİAŞ'tan eklenen santrallerin kaynak bilgisini proje açıklamasına not olarak ekliyordu: "EPİAŞ açık verisi: KGÜP ilk versiyon (plan) ve UEVM (gerçekleşen).
 - `lib/projects/name.ts` — Proje adı: Proje adı rapor kapağında, dosya adında ve proje kartında görünür.
 
-## lib/ptf (10)
+## lib/ptf (11)
 
 - `lib/ptf/auto.ts` — PTF motoru: günlük otomatik çalışmanın kararı ve telefon özeti (saf, I/O yok; betik scripts/ptf/forecast-daily.mts)
 - `lib/ptf/features.ts` — PTF motoru: özellikler (saf, I/O yok; bütün erişim PtfView üzerinden, bilgi kuralı history.ts)
 - `lib/ptf/forecast-log-store.ts` — PTF tahmin kaydının dosyası (biçim lib/ptf/forecast-log.ts): data/pool/forecast-log/ptf/<YYYY-MM>/<YYYY-MM-DD>.json.gz: hedef gün başına bir dosya, yalnız yoksa yazılır (geçici dosya + `link`, salt okunur).
 - `lib/ptf/forecast-log.ts` — PTF motoru: günlük tahmin kaydı (saf, I/O yok; dosya forecast-log-store.ts): Her hedef gün için bir kez yazılan, bir daha değişmeyen kayıt: ileriye dönük skorun tek dayanağı.
 - `lib/ptf/history.ts` — PTF motoru: gün verisi ve bilgi zamanı kuralı (saf, I/O yok): Motor hedef gün T'nin 24 saatlik PTF'sini T-1 günü öğlen (kesim, varsayılan 12:05 Türkiye) bilinen veriyle tahmin eder.
+- `lib/ptf/level.ts` — PTF motoru: günlük seviye düzeltmesi (saf, I/O yok; deney: scripts/ptf/level-correction.mts, variants.mts)
 - `lib/ptf/models.ts` — PTF motoru: modeller (saf, I/O yok): Her model hedef gün T için 24 saatlik PTF tahmini verir; eğitim yalnız T'den önceki günlerin etiketleriyle (T-1'in PTF'si kesimde bilinir) ve aynı bilgi kuralıyla kurulmuş özelliklerle yapılır.
 - `lib/ptf/replay.ts` — PTF motoru: günlük yeniden oynatma ve skor (saf, I/O yok): `replay`: hedef günleri sırayla gezer, her modelden 24 saatlik tahmin alır (model kendi eğitimini yalnız geçmişle yapar) ve gerçekleşenle karşılaştırır.
 - `lib/ptf/solar-regions.ts` — PTF motoru: ülke güneşi için bölge noktaları (saf, I/O yok): İşletmedeki GES'ler (Global Energy Monitor Global Solar Power Tracker, koordinat + MW) 1°×1° hücrelere toplanır; hücre noktası kapasite ağırlıklı merkez.
@@ -587,15 +588,18 @@
 - `scripts/analysis/wind-forecast-backtest.mts` — Rüzgâr üretim tahmini geriye dönük testi (kullanıcı 18.10.2026; güneşteki scripts/analysis/forecast-backtest.mts'in rüzgâr karşılığı).
 - `scripts/analysis/wind-live-backtest.mts` — Güncel sunucu kopyasında 120 günlük, günlük kayan RES temel sınaması.
 
-## scripts/ptf (9)
+## scripts/ptf (12)
 
+- `scripts/ptf/bad-days.mts` — PTF motoru: kötü gün incelemesi (yalnız okur).
 - `scripts/ptf/forecast-daily.mts` — PTF motoru: yarının saatlik PTF tahmini, değişmeyen kayıt (data/pool/forecast-log/ptf/<ay>/<gün>.json.gz).
 - `scripts/ptf/forecast-preview.mts` — PTF motoru: teklif öncesi sayfası için tahmin (kayıt yazmaz).
+- `scripts/ptf/level-correction.mts` — PTF motoru: günlük seviye düzeltmesi denemesi (yalnız okur; replay çıktısı üstünde, yeni tahmin üretmez).
 - `scripts/ptf/replay.mts` — PTF motoru: günlük yeniden oynatma (lib/ptf/replay.ts).
 - `scripts/ptf/scorecard.mts` — PTF motoru: ileriye dönük karne.
 - `scripts/ptf/solar-eval.mts` — PTF motoru: ülke güneş tahmininin kendi hatası.
 - `scripts/ptf/solar-regions.mts` — PTF motoru: ülke güneşi bölge noktaları ve hava arşivi.
 - `scripts/ptf/summary.mts` — PTF motoru: kayıtlı yeniden oynatma sonuçlarını (.cache/ptf/replay-<etiket>.json) seçim ve sınama dönemlerinde karşılaştırır.
+- `scripts/ptf/variants.mts` — PTF motoru: hidro ve güneş deneylerinin karşılaştırması (yalnız okur; replay çıktıları üstünde).
 - `scripts/ptf/wind-eval.mts` — PTF motoru: ülke rüzgâr tahmininin kendi hatası.
 - `scripts/ptf/wind-regions.mts` — PTF motoru: ülke rüzgârı için bölge noktaları ve 100 m rüzgâr arşivi.
 

@@ -1,5 +1,25 @@
 # PTF tahmin motoru: yol planı (27.10.2026)
 
+## Güneş serisi kırılması, seviye düzeltmesi ve hidro (29.10.2026)
+
+Kötü gün incelemesi ve bahar 2025'i de kapsayan yeniden oynatma (2025-01-01'den, 663 gün) üç şey gösterdi: (1) 2026 baharının
+zorluğu mevsim değil su rejimi (Mart–Haziran hidro planı 2026'da 14,7–19 GW, 2025'te 6,3–9,8, 2024'te 8,5–11; Nisan fiyatı
+921); (2) KGÜP güneş serisi 11.03.2025'te lisanssız güneşi eklemeye başladı (günlük ortalama ~700 → ~3.600 MW), eğitim
+satırlarının yarısı farklı tanımlı; (3) hata günler arası sürüyor (dünkü günlük hata ile bugünküyün korelasyonu 0,47).
+Seçim: Temmuz 2025 – Mart 2026; yeni dönem: Ocak–Haziran 2025 (ayar seçiminde hiç kullanılmamıştı); sınama: Nisan 2026–.
+
+| Sürüm (birleşim MAE, TL/MWh) | Oca–Haz 2025 | Seçim | Sınama |
+|---|---|---|---|
+| Taban (eski) | 285 | 286 | 396 |
+| + güneş kırılma düzeltmesi (×5,08) | 270 (+%5,4 ✓) | 279 (+%2,5 ✓) | 396 (−%0,1) |
+| + seviye düzeltmesi γ=0,5 (**canlı tarif**) | 264 (+%7,5 ✓) | 270 (+%5,7 ✓) | 382 (+%3,5) |
+| + hidro özellikleri (gölge sürüm) | 265 (+%7,1 ✓) | 270 (+%5,8 ✓) | 371 (+%6,3 ✓) |
+
+Canlı tarif 663 günde 320 → 303 (%5,3, %95 aralık 10…25), hidro gölge 300 (%6,3, 13…28). Denenip alınmayanlar: melez model
+(LEAR + ağaç artığı; tek başına %3–5 kötü, üçlü birleşim tabandan farksız), güneş tanımı göstergesi (≈0), 2025-03 öncesini
+atmak (+%1,1 seçim, anlamsız). Hidro: sınamadaki kazanç (%3,6) hipotez sınama dönemine bakılarak kurulduğu için kanıt
+sayılmaz; gölge sürüm ileriye dönük kayıtla (`ptf-ens-v1-hidro`) karşılaştırılır. Sınır: kırılma çarpanı 2024'e sabit.
+
 ## Kesim kararı (29.10.2026): 11:30 → 12:05
 
 Anlık görüntü işi (08:02–14:02) iki gün üst üste aynı şeyi gösterdi: yarının yük tahmini 11:02'de yok, 12:02'de var (hedef 29 ve
