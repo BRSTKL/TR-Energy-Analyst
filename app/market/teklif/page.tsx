@@ -5,17 +5,13 @@ import Link from "next/link";
 import { AlertTriangle, ArrowLeft, FlaskConical, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MethodLink } from "@/components/method-link";
-import { weekday, shift } from "@/components/market/daily-dashboard";
-import {
-  BriefHeadline,
-  ConfidenceBox,
-  HourChart,
-  SignalSection,
-} from "@/components/market/brief";
+import { shift } from "@/components/market/daily-dashboard";
+import { SignalSection } from "@/components/market/brief";
 import { PreBidContextPanel } from "@/components/market/pre-bid-context";
 import { PreBidEffectsPanel } from "@/components/market/pre-bid-effects";
 import { PreBidBody, PreBidStatusCard } from "@/components/market/pre-bid-view";
 import { PriceLimitNote } from "@/components/market/price-limit-note";
+import { PtfEnginePanel } from "@/components/market/ptf-engine-panel";
 import { buildBrief } from "@/lib/analysis/pre-bid-brief";
 import type { PreBidView } from "@/lib/analysis/pre-bid";
 import type { PriceLimit } from "@/lib/analysis/price-limit";
@@ -48,13 +44,8 @@ export default function BriefPage() {
   const [ctxError, setCtxError] = useState<string | null>(null);
   const [effects, setEffects] = useState<PreBidEffects | null>(null);
   const [effectsError, setEffectsError] = useState<string | null>(null);
-  const [now, setNow] = useState(() => Date.now());
   const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(t);
-  }, []);
+  const [engineMean, setEngineMean] = useState<number | null>(null);
 
   // Üç kaynak aynı anda; hızlı olan (model) ilk dolar, bağlam ve ölçüm geldikçe kartlar tamamlanır
   useEffect(() => {
@@ -106,9 +97,11 @@ export default function BriefPage() {
 
   const refresh = useCallback(() => setReload((n) => n + 1), []);
   const okView = core && core.view.ok ? core.view : null;
+  // Fiyat tahmini PTF motorundan; eski önizleme modeli yalnız "Tüm ayrıntılar"da karşılaştırma için
   const brief = useMemo(
-    () => (core ? buildBrief({ view: okView, limit: core.limit, ctx, effects }) : null),
-    [okView, core, ctx, effects]
+    () =>
+      buildBrief({ view: null, limit: core?.limit ?? null, ctx, effects, engine: true }),
+    [core, ctx, effects]
   );
 
   const openDetail = (id: string) => {
@@ -189,36 +182,16 @@ export default function BriefPage() {
         <div className="flex gap-2 rounded-md border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900">
           <FlaskConical className="mt-0.5 h-4 w-4 shrink-0" />
           <p>
-            <b>Önizleme.</b> Teklif öncesi bilinen verilerin tek sayfada özeti. Al/sat
-            önerisi vermez; her verinin ne gösterdiğini ve tahmini gerçekten kurup
-            kurmadığını yazar. Geçmiş bir günü seçerseniz hesap o günün girdileriyle
-            yapılır.
+            <b>Önizleme.</b> Yarının saatlik PTF tahmini (tahmin motoru) ve teklif öncesi
+            bilinen verilerin tek sayfada özeti. Al/sat önerisi vermez; alınamayan veriyi
+            açıkça yazar. Geçmiş bir günü seçerseniz hesap o günün kesiminde bilinen
+            veriyle yapılır ve gerçekleşenle karşılaştırılır.
           </p>
         </div>
 
-        {loading && (
-          <div className="flex items-center gap-2 rounded-md border bg-white p-4 text-sm text-slate-500">
-            <Loader2 className="h-4 w-4 animate-spin" /> Fiyat beklentisi hesaplanıyor…
-          </div>
-        )}
-        {coreError && (
-          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            {coreError}
-          </div>
-        )}
-        {core && !core.view.ok && (
-          <div className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <p>{core.view.reason}</p>
-          </div>
-        )}
-        {core && core.notes.length > 0 && (
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-            {core.notes.map((n) => (
-              <p key={n}>{n}</p>
-            ))}
-          </div>
-        )}
+        <PtfEnginePanel date={date} reload={reload} onMean={setEngineMean} />
+        <PriceLimitNote limit={core?.limit ?? null} />
+
         {ctxError && (
           <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
             Bağlam verileri alınamadı: {ctxError}
@@ -230,69 +203,61 @@ export default function BriefPage() {
           </div>
         )}
 
-        {core && brief && (
-          <>
-            {okView && brief.headline && (
-              <>
-                <BriefHeadline
-                  h={brief.headline}
-                  weekday={weekday(okView.date)}
-                  nowMs={now}
-                  isTomorrow={okView.date === tomorrow}
-                />
-                <HourChart view={okView} cap={core.limit?.cap ?? null} />
-                <PriceLimitNote limit={core.limit} />
-              </>
-            )}
-            <SignalSection brief={brief} ctxLoading={ctxLoading} onDetail={openDetail} />
-            <ConfidenceBox h={brief.headline} />
+        <SignalSection brief={brief} ctxLoading={ctxLoading} onDetail={openDetail} />
 
-            <details
-              className="rounded-lg border bg-white shadow-sm"
-              open={open}
-              onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}
-            >
-              <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-800">
-                Tüm ayrıntılar: model grafikleri, bağlam kartları, ölçüm ve veri durumu
-              </summary>
-              <div className="space-y-6 border-t p-4">
-                {okView && <PreBidBody view={okView} limit={core.limit} />}
-                {ctx ? (
-                  <PreBidContextPanel
-                    date={date}
-                    expectedMean={okView?.summary.meanExpected ?? null}
-                    data={ctx}
-                  />
-                ) : (
-                  <p className="text-sm text-slate-500">
-                    Bağlam kartları yükleniyor ya da alınamadı.
-                  </p>
-                )}
-                {effects ? (
-                  <PreBidEffectsPanel data={effects} />
-                ) : (
-                  <p className="text-sm text-slate-500">
-                    Etki ölçümü yükleniyor ya da alınamadı.
-                  </p>
-                )}
-                <PreBidStatusCard />
-              </div>
-            </details>
-            <p className="text-[11px] text-slate-400">
-              Güncelleme{" "}
-              {new Date(core.updatedAt).toLocaleTimeString("tr-TR", {
-                hour: "2-digit",
-                minute: "2-digit",
-                timeZone: "Europe/Istanbul",
-              })}
-              . Eski görünüm:{" "}
-              <Link href="/market/gunluk" className="underline">
-                Günlük pano › Teklif öncesi
-              </Link>
-              .
-            </p>
-          </>
-        )}
+        <details
+          className="rounded-lg border bg-white shadow-sm"
+          open={open}
+          onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}
+        >
+          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-800">
+            Tüm ayrıntılar: bağlam kartları, ölçüm, eski önizleme modeli ve veri durumu
+          </summary>
+          <div className="space-y-6 border-t p-4">
+            {ctx ? (
+              <PreBidContextPanel date={date} expectedMean={engineMean} data={ctx} />
+            ) : (
+              <p className="text-sm text-slate-500">
+                Bağlam kartları yükleniyor ya da alınamadı.
+              </p>
+            )}
+            {effects ? (
+              <PreBidEffectsPanel data={effects} />
+            ) : (
+              <p className="text-sm text-slate-500">
+                Etki ölçümü yükleniyor ya da alınamadı.
+              </p>
+            )}
+            <div className="space-y-3">
+              <h3 className="text-base font-semibold text-slate-900">
+                Eski önizleme modeli (karşılaştırma için)
+              </h3>
+              <p className="text-sm text-slate-500">
+                Önceki basit model (yük tahmini, rüzgâr tahmini ve dünkü fiyat sapması;
+                hata payı yaklaşık ±550 TL/MWh). Sayfadaki tahmin artık motordan gelir.
+              </p>
+              {loading && (
+                <p className="flex items-center gap-2 text-sm text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Hesaplanıyor…
+                </p>
+              )}
+              {coreError && <p className="text-sm text-red-700">{coreError}</p>}
+              {core && !core.view.ok && (
+                <p className="flex gap-2 text-sm text-amber-900">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  {core.view.reason}
+                </p>
+              )}
+              {core?.notes.map((n) => (
+                <p key={n} className="text-sm text-amber-900">
+                  {n}
+                </p>
+              ))}
+              {okView && core && <PreBidBody view={okView} limit={core.limit} />}
+            </div>
+            <PreBidStatusCard />
+          </div>
+        </details>
       </main>
     </div>
   );

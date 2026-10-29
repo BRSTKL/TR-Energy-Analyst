@@ -529,12 +529,15 @@ export function buildBrief(input: {
   limit: PriceLimit | null;
   ctx: PreBidContext | null;
   effects: PreBidEffects | null;
+  /** Fiyat tahmini sayfada PTF motorundan geliyor (view verilmez; kartlar yalnız bağlam) */
+  engine?: boolean;
 }): Brief {
-  const { view, limit, ctx, effects } = input;
+  const { view, limit, ctx, effects, engine } = input;
   const signals = [
     ...(view ? modelSignals(view, limit) : []),
     ...(ctx ? contextSignals(ctx, effects) : []),
-    solarSignal(effects),
+    // Motor kendi ülke güneş tahminini kullanıyor; "güneş bilinmiyor" kartı yalnız eski modelde geçerli
+    ...(engine ? [] : [solarSignal(effects)]),
   ];
   const order: SignalGroup[] = ["talep", "arz", "piyasa", "dis"];
   signals.sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group));
@@ -552,16 +555,17 @@ export function buildBrief(input: {
       .length,
   };
   const ctxNote = ctx ? "" : " Bağlam verileri hâlâ yükleniyor.";
-  const noModel = view
-    ? ""
-    : " Model beklentisi kurulamadı: bu veriler yalnız bağlamdır.";
+  const noModel =
+    view || engine ? "" : " Model beklentisi kurulamadı: bu veriler yalnız bağlamdır.";
   return {
     headline: view ? buildHeadline(view, limit) : null,
     signals,
     tally: t,
     tallyLine:
       `${real.length} sinyalden ${t.up} yukarı, ${t.down} aşağı yönlü, ${t.flat} nötr, ${t.info} yalnız bilgi. ` +
-      `Bunlardan ${t.model} tanesi tahmini kuruyor; ${t.noise} tanesi modele eklenince etkisi görünmedi, ${t.untested} tanesi hiç ölçülmedi: yön okları bağlamdır, tahmini değiştirmez.` +
+      (engine && !view
+        ? `Fiyat tahmini yukarıdaki motordan gelir; bu kartlar tahmine girmez, bağlamdır (${t.noise} tanesi modele eklenince etkisi görünmedi, ${t.untested} tanesi hiç ölçülmedi).`
+        : `Bunlardan ${t.model} tanesi tahmini kuruyor; ${t.noise} tanesi modele eklenince etkisi görünmedi, ${t.untested} tanesi hiç ölçülmedi: yön okları bağlamdır, tahmini değiştirmez.`) +
       noModel +
       ctxNote,
   };

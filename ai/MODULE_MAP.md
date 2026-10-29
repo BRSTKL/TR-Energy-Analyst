@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-505 dosya, 40 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+509 dosya, 40 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
 ## Sayfalar (app/**/page.tsx) (23)
 
@@ -32,7 +32,7 @@
 - `/sector/aggregators/[id]` (`app/sector/aggregators/[id]/page.tsx`) — Toplayıcı ayrıntısı (PLAN 9.2): kıyas tablosundaki bir satırın içi.
 - `/sector` (`app/sector/page.tsx`) — "2025" ya da "2026 (Ocak–Ağustos)"
 
-## API (app/api/**/route.ts) (67)
+## API (app/api/**/route.ts) (68)
 
 - `GET, PUT, DELETE /api/account/epias` — GET /api/account/epias: hesap e-postası ve kayıtlı EPİAŞ hesabının özeti (şifre dönmez).
 - `POST /api/account/epias/test` — POST /api/account/epias/test: kayıtlı (yoksa .env) EPİAŞ hesabıyla yeni bilet alarak bağlantıyı dener.
@@ -61,6 +61,7 @@
 - `GET /api/market/pre-bid-context` — GET /api/market/pre-bid-context?date=YYYY-AA-GG (ÖNİZLEME): Teklif öncesi görünümün bağlam verileri: doğal gaz GRF, arz–talep eğrisi, teklif miktarları, gün içi işlem özeti (lib/services/pre-bid-context.ts).
 - `GET /api/market/pre-bid-effects` — GET /api/market/pre-bid-effects (ÖNİZLEME): Yeni bulunan verilerin (doğal gaz GRF, gerçekleşen güneş) teklif öncesi fiyat modeline etkisi: aynı yürüyen geriye test, mevcut modelle günlük eşleştirilmiş hata farkı (lib/analysis/pre-bid-effec…
 - `GET /api/market/pre-bid` — GET /api/market/pre-bid?date=YYYY-AA-GG (ÖNİZLEME): Teklif öncesi görünüm: hedef gün için saatlik PTF beklentisi ve ± aralık (lib/analysis/pre-bid.ts).
+- `GET /api/market/ptf-forecast` — GET /api/market/ptf-forecast?date=YYYY-AA-GG[&refresh=1]: PTF motorunun hedef gün tahmini, girdilerin durumu ve sabah kaydı (lib/services/ptf-forecast-page.ts).
 - `GET /api/market` — "2026 (Ocak–Ağustos)", tam yıl için "2025"; ay ortasında biten dönem "2026 (Ocak – 19 Ekim)" ya da "1–19 Ekim 2026"; ay başında başlamayan ya da yıl aşan dönemde tarih aralığı
 - `POST /api/pool/plant` — POST /api/pool/plant { powerPlantId, startDay, endDay, kgupVersion?
 - `GET /api/projects/[id]/backtest` — GET /api/projects/[id]/backtest: Her santral için kaydırmalı geriye dönük testi iki fiyat rejiminde çalıştırır: - "project": projenin fiyat profili (mevzuat modunda her saat kendi tarihinin kuralıyla) - "rules2026": tüm veri 2026 kuralları…
@@ -312,7 +313,7 @@
 - `lib/sector/period.ts` — Sektör analizlerinin dönemi: içinde bulunulan yılın sektör karnesinin dönem sonu (scripts/sector-collect.mts; piyasa verisi olan son gün).
 - `lib/sector/plant-technology.ts` — Sektör taramasında santral teknolojisi (PLAN Bekleyen işler: EPDK ↔ karne, adım 2b): Eskiden tür yalnız addan tahmin ediliyordu (`guessTechnologyFromName`); adında tür eki olmayan santraller ("OYMAPINAR", "BORÇKA", "HASAN UĞURLU") ve tanın…
 
-## lib/services (52)
+## lib/services (53)
 
 - `lib/services/aggregator-data.ts` — Toplayıcı kıyası ve ayrıntısı için veri okuma (PLAN 8.7, 9.2): Santral saatleri veri havuzundan (ilk KGÜP ve UEVM), türü ve sahibi sektör karnesi dosyalarından ya da havuz tanımından, fiyatlar veritabanındaki EPİAŞ resmi dengesizlik fiyatl…
 - `lib/services/aggregator-membership.ts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" ekiyle kayıtlı tüm katılımcıların santral listesi çekilir ve .cache/epias/ aggregator-membership.json'a yazılır.
@@ -345,6 +346,7 @@
 - `lib/services/project-kpis.ts` — Proje karşılaştırması için özet göstergeler: Her proje Dengesizlik Karnesi ile aynı motordan geçer (şirket bazında uzlaştırma, KÜPST, YEKDEM varsayımları, 2026 kuralları, sektör sırası); karşılaştırma tablosundaki rakamlar rapordakilerle b…
 - `lib/services/project-records.ts` — Projeyi saatlik kayıtları ve piyasa verisiyle yükleme: İki kaynak: - Havuzdan okunan santral (poolBacked, PLAN 7.7): saatler veri havuzundan (data/pool), projenin dönemi içinde.
 - `lib/services/ptf-engine.ts` — PTF motoru: yarının tahmini (hesap lib/ptf/*; veri lib/services/ptf-history.ts): Hedef gün T için: geçmiş günler havuzdan ve veri tabanından; kesimde bilinen ama havuzda henüz olmayanlar EPİAŞ'tan canlı (T'nin yük planı ve rüzgâr tahmini, …
+- `lib/services/ptf-forecast-page.ts` — teklif öncesi sayfası: PTF motoru tahmini (kayıt yazmaz): Motor (lib/services/ptf-engine.ts) iki modeli geçmişle eğitip son 60 günü yeniden oynatır; yaklaşık bir dakika işlemciyi tutar.
 - `lib/services/ptf-history.ts` — PTF motoru: gün verisini toplar (hesap lib/ptf/*): PTF veri tabanından (doğrulanmış EPİAŞ / dosya kaynakları); yük tahmin planı, tüketim, gerçek zamanlı rüzgâr ve güneş, kaynak bazında KGÜP sistem havuzundan (`data/pool/system/<yıl>`); EPİ…
 - `lib/services/ptf-recent.ts` — Son günlerin PTF'si (Aşama 22.6 kısıntı gölge sürümü için): MarketData'ya piyasa eşitlemesi (scripts/market-sync.mts --recent) düne kadar yazar: SMF uç noktası bitişin geçmişte olmasını ister.
 - `lib/services/ptf-solar.ts` — PTF motoru: ülke güneşi bölge hava verisini okur (hesap lib/ptf/solar.ts): data/pool/ptf/solar-regions.json (bölge noktaları ve ağırlıkları) ve data/pool/ptf/solar-weather/<nokta>/<yıl>.json.gz (ECMWF "2 gün önceki" küresel ışınım; scripts…
@@ -439,7 +441,7 @@
 - `lib/wind-engine/pipeline.ts` — RES günlük akışı: taze girdiler, kanıtla sürüm seçimi, kesimden önce değişmez kayıt.
 - `lib/wind-engine/registry.ts` — Rüzgâr günlük kayıt sürümleri.
 
-## components (57)
+## components (58)
 
 - `components/aggregator-benchmark-tab.tsx` — Sektör karnesi · Toplayıcılar sekmesi (PLAN 9.1): EPİAŞ'taki toplayıcıların aynı yöntemle kıyası.
 - `components/budget-tab.tsx` — Planlama sayfasının "2027 bütçesi" sekmesi (PLAN 17.3): gelecek yılın aylık dengesizlik + KÜPST bütçesi, senaryolar ve kötü durum aralığı.
@@ -464,6 +466,7 @@
 - `components/market/pre-bid-effects.tsx` — Ölçülmeyen verilerin neden ölçülmediği; sayı yok, yalnız durum
 - `components/market/pre-bid-view.tsx` — Neleri bilsek daha iyi ölçerdik: etki ölçümde görülene dayanır; kaynak ve durum yanında
 - `components/market/price-limit-note.tsx` — Fiyat limiti notu.
+- `components/market/ptf-engine-panel.tsx` — Teklif öncesi sayfası: PTF motorunun tahmini (lib/services/ptf-engine.ts), dayandığı veriler ve alınamayan girdiler.
 - `components/market/tomorrow-view.tsx`
 - `components/method-link.tsx` — Metodoloji sayfasındaki ilgili bölüme küçük bağlantı ("Bu rakam nereden geliyor?")
 - `components/netting-card.tsx` — Dengeden sorumlu grup (DSG) netleştirme faydası: santrallerin tek başına ve grup halinde netleşmiş dengesizlik maliyetlerini karşılaştırır.
@@ -583,9 +586,10 @@
 - `scripts/analysis/wind-forecast-backtest.mts` — Rüzgâr üretim tahmini geriye dönük testi (kullanıcı 18.10.2026; güneşteki scripts/analysis/forecast-backtest.mts'in rüzgâr karşılığı).
 - `scripts/analysis/wind-live-backtest.mts` — Güncel sunucu kopyasında 120 günlük, günlük kayan RES temel sınaması.
 
-## scripts/ptf (8)
+## scripts/ptf (9)
 
 - `scripts/ptf/forecast-daily.mts` — PTF motoru: yarının saatlik PTF tahmini, değişmeyen kayıt (data/pool/forecast-log/ptf/<ay>/<gün>.json.gz).
+- `scripts/ptf/forecast-preview.mts` — PTF motoru: teklif öncesi sayfası için tahmin (kayıt yazmaz).
 - `scripts/ptf/replay.mts` — PTF motoru: günlük yeniden oynatma (lib/ptf/replay.ts).
 - `scripts/ptf/scorecard.mts` — PTF motoru: ileriye dönük karne.
 - `scripts/ptf/solar-eval.mts` — PTF motoru: ülke güneş tahmininin kendi hatası.

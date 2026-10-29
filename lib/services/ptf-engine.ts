@@ -43,6 +43,8 @@ const LOOKBACK_DAYS = 830;
 
 const full = (a: Array<number | null> | null | undefined): a is number[] =>
   !!a && a.length === 24 && a.every((v) => v !== null && Number.isFinite(v));
+const sum = (...series: number[][]) =>
+  series[0].map((_, h) => series.reduce((s, x) => s + x[h], 0));
 
 /** T-1'in kaynak bazında KGÜP'ü (havuzda yoksa) */
 async function liveKgup(day: string): Promise<Partial<Record<KgupSource, number[]>>> {
@@ -71,10 +73,110 @@ async function liveKgup(day: string): Promise<Partial<Record<KgupSource, number[
   return out;
 }
 
+/** Ekranda gösterilen girdi durumu: alındı, yedeğe düştü ya da yok */
+export interface PtfInputStatus {
+  key: "lep" | "wind" | "sun" | "ptfD1" | "kgupD1";
+  state: "ok" | "fallback" | "missing";
+  /** Kaynak ya da yedek (düz Türkçe) */
+  detail: string;
+}
+
+/** Tahminin dayandığı saatlik seriler (ekran için; kayıtta yok) */
+export interface PtfDisplaySeries {
+  base: number[];
+  ptfD1: number[];
+  lep: number[];
+  /** Aynı sınıf günlerin yük tahmini ortancası */
+  lepRef: number[];
+  wind: number[];
+  sun: number[];
+  net: number[];
+  /** T-1 KGÜP: gaz + ithal kömür + linyit; baraj + akarsu */
+  kgupThermal: number[];
+  kgupHydro: number[];
+  /** Hedef günün gerçekleşen PTF'si (yalnız geçmiş gün denemesinde) */
+  actual: number[] | null;
+}
+
 export interface EngineForecast {
   log: PtfForecastLog;
   /** Uyarılar (canlı alınamayan girdiler vb.) */
   notes: string[];
+  inputs: PtfInputStatus[];
+  display: PtfDisplaySeries;
+}
+
+/** Tahmin kurulamadı; ekran hangi girdinin eksik olduğunu gösterebilsin diye durum taşır */
+export class PtfForecastError extends Error {
+  constructor(
+    message: string,
+    readonly inputs: PtfInputStatus[],
+    readonly notes: string[]
+  ) {
+    super(message);
+    this.name = "PtfForecastError";
+  }
+}
+
+const WIND_SOURCE: Record<number, string> = {
+  1: "EPİAŞ rüzgâr tahmini",
+  3: "kendi rüzgâr tahminimiz (EPİAŞ tahmini yok)",
+  4: "EPİAŞ ve kendi tahminin ortalaması",
+  0: "son 3 günün gerçekleşen rüzgârı (tahmin yok)",
+};
+
+function inputStatus(
+  t: PtfDay,
+  p: PtfDay,
+  windKind: number | null,
+  sunKind: number | null
+): PtfInputStatus[] {
+  const kgupOk = KGUP_SOURCES.filter((s) => s !== "sun" && full(p.kgup[s])).length;
+  return [
+    t.lep
+      ? { key: "lep", state: "ok", detail: "EPİAŞ yük tahmin planı" }
+      : {
+          key: "lep",
+          state: "missing",
+          detail:
+            "EPİAŞ hedef günün yük tahminini henüz yayımlamadı (28.10.2026'da 12:02 çekiminde görüldü); tahmin kurulamaz",
+        },
+    windKind === null
+      ? {
+          key: "wind",
+          state: t.windF || t.windOwn ? "ok" : "missing",
+          detail: t.windF
+            ? WIND_SOURCE[1]
+            : t.windOwn
+              ? WIND_SOURCE[3]
+              : "EPİAŞ rüzgâr tahmini ve kendi tahminimiz yok",
+        }
+      : {
+          key: "wind",
+          state: windKind === 1 || windKind === 4 ? "ok" : windKind < 0 ? "missing" : "fallback",
+          detail: WIND_SOURCE[windKind] ?? "rüzgâr girdisi yok (0 kabul edildi)",
+        },
+    sunKind === 1 || (sunKind === null && t.sunF)
+      ? { key: "sun", state: "ok", detail: "kendi ülke güneş tahminimiz (30 bölge, ECMWF ışınım)" }
+      : {
+          key: "sun",
+          state: sunKind === 0 ? "fallback" : "missing",
+          detail:
+            sunKind === 0
+              ? "hava tahmini alınamadı; son 7 günün KGÜP güneş ortancası kullanıldı"
+              : "güneş girdisi yok",
+        },
+    p.ptf
+      ? { key: "ptfD1", state: "ok", detail: "EPİAŞ gün öncesi piyasası" }
+      : { key: "ptfD1", state: "missing", detail: "önceki günün PTF'si alınamadı; tahmin kurulamaz" },
+    kgupOk === 6
+      ? { key: "kgupD1", state: "ok", detail: "EPİAŞ KGÜP, kaynak bazında" }
+      : {
+          key: "kgupD1",
+          state: kgupOk ? "fallback" : "missing",
+          detail: `${6 - kgupOk} kaynakta önceki günün KGÜP'ü yok (0 kabul edildi)`,
+        },
+  ];
 }
 
 export async function forecastPtf(
@@ -93,10 +195,13 @@ export async function forecastPtf(
   const p = days.get(prev)!;
 
   // Hedef günün yük planı ve rüzgâr tahmini; T-1'in PTF'si: havuzda / veri tabanında yoksa canlı
+  // Hedef günün gerçekleşen PTF'si yalnız ekranda karşılaştırma için tutulur; modele gitmez (PtfView zaten okutmaz)
+  let actual: number[] | null = full(t.ptf) ? t.ptf : null;
   if (!t.lep || !t.windF) {
     const l = await liveDay(target).catch(() => null);
     if (!t.lep && l && full(l.lep)) ((t.lep = l.lep), live.push("lep"));
     if (!t.windF && l && full(l.windF)) ((t.windF = l.windF), live.push("windF"));
+    if (!actual && l && full(l.ptf)) actual = l.ptf;
   }
   if (!p.ptf) {
     const l = await liveDay(prev).catch(() => null);
@@ -159,6 +264,13 @@ export async function forecastPtf(
   }
   if (!t.lep) notes.push("Hedef günün yük planı yok: tahmin kurulamaz.");
   if (!p.ptf) notes.push("T-1 PTF'si yok: tahmin kurulamaz.");
+  // Zorunlu girdi yoksa modelleri boşuna eğitme (yaklaşık bir dakika)
+  if (!t.lep || !p.ptf)
+    throw new PtfForecastError(
+      `Tahmin kurulamadı (${target}): ${notes.join(" ")}`,
+      inputStatus(t, p, null, null),
+      notes.filter((n) => !n.endsWith("tahmin kurulamaz.")) // girdi durumunda zaten var
+    );
 
   const ctx = { days, exclude: new Set(ENGINE_EXCLUDE) };
   const cache = new FeatureCache(ctx);
@@ -185,9 +297,21 @@ export async function forecastPtf(
   const f = buildFeatures(new PtfView(days, target));
   const pl = lear.predict(target);
   const pg = gbm.predict(target);
+  const col = (name: (typeof FEATURE_NAMES)[number]) => {
+    const j = FEATURE_NAMES.indexOf(name);
+    return f ? f.rows.map((r) => r[j]) : [];
+  };
+  const inputs = inputStatus(
+    t,
+    p,
+    f ? col("windKind")[0] : null,
+    f ? col("sunKind")[0] : null
+  );
   if (!f || !pl || !pg)
-    throw new Error(
-      `Tahmin kurulamadı (${target}): ${notes.join(" ") || "özellik ya da model eksik"}`
+    throw new PtfForecastError(
+      `Tahmin kurulamadı (${target}): ${notes.join(" ") || "özellik ya da model eksik"}`,
+      inputs,
+      notes
     );
   const p50 = pl.map((v, h) => (v + pg[h]) / 2);
   // Gölge sürüm: rüzgârda EPİAŞ ve kendi tahminin ortalaması (sınama döneminde %2,9 daha iyi göründü; seçim döneminde
@@ -240,5 +364,18 @@ export async function forecastPtf(
       cap: f.cap,
     },
     notes,
+    inputs,
+    display: {
+      base: f.base,
+      ptfD1: col("ptfD1"),
+      lep: col("lep"),
+      lepRef: sum(col("lep"), col("lepDev").map((v) => -v)),
+      wind: col("wind"),
+      sun: col("sun"),
+      net: col("net"),
+      kgupThermal: sum(col("kgupGas"), col("kgupImpCoal"), col("kgupLignite")),
+      kgupHydro: sum(col("kgupDam"), col("kgupRiver")),
+      actual,
+    },
   };
 }

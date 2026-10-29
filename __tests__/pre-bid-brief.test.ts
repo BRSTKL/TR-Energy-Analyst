@@ -330,3 +330,13 @@ describe("buildBrief: model kurulamadığında (arife, bayram)", () => {
     expect(b.tally.model).toBe(0);
   });
 });
+
+describe("buildBrief: tahmin PTF motorundan (engine)", () => {
+  it("kartlar yalnız bağlam; eski güneş kartı ve 'kurulamadı' cümlesi yok", () => {
+    const b = buildBrief({ view: null, limit, ctx: ctx(), effects: null, engine: true });
+    expect(b.signals.find((s) => s.id === "solar")).toBeUndefined();
+    expect(b.signals.find((s) => s.id === "gas")).toBeDefined();
+    expect(b.tallyLine).toContain("yukarıdaki motordan");
+    expect(b.tallyLine).not.toContain("kurulamadı");
+  });
+});
