@@ -12,6 +12,14 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
 
 ---
 
+## 29.10.2026 · Claude · Günlük pano: eski önizleme sekmesi kaldırıldı, 14:00 öncesi GÖP isteği (commit yok)
+
+- **Yapılan:** `/market/gunluk` "Teklif öncesi (önizleme)" sekmesi kaldırıldı, yerine `/market/teklif` bağlantısı (kullanıcı isteği); kullanılmayan `PreBidPanel` silindi. GÖP uç noktalarında (`mcp`, `submitted-*-order-volume`) bitiş "gün 23:00" yerine "gün 00:00": EPİAŞ bitişi gün olarak okuyor, "bugün 23:00" 14:00'ten önce HTTP 400 dönüyor (29.10 11:29'da denendi; 00:00 bitişi 24 saati veriyor). Düzeltilen yerler: `live-day.ts` (Bugün sekmesi), `pre-bid-context.ts` (teklif miktarları, komşu karşılaştırmasındaki PTF), `pre-bid.ts` `liveDay` (PTF motorunun T-1 PTF'si de buradan; sabah kaydının ikinci engeli olabilirdi).
+- **Sınama:** 889 test, `check:reports` 0 hata, duman testi `--only gunluk,teklif` geçti (ilk açılışta yavaş API uyarısı); tarayıcıda 11:31'de Bugün sekmesi ve teklif bağlamı hatasız.
+- **Yarın sekmesi (sonra, kullanıcı isteği):** 14:00'ten önce hata yerine "henüz yayımlanmadı: PTF ve GÖP hacmi 14:00'te açıklanır" der ve yük tahminini gösterir (`live-day.ts` `beforeAuction`: yalnız "saat 14 öncesinde" 400'ü boş sayılır, öbür hatalar yine hata). Özet ve bilgi kutusu PTF yokken "PTF zaten açıklandı" demez; fiyat limiti kutusu "–". Yöntem sayfası metni güncellendi. 11:56'da tarayıcıda denendi; 889 test, duman `--only gunluk,methodology` geçti.
+
+---
+
 ## 28.10.2026 · Claude · PTF motoru: ülke rüzgâr tahmini (yüklendi; sabah kaydı yazılamadı)
 
 - **Yapılan:** `lib/ptf/wind.ts`, `lib/services/ptf-wind.ts`, `scripts/ptf/{wind-regions,wind-eval}.mts`, `__tests__/ptf-wind.test.ts`; rüzgâr seçim kuralı `WindPolicy` (features.ts); motor yarının 100 m rüzgârını canlı çeker; günlük kayda gölge sürüm (rüzgârda EPİAŞ + kendi ortalaması) ve karnede gölge karşılaştırması; saatlik işe günde bir rüzgâr arşivi güncellemesi. Mac'te `data/pool/ptf/wind-regions.json` ve 30 noktanın arşivi (90 istek).
