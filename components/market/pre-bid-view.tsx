@@ -1,8 +1,6 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
-import { AlertTriangle, FlaskConical } from "lucide-react";
 import { BarChart, ComposedChart, ReferenceLine } from "recharts";
 import {
   ChartArea as Area,
@@ -18,9 +16,6 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartCard } from "@/components/market/chart-card";
 import { Kpi, hh } from "@/components/market/daily-dashboard";
-import { PreBidContextPanel } from "@/components/market/pre-bid-context";
-import { PreBidEffectsPanel } from "@/components/market/pre-bid-effects";
-import { PriceLimitNote } from "@/components/market/price-limit-note";
 import { DAY_CLASS_LABEL } from "@/lib/analysis/daily-market";
 import { LEVEL_LABEL, type PriceLimit } from "@/lib/analysis/price-limit";
 import type { PreBidView } from "@/lib/analysis/pre-bid";
@@ -176,70 +171,6 @@ export function PreBidStatusCard() {
         </ol>
       </CardContent>
     </Card>
-  );
-}
-
-export function PreBidPanel({
-  view,
-  limit,
-  notes,
-  updatedAt,
-  date,
-}: {
-  view: PreBidView;
-  limit: PriceLimit | null;
-  notes: string[];
-  updatedAt: string;
-  date: string;
-}) {
-  return (
-    <>
-      <div className="flex gap-2 rounded-md border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900">
-        <FlaskConical className="mt-0.5 h-4 w-4 shrink-0" />
-        <p>
-          <b>Önizleme.</b> Teklif öncesi bilinebilecek girdilerle (yarının yük tahmini,
-          EPİAŞ&apos;ın rüzgâr tahmini, dünkü fiyat sapması) saatlik fiyat beklentisi ve ±
-          aralık. Nokta tahmin değildir; hata payı yaklaşık ±550 TL/MWh ve aralık yaklaşık
-          %75 tutuyor. Henüz onaylanmadı, kararlarda tek başına kullanmayın. Güncelleme{" "}
-          {new Date(updatedAt).toLocaleTimeString("tr-TR", {
-            hour: "2-digit",
-            minute: "2-digit",
-            timeZone: "Europe/Istanbul",
-          })}
-          . Daha sade bir özet için{" "}
-          <Link href="/market/teklif" className="font-medium underline">
-            yeni karar sayfasına
-          </Link>{" "}
-          bakın.
-        </p>
-      </div>
-      <PriceLimitNote limit={limit} />
-
-      {!view.ok && (
-        <div className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>{view.reason}</p>
-        </div>
-      )}
-      {notes.length > 0 && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          {notes.map((n) => (
-            <p key={n}>{n}</p>
-          ))}
-        </div>
-      )}
-
-      {view.ok && <PreBidBody view={view} limit={limit} />}
-
-      <PreBidContextPanel
-        date={date}
-        expectedMean={view.ok ? view.summary.meanExpected : null}
-      />
-
-      <PreBidEffectsPanel />
-
-      <PreBidStatusCard />
-    </>
   );
 }
 
