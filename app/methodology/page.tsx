@@ -490,7 +490,7 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
               yanıt vermezse o seri boş kalır ve ekranda not düşer.
             </p>
             <p>
-              <b>Yarın sekmesi.</b> Yarının açıklanmış PTF&apos;si (gün öncesi piyasası sonuçları genelde 13:00–14:00), yük tahmini ve GÖP
+              <b>Yarın sekmesi.</b> Yarının açıklanmış PTF&apos;si (gün öncesi piyasası sonuçları 14:00&apos;te açıklanır; öncesinde sekme &quot;henüz yayımlanmadı&quot; der), yük tahmini ve GÖP
               eşleşme hacmi; aynı sınıftaki son 28 günün ortancasıyla ve fiyat limitiyle kıyaslanır. <b>Fiyat tahmini değildir:</b> PTF zaten
               açıklanmıştır. Ölçüm (27.10.2026, 626 gün, doğrulanmış PTF; her gün için önceki 28 günün aynı sınıf günleriyle, saat bazında
               ortanca; <code className="break-all">scripts/analysis/ptf-load-evidence.mts</code>): yük tahmini tek başına fiyat hatasını ortancaya göre yalnız %2,3

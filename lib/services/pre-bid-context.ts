@@ -141,7 +141,8 @@ async function loadOutages(date: string) {
 
 async function loadBids(day: string) {
   return cached(`bids:${day}`, 3_600_000, async () => {
-    const q = { startDate: iso(shift(day, -28)), endDate: iso(day, 23) };
+    // GÖP bitişi gün olarak okunur ("gün 00:00" o günü de verir); bugün için "23:00" bitişi 14:00'ten önce HTTP 400 döner
+    const q = { startDate: iso(shift(day, -28)), endDate: iso(day) };
     const [bid, offer] = await Promise.all([
       epiasRequest<{ items?: Array<Record<string, unknown>> }>(
         "/markets/dam/data/submitted-bid-order-volume",
@@ -212,7 +213,7 @@ async function loadNeighbors(date: string) {
     try {
       const r = await epiasRequest<{
         items?: Array<{ date?: string; price?: number }>;
-      }>("/markets/dam/data/mcp", { startDate: iso(d), endDate: iso(d, 23) });
+      }>("/markets/dam/data/mcp", { startDate: iso(d), endDate: iso(d) });
       const arr: number[] = Array(24).fill(NaN);
       for (const it of r.items ?? []) {
         const h = typeof it.date === "string" ? Number(it.date.slice(11, 13)) : NaN;

@@ -49,9 +49,10 @@ export function TomorrowViewPanel({
   return (
     <>
       <div className="rounded-md border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
-        Yarının açıklanmış verisi (PTF, yük tahmini, GÖP hacmi). Fiyat tahmini değildir:
-        PTF zaten açıklandı; görünüm fiyatın benzer günlere ve yük seviyesine göre nerede
-        durduğunu gösterir. Güncelleme{" "}
+        {view.published.ptf
+          ? "Yarının açıklanmış verisi (PTF, yük tahmini, GÖP hacmi). Fiyat tahmini değildir: PTF zaten açıklandı; görünüm fiyatın benzer günlere ve yük seviyesine göre nerede durduğunu gösterir."
+          : "Yarının PTF'si ve GÖP hacmi 14:00'te açıklanır; şimdilik yayımlananlar (yük tahmini) gösteriliyor. Fiyat tahmini değildir."}{" "}
+        Güncelleme{" "}
         {new Date(updatedAt).toLocaleTimeString("tr-TR", {
           hour: "2-digit",
           minute: "2-digit",
@@ -104,7 +105,7 @@ export function TomorrowViewPanel({
         />
         <Kpi
           label="Fiyat limiti"
-          value={limit ? `${p.capHours} limitte / ${p.nearHours} yakın` : "–"}
+          value={limit && p.mean !== null ? `${p.capHours} limitte / ${p.nearHours} yakın` : "–"}
           sub={
             limit
               ? `Limit ${nf(limit.cap)} TL/MWh${p.zeroHours ? ` · ${p.zeroHours} sıfır fiyatlı saat` : ""}`

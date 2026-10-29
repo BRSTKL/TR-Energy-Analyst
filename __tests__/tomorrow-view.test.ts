@@ -43,6 +43,7 @@ describe("buildTomorrowView", () => {
     expect(v.published.ptf).toBe(false);
     expect(v.ptf.mean).toBeNull();
     expect(v.warnings.some((w) => w.includes("henüz yayımlanmadı"))).toBe(true);
+    expect(v.sentences.join(" ")).not.toContain("zaten açıklandı");
   });
 
   it("kıyas günü yoksa konum null, uyarı var", () => {

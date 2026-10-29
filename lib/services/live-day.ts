@@ -116,7 +116,8 @@ export function loadToday(): Promise<TodayResult> {
       }
     };
     const [mcp, smp, sd, wap, dpp, lep, cons, rt, up, down] = await Promise.all([
-      items("/markets/dam/data/mcp", full),
+      // GÖP bitişi gün olarak okunur ("bugün 00:00" bütün günü verir); "bugün 23:00" 14:00'ten önce HTTP 400 döner
+      items("/markets/dam/data/mcp", { ...full, endDate: isoAt(today, 0) }),
       settle("SMF", items("/markets/bpm/data/system-marginal-price", past)),
       settle("sistem yönü", items("/markets/bpm/data/system-direction", past)),
       settle(
@@ -215,10 +216,20 @@ export function loadTomorrow(): Promise<TomorrowResult> {
         return [];
       }
     };
+    // Yarının GÖP sonuçları 14:00'te açıklanır; öncesinde EPİAŞ HTTP 400 döner ("... saat 14 öncesinde mevcut değil"):
+    // boş seri sayılır, görünüm "henüz yayımlanmadı" der
+    const beforeAuction = (p: Promise<Item[]>) =>
+      p.catch((e) => {
+        if (e instanceof Error && /saat 14 öncesinde/.test(e.message)) return [];
+        throw e;
+      });
     const [mcp, lep, gop] = await Promise.all([
-      items("/markets/dam/data/mcp", full),
+      beforeAuction(items("/markets/dam/data/mcp", full)),
       settle("yük tahmini", items("/consumption/data/load-estimation-plan", full)),
-      settle("GÖP eşleşme miktarı", items("/markets/dam/data/clearing-quantity", full)),
+      settle(
+        "GÖP eşleşme miktarı",
+        beforeAuction(items("/markets/dam/data/clearing-quantity", full))
+      ),
     ]);
     const limit = await loadPriceLimit();
     const view = buildTomorrowView({

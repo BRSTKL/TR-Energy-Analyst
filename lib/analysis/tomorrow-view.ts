@@ -173,7 +173,7 @@ export function buildTomorrowView(input: TomorrowInput): TomorrowView {
   const published = { ptf: ptfs.length === HOURS, lep: lepVals.length >= 24 };
   if (ptfs.length === 0)
     warnings.push(
-      "Yarının PTF'si henüz yayımlanmadı (gün öncesi piyasası sonuçları genelde 13:00–14:00 arasında açıklanır)."
+      "Yarının PTF'si henüz yayımlanmadı: gün öncesi piyasası sonuçları (PTF ve GÖP hacmi) 14:00'te açıklanır."
     );
   else if (ptfs.length < HOURS) warnings.push(`Yarının PTF'si ${ptfs.length}/24 saat.`);
   if (lepVals.length === 0) warnings.push("Yarının yük tahmini henüz yayımlanmadı.");
@@ -222,7 +222,9 @@ export function buildTomorrowView(input: TomorrowInput): TomorrowView {
   }
   if (s.length)
     s.push(
-      "Bu görünüm fiyat tahmini değildir: PTF zaten açıklandı. Yük tahmini tek başına fiyatı benzer gün ortancasından iyi öngörmüyor (yöntem sayfasındaki ölçüm)."
+      ptfSummary.mean !== null
+        ? "Bu görünüm fiyat tahmini değildir: PTF zaten açıklandı. Yük tahmini tek başına fiyatı benzer gün ortancasından iyi öngörmüyor (yöntem sayfasındaki ölçüm)."
+        : "Bu görünüm fiyat tahmini değildir. Yük tahmini tek başına fiyatı benzer gün ortancasından iyi öngörmüyor (yöntem sayfasındaki ölçüm)."
     );
 
   return {

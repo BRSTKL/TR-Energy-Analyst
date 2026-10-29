@@ -92,11 +92,12 @@ export async function forecastDays(from: string, to: string): Promise<Map<string
 /** Bir günün (EPİAŞ) PTF, yük tahmini ve rüzgâr tahmini: hedef yarın / bugün ise canlı */
 export async function liveDay(date: string) {
   const q = { startDate: `${date}T00:00:00+03:00`, endDate: `${date}T23:00:00+03:00` };
-  const get = async (path: string) =>
-    ((await epiasRequest<{ items?: Array<Record<string, unknown>> }>(path, q)).items ??
+  const get = async (path: string, body: typeof q = q) =>
+    ((await epiasRequest<{ items?: Array<Record<string, unknown>> }>(path, body)).items ??
       []) as Array<Record<string, unknown>>;
   const [mcp, lep, wf] = await Promise.all([
-    get("/markets/dam/data/mcp").catch(() => []),
+    // GÖP bitişi gün olarak okunur ("gün 00:00" bütün günü verir); bugün için "23:00" bitişi 14:00'ten önce HTTP 400 döner
+    get("/markets/dam/data/mcp", { ...q, endDate: q.startDate }).catch(() => []),
     get("/consumption/data/load-estimation-plan").catch(() => []),
     get("/renewables/data/res-generation-and-forecast").catch(() => []),
   ]);
