@@ -52,7 +52,14 @@ export interface PtfForecastLog {
   /** Girdi notları: rüzgâr kaynağı (0 kalıcılık, 1 EPİAŞ tahmini), yedeğe düşen girdiler, canlı alınan alanlar */
   inputs: { windKind: number; sunKind?: number; fallbacks: string[]; live: string[] };
   /** Aralığın dayandığı örneklem dışı gün sayısı ve son 60 günde birleşimin hatası (TL/MWh) */
-  band: { days: number; recentMae: number | null };
+  band: {
+    days: number;
+    recentMae: number | null;
+    /** Aynı günlerdeki ortalama gerçek fiyat (TL/MWh): sapmayı yüzdeye çevirmek için (30.10.2026'dan sonraki kayıtlarda) */
+    meanPrice?: number | null;
+    /** Basit yöntemin (benzer günlerin ortancası) aynı günlerdeki saat başına ortalama sapması */
+    baselineMae?: number | null;
+  };
   cap: number | null;
 }
 

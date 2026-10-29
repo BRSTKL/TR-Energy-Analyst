@@ -367,6 +367,20 @@ export async function forecastPtf(
     ? errors.reduce((s, e) => s + e.reduce((x, v) => x + Math.abs(v), 0) / H, 0) /
       errors.length
     : null;
+  // Sade başarı özeti için: aynı günlerin ortalama gerçek fiyatı ve basit yöntemin (benzer günlerin ortancası) sapması
+  const meanPrice = pastCorrected.length
+    ? pastCorrected.reduce((s, r) => s + r.actual.reduce((x, v) => x + v, 0) / H, 0) /
+      pastCorrected.length
+    : null;
+  let baseSum = 0;
+  let baseDays = 0;
+  for (const r of pastCorrected) {
+    const b = cache.get(r.day)?.base;
+    if (!b) continue;
+    baseSum += r.actual.reduce((x, a, h) => x + Math.abs(a - b[h]), 0) / H;
+    baseDays++;
+  }
+  const baselineMae = baseDays === pastCorrected.length && baseDays > 0 ? baseSum / baseDays : null;
 
   // Gölge sürümler: ana sürümle aynı hat ve aynı düzeltme, farklı girdi. Rüzgârda EPİAŞ ve kendi tahminin ortalaması
   // (sınama döneminde %2,9 daha iyi göründü, seçimde ölçülemedi); hidro özellikleri (sınamada %3,6, hipotez sınama
@@ -415,7 +429,7 @@ export async function forecastPtf(
         fallbacks: f.fallbacks,
         live,
       },
-      band: { days: errors.length, recentMae },
+      band: { days: errors.length, recentMae, meanPrice, baselineMae },
       cap: f.cap,
     },
     notes,

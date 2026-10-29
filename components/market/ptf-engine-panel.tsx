@@ -29,6 +29,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ChartCard } from "@/components/market/chart-card";
 import { hh } from "@/components/market/daily-dashboard";
 import { DAY_CLASS_LABEL, type DayClass } from "@/lib/analysis/daily-market";
+import { accuracySummary, type AccuracySummary } from "@/lib/ptf/accuracy";
 import { nf } from "@/lib/format";
 import type { PtfPageForecast } from "@/lib/services/ptf-forecast-page";
 import type { PtfInputStatus } from "@/lib/services/ptf-engine";
@@ -277,6 +278,36 @@ function InputCards({
   );
 }
 
+/** Kartın sağ üstü: motor yakın geçmişte fiyata ne kadar yakın tahmin etti (sade özet; ayrıntı alttaki cümlede) */
+function AccuracyBox({ acc }: { acc: AccuracySummary }) {
+  const vs = acc.vsBaselinePct;
+  return (
+    <div
+      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 sm:w-auto sm:min-w-56"
+      title={`Son ${acc.days} günde motorun her saat için yaptığı tahmin, gerçekleşen fiyattan ortalama bu kadar saptı. Basit yöntem: aynı tür günlerin son 28 günlük ortancası.`}
+    >
+      <p className="text-xs font-medium text-slate-500">Ne kadar yakın tahmin ediyor?</p>
+      <p className="mt-0.5 text-2xl font-bold tabular-nums text-slate-900">
+        {acc.relPct !== null ? `%${nf(acc.relPct)}` : `±${nf(acc.maeTl)}`}{" "}
+        <span className="text-sm font-medium text-slate-500">ortalama sapma</span>
+      </p>
+      <p className="text-xs text-slate-600">
+        son {acc.days} gün
+        {acc.relPct !== null
+          ? ` · saat başına ±${nf(acc.maeTl)} TL/MWh`
+          : " · TL/MWh, saat başına"}
+      </p>
+      {vs !== null && (
+        <p
+          className={`mt-1 text-xs font-medium ${vs >= 0 ? "text-emerald-700" : "text-amber-800"}`}
+        >
+          Basit yönteme göre %{nf(Math.abs(vs))} {vs >= 0 ? "daha yakın" : "daha uzak"}
+        </p>
+      )}
+    </div>
+  );
+}
+
 type OkPreview = Extract<NonNullable<PtfPageForecast["preview"]>, { ok: true }>;
 
 function OkView({
@@ -301,6 +332,7 @@ function OkView({
   const baseMean = avg(d.base);
   const vsBase = baseMean > 0 ? (mean / baseMean - 1) * 100 : null;
   const nearCap = cap ? p50.filter((v) => v >= cap * 0.9).length : 0;
+  const acc = accuracySummary(log.band);
   const actualMean = d.actual ? avg(d.actual) : null;
   const actualMae = d.actual ? avg(d.actual.map((a, h) => Math.abs(a - p50[h]))) : null;
   const fallbacks = log.inputs.fallbacks
@@ -333,18 +365,23 @@ function OkView({
       <Card className="border-slate-300 shadow-sm">
         <CardContent className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:p-6">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              {dmy(date)} · ortalama PTF tahmini
-            </p>
-            <p className="mt-1 text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
-              {nf(mean)}{" "}
-              <span className="text-lg font-medium text-slate-500">TL/MWh</span>
-            </p>
-            {Number.isFinite(lo) && Number.isFinite(hi) && (
-              <p className="mt-1 text-sm text-slate-600">
-                Olası aralık (ortalama) {nf(lo)} – {nf(hi)} TL/MWh
-              </p>
-            )}
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                  {dmy(date)} · ortalama PTF tahmini
+                </p>
+                <p className="mt-1 text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
+                  {nf(mean)}{" "}
+                  <span className="text-lg font-medium text-slate-500">TL/MWh</span>
+                </p>
+                {Number.isFinite(lo) && Number.isFinite(hi) && (
+                  <p className="mt-1 text-sm text-slate-600">
+                    Olası aralık (ortalama) {nf(lo)} – {nf(hi)} TL/MWh
+                  </p>
+                )}
+              </div>
+              {acc && <AccuracyBox acc={acc} />}
+            </div>
             <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">
                 En pahalı {hh(maxH)} · {nf(p50[maxH])}
@@ -390,13 +427,15 @@ function OkView({
                 : "Dünkü kayıt yok: günlük seviye düzeltmesi uygulanmadı."}
             </p>
             <p className="text-slate-600">
-              Düzeltmeden önce iki modelin ortalaması: doğrusal model {nf(avg(log.members["LEAR-ridge"]))},
-              ağaç tabanlı model {nf(avg(log.members.GBM))} TL/MWh.
+              Düzeltmeden önce iki modelin ortalaması: doğrusal model{" "}
+              {nf(avg(log.members["LEAR-ridge"]))}, ağaç tabanlı model{" "}
+              {nf(avg(log.members.GBM))} TL/MWh.
               {log.shadow?.["ptf-ens-v1-ruzgar-ortalama"] &&
                 ` Deneme sürümleri (düzeltmeli): rüzgârda EPİAŞ ve kendi tahminimizin ortalaması ${nf(avg(log.shadow["ptf-ens-v1-ruzgar-ortalama"]))}`}
               {log.shadow?.["ptf-ens-v1-hidro"] &&
                 `${log.shadow["ptf-ens-v1-ruzgar-ortalama"] ? "," : " Deneme sürümü (düzeltmeli):"} hidro özellikli ${nf(avg(log.shadow["ptf-ens-v1-hidro"]))}`}
-              {(log.shadow?.["ptf-ens-v1-ruzgar-ortalama"] || log.shadow?.["ptf-ens-v1-hidro"]) &&
+              {(log.shadow?.["ptf-ens-v1-ruzgar-ortalama"] ||
+                log.shadow?.["ptf-ens-v1-hidro"]) &&
                 " TL/MWh."}
             </p>
             <p className="text-xs text-slate-500">
