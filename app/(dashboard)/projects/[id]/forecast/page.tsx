@@ -124,12 +124,6 @@ export default function ForecastPage() {
   const ok = data?.plants.filter((p) => p.status === "ok") ?? [];
   const missing = data?.plants.filter((p) => p.status !== "ok") ?? [];
   const selected = ok.find((p) => p.epiasPlantId === plant) ?? null;
-  // Hava tahmini yarının GÖP kesiminden (bugün 12:30 Türkiye saati) sonra alındıysa: GÖP teklifi için elde değildi
-  const afterCutoff = (() => {
-    if (!data?.weatherFetchedAt || !data.days[0]) return false;
-    const d = new Date(Date.parse(`${data.days[0]}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
-    return Date.parse(data.weatherFetchedAt) > Date.parse(`${d}T09:30:00Z`);
-  })();
   const shownBands = selected ? (tech === "RES" ? selected.bands : bandDate === data?.days[0] ? solarBands[selected.epiasPlantId!] : undefined) : undefined;
   const shown = selected?.hours ?? portfolioForecastHours(ok.map(p => p.hours ?? []));
   const tomorrow = forecastDaySummary(shown, 0);
@@ -187,11 +181,6 @@ export default function ForecastPage() {
                 ))}
               </select>
             </div>
-            {afterCutoff && (
-              <CardDescription className="text-amber-700">
-                Hava tahmini bugün 12:30&apos;dan sonra alındı: yarının gün öncesi teklifi için geç; gün içi piyasa ve bilgi amaçlı.
-              </CardDescription>
-            )}
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-3 gap-2 sm:gap-3">
