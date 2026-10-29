@@ -1,15 +1,15 @@
 /**
  * TR-Energy Analyst - PTF motoru: gün verisi ve bilgi zamanı kuralı (saf, I/O yok)
  *
- * Motor hedef gün T'nin 24 saatlik PTF'sini T-1 günü sabah (kesim, varsayılan 11:30 Türkiye) bilinen veriyle tahmin eder.
+ * Motor hedef gün T'nin 24 saatlik PTF'sini T-1 günü öğlen (kesim, varsayılan 12:05 Türkiye) bilinen veriyle tahmin eder.
  * Bütün modeller veriye yalnız `PtfView` üzerinden erişir; görünüm, hedef güne göre hangi günün hangi alanının kesimde
  * elde olduğunu bilir ve kural dışı erişimde `LeakageError` atar. Eğitim satırı da aynı görünümle (o günü hedef sayarak)
  * kurulur, yani eğitim ve tahmin aynı bilgi kuralına uyar.
  *
- * Elde olma kuralı (hedef T, kesim T-1 11:30), gün farkı = T − gün:
+ * Elde olma kuralı (hedef T, kesim T-1 12:05), gün farkı = T − gün:
  *   ptf        ≥ 1   GÖP sonucu bir önceki gün 14:00'te yayımlanır; T-1'in bütün saatleri bilinir
- *   lep        ≥ 0   yük tahmin planı: T'nin planı kesimden önce yayımlı sayılır (estimated_availability; yayım saati
- *                    anlık görüntü işiyle ölçülecek)
+ *   lep        ≥ 0   yük tahmin planı: T'nin planı kesimden önce yayımlı sayılır (estimated_availability; anlık görüntü işi
+ *                    28 ve 29.10'da 11:02'de yok, 12:02'de var gördü: bu yüzden kesim 12:05)
  *   windF      ≥ 0   EPİAŞ rüzgâr tahmini: aynı (estimated_availability; seri 2026-06'dan güvenilir)
  *   sunF       ≥ 0   kendi güneş tahminimiz: d2 hava (kesimde elde) ve T-1'e kadar KGÜP güneşiyle kurulur
  *   windOwn    ≥ 0   kendi rüzgâr tahminimiz: d2 100 m rüzgâr ve T-2'ye kadar gerçek zamanlı rüzgârla kurulur

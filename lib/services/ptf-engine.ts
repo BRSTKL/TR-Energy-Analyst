@@ -139,7 +139,7 @@ function inputStatus(
           key: "lep",
           state: "missing",
           detail:
-            "EPİAŞ hedef günün yük tahminini henüz yayımlamadı (28.10.2026'da 12:02 çekiminde görüldü); tahmin kurulamaz",
+            "EPİAŞ hedef günün yük tahminini henüz yayımlamadı (genelde 12:00 civarı çıkıyor); tahmin kurulamaz",
         },
     windKind === null
       ? {

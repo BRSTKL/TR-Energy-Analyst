@@ -14,7 +14,8 @@ Zamanlanmış işler ve uygulama Mac'te değil sunucuda çalışır. Mac kapalı
 |---|---|---|
 | `tr-energy-solar-forecast` | 09:30, 11:00 | `scripts/solar-forecast-daily.mts` |
 | `tr-energy-wind-forecast` | 10:00, 11:30 (Europe/Istanbul) | `scripts/wind-forecast-daily.mts --write`; kurulum sonrası etkin |
-| `tr-energy-epias-monthly` | saatte bir | `scripts/epias-monthly-sync.mts` (günlük küçük işler: piyasa fiyatları, sistem geneli seriler `system-sync.mts --recent`, arıza bildirimleri `umm-sync.mts --recent`: içinde bulunulan ay 6 saatte bir; DSİ baraj doluluğu `dsi-dam-sync.mts`: yagisbarajdoluluk.dsi.gov.tr yalnız Türkiye IP'sinden açılır, havuz `data/pool/dsi/`; ENTSO-E komşu fiyat ve akış `entsoe-sync.mts`: `ENTSOE_TOKEN` .env'de, havuz `data/pool/entsoe/`; 08:00–11:30 arası yarının PTF tahmini `ptf/forecast-daily.mts --auto`, kayıt `data/pool/forecast-log/ptf/`) |
+| `tr-energy-epias-monthly` | saatte bir | `scripts/epias-monthly-sync.mts` (günlük küçük işler: piyasa fiyatları, sistem geneli seriler `system-sync.mts --recent`, arıza bildirimleri `umm-sync.mts --recent`: içinde bulunulan ay 6 saatte bir; DSİ baraj doluluğu `dsi-dam-sync.mts`: yagisbarajdoluluk.dsi.gov.tr yalnız Türkiye IP'sinden açılır, havuz `data/pool/dsi/`; ENTSO-E komşu fiyat ve akış `entsoe-sync.mts`: `ENTSOE_TOKEN` .env'de, havuz `data/pool/entsoe/`; PTF tahmini artık kendi işinde: aşağıda `tr-energy-ptf-forecast`) |
+| `tr-energy-ptf-forecast` | 12:03, 12:15, 12:25 (Europe/Istanbul) | `scripts/ptf/forecast-daily.mts --auto`: EPİAŞ yarının yük tahminini yayımladıysa yarının saatlik PTF tahminini hesaplar, `data/pool/forecast-log/ptf/` altına değişmeyen kayıt yazar, telefona özet bildirim gönderir (ntfy) ve sayfanın önbelleğine (`.cache/ptf/preview/`) koyar. Yük tahmini yoksa 12:05 kesimine kadar yoklar; sonra çıkar, 12:15 ve 12:25 dener (kesimden sonra yazılan kayıt skora girmez). 12:30'dan sonra yazmaz; 12:25'te de yazılamazsa nedenini telefona bildirir. Ortak `daily-forecast.lock` kullanmaz (kesim bekletilmesin). Kurulum aşağıda. |
 | `tr-energy-snapshot` | 08:02–13:02 saatlik, 12:25, 13:30, 14:02 | `scripts/snapshot-capture.mts` (27.10.2026'dan beri kurulu, aşağıya bakın) |
 | `tr-energy-db-backup` | 03:00 | `scripts/backup-db.mts daily` (`prisma/backups/`, son 5) |
 | `tr-energy-forecast-check` | 12:15 | yarının güneş/rüzgâr tahmini yazılmadıysa bildirim (yeni dosyalar kurulunca) |
@@ -68,3 +69,12 @@ cp scripts/server/systemd/tr-energy-snapshot.{service,timer} /etc/systemd/system
 
 İlk gözlem (27.10.2026): yarının KGÜP'ü 15:13'te HTTP 400 verdi, 17:48'de 24 kayıt döndü; yayım saati bu işle ölçülür.
 
+### PTF tahmini işi (29.10.2026): kurulum
+
+Yarının yük tahmini 11:02 ile 12:02 arasında yayımlanıyor (28 ve 29.10 anlık görüntüleri); bu yüzden PTF kesimi 11:30'dan 12:05'e alındı ve tahmin saatlik işten ayrılıp kendi zamanlayıcısına geçti. Kod `deploy.sh` ile yüklenir, sonra sunucuda (kullanıcı onayıyla):
+
+```bash
+cp scripts/server/systemd/tr-energy-ptf-forecast.{service,timer} /etc/systemd/system/ && cp scripts/server/bin/tr-energy-daily-summary /usr/local/bin/ && systemctl daemon-reload && systemctl enable --now tr-energy-ptf-forecast.timer
+```
+
+Deneme: `systemctl start tr-energy-ptf-forecast` (12:30'dan sonra "GÖP kapanışı geçti" der, kayıt yazmaz). Günlük: `/var/log/tr-energy/tr-energy-ptf-forecast.log`. Telefon bildirimi için `.env`'de `NTFY_TOPIC` tanımlı olmalı (diğer işlerle aynı kanal). 12:30 özeti (`tr-energy-daily-summary`) artık PTF kaydını da yazar.

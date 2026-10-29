@@ -1,17 +1,29 @@
 /**
  * PTF motoru: yarının saatlik PTF tahmini, değişmeyen kayıt (data/pool/forecast-log/ptf/<ay>/<gün>.json.gz).
  *
- *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/ptf/forecast-daily.mts [--date YYYY-AA-GG] [--dry]
+ *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/ptf/forecast-daily.mts [--date YYYY-AA-GG] [--dry] [--auto]
  *
- * Hedef gün varsayılan yarın (Türkiye). Kayıt zaten varsa dokunmaz. Kesimden (hedeften önceki gün 11:30) sonra yazılan kayıt
+ * Hedef gün varsayılan yarın (Türkiye). Kayıt zaten varsa dokunmaz. Kesimden (hedeften önceki gün 12:05) sonra yazılan kayıt
  * `onTime: false` taşır ve ileriye dönük skora girmez. `--dry`: hesaplar ve gösterir, yazmaz. Geçmiş ya da bugün için kayıt
  * yazılmaz (yalnız `--dry`).
- * `--auto` (saatlik işten): kesim geçtiyse çıkar; EPİAŞ rüzgâr tahmini henüz yoksa 11:00'den önce beklemek için çıkar
- * (sonraki saat yeniden dener), 11:00'den sonra eldeki veriyle (rüzgâr kalıcılığıyla) yazar.
+ * `--at SS:DD` (deneme): --auto kararlarını o Türkiye saatiymiş gibi verir.
+ * `--auto` (sunucuda 12:03, 12:15 ve 12:25; lib/ptf/auto.ts): EPİAŞ yarının yük tahminini yayımladıysa hemen yazar, yoksa
+ * kesime kadar yoklar; kesimde de yoksa çıkar, sonraki çalışma dener. Yazınca telefona özet bildirim gider ve sayfanın
+ * önbelleğine (`.cache/ptf/preview`) aynı sonuç konur. 12:30'dan sonra kayıt yazılmaz. Son denemede (12:20'den sonra) başarısızlık
+ * da bildirilir.
  */
 
 import { readPtfLog, writePtfLog } from "@/lib/ptf/forecast-log-store";
-import { forecastPtf } from "@/lib/services/ptf-engine";
+import {
+  failureNotification,
+  FINAL_ATTEMPT_MINUTES,
+  forecastNotification,
+  planAuto,
+} from "@/lib/ptf/auto";
+import { notify } from "@/lib/notify";
+import { liveDay } from "@/lib/services/pre-bid";
+import { forecastPtf, PtfForecastError } from "@/lib/services/ptf-engine";
+import { savePtfPreview } from "@/lib/services/ptf-forecast-page";
 
 const arg = (n: string) => {
   const i = process.argv.indexOf(`--${n}`);
@@ -19,7 +31,15 @@ const arg = (n: string) => {
 };
 const dry = process.argv.includes("--dry");
 const auto = process.argv.includes("--auto");
-const today = new Date(Date.now() + 3 * 3_600_000).toISOString().slice(0, 10);
+const trNow = () => new Date(Date.now() + 3 * 3_600_000);
+// `--at SS:DD`: --auto kararlarını o Türkiye saatiymiş gibi dener (yalnız deneme; tahmin gerçek anla yapılır)
+const at = /^(\d{1,2}):(\d{2})$/.exec(arg("at") ?? "");
+const nowMinutes = () => {
+  if (at) return Number(at[1]) * 60 + Number(at[2]);
+  const w = trNow();
+  return w.getUTCHours() * 60 + w.getUTCMinutes() + w.getUTCSeconds() / 60;
+};
+const today = trNow().toISOString().slice(0, 10);
 const tomorrow = new Date(Date.parse(`${today}T00:00:00Z`) + 86_400_000)
   .toISOString()
   .slice(0, 10);
@@ -32,26 +52,57 @@ if (!dry && (await readPtfLog(target))) {
   console.log(`PTF tahmin kaydı ${target} zaten var; dokunulmadı.`);
   process.exit(0);
 }
-const nowTrMin = (() => {
-  const w = new Date(Date.now() + 3 * 3_600_000);
-  return w.getUTCHours() * 60 + w.getUTCMinutes();
-})();
-if (auto && target === tomorrow && nowTrMin > 11 * 60 + 30) {
-  console.log(`Kesim geçti (${target}); kayıt yazılmadı.`);
+
+/** Otomatik çalışmada başarısızlık: son denemedeyse telefona da bildirilir; çıkış 0 (sonraki çalışma dener) */
+const giveUp = (reason: string): never => {
+  console.log(`${reason} Kayıt yazılmadı.`);
+  if (nowMinutes() >= FINAL_ATTEMPT_MINUTES) {
+    const n = failureNotification(target, reason);
+    notify(n.title, n.text);
+  }
   process.exit(0);
+};
+
+if (auto) {
+  const hasLep = async () => {
+    const l = await liveDay(target).catch(() => null);
+    return !!l && l.lep.length === 24 && l.lep.every((v) => v !== null);
+  };
+  for (;;) {
+    const plan = planAuto({ nowMinutes: nowMinutes(), hasLep: await hasLep() });
+    if (plan === "write") break;
+    if (plan === "early") {
+      console.log(`Kesime daha var (yük tahmini yok); ${target} için bekleniyor.`);
+      process.exit(0);
+    }
+    if (plan === "closed") {
+      console.log(`GÖP kapanışı (12:30) geçti; ${target} için kayıt yazılmadı.`);
+      process.exit(0);
+    }
+    if (plan === "retry") giveUp(`EPİAŞ ${target} için yük tahminini henüz yayımlamadı.`);
+    if (at) {
+      console.log(
+        "(deneme) kesime kadar yoklanırdı; --at ile saat ilerlemez, çıkılıyor."
+      );
+      process.exit(0);
+    }
+    await new Promise((r) => setTimeout(r, 10_000)); // "wait": kesime kadar yokla
+  }
 }
+
 const t0 = Date.now();
-const { log, notes } = await forecastPtf(target);
-if (auto && log.inputs.windKind !== 1 && nowTrMin < 11 * 60) {
-  console.log(
-    `EPİAŞ rüzgâr tahmini ${target} için henüz yok; 11:00'e kadar beklenecek (kayıt yazılmadı).`
-  );
-  process.exit(0);
+let result;
+try {
+  result = await forecastPtf(target);
+} catch (e) {
+  if (auto && e instanceof PtfForecastError) giveUp(e.message);
+  throw e;
 }
+const { log, notes } = result;
 const nf = (v: number | null) =>
   v === null ? "—" : Math.round(v).toLocaleString("tr-TR");
 console.log(
-  `${target} PTF tahmini (${log.modelId}, ${((Date.now() - t0) / 1000).toFixed(0)} sn; kesimden önce: ${log.onTime ? "evet" : "HAYIR"}; rüzgâr: ${log.inputs.windKind === 1 ? "EPİAŞ tahmini" : "kalıcılık"}; güneş: ${log.inputs.sunKind === 1 ? "kendi tahmin" : "vekil"}; gölge: ${Object.keys(log.shadow ?? {}).join(", ") || "—"}; canlı: ${log.inputs.live.join(", ") || "—"}; yedek: ${log.inputs.fallbacks.join(", ") || "—"})`
+  `${target} PTF tahmini (${log.modelId}, ${((Date.now() - t0) / 1000).toFixed(0)} sn; kesimden önce: ${log.onTime ? "evet" : "HAYIR"}; rüzgâr: ${log.inputs.windKind === 1 ? "EPİAŞ tahmini" : "kalıcılık ya da kendi tahmin"}; güneş: ${log.inputs.sunKind === 1 ? "kendi tahmin" : "vekil"}; gölge: ${Object.keys(log.shadow ?? {}).join(", ") || "—"}; canlı: ${log.inputs.live.join(", ") || "—"}; yedek: ${log.inputs.fallbacks.join(", ") || "—"})`
 );
 console.log(
   `ortalama ${nf(log.hours.reduce((s, h) => s + h.p50, 0) / 24)} TL/MWh; son ${log.band.days} gün birleşim hatası ${nf(log.band.recentMae)} TL/MWh; tavan ${nf(log.cap)}`
@@ -63,10 +114,23 @@ for (const h of log.hours)
     );
 for (const n of notes) console.log(`not: ${n}`);
 if (dry) console.log("(kuru çalışma; yazılmadı)");
-else
+else {
+  const wrote = await writePtfLog(log);
   console.log(
-    (await writePtfLog(log))
-      ? `yazıldı (${target})`
-      : `kayıt başka bir çalışmayla yazılmış; dokunulmadı`
+    wrote ? `yazıldı (${target})` : `kayıt başka bir çalışmayla yazılmış; dokunulmadı`
   );
+  if (wrote && auto) {
+    const n = forecastNotification(log, notes);
+    notify(n.title, n.text);
+    try {
+      savePtfPreview(target, {
+        ok: true,
+        computedAt: new Date().toISOString(),
+        ...result,
+      });
+    } catch (e) {
+      console.log(`Sayfa önbelleği yazılamadı: ${e instanceof Error ? e.message : e}`);
+    }
+  }
+}
 process.exit(0);

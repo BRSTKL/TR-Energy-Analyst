@@ -1,0 +1,12 @@
+[Unit]
+Description=tr-energy-ptf-forecast zamanlayici
+[Timer]
+# 12:03 ilk deneme (yuk tahmini yoksa 12:05 kesimine kadar yoklar), 12:15 ve 12:25 yeniden dener (kayit varsa hemen cikar)
+OnCalendar=*-*-* 12:03:00 Europe/Istanbul
+OnCalendar=*-*-* 12:15:00 Europe/Istanbul
+OnCalendar=*-*-* 12:25:00 Europe/Istanbul
+# Kacirilan calisma sonradan yapilmaz: kesim ve GOP kapanisi gecmis olur
+Persistent=false
+AccuracySec=1s
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,12 @@
+[Unit]
+Description=Yarinin PTF tahmini (kayit + telefon ozeti)
+OnFailure=tr-energy-failed@%n.service
+[Service]
+Type=oneshot
+User=tre
+WorkingDirectory=/srv/tr-energy
+# Kesim 12:05: baska is bekletmesin diye ortak daily-forecast.lock kullanilmaz; yalniz ayni isin ust uste binmesi engellenir
+ExecStart=/usr/bin/flock -n -E 0 /srv/tr-energy/.cache/ptf-forecast.lock /usr/bin/node --env-file=.env node_modules/.bin/tsx --tsconfig tsconfig.json scripts/ptf/forecast-daily.mts --auto
+TimeoutStartSec=10min
+StandardOutput=append:/var/log/tr-energy/tr-energy-ptf-forecast.log
+StandardError=append:/var/log/tr-energy/tr-energy-ptf-forecast.log

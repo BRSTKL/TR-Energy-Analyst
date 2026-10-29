@@ -393,8 +393,8 @@ function OkView({
             <p className="text-xs text-slate-500">
               Hesap {clock(preview.computedAt)}. Al/sat önerisi değildir.{" "}
               {record
-                ? `Sabah kaydı ${clock(record.issuedAt)}'te yazıldı (ortalama ${nf(record.mean)} TL/MWh${record.onTime ? ", kesimden önce" : ", kesimden sonra"}).`
-                : "Bu gün için sabah kaydı yazılmadı."}
+                ? `Günlük kayıt ${clock(record.issuedAt)}'te yazıldı (ortalama ${nf(record.mean)} TL/MWh${record.onTime ? ", kesimden önce" : ", kesimden sonra"}).`
+                : "Bu gün için günlük kayıt (12:05) yazılmadı."}
             </p>
           </div>
         </CardContent>

@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 /**
  * GET /api/market/ptf-forecast?date=YYYY-AA-GG[&refresh=1]
  *
- * PTF motorunun hedef gün tahmini, girdilerin durumu ve sabah kaydı (lib/services/ptf-forecast-page.ts). Hesap ayrı süreçte
+ * PTF motorunun hedef gün tahmini, girdilerin durumu ve günlük kayıt (lib/services/ptf-forecast-page.ts). Hesap ayrı süreçte
  * yapılır: ilk istek "computing" döner, sayfa birkaç saniyede bir yeniden sorar. Tarih verilmezse yarın.
  */
 export async function GET(request: Request) {

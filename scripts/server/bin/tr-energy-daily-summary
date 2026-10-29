@@ -10,9 +10,14 @@ for tech in solar wind; do
     L1="$L1 $D $tech: $T."
   else L1="$L1 UYARI: $D $tech tahmini YOK."; fi
 done
+PF=data/pool/forecast-log/ptf/${D:0:7}/$D.json.gz
+if [ -f "$PF" ]; then
+  P=$(zcat "$PF" | python3 -c 'import json,sys; d=json.load(sys.stdin); h=d["hours"]; print("ort. "+str(round(sum(x["p50"] for x in h)/len(h)))+" TL/MWh"+("" if d["onTime"] else ", kesimden SONRA"))')
+  L1="$L1 $D ptf: $P."
+else L1="$L1 UYARI: $D ptf kaydi YOK."; fi
 since=$(date -d "24 hours ago" "+%F %T")
 ok=0; bad=0
-for u in tr-energy-epias-monthly tr-energy-solar-forecast tr-energy-wind-forecast tr-energy-db-backup; do
+for u in tr-energy-epias-monthly tr-energy-solar-forecast tr-energy-wind-forecast tr-energy-ptf-forecast tr-energy-db-backup; do
   n=$(journalctl -u $u --since "$since" -o cat 2>/dev/null | grep -c "Finished\|Deactivated successfully")
   f=$(journalctl -u $u --since "$since" -o cat 2>/dev/null | grep -c "Failed with result")
   ok=$((ok+n)); bad=$((bad+f))

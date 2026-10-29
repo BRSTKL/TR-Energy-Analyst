@@ -1,16 +1,20 @@
 /**
  * TR-Energy Analyst - PTF motoru: günlük tahmin kaydı (saf, I/O yok; dosya forecast-log-store.ts)
  *
- * Her hedef gün için bir kez yazılan, bir daha değişmeyen kayıt: ileriye dönük skorun tek dayanağı. Kesimden (T-1, 11:30
+ * Her hedef gün için bir kez yazılan, bir daha değişmeyen kayıt: ileriye dönük skorun tek dayanağı. Kesimden (T-1, 12:05
  * Türkiye) sonra yazılan kayıt `onTime: false` taşır ve skora girmez. Aralık: birleşim modelinin son 60 günlük örneklem dışı
- * saatlik hatalarının %10 ve %90 yüzdelikleri (nominal %80).
+ * saatlik hatalarının %5 ve %95 yüzdelikleri (nominal %80).
  */
 
 import { H } from "./history";
 
 export const PTF_LOG_FORMAT = 1;
-/** Kesim: hedef günden önceki gün, Türkiye saatiyle (dakika) */
-export const PTF_CUTOFF_MINUTES = 11 * 60 + 30;
+/**
+ * Kesim: hedef günden önceki gün, Türkiye saatiyle (dakika). 29.10.2026'ya kadar 11:30'du; ama EPİAŞ yarının yük tahminini
+ * 11:02 ile 12:02 arasında yayımlıyor (28 ve 29.10 anlık görüntüleri), 11:30'da elde yoktu. Modelin bilgi kuralı yük tahminini
+ * hedef günde elde sayıyordu: 12:05 bu varsayımı gerçeğe uyduruyor (kuralın kendisi değişmedi, geçmiş ölçüm aynı kalır).
+ */
+export const PTF_CUTOFF_MINUTES = 12 * 60 + 5;
 
 export interface PtfLogHour {
   hour: number;

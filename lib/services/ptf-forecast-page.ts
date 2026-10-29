@@ -12,10 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { PtfForecastLog } from "@/lib/ptf/forecast-log";
 import { readPtfLog } from "@/lib/ptf/forecast-log-store";
-import type {
-  PtfDisplaySeries,
-  PtfInputStatus,
-} from "@/lib/services/ptf-engine";
+import type { PtfDisplaySeries, PtfInputStatus } from "@/lib/services/ptf-engine";
 
 const DIR = path.join(process.cwd(), ".cache", "ptf", "preview");
 const FRESH_MS = 30 * 60_000;
@@ -49,9 +46,19 @@ export interface PtfPageForecast {
 
 const running = new Map<string, { startedAt: string; done: Promise<void> }>();
 
+/** Günlük işin sonucunu sayfanın önbelleğine de yazar: sayfa 12:05'ten sonra hesap beklemeden açılır */
+export function savePtfPreview(date: string, preview: PtfPreview) {
+  fs.mkdirSync(DIR, { recursive: true });
+  const file = path.join(DIR, `${date}.json`);
+  fs.writeFileSync(`${file}.tmp`, JSON.stringify(preview));
+  fs.renameSync(`${file}.tmp`, file);
+}
+
 function readPreview(date: string): PtfPreview | null {
   try {
-    return JSON.parse(fs.readFileSync(path.join(DIR, `${date}.json`), "utf8")) as PtfPreview;
+    return JSON.parse(
+      fs.readFileSync(path.join(DIR, `${date}.json`), "utf8")
+    ) as PtfPreview;
   } catch {
     return null;
   }
@@ -90,7 +97,10 @@ function start(date: string) {
             ok: false,
             computedAt: new Date().toISOString(),
             error:
-              line ?? (code === null ? "Hesap zaman aşımına uğradı." : `Hesap süreci ${code} koduyla bitti.`),
+              line ??
+              (code === null
+                ? "Hesap zaman aşımına uğradı."
+                : `Hesap süreci ${code} koduyla bitti.`),
             notes: [],
             inputs: [],
           } satisfies PtfPreview)
