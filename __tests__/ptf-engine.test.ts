@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { LeakageError, PtfView, shiftDay, type PtfDay } from "@/lib/ptf/history";
 import { buildFeatures, FEATURE_NAMES, inferCap } from "@/lib/ptf/features";
-import { FeatureCache, gbmModel, learModel, referenceModels } from "@/lib/ptf/models";
+import {
+  ENGINE_EXCLUDE,
+  FeatureCache,
+  gbmModel,
+  HYDRO_FEATURES,
+  learModel,
+  referenceModels,
+} from "@/lib/ptf/models";
 import { compare, replay, scoreModels } from "@/lib/ptf/replay";
 
 let seed = 3;
@@ -93,6 +100,56 @@ describe("PtfView: bilgi zamanı kuralı", () => {
       d.set(k, { ...d.get(k)!, ptf: p });
     }
     expect(inferCap(new PtfView(d, "2026-03-10"))).toBe(4500);
+  });
+});
+
+describe("deneysel özellikler (hidro, güneş tanımı): varsayılan kapalı", () => {
+  const days = world("2026-01-01", "2026-03-31");
+  const target = "2026-03-10";
+
+  it("ana motor dışlama listesinde; kapatınca sütun sayısı FEATURE_NAMES − dışlanan", () => {
+    for (const n of ["hydroD1", "netHydro", "hydroDev", "sunDef"])
+      expect(ENGINE_EXCLUDE).toContain(n);
+    const f = new FeatureCache({ days, exclude: new Set(ENGINE_EXCLUDE) }).get(target)!;
+    expect(f.rows[0]).toHaveLength(FEATURE_NAMES.length - ENGINE_EXCLUDE.length);
+  });
+
+  it("hidro gölge sürümü yalnız hidro özelliklerini açar (sunDef kapalı kalır)", () => {
+    const ex = new Set(ENGINE_EXCLUDE.filter((n) => !HYDRO_FEATURES.includes(n)));
+    const f = new FeatureCache({ days, exclude: ex }).get(target)!;
+    expect(f.rows[0]).toHaveLength(
+      FEATURE_NAMES.length - ENGINE_EXCLUDE.length + HYDRO_FEATURES.length
+    );
+  });
+
+  it("hidro özellikleri: dünkü baraj + akarsu planı, net yükten hidro, sapma (sabit hidroda 0)", () => {
+    const f = buildFeatures(new PtfView(days, target))!;
+    const col = (n: (typeof FEATURE_NAMES)[number]) =>
+      f.rows.map((r) => r[FEATURE_NAMES.indexOf(n)]);
+    expect(col("hydroD1")).toEqual(Array(24).fill(4500)); // 3000 + 1500
+    expect(col("hydroDev").every((x) => x === 0)).toBe(true); // hidro her gün aynı
+    const net = col("net");
+    expect(col("netHydro")).toEqual(net.map((x) => x - 4500));
+  });
+
+  it("hidro sapması 28 günlük ortalamadan ayrışınca görünür", () => {
+    const d = new Map(days);
+    const prev = "2026-03-09";
+    d.set(prev, {
+      ...d.get(prev)!,
+      kgup: { ...d.get(prev)!.kgup, dam: series(() => 6000) },
+    });
+    const f = buildFeatures(new PtfView(d, target))!;
+    const dev = f.rows[0][FEATURE_NAMES.indexOf("hydroDev")];
+    expect(dev).toBe(3000); // dün 7.500, önceki 28 günün ortalaması 4.500 (dünün kendisi ortalamaya girmez)
+  });
+
+  it("güneş tanımı göstergesi kırılma tarihinde değişir", () => {
+    const d = world("2025-03-01", "2025-03-31");
+    const col = (t: string) =>
+      buildFeatures(new PtfView(d, t))!.rows[0][FEATURE_NAMES.indexOf("sunDef")];
+    expect(col("2025-03-10")).toBe(0);
+    expect(col("2025-03-11")).toBe(1);
   });
 });
 

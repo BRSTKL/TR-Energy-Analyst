@@ -385,10 +385,19 @@ function OkView({
               %84&apos;ü aralık içinde kaldı.
             </p>
             <p className="text-slate-600">
-              İki modelin ortalaması: doğrusal model {nf(avg(log.members["LEAR-ridge"]))},
+              {d.level?.basis
+                ? `Dünkü kayıt (${dmy(d.level.basis)}) gerçekleşenden saptı: bugünün tahminine ${d.level.adj >= 0 ? "+" : "−"}${nf(Math.abs(d.level.adj))} TL/MWh düzeltme eklendi (dünkü sapmanın yarısı).`
+                : "Dünkü kayıt yok: günlük seviye düzeltmesi uygulanmadı."}
+            </p>
+            <p className="text-slate-600">
+              Düzeltmeden önce iki modelin ortalaması: doğrusal model {nf(avg(log.members["LEAR-ridge"]))},
               ağaç tabanlı model {nf(avg(log.members.GBM))} TL/MWh.
               {log.shadow?.["ptf-ens-v1-ruzgar-ortalama"] &&
-                ` Rüzgârda EPİAŞ ve kendi tahminimizin ortalamasıyla deneme sürümü ${nf(avg(log.shadow["ptf-ens-v1-ruzgar-ortalama"]))} TL/MWh.`}
+                ` Deneme sürümleri (düzeltmeli): rüzgârda EPİAŞ ve kendi tahminimizin ortalaması ${nf(avg(log.shadow["ptf-ens-v1-ruzgar-ortalama"]))}`}
+              {log.shadow?.["ptf-ens-v1-hidro"] &&
+                `${log.shadow["ptf-ens-v1-ruzgar-ortalama"] ? "," : " Deneme sürümü (düzeltmeli):"} hidro özellikli ${nf(avg(log.shadow["ptf-ens-v1-hidro"]))}`}
+              {(log.shadow?.["ptf-ens-v1-ruzgar-ortalama"] || log.shadow?.["ptf-ens-v1-hidro"]) &&
+                " TL/MWh."}
             </p>
             <p className="text-xs text-slate-500">
               Hesap {clock(preview.computedAt)}. Al/sat önerisi değildir.{" "}

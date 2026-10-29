@@ -73,6 +73,11 @@ export function forecastNotification(
     parts.push(
       `Son ${log.band.days} gün motor saat başına ±${nf(log.band.recentMae)} saptı.`
     );
+  const lv = log.level?.applied[log.modelId];
+  if (lv && lv.basis && Math.abs(lv.adj) >= 1)
+    parts.push(
+      `Dünkü sapma düzeltmesi ${lv.adj > 0 ? "+" : "−"}${nf(Math.abs(lv.adj))} TL/MWh (dünkü kayıt ${dm(lv.basis)}).`
+    );
   const missing: string[] = [];
   if (log.inputs.windKind !== 1 && log.inputs.windKind !== 4)
     missing.push("EPİAŞ rüzgâr tahmini yok, yedek kullanıldı");

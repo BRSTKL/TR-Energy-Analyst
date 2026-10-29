@@ -24,6 +24,15 @@ export interface PtfLogHour {
   q90: number | null;
 }
 
+/** Günlük seviye düzeltmesi (lib/ptf/level.ts): bugünün tahminine dünkü hatanın γ katı eklenir */
+export interface PtfLevelInfo {
+  gamma: number;
+  /** Sürüm adı → uygulanan düzeltme (TL/MWh) ve dayandığı dünkü kayıt (yoksa null: düzeltme 0) */
+  applied: Record<string, { adj: number; basis: string | null }>;
+  /** Sürüm adı → düzeltilmemiş 24 saatlik tahmin; ertesi günün düzeltmesi bundan hesaplanır (hata geri beslenmez) */
+  raw: Record<string, number[]>;
+}
+
 export interface PtfForecastLog {
   format: number;
   targetDate: string;
@@ -36,8 +45,10 @@ export interface PtfForecastLog {
   hours: PtfLogHour[];
   /** Birleşimi oluşturan modellerin saatlik tahminleri */
   members: Record<string, number[]>;
-  /** Gölge sürümler (ana tahmin değil; ileriye dönük karşılaştırma için): sürüm adı → 24 saat */
+  /** Gölge sürümler (ana tahmin değil; ileriye dönük karşılaştırma için): sürüm adı → 24 saat (düzeltilmiş) */
   shadow?: Record<string, number[]>;
+  /** Seviye düzeltmesi (29.10.2026'dan sonraki kayıtlarda); `hours` ve `shadow` düzeltilmiştir, `members` düzeltilmemiş */
+  level?: PtfLevelInfo;
   /** Girdi notları: rüzgâr kaynağı (0 kalıcılık, 1 EPİAŞ tahmini), yedeğe düşen girdiler, canlı alınan alanlar */
   inputs: { windKind: number; sunKind?: number; fallbacks: string[]; live: string[] };
   /** Aralığın dayandığı örneklem dışı gün sayısı ve son 60 günde birleşimin hatası (TL/MWh) */
@@ -91,4 +102,22 @@ export function bandsFrom(
         }
       : { q10: null, q90: null }
   );
+}
+
+/**
+ * Bir sürümün düzeltilmemiş tahmini (ertesi günün seviye düzeltmesi için): kayıttaki `level.raw`; eski kayıtta ana sürüm için
+ * iki üyenin ortalaması; yoksa null
+ */
+export function rawFromLog(
+  log: PtfForecastLog | null | undefined,
+  id: string
+): number[] | null {
+  if (!log) return null;
+  const r = log.level?.raw[id];
+  if (r && r.length === H) return r;
+  const a = log.members["LEAR-ridge"];
+  const b = log.members["GBM"];
+  if (id === log.modelId && a?.length === H && b?.length === H)
+    return a.map((v, h) => (v + b[h]) / 2);
+  return null;
 }

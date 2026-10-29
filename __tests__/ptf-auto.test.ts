@@ -101,6 +101,24 @@ describe("telefon bildirimi", () => {
     expect(n.text).toContain("dam üretim planı yok");
     expect(n.text).toContain("kesimden sonra: skora girmez");
   });
+  it("seviye düzeltmesi uygulandıysa miktarını ve dünkü kaydı yazar; kayıt yoksa yazmaz", () => {
+    const withLevel = forecastNotification(
+      log({
+        level: { gamma: 0.5, applied: { "ptf-ens-v1": { adj: 212.4, basis: "2026-10-29" } }, raw: {} },
+      })
+    );
+    expect(withLevel.text).toContain("Dünkü sapma düzeltmesi +212 TL/MWh (dünkü kayıt 29.10)");
+    const neg = forecastNotification(
+      log({
+        level: { gamma: 0.5, applied: { "ptf-ens-v1": { adj: -80, basis: "2026-10-29" } }, raw: {} },
+      })
+    );
+    expect(neg.text).toContain("−80 TL/MWh");
+    const none = forecastNotification(
+      log({ level: { gamma: 0.5, applied: { "ptf-ens-v1": { adj: 0, basis: null } }, raw: {} } })
+    );
+    expect(none.text).not.toContain("Dünkü sapma düzeltmesi");
+  });
   it("başarısızlık bildirimi nedeni ve elle deneme yolunu söyler", () => {
     const n = failureNotification("2026-10-30", "EPİAŞ yük tahminini henüz yayımlamadı.");
     expect(n.title).toBe("PTF tahmini 30.10 yazılamadı");

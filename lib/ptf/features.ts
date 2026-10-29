@@ -15,7 +15,7 @@
  */
 
 import { dayClass, type DayClass } from "@/lib/analysis/daily-market";
-import { H, PtfView, median, mean, shiftDay, type KgupSource } from "./history";
+import { H, PtfView, median, mean, shiftDay, type KgupSource, type PtfDay } from "./history";
 
 export const FEATURE_NAMES = [
   "hour",
@@ -51,7 +51,31 @@ export const FEATURE_NAMES = [
   "lepBias7",
   "windFBias7",
   "sunKind",
+  // Deneysel (29.10.2026, varsayılan kapalı: ENGINE_EXCLUDE): hidro rejimi ve güneş serisi tanımı
+  "hydroD1",
+  "netHydro",
+  "hydroDev",
+  "sunDef",
 ] as const;
+
+/** KGÜP güneş serisi bu günden itibaren lisanssız güneşi de içerir (günlük ortalama ~700 → ~3.600 MW, 11.03.2025) */
+export const SUN_SERIES_BREAK = "2025-03-11";
+/**
+ * Kırılma çarpanı (29.10.2026): kırılmadan önceki 30 günün "KGÜP güneşi / ışınım indeksi" ölçeği ortancası ile sonraki 30
+ * günün oranı (ölçek, lib/ptf/solar.ts'deki aynı büyüklük). Kırılma öncesi KGÜP güneşi bununla çarpılınca eğitim satırları
+ * tek tanımda toplanır. Sabit çünkü motorun yüklediği geçmiş penceresi ileride kırılma çevresini kapsamaz. Sınır: 2024'ün
+ * tamamına sabit uygulanır (lisanssız kapasite o yıl büyüdü, kaba bir düzeltme). Deney: replay v4 / v5, PICKUP 29.10.
+ */
+export const SUN_BREAK_FACTOR = 5.08;
+
+/** Kırılma öncesi günlerin KGÜP güneşini çarpanla ölçekler (yerinde; saf, I/O yok) */
+export function applySunBreakFactor(
+  days: Map<string, PtfDay>,
+  factor: number = SUN_BREAK_FACTOR
+): void {
+  for (const [d, day] of Array.from(days))
+    if (d < SUN_SERIES_BREAK && day.kgup.sun) day.kgup.sun = day.kgup.sun.map((x) => x * factor);
+}
 
 export interface DayFeatures {
   target: string;
@@ -286,6 +310,21 @@ export function buildFeatures(
   const lepBias = recentBias(v, "lep", "cons");
   const windBias = recentBias(v, "windF", "windRt");
 
+  // Deneysel hidro özellikleri: dünkü baraj + akarsu planı, net yükten hidro çıkarılmış hâli ve son 28 güne göre sapma.
+  // Sapma durağandır (su yılı ne kadar sulu olursa olsun eğitim aralığında kalır); ağaç modeli aralık dışına çıkamaz.
+  const hydroH = kDam.map((x, h) => x + kRiver[h]);
+  const hydroD1 = mean(hydroH);
+  const lastKgup = v.lastDay("kgup");
+  const hydroPast: number[] = [];
+  for (let i = 1; i <= 28; i++) {
+    const dd = shiftDay(lastKgup, -i);
+    const a1 = v.kgup("dam", dd);
+    const a2 = v.kgup("river", dd);
+    if (a1 && a2) hydroPast.push(mean(a1) + mean(a2));
+  }
+  const hydroDev = hydroPast.length >= 7 ? hydroD1 - mean(hydroPast) : 0;
+  const sunDef = v.target >= SUN_SERIES_BREAK ? 1 : 0;
+
   const rows = Array.from({ length: H }, (_, h) => [
     h,
     dow,
@@ -320,6 +359,10 @@ export function buildFeatures(
     lepBias[h],
     windBias[h],
     sunIn.kind,
+    hydroD1,
+    net[h] - hydroH[h],
+    hydroDev,
+    sunDef,
   ]);
   return { target: v.target, base, cap, rows, fallbacks };
 }

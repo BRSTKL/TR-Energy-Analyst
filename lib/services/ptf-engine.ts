@@ -12,7 +12,9 @@ import {
   bandsFrom,
   cutoffMs,
   PTF_LOG_FORMAT,
+  rawFromLog,
   type PtfForecastLog,
+  type PtfLevelInfo,
 } from "@/lib/ptf/forecast-log";
 import {
   H,
@@ -22,8 +24,16 @@ import {
   type KgupSource,
   type PtfDay,
 } from "@/lib/ptf/history";
-import { ENGINE_EXCLUDE, FeatureCache, gbmModel, learModel } from "@/lib/ptf/models";
+import {
+  ENGINE_EXCLUDE,
+  FeatureCache,
+  gbmModel,
+  HYDRO_FEATURES,
+  learModel,
+} from "@/lib/ptf/models";
+import { applyLevel, correctLevel, LEVEL_GAMMA, levelAdjustment } from "@/lib/ptf/level";
 import { replay } from "@/lib/ptf/replay";
+import { readPtfLog } from "@/lib/ptf/forecast-log-store";
 import { DPP_FIELDS } from "@/lib/pool/system-codec";
 import { epiasRequest } from "@/lib/services/epias-service";
 import { liveDay } from "@/lib/services/pre-bid";
@@ -36,6 +46,8 @@ import { liveRegionWind, loadRegionWind } from "@/lib/services/ptf-wind";
 export const ENGINE_MODEL_ID = "ptf-ens-v1";
 /** Gölge sürüm: rüzgârda EPİAŞ ve kendi tahminin ortalaması */
 export const SHADOW_AVG_WIND_ID = "ptf-ens-v1-ruzgar-ortalama";
+/** Gölge sürüm: hidro özellikleri (dünkü baraj + akarsu planı, net yük − hidro, son 28 güne göre sapma) */
+export const SHADOW_HYDRO_ID = "ptf-ens-v1-hidro";
 const BAND_DAYS = 60;
 const HISTORY_FLOOR = "2024-01-01";
 /** Eğitim penceresi (728) + aralık günleri (60) + referans (28) + pay */
@@ -96,6 +108,8 @@ export interface PtfDisplaySeries {
   kgupHydro: number[];
   /** Hedef günün gerçekleşen PTF'si (yalnız geçmiş gün denemesinde) */
   actual: number[] | null;
+  /** Seviye düzeltmesi: uygulanan miktar (TL/MWh) ve dayandığı dünkü kayıt (yoksa null, düzeltme 0); eski önbellekte yok */
+  level?: { gamma: number; adj: number; basis: string | null };
 }
 
 export interface EngineForecast {
@@ -179,9 +193,24 @@ function inputStatus(
   ];
 }
 
+/** Gölge sürüm tanımı: aynı hat (LEAR + GBM, seviye düzeltmesi), farklı girdi seçimi */
+interface ShadowSpec {
+  id: string;
+  windPolicy?: "average";
+  exclude: ReadonlySet<string>;
+}
+const SHADOWS: ShadowSpec[] = [
+  { id: SHADOW_AVG_WIND_ID, windPolicy: "average", exclude: new Set(ENGINE_EXCLUDE) },
+  {
+    id: SHADOW_HYDRO_ID,
+    exclude: new Set(ENGINE_EXCLUDE.filter((n) => !HYDRO_FEATURES.includes(n))),
+  },
+];
+
 export async function forecastPtf(
   target: string,
-  now = new Date()
+  now = new Date(),
+  opts: { prevLog?: PtfForecastLog | null } = {}
 ): Promise<EngineForecast> {
   const notes: string[] = [];
   const live: string[] = [];
@@ -189,7 +218,7 @@ export async function forecastPtf(
     shiftDay(target, -LOOKBACK_DAYS) < HISTORY_FLOOR
       ? HISTORY_FLOOR
       : shiftDay(target, -LOOKBACK_DAYS);
-  const days = await loadPtfHistory(from, target);
+  const days = await loadPtfHistory(from, target, { sunFix: true });
   const t = days.get(target)!;
   const prev = shiftDay(target, -1);
   const p = days.get(prev)!;
@@ -276,23 +305,16 @@ export async function forecastPtf(
   const cache = new FeatureCache(ctx);
   const lear = learModel(ctx, cache);
   const gbm = gbmModel(ctx, cache);
-  // Son 60 gün: örneklem dışı hatalar (aralık için); modeller burada kendi takvimiyle yeniden kurulur
+  // Son 61 gün (60 hata günü + düzeltmenin dayandığı önceki gün): örneklem dışı tahminler; modeller burada kendi takvimiyle
+  // yeniden kurulur
   const past = replay(
     [lear, gbm],
     days,
-    shiftDay(target, -BAND_DAYS),
+    shiftDay(target, -(BAND_DAYS + 1)),
     shiftDay(target, -1)
   );
   const ens = (preds: Record<string, number[]>) =>
     preds["LEAR-ridge"].map((v, h) => (v + preds["GBM"][h]) / 2);
-  const errors = past.map((r) => {
-    const e = ens(r.preds);
-    return r.actual.map((a, h) => a - e[h]);
-  });
-  const recentMae = errors.length
-    ? errors.reduce((s, e) => s + e.reduce((x, v) => x + Math.abs(v), 0) / H, 0) /
-      errors.length
-    : null;
 
   const f = buildFeatures(new PtfView(days, target));
   const pl = lear.predict(target);
@@ -313,28 +335,60 @@ export async function forecastPtf(
       inputs,
       notes
     );
-  const p50 = pl.map((v, h) => (v + pg[h]) / 2);
-  // Gölge sürüm: rüzgârda EPİAŞ ve kendi tahminin ortalaması (sınama döneminde %2,9 daha iyi göründü; seçim döneminde
-  // ölçülemedi, bu yüzden ana sürüm değil). İleriye dönük kayıtla karşılaştırılır.
-  const shadow: Record<string, number[]> = {};
-  try {
-    const sctx = {
-      days,
-      exclude: new Set(ENGINE_EXCLUDE),
-      windPolicy: "average" as const,
+
+  // Seviye düzeltmesi: dünkü kayıttaki düzeltilmemiş tahmin ile gerçekleşenin farkı (kayıt yoksa 0)
+  const prevLog =
+    opts.prevLog !== undefined ? opts.prevLog : await readPtfLog(prev).catch(() => null);
+  const level: PtfLevelInfo = { gamma: LEVEL_GAMMA, applied: {}, raw: {} };
+  const levelFor = (id: string, rawToday: number[]) => {
+    const rawPrev = rawFromLog(prevLog, id);
+    const adj = levelAdjustment(p.ptf, rawPrev);
+    level.applied[id] = {
+      adj: Math.round(adj * 100) / 100,
+      basis: rawPrev ? prev : null,
     };
-    const scache = new FeatureCache(sctx);
-    const sl = learModel(sctx, scache);
-    const sg = gbmModel(sctx, scache);
-    replay([sl, sg], days, shiftDay(target, -BAND_DAYS), shiftDay(target, -1)); // yeniden kurma takvimi ana sürümle aynı kalsın
-    const a = sl.predict(target);
-    const b = sg.predict(target);
-    if (a && b)
-      shadow[SHADOW_AVG_WIND_ID] = a.map(
-        (v, h) => Math.round(((v + b[h]) / 2) * 100) / 100
-      );
-  } catch (e) {
-    notes.push(`Gölge sürüm kurulamadı: ${e instanceof Error ? e.message : e}`);
+    level.raw[id] = rawToday.map((v) => Math.round(v * 100) / 100);
+    return applyLevel(rawToday, adj, f.cap);
+  };
+  const rawEns = pl.map((v, h) => (v + pg[h]) / 2);
+  const p50 = levelFor(ENGINE_MODEL_ID, rawEns);
+
+  // Aralık: son 60 günün DÜZELTİLMİŞ birleşim hataları (düzeltme geçmişte de aynı kuralla uygulanmış gibi)
+  const pastCorrected = correctLevel(
+    past.map((r) => ({ day: r.day, actual: r.actual, preds: { ENS: ens(r.preds) } })),
+    "ENS",
+    "COR",
+    LEVEL_GAMMA,
+    null,
+    f.cap
+  ).slice(-BAND_DAYS);
+  const errors = pastCorrected.map((r) => r.actual.map((a, h) => a - r.preds.COR[h]));
+  const recentMae = errors.length
+    ? errors.reduce((s, e) => s + e.reduce((x, v) => x + Math.abs(v), 0) / H, 0) /
+      errors.length
+    : null;
+
+  // Gölge sürümler: ana sürümle aynı hat ve aynı düzeltme, farklı girdi. Rüzgârda EPİAŞ ve kendi tahminin ortalaması
+  // (sınama döneminde %2,9 daha iyi göründü, seçimde ölçülemedi); hidro özellikleri (sınamada %3,6, hipotez sınama
+  // dönemine bakılarak kuruldu). İleriye dönük kayıtla karşılaştırılır; ana sürüme ancak kanıtla geçer.
+  const shadow: Record<string, number[]> = {};
+  for (const sp of SHADOWS) {
+    try {
+      const sctx = { days, exclude: sp.exclude, windPolicy: sp.windPolicy };
+      const scache = new FeatureCache(sctx);
+      const sl = learModel(sctx, scache);
+      const sg = gbmModel(sctx, scache);
+      replay([sl, sg], days, shiftDay(target, -(BAND_DAYS + 1)), shiftDay(target, -1)); // yeniden kurma takvimi ana sürümle aynı kalsın
+      const a = sl.predict(target);
+      const b = sg.predict(target);
+      if (a && b)
+        shadow[sp.id] = levelFor(
+          sp.id,
+          a.map((v, h) => (v + b[h]) / 2)
+        ).map((v) => Math.round(v * 100) / 100);
+    } catch (e) {
+      notes.push(`Gölge sürüm (${sp.id}) kurulamadı: ${e instanceof Error ? e.message : e}`);
+    }
   }
   const bands = bandsFrom(errors, p50, f.cap);
   const cutoff = cutoffMs(target);
@@ -354,6 +408,7 @@ export async function forecastPtf(
       })),
       members: { "LEAR-ridge": pl, GBM: pg },
       shadow,
+      level,
       inputs: {
         windKind: f.rows[0][FEATURE_NAMES.indexOf("windKind")],
         sunKind: f.rows[0][FEATURE_NAMES.indexOf("sunKind")],
@@ -376,6 +431,11 @@ export async function forecastPtf(
       kgupThermal: sum(col("kgupGas"), col("kgupImpCoal"), col("kgupLignite")),
       kgupHydro: sum(col("kgupDam"), col("kgupRiver")),
       actual,
+      level: {
+        gamma: LEVEL_GAMMA,
+        adj: level.applied[ENGINE_MODEL_ID].adj,
+        basis: level.applied[ENGINE_MODEL_ID].basis,
+      },
     },
   };
 }

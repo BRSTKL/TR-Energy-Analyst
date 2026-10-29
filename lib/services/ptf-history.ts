@@ -11,6 +11,7 @@ import { daySlice } from "@/lib/analysis/daily-market";
 import { KGUP_SOURCES, type PtfDay } from "@/lib/ptf/history";
 import { prisma } from "@/lib/prisma";
 import { readSystemYear } from "@/lib/pool/system-store";
+import { applySunBreakFactor } from "@/lib/ptf/features";
 import { forecastSolar, irradianceIndex } from "@/lib/ptf/solar";
 import { forecastDays } from "@/lib/services/pre-bid";
 import { loadRegionWeather } from "@/lib/services/ptf-solar";
@@ -27,7 +28,14 @@ const full = (a: ReadonlyArray<number | null> | null | undefined): a is number[]
 export async function loadPtfHistory(
   from: string,
   to: string,
-  opts: { windForecast?: boolean; gas?: boolean; solar?: boolean; wind?: boolean } = {}
+  opts: {
+    windForecast?: boolean;
+    gas?: boolean;
+    solar?: boolean;
+    wind?: boolean;
+    /** KGÜP güneşinin 11.03.2025 öncesini (lisanssız güneş yok) kırılma çarpanıyla ölçekler (lib/ptf/features.ts); canlı motor açar */
+    sunFix?: boolean;
+  } = {}
 ): Promise<Map<string, PtfDay>> {
   const rows = await prisma.marketData.findMany({
     where: {
@@ -94,6 +102,8 @@ export async function loadPtfHistory(
       gas: gas.get(d) ?? null,
     });
   }
+  // Güneş serisi kırılması: kırılma öncesi KGÜP güneşi tek tanıma getirilir; kendi güneş tahmininin ölçeği de bundan beslenir
+  if (opts.sunFix) applySunBreakFactor(out);
   // Kendi ülke güneş tahminimiz: her gün yalnız kendinden önceki günlerin KGÜP güneşiyle ve d2 havayla (lib/ptf/solar.ts)
   if (opts.solar !== false) {
     const regions = await loadRegionWeather(

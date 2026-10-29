@@ -163,9 +163,50 @@ function scheduled<M>(
  * Son 7 günün tahmin sapması özellikleri (lepBias7, windFBias7; 28.10.2026) de çıkarıldı: seçim döneminde birleşim 328,4 →
  * 327,9 (gürültü), rüzgâr sapması sınamada LEAR'ı kötüleştirdi (425 → 435; seçim döneminde EPİAŞ rüzgâr tahmini yok).
  */
-export const ENGINE_EXCLUDE: readonly string[] = ["gas", "lepBias7", "windFBias7"];
+/** Hidro rejimi özellikleri: ana motorda kapalı, gölge sürüm `ptf-ens-v1-hidro` kullanır (29.10.2026) */
+export const HYDRO_FEATURES: readonly string[] = ["hydroD1", "netHydro", "hydroDev"];
+export const EXPERIMENTAL_FEATURES: readonly string[] = [...HYDRO_FEATURES, "sunDef"];
+export const ENGINE_EXCLUDE: readonly string[] = [
+  "gas",
+  "lepBias7",
+  "windFBias7",
+  ...EXPERIMENTAL_FEATURES,
+];
 export const LEAR_DEFAULTS: TrainOpts = { windowDays: 728, retrainDays: 7, minDays: 90 };
 const LAMBDAS = [0.3, 3, 30, 300];
+
+/** 24 saat ayrı ayrı ridge; λ son 28 günde (zaman sırasıyla) seçilir, sonra bütün pencerede yeniden kurulur */
+function fitLearModels(
+  xs: number[][],
+  ys: number[],
+  rowsByDay: Array<{ from: number }>
+): RidgeModel[] {
+  const cut = rowsByDay[Math.max(0, rowsByDay.length - 28)].from;
+  const byHour = (lo: number, hi: number, h: number) => {
+    const X: number[][] = [];
+    const Y: number[] = [];
+    for (let i = lo; i < hi; i++) if (xs[i][0] === h) (X.push(xs[i]), Y.push(ys[i]));
+    return { X, Y };
+  };
+  let best = LAMBDAS[0];
+  let bestErr = Infinity;
+  for (const lam of LAMBDAS) {
+    let err = 0;
+    for (let h = 0; h < H; h++) {
+      const tr = byHour(0, cut, h);
+      const va = byHour(cut, xs.length, h);
+      if (tr.X.length < 20 || !va.X.length) continue;
+      const m = fitRidge(tr.X, tr.Y, lam);
+      for (let i = 0; i < va.X.length; i++)
+        err += Math.abs(predictRidge(m, va.X[i]) - va.Y[i]);
+    }
+    if (err < bestErr) ((bestErr = err), (best = lam));
+  }
+  return Array.from({ length: H }, (_, h) => {
+    const all = byHour(0, xs.length, h);
+    return fitRidge(all.X, all.Y, best);
+  });
+}
 
 export function learModel(
   ctx: ModelContext,
@@ -180,32 +221,7 @@ export function learModel(
     (target) => {
       const { xs, ys, rowsByDay } = trainingSet(cache, target, o.windowDays);
       if (rowsByDay.length < o.minDays) return null;
-      // λ seçimi: son 28 gün doğrulama, öncesi eğitim (zaman sırası)
-      const cut = rowsByDay[Math.max(0, rowsByDay.length - 28)].from;
-      const byHour = (lo: number, hi: number, h: number) => {
-        const X: number[][] = [];
-        const Y: number[] = [];
-        for (let i = lo; i < hi; i++) if (xs[i][0] === h) (X.push(xs[i]), Y.push(ys[i]));
-        return { X, Y };
-      };
-      let best = LAMBDAS[0];
-      let bestErr = Infinity;
-      for (const lam of LAMBDAS) {
-        let err = 0;
-        for (let h = 0; h < H; h++) {
-          const tr = byHour(0, cut, h);
-          const va = byHour(cut, xs.length, h);
-          if (tr.X.length < 20 || !va.X.length) continue;
-          const m = fitRidge(tr.X, tr.Y, lam);
-          for (let i = 0; i < va.X.length; i++)
-            err += Math.abs(predictRidge(m, va.X[i]) - va.Y[i]);
-        }
-        if (err < bestErr) ((bestErr = err), (best = lam));
-      }
-      return Array.from({ length: H }, (_, h) => {
-        const all = byHour(0, xs.length, h);
-        return fitRidge(all.X, all.Y, best);
-      });
+      return fitLearModels(xs, ys, rowsByDay);
     },
     (ms, f) => f.rows.map((x, h) => f.base[h] + predictRidge(ms[h], x))
   );
@@ -239,5 +255,38 @@ export function gbmModel(
       return fitGbm(xs, ys, params);
     },
     (m, f) => f.rows.map((x, h) => f.base[h] + m.predict(x))
+  );
+}
+
+/**
+ * Melez (deneysel, 29.10.2026): önce LEAR (doğrusal, aralık dışına uzanır), sonra ağaç modeli doğrusalın artığını düzeltir.
+ * Eğitimde görülmemiş bir rejimde (ör. 2026 baharının sulu yılı) doğrusal kısım uzanır, ağaç yalnız sapmayı öğrenir.
+ * Artık, ridge'in aynı pencerede (örneklem içi) kalanıdır.
+ */
+interface HybridModel {
+  ridge: RidgeModel[];
+  gbm: GbmModel;
+}
+
+export function hybridModel(
+  ctx: ModelContext,
+  cache = new FeatureCache(ctx),
+  o: TrainOpts = GBM_DEFAULTS,
+  params: GbmOptions = GBM_PARAMS,
+  id = "HYB"
+): PtfModel {
+  return scheduled<HybridModel>(
+    id,
+    cache,
+    o,
+    (target) => {
+      const { xs, ys, rowsByDay } = trainingSet(cache, target, o.windowDays);
+      if (rowsByDay.length < o.minDays) return null;
+      const ridge = fitLearModels(xs, ys, rowsByDay);
+      const resid = ys.map((y, i) => y - predictRidge(ridge[xs[i][0]], xs[i]));
+      return { ridge, gbm: fitGbm(xs, resid, params) };
+    },
+    (m, f) =>
+      f.rows.map((x, h) => f.base[h] + predictRidge(m.ridge[h], x) + m.gbm.predict(x))
   );
 }
