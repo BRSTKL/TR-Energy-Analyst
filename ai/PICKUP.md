@@ -12,6 +12,22 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
 
 ---
 
+## 29.10.2026 · Claude · Teklif öncesi sayfası: "Ne kadar yakın tahmin ediyor?" kutusu (commit yok, sunucuda değil)
+
+- **Yapılan (kullanıcı isteği):** PTF kartının sağ üstüne sade başarı kutusu: son 60 günde motor gerçek fiyattan ortalama %X saptı (saat başına ±TL/MWh) ve basit yönteme (benzer günlerin ortancası) göre %Y daha yakın. Kaynak: kayıttaki `band` (yeni opsiyonel `meanPrice`, `baselineMae`; `ptf-engine.ts` düzeltilmiş son 60 gün hatasından hesaplar), saf `lib/ptf/accuracy.ts` (`accuracySummary`, testli), `components/market/ptf-engine-panel.tsx` `AccuracyBox`. Eski kayıtta fiyat / basit yöntem alanı yoksa yalnız TL sapma gösterilir.
+- **Sınama:** 5 yeni test; önizlemede 30.10: %14 ortalama sapma (±386 TL/MWh, 58 gün), basit yönteme göre %27 daha yakın. Gün sayısı 58: Mac'te iki günlük PTF eksik.
+
+---
+
+---
+
+## 29.10.2026 · Claude · SARAY DÖKÜM RES (#7160) konumu girildi (sunucuda, commit yok)
+
+- **Yapılan (kullanıcı girdisi):** `plant-location.mts set 7160 41.441083 27.921583 USER` sunucuda çalıştırıldı (Kuzey 41° 26' 27,9" – Doğu 27° 55' 17,7", yaklaşık; Saray / Tekirdağ). Havuz tanımı (`data/pool/7160/plant.json`) ve proje santrali (proje `cmuo9nbr8002remo579ssohzg`) `locationSource: USER`, `locationRef` kullanıcı girdisi notuyla yazıldı. Mac'teki kopya güncellenmedi (veri sahibi sunucu).
+- **Sonuç:** rüzgâr tahmininde bu santral artık "konum yok" değil, "Geçmiş d2 rüzgâr arşivi yok" (`no-data`): hava arşivi henüz çekilmedi. Sunucudaki günlük rüzgâr işi (10:00 ve 11:30) arşivi çeker; 30.10 sabahı santralin 122/122 olup olmadığına bakılır. Çekilemezse `wind-sync` elle (kullanıcı onayıyla).
+
+---
+
 ## 29.10.2026 · Claude · Uygulama düzeni: sol menü, saat şeridi, Bugün kokpiti, proje sekmeleri (yüklendi)
 
 - **İstek (kullanıcı):** sayfaların yerlerini enerji ticareti uzmanının günlük rutinine göre düzenle; önce önizleme, beğenirse sunucuya.
