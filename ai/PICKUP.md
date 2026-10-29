@@ -12,13 +12,22 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
 
 ---
 
-## 29.10.2026 · Claude · PTF motoru: güneş düzeltmesi + seviye düzeltmesi canlıya alındı, hidro gölge (commit yok, sunucuda değil)
+## 29.10.2026 · Claude · Uygulama düzeni: sol menü, saat şeridi, Bugün kokpiti, proje sekmeleri (yüklendi)
+
+- **İstek (kullanıcı):** sayfaların yerlerini enerji ticareti uzmanının günlük rutinine göre düzenle; önce önizleme, beğenirse sunucuya.
+- **Yapılan:** `components/app-shell.tsx` (sol menü, telefonda çekmece + alt 4 kısayol, "içeriğe geç", baskıda gizli, `/login`'de yok), `components/day-strip.tsx` (saat, faz, kapanışa geri sayım, PTF / güneş / rüzgâr kayıt rozetleri), `components/nav/nav-config.ts` (menü tek kaynağı) ve `project-nav.tsx` (`app/(dashboard)/projects/[id]/layout.tsx`), `components/ui/menu.tsx` (`<details>` açılır menü), `lib/ui/{day-phase,ops-chips,cockpit-alerts,last-project,use-tr-clock}.ts`, `lib/services/ops-status.ts` + `GET /api/ops/status` (yalnız dosya okur), yeni `app/page.tsx` (Bugün) ve `app/ozet/page.tsx` (eski ana sayfa), `components/summary-parts.tsx`. Sonuç sayfası başlığı sadeleşti; planlama ve içgörü başlıklarındaki yinelenen butonlar, Projeler sayfasındaki Karşılaştır / Sektör / Piyasa butonları kaldırıldı; "Dashboard" kökü "Bugün" oldu. `scripts/smoke-test.mts` listesine `/ozet`, telefon listesine `/`.
+- **Sınama:** 958 test (36 yeni: day-phase, menü yapılandırması, ops-status, rozetler, uyarılar, proje menüsü, son proje), tsc, eslint; tarayıcıda masaüstü ve 375 px: Bugün, günlük pano, proje sonuç ve tahmin, "Veri ve ayarlar" menüsü, yatay taşma yok. Tam duman turu için bkz. aşağıdaki not.
+- **Yüklendi (29.10 22:30):** kullanıcı önizlemeyi onayladı. Mac'te yarının kayıtları yok (veri sunucuda), rozetler orada kırmızı görünür; sunucuda yeşil olmalı. Sayfa birleştirme ve komut paleti kapsam dışı.
+
+---
+
+## 29.10.2026 · Claude · PTF motoru: güneş düzeltmesi + seviye düzeltmesi canlıya alındı, hidro gölge (yüklendi)
 
 - **Karar (kullanıcı):** `sunFix` ve günlük seviye düzeltmesi (γ=0,5) canlı motorda; hidro özellikleri gölge sürüm; aralık düzeltilmiş hatalardan; dünkü kayıt yoksa düzeltme 0.
 - **Yapılan:** `lib/ptf/features.ts` `SUN_BREAK_FACTOR = 5,08` ve `applySunBreakFactor` (kırılma öncesi KGÜP güneşi × 5,08; sabit, çünkü motorun geçmiş penceresi ileride kırılma çevresini kapsamaz); `loadPtfHistory(…, { sunFix })` canlıda açık (kırılmada süreklilik: 10.03 3.548 → 11.03 3.623 MW). `lib/ptf/level.ts`: `levelAdjustment`, `applyLevel`, `correctLevel` (replay ile canlı aynı kodu kullanır). `ptf-engine.ts`: dünkü kayıttan (`rawFromLog`) düzeltilmemiş tahmin → `adj = γ·ortalama(gerçek − ham)`; `p50` düzeltilmiş, `members` ham; aralık son 60 günün düzeltilmiş hatalarından; gölge sürümler (`ptf-ens-v1-ruzgar-ortalama`, yeni `ptf-ens-v1-hidro`) aynı düzeltmeyle. Kayıtta yeni `level { gamma, applied{adj,basis}, raw }` (opsiyonel, format 1). Sayfa ve telefon özeti düzeltmeyi yazar. `replay.mts` artık canlı tarifle (sunFix açık, `ENS-seviye`; `--no-sun-fix` ile kapanır).
 - **Geçmiş ölçüm (663 gün, canlı tarifle; eski taban ENS-ortalama 285 / 286 / 396):** `ENS-seviye` Oca–Haz 2025 264 (%7,5), seçim 270 (%5,7), sınama 382 (%3,5, sınırda); hepsi 320 → 303 (%5,3, %95 10…25), aydan kötüleşen 3/22, aralık kapsaması %84,6 (genişlik 1.285, öncesi 1.342). Hidro gölge tarifi: 265 / 270 / 371 (%7,1 / %5,8 / %6,3), hepsi 320 → 300 (%6,3, 13…28), aydan kötüleşen 2/22, kapsama %84,7. R2'ye göre %30,6 (gölge %31,3).
 - **Sınama:** 922 test (20 yeni: seviye, sunFix, hidro özellikleri, `rawFromLog`, bildirim), tsc, eslint, `check:reports` 0 hata, duman `--only teklif`. Canlı motor Mac'te kuru denendi (34 sn): dünkü kayıt verilince +215 TL/MWh düzeltme (3.145 → 3.336), kayıt yokken 0.
-- **Yarım:** commit / push / sunucu yok. Sunucuda süre ~100+ sn beklenir (iki gölge sürüm); `tr-energy-ptf-forecast` 10 dk zaman aşımında. Düzeltme ilk kez 31.10'da çalışır (ilk kayıt 30.10). Hidro hipotezi sınama dönemine bakılarak kuruldu: gölge sürüm 4+ hafta kayıtla karşılaştırılmadan ana sürüme geçmez. Sınır: F 2024'e sabit uygulanıyor (lisanssız kapasite büyüdü).
+- **Yüklendi (29.10 21:30):** `70c6782`, sunucuya yüklendi (`ff09a85 → 70c6782`, sayfalar 200). Sunucuda kuru çalışma (30.10 hedefi): 109 sn, 307 MB, ana + iki gölge sürüm tamam, ortalama 3.209 TL/MWh (dünkü kayıt olmadığından düzeltme 0), girdiler tam, yedek yok; `tr-energy-ptf-forecast` 10 dk zaman aşımı içinde. Düzeltme ilk kez 31.10'da çalışır (ilk kayıt 30.10). Hidro hipotezi sınama dönemine bakılarak kuruldu: gölge sürüm 4+ hafta kayıtla karşılaştırılmadan ana sürüme geçmez. Sınır: F 2024'e sabit uygulanıyor (lisanssız kapasite büyüdü).
 
 ---
 

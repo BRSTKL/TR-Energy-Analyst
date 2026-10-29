@@ -4,9 +4,9 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-514 dosya, 40 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+529 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
-## Sayfalar (app/**/page.tsx) (23)
+## Sayfalar (app/**/page.tsx) (24)
 
 - `/projects/[id]/backtest` (`app/(dashboard)/projects/[id]/backtest/page.tsx`) — Aşama 14: yön tahminiyle plan ayarı (projenin fiyat profiliyle, KÜPST dahil)
 - `/projects/[id]/candidates` (`app/(dashboard)/projects/[id]/candidates/page.tsx`) — YEKDEM çıkışı rozeti: bu yıl çıkan ya da süresi bu yıl / yakında dolan
@@ -26,13 +26,14 @@
 - `/market` (`app/market/page.tsx`) — Türkçe yüzde: "+%45"
 - `/market/teklif` (`app/market/teklif/page.tsx`)
 - `/methodology` (`app/methodology/page.tsx`) — Metodoloji: uygulamadaki ve rapordaki her rakamın nereden geldiği.
-- `/` (`app/page.tsx`) — Ana sayfa: uygulamayı ilk açan kişinin gördüğü özet.
+- `/ozet` (`app/ozet/page.tsx`) — Portföy özeti (eski ana sayfa; 29.10.2026'dan beri ana sayfa Bugün kokpiti).
+- `/` (`app/page.tsx`) — Bugün kokpiti (ana sayfa): günün saatlerine göre şimdi hangi adımdasınız, yarın için ne hazır, piyasa şimdi nasıl, dünün sonucu ve uyarılar.
 - `/projects/epias` (`app/projects/epias/page.tsx`) — Bir santralin EPİAŞ çekim durumu
 - `/projects` (`app/projects/page.tsx`) — Kartın gösterge bloğu: bir trader'ın ilk bakacağı dört bilgi (Dengesizlik Karnesi ile aynı motordan, /api/compare).
 - `/sector/aggregators/[id]` (`app/sector/aggregators/[id]/page.tsx`) — Toplayıcı ayrıntısı (PLAN 9.2): kıyas tablosundaki bir satırın içi.
 - `/sector` (`app/sector/page.tsx`) — "2025" ya da "2026 (Ocak–Ağustos)"
 
-## API (app/api/**/route.ts) (68)
+## API (app/api/**/route.ts) (69)
 
 - `GET, PUT, DELETE /api/account/epias` — GET /api/account/epias: hesap e-postası ve kayıtlı EPİAŞ hesabının özeti (şifre dönmez).
 - `POST /api/account/epias/test` — POST /api/account/epias/test: kayıtlı (yoksa .env) EPİAŞ hesabıyla yeni bilet alarak bağlantıyı dener.
@@ -63,6 +64,7 @@
 - `GET /api/market/pre-bid` — GET /api/market/pre-bid?date=YYYY-AA-GG (ÖNİZLEME): Teklif öncesi görünüm: hedef gün için saatlik PTF beklentisi ve ± aralık (lib/analysis/pre-bid.ts).
 - `GET /api/market/ptf-forecast` — GET /api/market/ptf-forecast?date=YYYY-AA-GG[&refresh=1]: PTF motorunun hedef gün tahmini, girdilerin durumu ve günlük kayıt (lib/services/ptf-forecast-page.ts).
 - `GET /api/market` — "2026 (Ocak–Ağustos)", tam yıl için "2025"; ay ortasında biten dönem "2026 (Ocak – 19 Ekim)" ya da "1–19 Ekim 2026"; ay başında başlamayan ya da yıl aşan dönemde tarih aralığı
+- `GET /api/ops/status` — GET /api/ops/status: Yarının günlük tahmin kayıtlarının (PTF, güneş, rüzgâr) durumu: üst şerit ve Bugün kokpiti.
 - `POST /api/pool/plant` — POST /api/pool/plant { powerPlantId, startDay, endDay, kgupVersion?
 - `GET /api/projects/[id]/backtest` — GET /api/projects/[id]/backtest: Her santral için kaydırmalı geriye dönük testi iki fiyat rejiminde çalıştırır: - "project": projenin fiyat profili (mevzuat modunda her saat kendi tarihinin kuralıyla) - "rules2026": tüm veri 2026 kuralları…
 - `GET /api/projects/[id]/budget` — GET /api/projects/[id]/budget?spread=y2026|y2025|wide&rule=r2026|r2025|strict&level=low|normal|high|custom&gwh=1000&intraday=1|0&inflation=25
@@ -103,9 +105,10 @@
 - `GET /api/sector/system-attribution` — GET /api/sector/system-attribution?year=2026&month=01..12&side=deficit|surplus&source=wind|sun|river&level=company|aggregator|region|plant (month verilmezse bütün dönem) Sistem yönü "Kimden geldi?": seçilen kaynağın o yöne itmesinin şirket…
 - `GET /api/sector/system-drivers` — GET /api/sector/system-drivers: Sistem yönünü ne belirledi: kaynak türüne göre plan sapması (UEVM − KGÜP) ve tüketim tahmini hatası, açık ve fazla saatlerde; ay ay, günün saatine göre ve önceki yılın aynı aylarıyla (lib/analysis/system-dri…
 
-## app/ (diğer: düzen, yükleniyor, hata) (6)
+## app/ (diğer: düzen, yükleniyor, hata) (7)
 
 - `app/(dashboard)/projects/[id]/insights/loading.tsx`
+- `app/(dashboard)/projects/[id]/layout.tsx` — Proje sayfalarının ortak alt menüsü (sekmeler); sayfa içerikleri kendi başlıklarını korur
 - `app/(dashboard)/projects/[id]/planning/loading.tsx`
 - `app/(dashboard)/projects/[id]/results/loading.tsx`
 - `app/layout.tsx`
@@ -315,7 +318,7 @@
 - `lib/sector/period.ts` — Sektör analizlerinin dönemi: içinde bulunulan yılın sektör karnesinin dönem sonu (scripts/sector-collect.mts; piyasa verisi olan son gün).
 - `lib/sector/plant-technology.ts` — Sektör taramasında santral teknolojisi (PLAN Bekleyen işler: EPDK ↔ karne, adım 2b): Eskiden tür yalnız addan tahmin ediliyordu (`guessTechnologyFromName`); adında tür eki olmayan santraller ("OYMAPINAR", "BORÇKA", "HASAN UĞURLU") ve tanın…
 
-## lib/services (53)
+## lib/services (54)
 
 - `lib/services/aggregator-data.ts` — Toplayıcı kıyası ve ayrıntısı için veri okuma (PLAN 8.7, 9.2): Santral saatleri veri havuzundan (ilk KGÜP ve UEVM), türü ve sahibi sektör karnesi dosyalarından ya da havuz tanımından, fiyatlar veritabanındaki EPİAŞ resmi dengesizlik fiyatl…
 - `lib/services/aggregator-membership.ts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" ekiyle kayıtlı tüm katılımcıların santral listesi çekilir ve .cache/epias/ aggregator-membership.json'a yazılır.
@@ -336,6 +339,7 @@
 - `lib/services/imbalance-prices.ts` — EPİAŞ resmi dengesizlik fiyatları: EPİAŞ Şeffaflık Platformu her saat için sistemin pozitif ve negatif dengesizlik tutarını (TL) ve miktarını (MWh) yayımlar.
 - `lib/services/installed-capacity.ts` — Kurulu güç kaynağı (EPİAŞ YEKDEM katılımcı listeleri, EPDK lisansları): Kural ve eşleştirme: lib/epias-plant/installed-capacity.ts.
 - `lib/services/live-day.ts` — Canlı gün: bugünün şu ana kadarki verisi ve yarının açıklanmış verisi (EPİAŞ'tan istek anında)
+- `lib/services/ops-status.ts` — günlük iş durumu (Bugün kokpiti ve üst şerit): yarının tahmin kayıtları yazıldı mı: Yalnız dosya okur (değişmeyen günlük kayıtlar: PTF, güneş, rüzgâr); EPİAŞ'a ya da hava servisine istek atmaz, bu yüzden her sayfada üst şeritten sık sorula…
 - `lib/services/outage-notices.ts` — Rapor için EPİAŞ arıza / bakım bildirimleri (Aşama 12.4): havuzdaki bildirimler (data/pool/umm) santral havuzundaki UEVÇB listesiyle (readPoolPlantInfo) proje santrallerine eşleştirilir.
 - `lib/services/plant-change-warnings.ts` — Güneş santrallerinde değişim uyarıları (Aşama 22.7 bağlaması; kural lib/forecast/change-detection.ts)
 - `lib/services/plant-location.ts` — Santral konumunu kaydetme (PLAN 15.1): Konum EPİAŞ santral kimliğiyle havuzdaki santral tanımına yazılır (projede olmayan sektör santralleri dahil) ve aynı kimlikteki proje santrallerine (`PowerPlant`) kopyalanır.
@@ -403,6 +407,14 @@
 - `lib/strategy/index.ts`
 - `lib/strategy/insights.ts` — Kural Tabanlı (Rule-Based) Strateji ve İçgörü Motoru: SAF ve deterministik fonksiyonlar: 1.
 
+## lib/ui (5)
+
+- `lib/ui/cockpit-alerts.ts` — Bugün kokpitinin uyarı listesi (saf, I/O yok): Girdiler: yarının kayıt durumu (ops-status), canlı piyasa notları ve projelerin veri boşlukları.
+- `lib/ui/day-phase.ts` — günün fazı (saf, I/O yok): üst şerit ve Bugün kokpiti: Enerji ticareti gününün saatleri sabit: yarının tahmini kesimden sonra (12:05), GÖP teklif kapanışı 12:30, fiyat 14:00'te açıklanır.
+- `lib/ui/last-project.ts` — son açılan proje (yalnız kolaylık: menüdeki "Üretim tahmini" bağlantısı onun tahminine gider)
+- `lib/ui/ops-chips.ts` — üst şeritteki kayıt rozetleri (saf, I/O yok): yarının PTF, güneş ve rüzgâr kayıtları: Kayıt yazılmışsa yeşil (kesimden sonra yazıldıysa sarı); yazılmamışsa beklenen saate kadar nötr "bekleniyor", saat geçtiyse kırmızı "yok".
+- `lib/ui/use-tr-clock.ts` — Türkiye saati (gün başından dakika); sunucuda ve ilk çizimde null (taşma uyuşmazlığı olmasın), sonra `everyMs`'de bir güncellenir
+
 ## lib/utils.ts (1)
 
 - `lib/utils.ts`
@@ -443,13 +455,15 @@
 - `lib/wind-engine/pipeline.ts` — RES günlük akışı: taze girdiler, kanıtla sürüm seçimi, kesimden önce değişmez kayıt.
 - `lib/wind-engine/registry.ts` — Rüzgâr günlük kayıt sürümleri.
 
-## components (58)
+## components (64)
 
 - `components/aggregator-benchmark-tab.tsx` — Sektör karnesi · Toplayıcılar sekmesi (PLAN 9.1): EPİAŞ'taki toplayıcıların aynı yöntemle kıyası.
+- `components/app-shell.tsx` — Uygulama kabuğu: sol menü (lg+), üstte saat şeridi, telefonda çekmece ve altta dört kısayol.
 - `components/budget-tab.tsx` — Planlama sayfasının "2027 bütçesi" sekmesi (PLAN 17.3): gelecek yılın aylık dengesizlik + KÜPST bütçesi, senaryolar ve kötü durum aralığı.
 - `components/contract-offer.tsx` — Aday santral için teklif kutusu (PLAN 16.3): taban (adil prim), öneri ve tavan (tek başına maliyet); öneri makasa endeksli (16.2b); PTF oranı, reel TL ve USD karşılığı; sözleşme biçimi sınaması ve sabit TL'nin riski.
 - `components/cost-change-card.tsx` — Reel TL ve USD karşılıkları (kur ve TÜFE serisi varsa)
 - `components/data-quality-banner.tsx` — Ayı eksik santraller ("Boreas 1 Enez RES: Temmuz 2025 yok")
+- `components/day-strip.tsx` — Üst şerit (her sayfada): Türkiye saati, günün fazı ve teklif kapanışına geri sayım, yarının kayıtlarının durumu.
 - `components/delete-project-dialog.tsx` — Projeyi, santrallerini ve saatlik üretim kayıtlarını kalıcı olarak silmeden önce onay isteyen diyalog.
 - `components/epias-plant-picker.tsx` — EPİAŞ adı çoğunlukla EIC kodunu da içerir ("BALABANLI RES-40W..."); varsa kısa ad gösterilir
 - `components/epias-sync-dialog.tsx`
@@ -471,6 +485,8 @@
 - `components/market/ptf-engine-panel.tsx` — Teklif öncesi sayfası: PTF motorunun tahmini (lib/services/ptf-engine.ts), dayandığı veriler ve alınamayan girdiler.
 - `components/market/tomorrow-view.tsx`
 - `components/method-link.tsx` — Metodoloji sayfasındaki ilgili bölüme küçük bağlantı ("Bu rakam nereden geliyor?")
+- `components/nav/nav-config.ts` — menü yapılandırması (tek kaynak): sol menü, telefon çekmecesi ve alt çubuk buradan beslenir.
+- `components/nav/project-nav.tsx` — Proje alt menüsü: bir projenin bütün sayfaları tek sekme şeridinde (eskiden sonuç sayfasının başlığında 17 buton vardı).
 - `components/netting-card.tsx` — Dengeden sorumlu grup (DSG) netleştirme faydası: santrallerin tek başına ve grup halinde netleşmiş dengesizlik maliyetlerini karşılaştırır.
 - `components/plant-comparison-card.tsx` — Santralleri, teknoloji gruplarını (RES / HES / GES) ve portföyü aynı birim metriklerle yan yana gösterir.
 - `components/plant-map-card.tsx` — Projedeki santrallerin haritası.
@@ -486,6 +502,7 @@
 - `components/sector-province-map-card.tsx` — Sektör sayfası harita sekmesi: EPDK üretim lisanslarının il bazında kurulu gücü (RES / GES / HES).
 - `components/settlement-unit-card.tsx` — Projenin uzlaştırma birimi: her santral sahibinin dengesinde (varsayılan) ya da tek bir toplayıcı portföyünde.
 - `components/slow-loading.tsx` — Ağır hesap sayfalarının yükleme göstergesi (hata ayıklama testi, 16.10.2026: geriye dönük test önbelleksiz 11–67 sn, DSG 14–17 sn sürüyordu ve yalnız düz yazı vardı).
+- `components/summary-parts.tsx` — Özet sayfalarının (Bugün, Portföy özeti) ortak küçük bileşenleri ve biçimleyicileri
 - `components/system-attribution-card.tsx` — Sistem yönü kartıyla aynı kaynak renkleri
 - `components/system-drivers-card.tsx` — Doğrulanmış kategorik sıra (validate_palette: açık zemin, bitişik çiftler)
 - `components/ui/button.tsx`
@@ -493,6 +510,7 @@
 - `components/ui/chart.tsx` — Grafik tasarım parçaları (shadcn "line chart" stili): kesikli yatay ızgara, eksen çizgisi ve tik yok, yumuşak çizgiler, halkalı renk noktalı gösterge ve özel ipucu kartı.
 - `components/ui/dialog.tsx`
 - `components/ui/heatmap-skyline.tsx` — Isı haritası "silüet" görünümü (21st.dev contribution-skyline'dan esinlenen, bağımlılıksız SVG): düz ızgara (2B) ile aynı veriyi izometrik 3B sütunlara dönüştürür.
+- `components/ui/menu.tsx` — Açılır menü (radix menüsü pakette yok): `<details>` tabanlı; dışarı tıklayınca ve Esc ile kapanır.
 - `components/ui/skeleton.tsx`
 - `components/ui/table.tsx`
 - `components/ui/tabs.tsx`
