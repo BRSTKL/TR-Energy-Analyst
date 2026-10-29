@@ -12,6 +12,16 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
 
 ---
 
+## 29.10.2026 · Claude · PTF kesimi 12:05 ve 12:05 sunucu işi (commit yok, sunucuda kurulu değil)
+
+- **Karar (kullanıcı):** yarının yük tahmini 11:02–12:02 arasında yayımlanıyor (anlık görüntü raporu, 28 ve 29.10: 11:02'de yok, 12:02'de var); PTF kesimi 11:30 → 12:05, sunucu her gün 12:05'te hesaplayıp kayıt yazsın ve telefona özet göndersin. Ayrıntı `ai/context/decisions.md`, `docs/ptf-motoru-yol-plani.md` "Kesim kararı".
+- **Yapılan:** `PTF_CUTOFF_MINUTES` 12:05 (`lib/ptf/forecast-log.ts`). `lib/ptf/auto.ts` (saf): `planAuto` (yaz / bekle / sonra dene / erken / kapandı) ve telefon özeti. `scripts/ptf/forecast-daily.mts --auto`: yük tahmini varsa hemen yazar, yoksa 12:05'e kadar yoklar; yazınca ntfy özeti + `.cache/ptf/preview/` önbelleği (sayfa beklemeden açılır); 12:20'den sonra başarısızlık da bildirilir; 12:30'dan sonra yazmaz; `--at SS:DD` ile saat denemesi. Saatlik işten (`epias-monthly-sync.mts`) PTF bloğu çıkarıldı (08:00–11:30 denemeleri yük tahmini yokken hep başarısız oluyordu). Yeni `scripts/server/systemd/tr-energy-ptf-forecast.{service,timer}` (12:03, 12:15, 12:25; ortak kilit yok, kendi `flock -n -E 0`); `bin/tr-energy-daily-summary` PTF kaydını da yazar; README güncel.
+- **Geçmiş ölçüm:** 482 gün yeniden oynatıldı, bire bir aynı: birleşim 330, R2 464 (−%28,9), kapsama %83,8. Kuralın kendisi (hangi veri bilinir) değişmedi; 11:30 kesimi olmayan bir veriyi elde saymıştı, 12:05 bunu gerçeğe uyduruyor.
+- **Sınama:** 902 test (12 yeni `ptf-auto`), `check:reports` 0 hata, duman `--only teklif` geçti; `--dry --auto --at` ile yazma / kapanış / yük tahmini yok yolları denendi (bekleme döngüsü gerçek saatle denenemedi). Gerçek ntfy gönderilmedi.
+- **Yarım:** commit / push / sunucuya yükleme yok. Sunucuda etkinleştirme (kullanıcı onayıyla): `deploy.sh`, sonra README'deki `cp … && systemctl enable --now tr-energy-ptf-forecast.timer` ve `bin/tr-energy-daily-summary` kopyası. İlk gerçek çalışma ertesi 12:03; `.env`'de `NTFY_TOPIC` olmalı. Sınır: yayım saati 11:02–12:02 arasında nerede bilinmiyor, kanıt iki gün; anlık görüntü sıklaştırılırsa 12:05 daraltılabilir.
+
+---
+
 ## 29.10.2026 · Claude · Teklif öncesi sayfası PTF motorunu gösteriyor (commit yok)
 
 - **Yapılan (kullanıcı isteği):** `/market/teklif` üstünde PTF motoru (ptf-ens-v1) tahmini: ortalama, olası aralık, en pahalı / ucuz saat, benzer günlere fark, limite yakın saat, son 60 gün hatası, iki modelin ve gölge sürümün ortalaması, sabah kaydı durumu; saatlik fiyat grafiği (aralık, benzer günler, önceki gün, geçmiş günde gerçekleşen), yük / net yük / rüzgâr / güneş grafiği, beş girdi kartı (Alındı / Yedek kullanıldı / Alınamadı), eksik ve yedekle tamamlanan veriler kutusu, saatlik tablo. Eski önizleme modeli yalnız "Tüm ayrıntılar"da karşılaştırma için; sinyal kartları bağlam (`buildBrief({ engine: true })`, eski "güneş bilinmiyor" kartı yok).

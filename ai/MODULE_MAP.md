@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-509 dosya, 40 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+510 dosya, 40 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
 ## Sayfalar (app/**/page.tsx) (23)
 
@@ -61,7 +61,7 @@
 - `GET /api/market/pre-bid-context` — GET /api/market/pre-bid-context?date=YYYY-AA-GG (ÖNİZLEME): Teklif öncesi görünümün bağlam verileri: doğal gaz GRF, arz–talep eğrisi, teklif miktarları, gün içi işlem özeti (lib/services/pre-bid-context.ts).
 - `GET /api/market/pre-bid-effects` — GET /api/market/pre-bid-effects (ÖNİZLEME): Yeni bulunan verilerin (doğal gaz GRF, gerçekleşen güneş) teklif öncesi fiyat modeline etkisi: aynı yürüyen geriye test, mevcut modelle günlük eşleştirilmiş hata farkı (lib/analysis/pre-bid-effec…
 - `GET /api/market/pre-bid` — GET /api/market/pre-bid?date=YYYY-AA-GG (ÖNİZLEME): Teklif öncesi görünüm: hedef gün için saatlik PTF beklentisi ve ± aralık (lib/analysis/pre-bid.ts).
-- `GET /api/market/ptf-forecast` — GET /api/market/ptf-forecast?date=YYYY-AA-GG[&refresh=1]: PTF motorunun hedef gün tahmini, girdilerin durumu ve sabah kaydı (lib/services/ptf-forecast-page.ts).
+- `GET /api/market/ptf-forecast` — GET /api/market/ptf-forecast?date=YYYY-AA-GG[&refresh=1]: PTF motorunun hedef gün tahmini, girdilerin durumu ve günlük kayıt (lib/services/ptf-forecast-page.ts).
 - `GET /api/market` — "2026 (Ocak–Ağustos)", tam yıl için "2025"; ay ortasında biten dönem "2026 (Ocak – 19 Ekim)" ya da "1–19 Ekim 2026"; ay başında başlamayan ya da yıl aşan dönemde tarih aralığı
 - `POST /api/pool/plant` — POST /api/pool/plant { powerPlantId, startDay, endDay, kgupVersion?
 - `GET /api/projects/[id]/backtest` — GET /api/projects/[id]/backtest: Her santral için kaydırmalı geriye dönük testi iki fiyat rejiminde çalıştırır: - "project": projenin fiyat profili (mevzuat modunda her saat kendi tarihinin kuralıyla) - "rules2026": tüm veri 2026 kuralları…
@@ -284,12 +284,13 @@
 - `lib/projects/description.ts` — Proje açıklaması: Eski sürümler EPİAŞ'tan eklenen santrallerin kaynak bilgisini proje açıklamasına not olarak ekliyordu: "EPİAŞ açık verisi: KGÜP ilk versiyon (plan) ve UEVM (gerçekleşen).
 - `lib/projects/name.ts` — Proje adı: Proje adı rapor kapağında, dosya adında ve proje kartında görünür.
 
-## lib/ptf (9)
+## lib/ptf (10)
 
+- `lib/ptf/auto.ts` — PTF motoru: günlük otomatik çalışmanın kararı ve telefon özeti (saf, I/O yok; betik scripts/ptf/forecast-daily.mts)
 - `lib/ptf/features.ts` — PTF motoru: özellikler (saf, I/O yok; bütün erişim PtfView üzerinden, bilgi kuralı history.ts)
 - `lib/ptf/forecast-log-store.ts` — PTF tahmin kaydının dosyası (biçim lib/ptf/forecast-log.ts): data/pool/forecast-log/ptf/<YYYY-MM>/<YYYY-MM-DD>.json.gz: hedef gün başına bir dosya, yalnız yoksa yazılır (geçici dosya + `link`, salt okunur).
 - `lib/ptf/forecast-log.ts` — PTF motoru: günlük tahmin kaydı (saf, I/O yok; dosya forecast-log-store.ts): Her hedef gün için bir kez yazılan, bir daha değişmeyen kayıt: ileriye dönük skorun tek dayanağı.
-- `lib/ptf/history.ts` — PTF motoru: gün verisi ve bilgi zamanı kuralı (saf, I/O yok): Motor hedef gün T'nin 24 saatlik PTF'sini T-1 günü sabah (kesim, varsayılan 11:30 Türkiye) bilinen veriyle tahmin eder.
+- `lib/ptf/history.ts` — PTF motoru: gün verisi ve bilgi zamanı kuralı (saf, I/O yok): Motor hedef gün T'nin 24 saatlik PTF'sini T-1 günü öğlen (kesim, varsayılan 12:05 Türkiye) bilinen veriyle tahmin eder.
 - `lib/ptf/models.ts` — PTF motoru: modeller (saf, I/O yok): Her model hedef gün T için 24 saatlik PTF tahmini verir; eğitim yalnız T'den önceki günlerin etiketleriyle (T-1'in PTF'si kesimde bilinir) ve aynı bilgi kuralıyla kurulmuş özelliklerle yapılır.
 - `lib/ptf/replay.ts` — PTF motoru: günlük yeniden oynatma ve skor (saf, I/O yok): `replay`: hedef günleri sırayla gezer, her modelden 24 saatlik tahmin alır (model kendi eğitimini yalnız geçmişle yapar) ve gerçekleşenle karşılaştırır.
 - `lib/ptf/solar-regions.ts` — PTF motoru: ülke güneşi için bölge noktaları (saf, I/O yok): İşletmedeki GES'ler (Global Energy Monitor Global Solar Power Tracker, koordinat + MW) 1°×1° hücrelere toplanır; hücre noktası kapasite ağırlıklı merkez.

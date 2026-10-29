@@ -1,5 +1,15 @@
 # PTF tahmin motoru: yol planı (27.10.2026)
 
+## Kesim kararı (29.10.2026): 11:30 → 12:05
+
+Anlık görüntü işi (08:02–14:02) iki gün üst üste aynı şeyi gösterdi: yarının yük tahmini 11:02'de yok, 12:02'de var (hedef 29 ve
+30.10). Modelin bilgi kuralı yük tahminini hedef günde elde sayıyordu; 11:30 kesimi bunu karşılamıyordu ve 28.10 sabah kaydı yazılamadı.
+Kesim 12:05'e alındı (`PTF_CUTOFF_MINUTES`). Kuralın kendisi (hangi alan hangi gecikmeyle okunur) değişmediği için geçmiş
+ölçüm aynı: 482 gün yeniden oynatıldı, birleşim 330 TL/MWh, R2 464, fark −%28,9 (%95 aralık 101…168), aralık kapsaması %83,8
+(önceki sonuçla birebir). Fark yalnız gerçekliğe uyum: 11:30'daki sonuç, o saatte olmayan bir veriye dayanıyordu. Sunucuda
+`tr-energy-ptf-forecast` (12:03, 12:15, 12:25) yük tahmini çıkınca yazar. Sınır: yayım saati 11:02–12:02 arasında nerede,
+bilinmiyor; kanıt iki gün.
+
 ## Durum (27.10.2026 akşam, `claude/ptf-motoru`, commit yok)
 
 Aşama 0'ın bilgi kuralı, aşama 1 (replay ve referanslar), aşama 1b (günlük değişmeyen kayıt) ve aşama 3'ün ilk iki modeli
@@ -108,7 +118,7 @@ Veri derinliği (bugün): PTF 01.01.2024'ten beri (24.720 saat, EPİAŞ'la bireb
 ## 4. Hedef tanımı (aşama 0'da sabitlenir)
 
 - Hedef: nihai saatlik PTF, TL/MWh, D+1 takvim günü (24 satır).
-- Kesim parametresi K: ilk değer D günü 11:30 Türkiye; replay'de aynı K.
+- Kesim parametresi K: D günü 12:05 Türkiye (29.10.2026'ya kadar 11:30; yük tahmini 12:02'de yayımlanıyor); replay'de aynı K.
 - Çıktı: P10/P50/P90, `quality_status` (normal / degraded / failed), model ve veri sürümü, anlık görüntü özeti (hash).
 - Ana ölçüler: MAE ve RMSE (TL/MWh), yönlü sapma, referansa göre rMAE; kritik saatlerde (limite yakın, sıfıra yakın) ayrı skor; aralık için pinball ve kapsama. MAPE ana ölçü değil.
 - Tavan ve sıfır: fiyat limiti tarihli parametre (kod sabiti değil); sıfır ve limit saatleri ayrı sınıflandırma ve ayrı skor.
