@@ -144,7 +144,8 @@ const chosen = ALL
   : [...new Map([bySize[0], bySize[bySize.length - 1], list.find((p) => !p.ges)].filter((p): p is (typeof list)[number] => !!p).map((p) => [p.id, p])).values()];
 
 const checks: Check[] = [
-  { url: "/", label: "Ana sayfa" },
+  { url: "/", label: "Bugün" },
+  { url: "/ozet", label: "Portföy özeti" },
   { url: "/projects", label: "Projeler" },
   { url: "/projects/epias", label: "EPİAŞ'tan proje" },
   { url: "/market", label: "Piyasa" },
@@ -170,6 +171,7 @@ checks.push({ url: "/projects/yok-boyle-bir-proje/plants", label: "Olmayan proje
 checks.push({ url: "/olmayan-sayfa", label: "404 sayfası", expect404: true, expectText: /Sayfa bulunamadı/ });
 // Telefon genişliği
 for (const [url, label] of [
+  ["/", "Bugün"],
   ["/projects", "Projeler"],
   ["/sector", "Sektör karnesi"],
   ["/market", "Piyasa"],

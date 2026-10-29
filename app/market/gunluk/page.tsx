@@ -93,7 +93,7 @@ export default function DailyMarketPage() {
                 href="/"
                 className="flex items-center gap-1 text-slate-500 hover:text-slate-900"
               >
-                <ArrowLeft className="h-3 w-3" /> Dashboard
+                <ArrowLeft className="h-3 w-3" /> Bugün
               </Link>
               <span className="text-slate-300">/</span>
               <Link href="/market" className="text-slate-500 hover:text-slate-900">

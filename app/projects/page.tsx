@@ -305,7 +305,7 @@ export default function ProjectsPage() {
                 href="/"
                 className="flex items-center gap-1 text-xs text-slate-500 transition-colors hover:text-slate-900"
               >
-                <ArrowLeft className="h-3 w-3" /> Dashboard
+                <ArrowLeft className="h-3 w-3" /> Bugün
               </Link>
               <span className="text-slate-300">/</span>
               <span className="text-xs font-medium text-slate-700">Projelerim</span>
@@ -324,18 +324,6 @@ export default function ProjectsPage() {
             <Button variant="outline" size="sm" onClick={fetchProjects} className="gap-1.5">
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
               Yenile
-            </Button>
-
-            <Button asChild variant="outline" size="sm">
-              <Link href="/compare">Karşılaştır</Link>
-            </Button>
-
-            <Button asChild variant="outline" size="sm">
-              <Link href="/sector">Sektör karnesi</Link>
-            </Button>
-
-            <Button asChild variant="outline" size="sm">
-              <Link href="/market">Piyasa</Link>
             </Button>
 
             <Button asChild variant="outline" size="sm" className="gap-1.5 border-sky-300 text-sky-800 hover:bg-sky-50">

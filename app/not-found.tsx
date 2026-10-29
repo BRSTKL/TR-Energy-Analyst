@@ -12,7 +12,7 @@ export default function NotFound() {
           Projeler
         </Link>
         <Link href="/" className="underline">
-          Ana sayfa
+          Bugün
         </Link>
       </div>
     </div>

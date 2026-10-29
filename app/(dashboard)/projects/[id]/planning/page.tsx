@@ -519,7 +519,7 @@ export default function PlanningEfficiencyPage() {
               Tekrar Dene
             </Button>
             <Button variant="outline" asChild>
-              <Link href="/">Ana Sayfaya Dön</Link>
+              <Link href="/">Bugün sayfasına dön</Link>
             </Button>
           </CardContent>
         </Card>
@@ -538,7 +538,7 @@ export default function PlanningEfficiencyPage() {
                 href="/"
                 className="flex items-center gap-1 text-xs text-slate-500 transition-colors hover:text-slate-900"
               >
-                <ArrowLeft className="h-3 w-3" /> Dashboard
+                <ArrowLeft className="h-3 w-3" /> Bugün
               </Link>
               <span className="text-slate-300">/</span>
               <Link
@@ -564,28 +564,6 @@ export default function PlanningEfficiencyPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              size="sm"
-              asChild
-              variant="outline"
-              className="gap-1.5 border-slate-300 hover:bg-slate-100"
-            >
-              <Link href={`/projects/${projectId}/results`}>
-                <FileSpreadsheet className="h-3.5 w-3.5 text-slate-600" />
-                Sonuç Tablosu
-              </Link>
-            </Button>
-            <Button
-              size="sm"
-              asChild
-              variant="outline"
-              className="gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-            >
-              <Link href={`/projects/${projectId}/insights`}>
-                <Lightbulb className="h-3.5 w-3.5 text-indigo-600" />
-                Stratejik İçgörüler
-              </Link>
-            </Button>
             <a
               href={`/api/projects/${projectId}/export/excel`}
               download

@@ -196,7 +196,7 @@ export default function ProjectInsightsPage() {
                 href={`/projects/${projectId}/results`}
                 className="flex items-center gap-1 text-xs text-slate-500 transition-colors hover:text-slate-900"
               >
-                <ArrowLeft className="h-3 w-3" /> Sonuç Dashboard
+                <ArrowLeft className="h-3 w-3" /> Sonuçlar
               </Link>
               <span className="text-slate-300">/</span>
               <span className="text-xs font-medium text-slate-700">
@@ -244,28 +244,6 @@ export default function ProjectInsightsPage() {
             <Button variant="outline" size="sm" onClick={fetchData} className="gap-1.5">
               <RefreshCw className="h-3.5 w-3.5" />
               Yenile
-            </Button>
-            <Button
-              size="sm"
-              asChild
-              variant="outline"
-              className="gap-1.5 border-sky-300 text-sky-700 hover:bg-sky-50"
-            >
-              <Link href={`/projects/${projectId}/planning`}>
-                <Target className="h-3.5 w-3.5 text-sky-600" />
-                Planlama Verimliliği
-              </Link>
-            </Button>
-            <Button
-              size="sm"
-              asChild
-              variant="default"
-              className="gap-1.5 bg-slate-900 hover:bg-slate-800"
-            >
-              <Link href={`/projects/${projectId}/results`}>
-                <FileSpreadsheet className="h-3.5 w-3.5" />
-                Sonuç Tablosu
-              </Link>
             </Button>
           </div>
         </div>

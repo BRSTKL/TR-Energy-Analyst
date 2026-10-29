@@ -71,7 +71,7 @@ export default function AccountPage() {
       <div className="mx-auto max-w-2xl space-y-6">
         <div className="flex items-center justify-between gap-2">
           <Link href="/" className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900">
-            <ArrowLeft className="h-4 w-4" /> Ana sayfa
+            <ArrowLeft className="h-4 w-4" /> Bugün
           </Link>
           <Button variant="outline" size="sm" className="gap-2" onClick={logout}>
             <LogOut className="h-4 w-4" /> Çıkış

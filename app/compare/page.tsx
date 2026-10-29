@@ -226,7 +226,7 @@ export default function ComparePage() {
           <div>
             <div className="flex items-center gap-2 text-xs">
               <Link href="/" className="flex items-center gap-1 text-slate-500 hover:text-slate-900">
-                <ArrowLeft className="h-3 w-3" /> Dashboard
+                <ArrowLeft className="h-3 w-3" /> Bugün
               </Link>
               <span className="text-slate-300">/</span>
               <span className="font-medium text-slate-700">Proje karşılaştırma</span>

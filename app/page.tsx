@@ -1,141 +1,467 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Activity, ArrowRight, BookOpen, CalendarDays, Database, Layers, UserRound, Wind, Zap } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { AlertTriangle, ArrowRight, CheckCircle2, CircleDot, Info } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ReportDownloadDialog } from "@/components/report-download-dialog";
-import { EpiasSyncDialog } from "@/components/epias-sync-dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Kpi, nf, SectionHead, Skeleton } from "@/components/summary-parts";
+import type { DailyMarket } from "@/lib/analysis/daily-market";
+import type { OpsStatus } from "@/lib/services/ops-status";
 import type { ProjectKpis } from "@/lib/services/project-kpis";
+import { buildAlerts, formatHours, type CockpitAlert } from "@/lib/ui/cockpit-alerts";
+import {
+  dayPhase,
+  formatCountdown,
+  phaseText,
+  type DayPhaseId,
+} from "@/lib/ui/day-phase";
+import { forecastHref, LAST_PROJECT_EVENT, readLastProject } from "@/lib/ui/last-project";
+import { opsChips } from "@/lib/ui/ops-chips";
+import { useTrMinutes } from "@/lib/ui/use-tr-clock";
 
 /**
- * Ana sayfa: uygulamayı ilk açan kişinin gördüğü özet. Hepsi gerçek veriden ve raporla aynı motordan gelir:
- * piyasanın son durumu (/api/market), projelerin sapma yükü ve sektördeki yeri (/api/compare), sektör karnesinin
- * teknoloji medyanları (/api/sector) ve veri durumu.
+ * Bugün kokpiti (ana sayfa): günün saatlerine göre şimdi hangi adımdasınız, yarın için ne hazır, piyasa şimdi nasıl, dünün
+ * sonucu ve uyarılar. Her bölüm kendi verisini ayrı yükler; alınamayan veri bölümde açıkça yazılır (sessizce atlanmaz).
+ * Yarının kayıtları dosyadan (/api/ops/status), piyasa EPİAŞ'tan (5 dk önbellekli), projeler /api/compare'den gelir.
  */
 
-const nf = (v: number, d = 0) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
-const tl = (v: number) => (Math.abs(v) >= 1e6 ? `${nf(v / 1e6, 1)} M ₺` : `${nf(v / 1e3, 0)} bin ₺`);
-const pct = (a: number, b: number) => (a !== 0 ? ((b - a) / Math.abs(a)) * 100 : null);
-const signed = (v: number | null, d = 0) => (v === null ? "" : `${v >= 0 ? "+" : "−"}%${nf(Math.abs(v), d)}`);
-const trDate = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}`;
-const MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
-const periodShort = (p: { start: string; end: string }) =>
-  `${MONTHS[Number(p.start.slice(5, 7)) - 1]}–${MONTHS[Number(p.end.slice(5, 7)) - 1]} ${p.end.slice(0, 4)}`;
-const TECH: Record<string, string> = { RES: "Rüzgâr", GES: "Güneş", HES: "Hidro" };
+const DAYS = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
+const MONTHS = [
+  "Ocak",
+  "Şubat",
+  "Mart",
+  "Nisan",
+  "Mayıs",
+  "Haziran",
+  "Temmuz",
+  "Ağustos",
+  "Eylül",
+  "Ekim",
+  "Kasım",
+  "Aralık",
+];
+const hh = (h: number) => `${String(h).padStart(2, "0")}:00`;
+const trDay = (d: string) => {
+  const w = new Date(`${d}T00:00:00Z`);
+  return `${DAYS[w.getUTCDay()]} ${w.getUTCDate()} ${MONTHS[w.getUTCMonth()]} ${w.getUTCFullYear()}`;
+};
+const clock = (iso: string) =>
+  new Date(iso).toLocaleTimeString("tr-TR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Istanbul",
+  });
+const tl = (v: number) =>
+  Math.abs(v) >= 1e6 ? `${nf(v / 1e6, 1)} M ₺` : `${nf(v / 1e3, 0)} bin ₺`;
 
-interface MarketStats {
-  spread: { mean: number };
-  ptf: { mean: number };
-  zeroHours: number;
-  direction: { deficitPct: number };
-}
-interface MarketResponse {
-  success: boolean;
-  error?: string;
-  available: { start: string; end: string } | null;
-  period: { label: string };
-  previousPeriod: { label: string } | null;
-  current: MarketStats;
-  previous: MarketStats | null;
-  sentences: string[];
-}
-interface SectorResponse {
-  success: boolean;
-  years: number[];
-  year: number;
-  label: string;
-  byType: Partial<Record<string, { unitImbalanceTl: { count: number; median: number } }>>;
+type Load<T> =
+  { state: "loading" } | { state: "ok"; data: T } | { state: "error"; message: string };
+
+function useLoad<T>(url: string, pick: (d: any) => T, deps: unknown[] = []): Load<T> {
+  const [s, setS] = useState<Load<T>>({ state: "loading" });
+  useEffect(() => {
+    let cancelled = false;
+    setS({ state: "loading" });
+    fetch(url)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        if (!d.success) throw new Error(d.error ?? "Veri alınamadı.");
+        setS({ state: "ok", data: pick(d) });
+      })
+      .catch(
+        (e) =>
+          !cancelled &&
+          setS({
+            state: "error",
+            message: e instanceof Error ? e.message : "Veri alınamadı.",
+          })
+      );
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, ...deps]);
+  return s;
 }
 
-/** Sektördeki yer: düşük yüzdelik daha iyi */
-const rankText = (rankPct: number) => (rankPct <= 50 ? `en iyi %${nf(Math.max(1, rankPct))}` : `en kötü %${nf(Math.max(1, 100 - rankPct))}`);
+function mapLoad<T, U>(l: Load<T>, f: (v: T) => U): Load<U> {
+  return l.state === "ok" ? { state: "ok", data: f(l.data) } : l;
+}
 
-function Kpi({ label, value, sub, tone = "text-slate-900" }: { label: string; value: string; sub?: string; tone?: string }) {
+function Failed({ what, message }: { what: string; message: string }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-xs font-medium text-slate-500">{label}</p>
-      <p className={`mt-1 text-2xl font-bold tabular-nums ${tone}`}>{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-slate-500">{sub}</p>}
-    </div>
+    <p className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+      <span>
+        {what} alınamadı: {message}
+      </span>
+    </p>
   );
 }
 
-function Skeleton({ h = "h-24" }: { h?: string }) {
-  return <div className={`${h} animate-pulse rounded-lg border border-slate-200 bg-slate-100/70`} />;
-}
+// ---------------------------------------------------------------- faz kartı
 
-function SectionHead({ title, sub, href, cta }: { title: string; sub?: string; href?: string; cta?: string }) {
+const STEPS: Array<{
+  id: "prep" | "bid" | "results" | "intraday";
+  title: string;
+  sub: string;
+  href: string;
+}> = [
+  {
+    id: "prep",
+    title: "Hazırlık",
+    sub: "Dünün sonucu, açık veriler",
+    href: "/market/gunluk",
+  },
+  {
+    id: "bid",
+    title: "Teklif",
+    sub: "PTF ve üretim tahmini, 12:30'a kadar",
+    href: "/market/teklif",
+  },
+  { id: "results", title: "Sonuç 14:00", sub: "Açıklanan PTF", href: "/market/gunluk" },
+  {
+    id: "intraday",
+    title: "Gün içi",
+    sub: "GİP, dengesizlik yönü",
+    href: "/market/gunluk",
+  },
+];
+const CURRENT_STEP: Record<DayPhaseId, number> = {
+  prep: 0,
+  "pre-bid": 1,
+  closing: 1,
+  awaiting: 2,
+  intraday: 3,
+  evening: 3,
+};
+
+function PhaseCard({ minutes, bidReady }: { minutes: number | null; bidReady: string }) {
+  if (minutes === null) return <Skeleton h="h-36" />;
+  const phase = dayPhase(minutes);
+  const current = CURRENT_STEP[phase.id];
+  const big =
+    phase.minutesToClose !== null
+      ? { text: formatCountdown(phase.minutesToClose), sub: "teklif kapanışına (12:30)" }
+      : phase.minutesToResults !== null
+        ? {
+            text: formatCountdown(phase.minutesToResults),
+            sub: "PTF'nin açıklanmasına (14:00)",
+          }
+        : null;
   return (
-    <div className="flex flex-wrap items-end justify-between gap-2">
-      <div>
-        <h2 className="text-lg font-bold text-slate-900">{title}</h2>
-        {sub && <p className="text-sm text-slate-600">{sub}</p>}
-      </div>
-      {href && (
-        <Link href={href} className="flex items-center gap-1 text-sm font-medium text-indigo-700 hover:text-indigo-900">
-          {cta} <ArrowRight className="h-3.5 w-3.5" />
-        </Link>
-      )}
-    </div>
+    <Card className={`shadow-sm ${phase.urgent ? "border-red-300" : ""}`}>
+      <CardContent className="space-y-4 p-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Şimdi
+            </p>
+            <h2 className="text-xl font-bold text-slate-900">{phaseText(phase)}</h2>
+          </div>
+          {big && (
+            <div className="text-right">
+              <p
+                className={`text-3xl font-bold tabular-nums ${phase.urgent ? "text-red-700" : "text-slate-900"}`}
+              >
+                {big.text}
+              </p>
+              <p className="text-xs text-slate-500">{big.sub}</p>
+            </div>
+          )}
+        </div>
+        <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {STEPS.map((st, i) => {
+            const done = i < current;
+            const now = i === current;
+            return (
+              <li key={st.id}>
+                <Link
+                  href={st.href}
+                  aria-current={now ? "step" : undefined}
+                  className={`block h-full rounded-md border p-3 text-sm transition-colors ${
+                    now
+                      ? "border-indigo-300 bg-indigo-50"
+                      : "border-slate-200 bg-white hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5 font-medium">
+                    {done ? (
+                      <CheckCircle2
+                        className="h-4 w-4 text-emerald-600"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <CircleDot
+                        className={`h-4 w-4 ${now ? "text-indigo-600" : "text-slate-300"}`}
+                        aria-hidden="true"
+                      />
+                    )}
+                    <span className={now ? "text-indigo-800" : "text-slate-800"}>
+                      {st.title}
+                    </span>
+                  </span>
+                  <span className="mt-1 block text-xs text-slate-600">
+                    {st.id === "bid" ? bidReady : st.sub}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ol>
+      </CardContent>
+    </Card>
   );
 }
 
-function MarketSection({ market }: { market: MarketResponse | null | undefined }) {
-  if (market === undefined)
+// ---------------------------------------------------------------- yarının kayıtları
+
+function PtfCard({ load }: { load: Load<OpsStatus> }) {
+  if (load.state === "loading") return <Skeleton h="h-40" />;
+  if (load.state === "error")
+    return <Failed what="Yarının PTF kaydı" message={load.message} />;
+  const p = load.data.ptf;
+  if (!p)
     return (
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }, (_, i) => (
-          <Skeleton key={i} />
-        ))}
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <p className="text-xs font-medium text-slate-500">Yarının PTF tahmini</p>
+        <p className="mt-2 text-sm text-slate-700">
+          Kayıt henüz yazılmadı. Sunucu her gün 12:03&apos;te hesaplar; şimdi görmek için
+          Teklif öncesi sayfasında hesaplatın.
+        </p>
+        <Link
+          href="/market/teklif"
+          className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-indigo-700 hover:underline"
+        >
+          Teklif öncesi <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
       </div>
     );
-  if (!market) return <p className="text-sm text-slate-500">Piyasa verisi yüklenemedi. EPİAŞ&apos;tan piyasa verisini güncelleyin.</p>;
-  const c = market.current;
-  const p = market.previous;
-  const prevLabel = market.previousPeriod?.label.slice(0, 4);
   return (
-    <div className="space-y-3">
-      {market.sentences[0] && <p className="text-sm text-slate-800">{market.sentences[0]}</p>}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Kpi
-          label="SMF–PTF makası (saatlik ortalama)"
-          value={`${nf(c.spread.mean)} TL/MWh`}
-          sub={p ? `${prevLabel}: ${nf(p.spread.mean)} (${signed(pct(p.spread.mean, c.spread.mean))})` : undefined}
-          tone={p && c.spread.mean > p.spread.mean ? "text-rose-700" : "text-slate-900"}
-        />
-        <Kpi
-          label="Ortalama PTF"
-          value={`${nf(c.ptf.mean)} TL/MWh`}
-          sub={p ? `${prevLabel}: ${nf(p.ptf.mean)} (${signed(pct(p.ptf.mean, c.ptf.mean))})` : undefined}
-        />
-        <Kpi label="Sıfır fiyatlı saat" value={nf(c.zeroHours)} sub={p ? `${prevLabel}: ${nf(p.zeroHours)}` : undefined} />
-        <Kpi
-          label="Sistem açığındaki saatlerin payı"
-          value={`%${nf(c.direction.deficitPct)}`}
-          sub={p ? `${prevLabel}: %${nf(p.direction.deficitPct)}` : undefined}
-        />
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-medium text-slate-500">Yarının PTF tahmini</p>
+        <span className="text-[11px] text-slate-400">
+          {clock(p.issuedAt)}&apos;te yazıldı{p.onTime ? "" : " (kesimden sonra)"}
+        </span>
       </div>
+      <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
+        {nf(p.mean)} <span className="text-sm font-medium text-slate-500">TL/MWh</span>
+      </p>
+      {p.bandLo !== null && p.bandHi !== null && (
+        <p className="text-xs text-slate-500">
+          olası aralık (ortalama) {nf(p.bandLo)} – {nf(p.bandHi)}
+        </p>
+      )}
+      <p className="mt-2 text-xs text-slate-700">
+        En pahalı {hh(p.max.hour)} ({nf(p.max.value)}), en ucuz {hh(p.min.hour)} (
+        {nf(p.min.value)})
+      </p>
+      {p.nearCapHours.length > 0 && (
+        <p className="mt-1 text-xs font-medium text-amber-800">
+          Limite yakın: {p.nearCapHours.length} saat ({formatHours(p.nearCapHours)})
+        </p>
+      )}
+      {p.levelAdj !== null && p.levelBasis && Math.abs(p.levelAdj) >= 1 && (
+        <p className="mt-1 text-xs text-slate-500">
+          Dünkü sapma düzeltmesi {p.levelAdj > 0 ? "+" : "−"}
+          {nf(Math.abs(p.levelAdj))} TL/MWh
+        </p>
+      )}
+      <Link
+        href="/market/teklif"
+        className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-indigo-700 hover:underline"
+      >
+        Ayrıntı <ArrowRight className="h-3.5 w-3.5" />
+      </Link>
     </div>
   );
 }
 
-function ProjectsSection({ rows, total }: { rows: ProjectKpis[] | null | undefined; total: number | null }) {
-  if (rows === undefined) return <Skeleton h="h-40" />;
-  if (!rows || rows.length === 0)
-    return (
-      <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-slate-600">
-          Henüz verisi olan proje yok. EPİAŞ&apos;tan bir şirketin santrallerini ekleyerek ya da üretim dosyası yükleyerek başlayın.
+function ProductionCard({
+  load,
+  minutes,
+  forecastLink,
+}: {
+  load: Load<OpsStatus>;
+  minutes: number | null;
+  forecastLink: string;
+}) {
+  if (load.state === "loading" || minutes === null) return <Skeleton h="h-40" />;
+  if (load.state === "error")
+    return <Failed what="Üretim tahmini kayıtları" message={load.message} />;
+  const chips = opsChips(load.data, minutes).filter((c) => c.key !== "ptf");
+  const tone = {
+    ok: "text-emerald-700",
+    warn: "text-amber-800",
+    bad: "text-red-700",
+    wait: "text-slate-500",
+  } as const;
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <p className="text-xs font-medium text-slate-500">Yarının üretim tahmini</p>
+      <ul className="mt-2 space-y-1.5 text-sm">
+        {chips.map((c) => (
+          <li key={c.key} className="flex items-baseline justify-between gap-2">
+            <span className={`font-medium ${tone[c.tone]}`}>{c.text}</span>
+            <span className="text-xs text-slate-500">
+              {c.tone === "ok"
+                ? "kesimden önce yazıldı"
+                : c.tone === "wait"
+                  ? "henüz saati gelmedi"
+                  : c.tone === "warn"
+                    ? "eksik ya da geç"
+                    : "yazılmadı"}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-xs text-slate-500">
+        Santral bazında tahmin proje sayfasında.
+      </p>
+      <Link
+        href={forecastLink}
+        className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-indigo-700 hover:underline"
+      >
+        Üretim tahmini <ArrowRight className="h-3.5 w-3.5" />
+      </Link>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- piyasa şimdi, dünün sonucu
+
+/** "Dünün sonucu" yalnız gün gerçekten dünse; doğrulanmış veri geride kaldıysa son doğrulanmış gün diye yazılır */
+const trYesterday = () =>
+  new Date(Date.now() + 3 * 3_600_000 - 86_400_000).toISOString().slice(0, 10);
+
+function MarketCard({
+  title,
+  load,
+  href,
+  cta,
+  what,
+}: {
+  title: string;
+  load: Load<DailyMarket>;
+  href: string;
+  cta: string;
+  what: string;
+}) {
+  if (load.state === "loading") return <Skeleton h="h-40" />;
+  if (load.state === "error") return <Failed what={what} message={load.message} />;
+  const d = load.data;
+  const pr = d.prices;
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <p className="text-xs font-medium text-slate-500">
+        {title === "Dünün sonucu" && d.date !== trYesterday()
+          ? "Son doğrulanmış gün"
+          : title}{" "}
+        <span className="text-slate-400">· {trDay(d.date)}</span>
+      </p>
+      <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
+        {pr.ptfMean === null ? "—" : nf(pr.ptfMean)}{" "}
+        <span className="text-sm font-medium text-slate-500">TL/MWh PTF</span>
+      </p>
+      <p className="text-xs text-slate-500">
+        SMF {pr.smfMean === null ? "—" : nf(pr.smfMean)} · makas{" "}
+        {pr.spreadMean === null ? "—" : nf(pr.spreadMean)} ({pr.hours} saat)
+      </p>
+      <p className="mt-2 text-xs text-slate-700">
+        Sistem açığı {d.direction.deficit} saat, fazla {d.direction.surplus}, dengede{" "}
+        {d.direction.balanced}
+        {pr.zeroHours > 0 ? ` · ${pr.zeroHours} sıfır fiyatlı saat` : ""}
+      </p>
+      <Link
+        href={href}
+        className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-indigo-700 hover:underline"
+      >
+        {cta} <ArrowRight className="h-3.5 w-3.5" />
+      </Link>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- uyarılar
+
+const ALERT_STYLE = {
+  bad: { cls: "border-red-200 bg-red-50 text-red-900", icon: AlertTriangle },
+  warn: { cls: "border-amber-200 bg-amber-50 text-amber-900", icon: AlertTriangle },
+  info: { cls: "border-slate-200 bg-white text-slate-700", icon: Info },
+} as const;
+
+function Alerts({ alerts, pending }: { alerts: CockpitAlert[]; pending: boolean }) {
+  return (
+    <section className="space-y-3">
+      <SectionHead
+        title="Uyarılar"
+        sub="Eksik kayıtlar, limite yakın saatler, veri boşlukları"
+      />
+      {pending && alerts.length === 0 ? (
+        <Skeleton h="h-16" />
+      ) : alerts.length === 0 ? (
+        <p className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Şu an uyarı yok.
         </p>
-        <Button asChild size="sm" className="gap-1.5">
-          <Link href="/projects">
-            <Layers className="h-4 w-4" /> Projelerim
-          </Link>
-        </Button>
-      </div>
+      ) : (
+        <ul className="space-y-2">
+          {alerts.map((a) => {
+            const st = ALERT_STYLE[a.tone];
+            const Icon = st.icon;
+            const body = (
+              <span className="flex items-start gap-2">
+                <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>{a.text}</span>
+              </span>
+            );
+            return (
+              <li key={a.id}>
+                {a.href ? (
+                  <Link
+                    href={a.href}
+                    className={`block rounded-md border p-3 text-sm hover:brightness-95 ${st.cls}`}
+                  >
+                    {body}
+                  </Link>
+                ) : (
+                  <div className={`rounded-md border p-3 text-sm ${st.cls}`}>{body}</div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------- portföy
+
+function Portfolio({ rows }: { rows: Load<ProjectKpis[]> }) {
+  if (rows.state === "loading") return <Skeleton h="h-32" />;
+  if (rows.state === "error") return <Failed what="Projeler" message={rows.message} />;
+  if (rows.data.length === 0)
+    return (
+      <p className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
+        Henüz verisi olan proje yok. EPİAŞ&apos;tan bir şirketin santrallerini ekleyerek
+        başlayın.{" "}
+        <Link
+          href="/projects/epias"
+          className="font-medium text-indigo-700 hover:underline"
+        >
+          EPİAŞ&apos;tan santral ekle
+        </Link>
+      </p>
     );
   return (
     <Card className="shadow-sm">
@@ -144,40 +470,27 @@ function ProjectsSection({ rows, total }: { rows: ProjectKpis[] | null | undefin
           <TableHeader>
             <TableRow>
               <TableHead>Proje</TableHead>
-              <TableHead>Dönem</TableHead>
               <TableHead className="text-right">Sapma yükü</TableHead>
-              <TableHead className="text-right">MWh başına</TableHead>
-              <TableHead>Sektördeki yer</TableHead>
               <TableHead>Veri</TableHead>
-              <TableHead className="text-right">Rapor</TableHead>
+              <TableHead className="text-right">Sayfalar</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((r) => (
+            {rows.data.map((r) => (
               <TableRow key={r.id}>
                 <TableCell>
-                  <Link href={`/projects/${r.id}/results`} className="font-medium text-slate-900 hover:text-indigo-700 hover:underline">
+                  <Link
+                    href={`/projects/${r.id}/results`}
+                    className="font-medium text-slate-900 hover:text-indigo-700 hover:underline"
+                  >
                     {r.name}
                   </Link>
                   <p className="text-xs text-slate-500">
-                    {r.plantCount} santral · {nf(r.capacityMw)} MW · {r.types.map((t) => TECH[t] ?? t).join(", ")}
-                    {r.companies.length ? ` · ${r.companies.length === 1 ? r.companies[0] : `${r.companies.length} şirket`}` : ""}
+                    {r.plantCount} santral · {nf(r.capacityMw)} MW
                   </p>
                 </TableCell>
-                <TableCell className="whitespace-nowrap text-sm text-slate-600">{r.period ? periodShort(r.period) : "—"}</TableCell>
                 <TableCell className="whitespace-nowrap text-right tabular-nums">
-                  <span className="font-semibold text-slate-900">{tl(r.load.current)}</span>
-                  {r.load.next2026 !== null && <p className="text-xs text-rose-700">2026 kurallarıyla {tl(r.load.next2026)}</p>}
-                </TableCell>
-                <TableCell className="whitespace-nowrap text-right tabular-nums">{nf(r.unitLoadTl)} TL</TableCell>
-                <TableCell className="text-sm">
-                  {r.sector.length
-                    ? r.sector.map((s) => (
-                        <p key={`${s.type}-${s.kind ?? ""}`} className={s.rankPct <= 50 ? "text-emerald-700" : "text-rose-700"}>
-                          {TECH[s.type] ?? s.type}{s.kind === "RESERVOIR" ? " (barajlı)" : s.kind === "RUN_OF_RIVER" ? " (nehir tipi)" : ""}: {rankText(s.rankPct)}
-                        </p>
-                      ))
-                    : <span className="text-slate-400">karne yok</span>}
+                  {tl(r.load.current)}
                 </TableCell>
                 <TableCell className="text-sm">
                   {r.dataGaps.length === 0 ? (
@@ -188,190 +501,190 @@ function ProjectsSection({ rows, total }: { rows: ProjectKpis[] | null | undefin
                     </span>
                   )}
                 </TableCell>
-                <TableCell className="text-right">
-                  <ReportDownloadDialog projectId={r.id} label="PPT" compact />
+                <TableCell className="whitespace-nowrap text-right text-sm">
+                  <Link
+                    href={`/projects/${r.id}/forecast`}
+                    className="text-indigo-700 hover:underline"
+                  >
+                    Üretim tahmini
+                  </Link>
+                  <span className="px-1.5 text-slate-300">·</span>
+                  <Link
+                    href={`/projects/${r.id}/results`}
+                    className="text-indigo-700 hover:underline"
+                  >
+                    Sonuç
+                  </Link>
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
-        <p className="border-t px-4 py-2 text-xs text-slate-500">
-          Sapma yükü: dönemin dengesizlik riski (tüm santraller, uzlaştırma biriminde netleşmiş) + tahmini KÜPST. MWh başına: sapma
-          yükü / üretim. Sektördeki yer: MWh başına dengesizlikte aynı
-          dönemin sektör karnesindeki yüzdelik.
-          {total !== null && total > rows.length ? ` En yeni ${rows.length} proje gösteriliyor (toplam ${total}).` : ""}
-        </p>
       </CardContent>
     </Card>
   );
 }
 
-function SectorSection({ cur, prev }: { cur: SectorResponse | null | undefined; prev: SectorResponse | null | undefined }) {
-  if (cur === undefined)
-    return (
-      <div className="grid gap-4 sm:grid-cols-3">
-        {Array.from({ length: 3 }, (_, i) => (
-          <Skeleton key={i} />
-        ))}
-      </div>
-    );
-  if (!cur) return <p className="text-sm text-slate-500">Sektör karnesi henüz toplanmadı.</p>;
-  const types = (["RES", "GES", "HES"] as const).filter((t) => cur.byType[t]);
-  return (
-    <div className="grid gap-4 sm:grid-cols-3">
-      {types.map((t) => {
-        const d = cur.byType[t]!.unitImbalanceTl;
-        const pd = prev?.byType[t]?.unitImbalanceTl;
-        return (
-          <Kpi
-            key={t}
-            label={`${TECH[t]} · ${nf(d.count)} santral · medyan`}
-            value={`${nf(d.median)} TL/MWh`}
-            sub={pd ? `${prev!.year}: ${nf(pd.median)} (${signed(pct(pd.median, d.median))})` : undefined}
-          />
-        );
-      })}
-    </div>
-  );
-}
+// ---------------------------------------------------------------- sayfa
 
-export default function HomePage() {
-  const [market, setMarket] = useState<MarketResponse | null | undefined>(undefined);
-  const [rows, setRows] = useState<ProjectKpis[] | null | undefined>(undefined);
-  const [projectTotal, setProjectTotal] = useState<number | null>(null);
-  const [sector, setSector] = useState<SectorResponse | null | undefined>(undefined);
-  const [sectorPrev, setSectorPrev] = useState<SectorResponse | null | undefined>(undefined);
+export default function TodayPage() {
+  const minutes = useTrMinutes();
+  const status = useLoad<OpsStatus>("/api/ops/status", (d) => d as OpsStatus);
+  const today = useLoad<{ day: DailyMarket; notes: string[] }>(
+    "/api/market/live?day=today",
+    (d) => ({
+      day: d.day as DailyMarket,
+      notes: (d.live?.notes ?? []) as string[],
+    })
+  );
+  const yesterday = useLoad<DailyMarket>(
+    "/api/market/daily",
+    (d) => d.day as DailyMarket
+  );
+  const [rows, setRows] = useState<Load<ProjectKpis[]>>({ state: "loading" });
+  const [lastProject, setLastProject] = useState<string | null>(null);
 
   useEffect(() => {
-    const json = (r: Response) => (r.ok ? r.json() : null);
-    fetch("/api/market")
-      .then(json)
-      .then((d) => setMarket(d?.success ? d : null))
-      .catch(() => setMarket(null));
-    fetch("/api/projects")
-      .then(json)
-      .then(async (d) => {
-        const ids: string[] = (d?.projects ?? []).map((p: { id: string }) => p.id);
-        setProjectTotal(ids.length);
-        if (!ids.length) return setRows(null);
-        const c = await fetch(`/api/compare?ids=${ids.slice(0, 6).join(",")}`).then(json);
-        // En yeni dönem üstte
-        setRows(c?.success ? [...(c.rows as ProjectKpis[])].sort((a, b) => (b.period?.end ?? "").localeCompare(a.period?.end ?? "")) : null);
-      })
-      .catch(() => setRows(null));
-    fetch("/api/sector")
-      .then(json)
-      .then((d: SectorResponse | null) => {
-        setSector(d?.success ? d : null);
-        const prevYear = d?.years?.find((y) => y < d.year);
-        if (!prevYear) return setSectorPrev(null);
-        return fetch(`/api/sector?year=${prevYear}`)
-          .then(json)
-          .then((p) => setSectorPrev(p?.success ? p : null));
-      })
-      .catch(() => {
-        setSector(null);
-        setSectorPrev(null);
-      });
+    const read = () => setLastProject(readLastProject());
+    read();
+    window.addEventListener(LAST_PROJECT_EVENT, read);
+    return () => window.removeEventListener(LAST_PROJECT_EVENT, read);
   }, []);
 
+  // Projeler: önce liste, sonra aynı karşılaştırma motorundan özet (eski ana sayfayla aynı kaynak)
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/projects")
+      .then((r) => r.json())
+      .then(async (d) => {
+        const ids: string[] = (d?.projects ?? []).map((p: { id: string }) => p.id);
+        if (!ids.length) return !cancelled && setRows({ state: "ok", data: [] });
+        const c = await fetch(`/api/compare?ids=${ids.slice(0, 6).join(",")}`).then((r) =>
+          r.json()
+        );
+        if (cancelled) return;
+        if (!c?.success) throw new Error(c?.error ?? "Karşılaştırma alınamadı.");
+        const sorted = [...(c.rows as ProjectKpis[])].sort((a, b) =>
+          (b.period?.end ?? "").localeCompare(a.period?.end ?? "")
+        );
+        setRows({ state: "ok", data: sorted });
+      })
+      .catch(
+        (e) =>
+          !cancelled &&
+          setRows({
+            state: "error",
+            message: e instanceof Error ? e.message : "Projeler alınamadı.",
+          })
+      );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const todayMarket = mapLoad(today, (v) => v.day);
+  const fLink = forecastHref(lastProject);
+  const liveNotes = today.state === "ok" ? today.data.notes : [];
+  const alerts = useMemo(
+    () =>
+      buildAlerts({
+        status: status.state === "ok" ? status.data : null,
+        statusError: status.state === "error" ? status.message : null,
+        nowMinutes: minutes ?? 0,
+        liveNotes,
+        projectGaps:
+          rows.state === "ok"
+            ? rows.data
+                .filter((r) => r.dataGaps.length > 0)
+                .map((r) => ({ id: r.id, name: r.name, gaps: r.dataGaps.length }))
+            : [],
+        forecastHref: fLink,
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [status, rows, minutes, fLink, today]
+  );
+  const bidReady =
+    status.state === "ok" && minutes !== null
+      ? (() => {
+          const c = opsChips(status.data, minutes);
+          const ok = c.filter((x) => x.tone === "ok").length;
+          return `${ok}/3 kayıt hazır (PTF, güneş, rüzgâr)`;
+        })()
+      : "PTF ve üretim tahmini, 12:30'a kadar";
+
   return (
-    <main className="min-h-screen bg-slate-50/50 p-6 md:p-10">
-      <div className="mx-auto max-w-7xl space-y-8">
-        <div className="flex flex-col gap-4 border-b pb-6 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow">
-                <Zap className="h-5 w-5" />
-              </span>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">TR-Energy Analyst</h1>
-            </div>
-            <p className="mt-1.5 max-w-2xl text-sm text-slate-600">
-              EPİAŞ açık verisiyle yenilenebilir üreticilerin dengesizlik maliyetini ölçen, sektörle kıyaslayan ve azaltma yollarını
-              gösteren analiz aracı.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button asChild className="gap-2 bg-slate-900 text-white hover:bg-slate-800">
-              <Link href="/projects">
-                <Layers className="h-4 w-4" /> Projelerim
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="gap-2">
-              <Link href="/market">
-                <Activity className="h-4 w-4" /> Piyasa
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="gap-2">
-              <Link href="/market/gunluk">
-                <CalendarDays className="h-4 w-4" /> Günlük pano
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="gap-2">
-              <Link href="/sector">
-                <Wind className="h-4 w-4" /> Sektör karnesi
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="gap-2">
-              <Link href="/compare">
-                <Layers className="h-4 w-4" /> Karşılaştır
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="gap-2">
-              <Link href="/methodology">
-                <BookOpen className="h-4 w-4" /> Metodoloji
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="gap-2">
-              <Link href="/account">
-                <UserRound className="h-4 w-4" /> Hesabım
-              </Link>
-            </Button>
-          </div>
+    <div className="min-h-screen bg-slate-50/60 pb-16">
+      <header className="border-b bg-white">
+        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            Bugün
+          </h1>
+          <p className="mt-1 text-sm text-slate-600" suppressHydrationWarning>
+            {trDay(new Date(Date.now() + 3 * 3_600_000).toISOString().slice(0, 10))}.
+            Yarın için ne hazır, piyasa şimdi nasıl.
+          </p>
         </div>
+      </header>
+
+      <main className="mx-auto max-w-7xl space-y-8 px-4 py-6 sm:px-6 lg:px-8">
+        <PhaseCard minutes={minutes} bidReady={bidReady} />
 
         <section className="space-y-3">
           <SectionHead
-            title={`Piyasa · ${market?.period.label ?? ""}`}
-            sub={market?.previousPeriod ? `Bir önceki yılın aynı dönemiyle: ${market.previousPeriod.label}` : undefined}
-            href="/market"
-            cta="Piyasa özeti"
+            title="Yarın için"
+            sub="Sunucunun 12:03'te yazdığı değişmeyen günlük kayıtlar"
           />
-          <MarketSection market={market} />
-        </section>
-
-        <section className="space-y-3">
-          <SectionHead title="Projeler" sub="Dengesizlik Karnesi ile aynı motordan" href="/projects" cta="Tüm projeler" />
-          <ProjectsSection rows={rows} total={projectTotal} />
-        </section>
-
-        <section className="space-y-3">
-          <SectionHead
-            title={`Sektör karnesi · ${sector?.label ?? ""}`}
-            sub="Lisanslı santrallerin MWh başına dengesizlik riski (santral tek başına)"
-            href="/sector"
-            cta="Sektör karnesi"
-          />
-          <SectorSection cur={sector} prev={sectorPrev} />
-        </section>
-
-        <section className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-2">
-            <Database className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-            <p>
-              <b className="text-slate-800">Veri durumu:</b> piyasa verisi{" "}
-              {market?.available ? `${trDate(market.available.start)} – ${trDate(market.available.end)}` : "—"} (EPİAŞ) · sektör
-              karnesi {sector?.years?.length ? [...sector.years].sort().join(", ") : "—"} ·{" "}
-              {projectTotal !== null ? `${nf(projectTotal)} proje` : "—"}. Kaynak ve yöntem:{" "}
-              <Link href="/methodology" className="text-indigo-700 hover:underline">
-                Metodoloji
-              </Link>
-              .
-            </p>
+          <div className="grid gap-4 md:grid-cols-2">
+            <PtfCard load={status} />
+            <ProductionCard load={status} minutes={minutes} forecastLink={fLink} />
           </div>
-          <EpiasSyncDialog />
         </section>
-      </div>
-    </main>
+
+        <section className="space-y-3">
+          <SectionHead
+            title="Piyasa"
+            sub="Bugün şu ana kadar ve dün"
+            href="/market/gunluk"
+            cta="Günlük pano"
+          />
+          <div className="grid gap-4 md:grid-cols-2">
+            <MarketCard
+              title="Bugün"
+              load={todayMarket}
+              href="/market/gunluk"
+              cta="Bugün sekmesi"
+              what="Bugünün piyasası"
+            />
+            <MarketCard
+              title="Dünün sonucu"
+              load={yesterday}
+              href="/market/gunluk"
+              cta="Geçmiş gün"
+              what="Dünün sonucu"
+            />
+          </div>
+        </section>
+
+        <Alerts alerts={alerts} pending={status.state === "loading"} />
+
+        <section className="space-y-3">
+          <SectionHead
+            title="Portföyüm"
+            sub="Proje başına hızlı geçiş"
+            href="/projects"
+            cta="Tüm projeler"
+          />
+          <Portfolio rows={rows} />
+        </section>
+
+        <p className="text-xs text-slate-500">
+          Dönem özeti, sektördeki yeriniz ve karşılaştırmalar için{" "}
+          <Link href="/ozet" className="text-indigo-700 hover:underline">
+            Portföy özeti
+          </Link>
+          .
+        </p>
+      </main>
+    </div>
   );
 }

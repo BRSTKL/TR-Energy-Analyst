@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Menu } from "@/components/ui/menu";
 import { PlantScopePicker } from "@/components/plant-scope-picker";
 import {
   Table,
@@ -22,7 +23,7 @@ import {
 } from "@/components/ui/table";
 import { BarChart, LineChart, ResponsiveContainer } from "recharts";
 import { ChartBar as Bar, ChartGrid as CartesianGrid, ChartLegend as Legend, ChartLine as Line, ChartTip as Tooltip, ChartXAxis as XAxis, ChartYAxis as YAxis } from "@/components/ui/chart";
-import { ClipboardCheck, CloudSun, SunMedium,
+import {
   Activity,
   AlertCircle,
   ArrowDownRight,
@@ -32,17 +33,11 @@ import { ClipboardCheck, CloudSun, SunMedium,
   FileSpreadsheet,
   Flame,
   Layers,
-  Lightbulb,
   RefreshCw,
   Sun,
-  Target,
   TrendingDown,
   Wind,
   Zap,
-  UploadCloud,
-  Factory,
-  FlaskConical,
-  Network,
 } from "lucide-react";
 import {
   HourlyResult,
@@ -420,7 +415,7 @@ export default function ProjectResultsPage() {
               Tekrar Dene
             </Button>
             <Button variant="outline" asChild>
-              <Link href="/">Ana Sayfaya Dön</Link>
+              <Link href="/">Bugün sayfasına dön</Link>
             </Button>
           </CardContent>
         </Card>
@@ -445,7 +440,7 @@ export default function ProjectResultsPage() {
                 href="/"
                 className="flex items-center gap-1 text-xs text-slate-500 transition-colors hover:text-slate-900"
               >
-                <ArrowLeft className="h-3 w-3" /> Dashboard
+                <ArrowLeft className="h-3 w-3" /> Bugün
               </Link>
               <span className="text-slate-300">/</span>
               <span className="text-xs font-medium text-slate-700">Sonuç Raporu</span>
@@ -488,33 +483,8 @@ export default function ProjectResultsPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              size="sm"
-              asChild
-              className="gap-1.5 bg-indigo-600 text-white hover:bg-indigo-700"
-            >
-              <Link href={`/projects/${projectId}/insights`}>
-                <Lightbulb className="h-3.5 w-3.5" />
-                Stratejik İçgörüler
-              </Link>
-            </Button>
-            <Button
-              size="sm"
-              asChild
-              variant="outline"
-              className="gap-1.5 border-sky-300 text-sky-700 hover:bg-sky-50"
-            >
-              <Link href={`/projects/${projectId}/planning`}>
-                <Target className="h-3.5 w-3.5 text-sky-600" />
-                Planlama Verimliliği
-              </Link>
-            </Button>
             <ReportDownloadDialog projectId={projectId} />
-            <a
-              href={`/api/projects/${projectId}/export/excel`}
-              download
-              className="inline-flex items-center"
-            >
+            <a href={`/api/projects/${projectId}/export/excel`} download className="inline-flex items-center">
               <Button
                 variant="outline"
                 size="sm"
@@ -524,72 +494,6 @@ export default function ProjectResultsPage() {
                 Excel İndir (.xlsx)
               </Button>
             </a>
-            <Button asChild size="sm" className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700">
-              <Link href={`/projects/${projectId}/import`}>
-                <UploadCloud className="h-4 w-4" />
-                Üretim Verisi Yükle
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm" className="gap-1.5">
-              <Link href={`/projects/${projectId}/dsg`}>
-                <Network className="h-3.5 w-3.5" />
-                DSG Senaryoları
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm" className="gap-1.5">
-              <Link href={`/projects/${projectId}/candidates`}>
-                <Target className="h-3.5 w-3.5" />
-                Aday Santraller
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm" className="gap-1.5">
-              <Link href={`/projects/${projectId}/backtest`}>
-                <FlaskConical className="h-3.5 w-3.5" />
-                Geriye Dönük Test
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm" className="gap-1.5" title="Şirketten veri istemeden: açık veriyle hesaplanan ayın uzlaştırma tutarları ve tek soru">
-              <Link href={`/projects/${projectId}/validation`}>
-                <ClipboardCheck className="h-3.5 w-3.5" />
-                Doğrulama paketi
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm" className="gap-1.5" title="Güneş santrallerinin uyduyla ölçülen kayıp üretimi: planlı kısıntı ve plansız kayıp (geçmiş)">
-              <Link href={`/projects/${projectId}/losses`}>
-                <SunMedium className="h-3.5 w-3.5" />
-                Kayıp üretim
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm" className="gap-1.5" title="Açık hava tahminiyle güneş santrallerinin yarın ve öbür gün beklenen üretimi">
-              <Link href={`/projects/${projectId}/forecast`}>
-                <CloudSun className="h-3.5 w-3.5" />
-                Üretim tahmini
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm" className="gap-1.5">
-              <Link href={`/projects/${projectId}/plants`}>
-                <Factory className="h-3.5 w-3.5" />
-                Santraller
-              </Link>
-            </Button>
-            <ProjectDataSyncButton projectId={projectId} onDone={fetchData} />
-            <EpiasSyncDialog
-              projectId={projectId}
-              onSyncSuccess={() => fetchData()}
-            />
-            <MarketDataUploadDialog
-              projectId={projectId}
-              onUploadSuccess={() => fetchData()}
-            />
-            <PricingProfileDialog
-              projectId={projectId}
-              initialProfile={data.pricingProfile}
-              onProfileUpdated={() => fetchData()}
-            />
-            <Button variant="outline" size="sm" onClick={fetchData} className="gap-1.5">
-              <RefreshCw className="h-3.5 w-3.5" />
-              Yenile
-            </Button>
             <Button
               size="sm"
               onClick={exportToCsv}
@@ -599,6 +503,23 @@ export default function ProjectResultsPage() {
               <Download className="h-3.5 w-3.5" />
               CSV
             </Button>
+            <Button variant="outline" size="sm" onClick={fetchData} className="gap-1.5">
+              <RefreshCw className="h-3.5 w-3.5" />
+              Yenile
+            </Button>
+            {/* Veri işleri (eşitleme, piyasa verisi, fiyat profili) tek açılır panelde; diğer proje sayfaları üstteki sekmelerde */}
+            <Menu label="Veri ve ayarlar" align="right" className="rounded-md border border-slate-200 bg-white">
+              <div className="flex min-w-64 flex-col items-stretch gap-2 p-2 [&>*]:w-full [&>*]:justify-start">
+                <ProjectDataSyncButton projectId={projectId} onDone={fetchData} />
+                <EpiasSyncDialog projectId={projectId} onSyncSuccess={() => fetchData()} />
+                <MarketDataUploadDialog projectId={projectId} onUploadSuccess={() => fetchData()} />
+                <PricingProfileDialog
+                  projectId={projectId}
+                  initialProfile={data.pricingProfile}
+                  onProfileUpdated={() => fetchData()}
+                />
+              </div>
+            </Menu>
           </div>
         </div>
       </header>
