@@ -12,7 +12,7 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
 
 ---
 
-## 02.11.2026 · Claude · Günlük rutin Faz 1 + Faz 3: teklif masası, portföy üretimi, PTF karnesi, Bugün görünümleri (commit yok, sunucuda değil)
+## 02.11.2026 · Claude · Günlük rutin Faz 1 + Faz 3: teklif masası, portföy üretimi, PTF karnesi, Bugün görünümleri (yüklendi, b339196)
 
 - **İstek (kullanıcı):** uygulama analiz tarafındaki herkese hitap etsin; öncelik sabah teklif kararı → gün içi → akşam karnesi → haftalık rapor; şirket verisi yok, açık veri.
 - **Yapılan:**
@@ -23,7 +23,7 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
   - Bugün: "Yarının üretimi" kartında portföy toplamı + proje başına; Görünüm seçici (Üretici / Piyasa / Toplayıcı / Yönetim; `lib/ui/today-view.ts`, `localStorage`) yalnız bölüm sırasını değiştirir.
   - Sol menüden "Üretim tahmini" kaldırıldı (kullanıcı isteği); proje sekmelerinde zaten var, o sayfa menüde Projelerim'i yakar. Menü ortak bileşen: commit öncesi tam duman turu gerekir.
 - **Sınama:** 984 test, tsc, eslint, `check:reports` 0 hata; duman: teklif + forecast (14 sayfa) ve Bugün (masaüstü + telefon) temiz. Önizlemede (localhost:3100, Mac'te kayıt yok) tablo ve boş durum mesajları görüldü.
-- **Yarım / doğrulanmadı:** karne ve portföy toplamı gerçek sunucu kayıtlarıyla bu oturumda çalıştırılmadı (Mac'te PTF ve üretim kaydı yok); yüklendikten sonra sunucuda `/api/ops/ptf-scorecard` ve `/api/ops/portfolio-forecast` salt okur kontrol edilir. 08:30 telefon özeti ve zamanlayıcı yazılmadı.
+- **Yüklendi (02.11 sonrası, b339196):** sunucuda salt okur doğrulandı: `/api/ops/ptf-scorecard` 2 gün, MAE 405, basit yönteme göre %46,8 (betikle aynı); `/api/ops/portfolio-forecast` 3 proje için güneş + rüzgâr toplamı (Kıvanç 518 MWh). 08:30 telefon özeti ve zamanlayıcı yazılmadı.
 - **Sıradaki:** Faz 2 (gün içi radar, portföye özel UMM arıza uyarısı), Faz 4 (haftalık özet, Markdown / PDF); yazılacak metinler `iddia-denetcisi`'nden geçer.
 
 ---
