@@ -12,6 +12,22 @@ Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
 
 ---
 
+## 02.11.2026 · Claude · Günlük rutin Faz 1 + Faz 3: teklif masası, portföy üretimi, PTF karnesi, Bugün görünümleri (commit yok, sunucuda değil)
+
+- **İstek (kullanıcı):** uygulama analiz tarafındaki herkese hitap etsin; öncelik sabah teklif kararı → gün içi → akşam karnesi → haftalık rapor; şirket verisi yok, açık veri.
+- **Yapılan:**
+  - Portföy üretim tahmini: `lib/services/portfolio-forecast.ts` (sunucunun sabah güneş / rüzgâr kayıtlarını proje santrallerinin EPİAŞ kimliğiyle toplar; aynı santral portföyde bir kez; HES ve eşleşmeyen santral "kapsam dışı" diye sayılır), `GET /api/ops/portfolio-forecast`.
+  - Teklif masası: `lib/ptf/bid-table.ts` (saf: saat saat PTF + aralık + portföy MWh + risk, CSV), `components/market/bid-table.tsx`, Teklif öncesi sayfasında PTF kartının altında. **Teklif miktarı önerisi yok** (kendi KGÜP / pozisyon verisi yok). Risk: tahmin ya da üst aralık limitte / limite yakın, alt aralık sıfıra iniyor; "geniş aralık" yalnız bilgi (%80 aralık zaten ±%25 gezer, riskli saat sayısına girmez). Excel yok, CSV (BOM, `;`) Excel'de açılır.
+  - Üretim tahmini sayfası: proje seçici (portföy API'sinden) ve "sunucunun sabah kaydı / sayfanın canlı hesabı" notu.
+  - PTF karnesi: `lib/ptf/scorecard.ts` (saf), `lib/services/ptf-scorecard.ts`, `GET /api/ops/ptf-scorecard`; `scripts/ptf/scorecard.mts` aynı fonksiyonları kullanıyor. Bugün'de "Akşam: dünün karnesi" (son gün, son 7 gün, 30 günden azsa "kanıt zayıf"); üretim karnesi için "kanıt toplanıyor" notu.
+  - Bugün: "Yarının üretimi" kartında portföy toplamı + proje başına; Görünüm seçici (Üretici / Piyasa / Toplayıcı / Yönetim; `lib/ui/today-view.ts`, `localStorage`) yalnız bölüm sırasını değiştirir.
+  - Sol menüden "Üretim tahmini" kaldırıldı (kullanıcı isteği); proje sekmelerinde zaten var, o sayfa menüde Projelerim'i yakar. Menü ortak bileşen: commit öncesi tam duman turu gerekir.
+- **Sınama:** 984 test, tsc, eslint, `check:reports` 0 hata; duman: teklif + forecast (14 sayfa) ve Bugün (masaüstü + telefon) temiz. Önizlemede (localhost:3100, Mac'te kayıt yok) tablo ve boş durum mesajları görüldü.
+- **Yarım / doğrulanmadı:** karne ve portföy toplamı gerçek sunucu kayıtlarıyla bu oturumda çalıştırılmadı (Mac'te PTF ve üretim kaydı yok); yüklendikten sonra sunucuda `/api/ops/ptf-scorecard` ve `/api/ops/portfolio-forecast` salt okur kontrol edilir. 08:30 telefon özeti ve zamanlayıcı yazılmadı.
+- **Sıradaki:** Faz 2 (gün içi radar, portföye özel UMM arıza uyarısı), Faz 4 (haftalık özet, Markdown / PDF); yazılacak metinler `iddia-denetcisi`'nden geçer.
+
+---
+
 ## 29.10.2026 · Claude · Teklif öncesi sayfası: "Ne kadar yakın tahmin ediyor?" kutusu (commit yok, sunucuda değil)
 
 - **Yapılan (kullanıcı isteği):** PTF kartının sağ üstüne sade başarı kutusu: son 60 günde motor gerçek fiyattan ortalama %X saptı (saat başına ±TL/MWh) ve basit yönteme (benzer günlerin ortancası) göre %Y daha yakın. Kaynak: kayıttaki `band` (yeni opsiyonel `meanPrice`, `baselineMae`; `ptf-engine.ts` düzeltilmiş son 60 gün hatasından hesaplar), saf `lib/ptf/accuracy.ts` (`accuracySummary`, testli), `components/market/ptf-engine-panel.tsx` `AccuracyBox`. Eski kayıtta fiyat / basit yöntem alanı yoksa yalnız TL sapma gösterilir.

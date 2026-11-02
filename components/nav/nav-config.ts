@@ -2,7 +2,7 @@
  * TR-Energy Analyst - menü yapılandırması (tek kaynak): sol menü, telefon çekmecesi ve alt çubuk buradan beslenir.
  *
  * Gruplar günün sırasını izler (Bugün → Gün içi → Portföy → Analiz). `activeNavId` bir adresin hangi öğeye ait olduğunu söyler;
- * proje alt sayfaları Portföy'e, yalnız Üretim tahmini ayrıca Gün içi altına bağlanır.
+ * proje alt sayfaları (üretim tahmini dahil) Portföy'e bağlanır.
  */
 
 import {
@@ -15,7 +15,6 @@ import {
   GitCompareArrows,
   LayoutDashboard,
   LineChart,
-  SunMedium,
   Target,
   UserRound,
   type LucideIcon,
@@ -25,7 +24,6 @@ export type NavId =
   | "today"
   | "pre-bid"
   | "daily"
-  | "forecast"
   | "projects"
   | "epias"
   | "market"
@@ -85,13 +83,6 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/market/gunluk",
         icon: CalendarClock,
         hint: "Geçmiş gün, bugün ve yarın",
-      },
-      {
-        id: "forecast",
-        label: "Üretim tahmini",
-        href: "/projects",
-        icon: SunMedium,
-        hint: "Son açılan projenin yarınki üretim tahmini",
       },
     ],
   },
@@ -161,7 +152,6 @@ export function activeNavId(pathname: string): NavId | null {
   if (is(p, "/market/gunluk")) return "daily";
   if (is(p, "/market")) return "market";
   if (is(p, "/projects/epias")) return "epias";
-  if (/^\/projects\/[^/]+\/forecast$/.test(p)) return "forecast";
   if (is(p, "/projects")) return "projects";
   if (is(p, "/sector")) return "sector";
   if (is(p, "/compare")) return "compare";

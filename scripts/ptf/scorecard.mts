@@ -9,6 +9,7 @@
 import { listPtfLogs, readPtfLog } from "@/lib/ptf/forecast-log-store";
 import { baseline } from "@/lib/ptf/features";
 import { PtfView, shiftDay } from "@/lib/ptf/history";
+import { SCORECARD_MIN_DAYS, scoreDay, summarizeScores, type ScoredDay } from "@/lib/ptf/scorecard";
 import { loadPtfHistory } from "@/lib/services/ptf-history";
 
 const targets = await listPtfLogs();
@@ -21,14 +22,9 @@ const days = await loadPtfHistory(
   targets[targets.length - 1],
   { windForecast: false, gas: false }
 );
-let n = 0;
 let late = 0;
 let pending = 0;
-let sumM = 0;
-let sumR = 0;
-let bias = 0;
-let inside = 0;
-let banded = 0;
+const scored: ScoredDay[] = [];
 const shadow = new Map<string, number>();
 for (const t of targets) {
   const log = await readPtfLog(t);
@@ -42,35 +38,28 @@ for (const t of targets) {
     pending++;
     continue;
   }
-  const ref = baseline(new PtfView(days, t));
-  n++;
+  const day = scoreDay(log, actual, baseline(new PtfView(days, t)));
+  if (!day) continue;
+  scored.push(day);
   for (const [id, p] of Object.entries(log.shadow ?? {}))
     shadow.set(
       id,
       (shadow.get(id) ?? 0) + p.reduce((x, v, h) => x + Math.abs(v - actual[h]), 0)
     );
-  for (const h of log.hours) {
-    sumM += Math.abs(h.p50 - actual[h.hour]);
-    bias += h.p50 - actual[h.hour];
-    if (ref) sumR += Math.abs(ref[h.hour] - actual[h.hour]);
-    if (h.q10 !== null && h.q90 !== null) {
-      banded++;
-      if (actual[h.hour] >= h.q10 && actual[h.hour] <= h.q90) inside++;
-    }
-  }
 }
 const f0 = (v: number) => Math.round(v).toLocaleString("tr-TR");
+const n = scored.length;
 console.log(
   `PTF karnesi: ${targets.length} kayıt; skorlanan ${n} gün, kesimden sonra yazılmış ${late}, gerçekleşeni henüz yok ${pending}.`
 );
-if (n) {
-  const m = sumM / (n * 24);
-  const r = sumR / (n * 24);
+const sum = summarizeScores(scored);
+if (sum) {
   console.log(
-    `MAE ${f0(m)} TL/MWh (referans R2 ${f0(r)}, %${(((r - m) / r) * 100).toFixed(1)} daha iyi); sapma ${f0(bias / (n * 24))}; aralık kapsaması %${banded ? ((inside / banded) * 100).toFixed(1) : "—"} (hedef %80).`
+    `MAE ${f0(sum.mae)} TL/MWh (referans R2 ${sum.refMae === null ? "—" : f0(sum.refMae)}${sum.vsRefPct === null ? "" : `, %${sum.vsRefPct.toFixed(1)} daha iyi`}); sapma ${f0(sum.bias)}; aralık kapsaması %${sum.coveragePct === null ? "—" : sum.coveragePct.toFixed(1)} (hedef %80).`
   );
-  for (const [id, sum] of Array.from(shadow))
-    console.log(`gölge ${id}: MAE ${f0(sum / (n * 24))} TL/MWh (ana ${f0(m)})`);
-  if (n < 30) console.log(`Not: ${n} gün az; karar için en az 30, tercihen 60 gün.`);
+  for (const [id, total] of Array.from(shadow))
+    console.log(`gölge ${id}: MAE ${f0(total / (n * 24))} TL/MWh (ana ${f0(sum.mae)})`);
+  if (n < SCORECARD_MIN_DAYS)
+    console.log(`Not: ${n} gün az; karar için en az ${SCORECARD_MIN_DAYS}, tercihen 60 gün.`);
 }
 process.exit(0);

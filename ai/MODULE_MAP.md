@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-529 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+538 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
 ## Sayfalar (app/**/page.tsx) (24)
 
@@ -33,7 +33,7 @@
 - `/sector/aggregators/[id]` (`app/sector/aggregators/[id]/page.tsx`) — Toplayıcı ayrıntısı (PLAN 9.2): kıyas tablosundaki bir satırın içi.
 - `/sector` (`app/sector/page.tsx`) — "2025" ya da "2026 (Ocak–Ağustos)"
 
-## API (app/api/**/route.ts) (69)
+## API (app/api/**/route.ts) (71)
 
 - `GET, PUT, DELETE /api/account/epias` — GET /api/account/epias: hesap e-postası ve kayıtlı EPİAŞ hesabının özeti (şifre dönmez).
 - `POST /api/account/epias/test` — POST /api/account/epias/test: kayıtlı (yoksa .env) EPİAŞ hesabıyla yeni bilet alarak bağlantıyı dener.
@@ -64,6 +64,8 @@
 - `GET /api/market/pre-bid` — GET /api/market/pre-bid?date=YYYY-AA-GG (ÖNİZLEME): Teklif öncesi görünüm: hedef gün için saatlik PTF beklentisi ve ± aralık (lib/analysis/pre-bid.ts).
 - `GET /api/market/ptf-forecast` — GET /api/market/ptf-forecast?date=YYYY-AA-GG[&refresh=1]: PTF motorunun hedef gün tahmini, girdilerin durumu ve günlük kayıt (lib/services/ptf-forecast-page.ts).
 - `GET /api/market` — "2026 (Ocak–Ağustos)", tam yıl için "2025"; ay ortasında biten dönem "2026 (Ocak – 19 Ekim)" ya da "1–19 Ekim 2026"; ay başında başlamayan ya da yıl aşan dönemde tarih aralığı
+- `GET /api/ops/portfolio-forecast` — GET /api/ops/portfolio-forecast[?date=YYYY-AA-GG]: Projelerin santrallerinin güneş ve rüzgâr üretim tahmini, sunucunun sabah yazdığı değişmeyen kayıtlardan (tarih verilmezse yarın).
+- `GET /api/ops/ptf-scorecard` — GET /api/ops/ptf-scorecard: PTF motorunun ileriye dönük karnesi: değişmeyen günlük kayıtlar gerçekleşen PTF'yle karşılaştırılır (son gün, son 7 gün, hepsi).
 - `GET /api/ops/status` — GET /api/ops/status: Yarının günlük tahmin kayıtlarının (PTF, güneş, rüzgâr) durumu: üst şerit ve Bugün kokpiti.
 - `POST /api/pool/plant` — POST /api/pool/plant { powerPlantId, startDay, endDay, kgupVersion?
 - `GET /api/projects/[id]/backtest` — GET /api/projects/[id]/backtest: Her santral için kaydırmalı geriye dönük testi iki fiyat rejiminde çalıştırır: - "project": projenin fiyat profili (mevzuat modunda her saat kendi tarihinin kuralıyla) - "rules2026": tüm veri 2026 kuralları…
@@ -287,9 +289,11 @@
 - `lib/projects/description.ts` — Proje açıklaması: Eski sürümler EPİAŞ'tan eklenen santrallerin kaynak bilgisini proje açıklamasına not olarak ekliyordu: "EPİAŞ açık verisi: KGÜP ilk versiyon (plan) ve UEVM (gerçekleşen).
 - `lib/projects/name.ts` — Proje adı: Proje adı rapor kapağında, dosya adında ve proje kartında görünür.
 
-## lib/ptf (11)
+## lib/ptf (14)
 
+- `lib/ptf/accuracy.ts` — PTF motoru: son günlerde fiyata ne kadar yakın tahmin etti (saf, I/O yok): Kayıttaki `band` son 60 günün düzeltilmiş birleşim hatasını, aynı günlerin ortalama fiyatını ve basit yöntemin (benzer günlerin ortancası) hatasını taşır.
 - `lib/ptf/auto.ts` — PTF motoru: günlük otomatik çalışmanın kararı ve telefon özeti (saf, I/O yok; betik scripts/ptf/forecast-daily.mts)
+- `lib/ptf/bid-table.ts` — teklif masası: saat saat karar tablosu (saf, I/O yok): Her saat için PTF tahmini ve aralığı, portföyün üretim tahmini ve fiyat riski.
 - `lib/ptf/features.ts` — PTF motoru: özellikler (saf, I/O yok; bütün erişim PtfView üzerinden, bilgi kuralı history.ts)
 - `lib/ptf/forecast-log-store.ts` — PTF tahmin kaydının dosyası (biçim lib/ptf/forecast-log.ts): data/pool/forecast-log/ptf/<YYYY-MM>/<YYYY-MM-DD>.json.gz: hedef gün başına bir dosya, yalnız yoksa yazılır (geçici dosya + `link`, salt okunur).
 - `lib/ptf/forecast-log.ts` — PTF motoru: günlük tahmin kaydı (saf, I/O yok; dosya forecast-log-store.ts): Her hedef gün için bir kez yazılan, bir daha değişmeyen kayıt: ileriye dönük skorun tek dayanağı.
@@ -297,6 +301,7 @@
 - `lib/ptf/level.ts` — PTF motoru: günlük seviye düzeltmesi (saf, I/O yok; deney: scripts/ptf/level-correction.mts, variants.mts)
 - `lib/ptf/models.ts` — PTF motoru: modeller (saf, I/O yok): Her model hedef gün T için 24 saatlik PTF tahmini verir; eğitim yalnız T'den önceki günlerin etiketleriyle (T-1'in PTF'si kesimde bilinir) ve aynı bilgi kuralıyla kurulmuş özelliklerle yapılır.
 - `lib/ptf/replay.ts` — PTF motoru: günlük yeniden oynatma ve skor (saf, I/O yok): `replay`: hedef günleri sırayla gezer, her modelden 24 saatlik tahmin alır (model kendi eğitimini yalnız geçmişle yapar) ve gerçekleşenle karşılaştırır.
+- `lib/ptf/scorecard.ts` — PTF motoru: ileriye dönük karne (saf, I/O yok; dosya okuma lib/services/ptf-scorecard.ts): Değişmeyen günlük kayıtlar (`PtfForecastLog`) gerçekleşen PTF'yle karşılaştırılır.
 - `lib/ptf/solar-regions.ts` — PTF motoru: ülke güneşi için bölge noktaları (saf, I/O yok): İşletmedeki GES'ler (Global Energy Monitor Global Solar Power Tracker, koordinat + MW) 1°×1° hücrelere toplanır; hücre noktası kapasite ağırlıklı merkez.
 - `lib/ptf/solar.ts` — PTF motoru: ülke güneş tahmini (saf, I/O yok): Hedef: hedef gün T'nin saatlik KGÜP güneşi (lisanssız dahil, MW).
 - `lib/ptf/wind.ts` — PTF motoru: ülke rüzgâr tahmini (saf, I/O yok): Hedef: hedef gün T'nin saatlik gerçek zamanlı rüzgâr üretimi (MW).
@@ -318,7 +323,7 @@
 - `lib/sector/period.ts` — Sektör analizlerinin dönemi: içinde bulunulan yılın sektör karnesinin dönem sonu (scripts/sector-collect.mts; piyasa verisi olan son gün).
 - `lib/sector/plant-technology.ts` — Sektör taramasında santral teknolojisi (PLAN Bekleyen işler: EPDK ↔ karne, adım 2b): Eskiden tür yalnız addan tahmin ediliyordu (`guessTechnologyFromName`); adında tür eki olmayan santraller ("OYMAPINAR", "BORÇKA", "HASAN UĞURLU") ve tanın…
 
-## lib/services (54)
+## lib/services (56)
 
 - `lib/services/aggregator-data.ts` — Toplayıcı kıyası ve ayrıntısı için veri okuma (PLAN 8.7, 9.2): Santral saatleri veri havuzundan (ilk KGÜP ve UEVM), türü ve sahibi sektör karnesi dosyalarından ya da havuz tanımından, fiyatlar veritabanındaki EPİAŞ resmi dengesizlik fiyatl…
 - `lib/services/aggregator-membership.ts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" ekiyle kayıtlı tüm katılımcıların santral listesi çekilir ve .cache/epias/ aggregator-membership.json'a yazılır.
@@ -343,6 +348,7 @@
 - `lib/services/outage-notices.ts` — Rapor için EPİAŞ arıza / bakım bildirimleri (Aşama 12.4): havuzdaki bildirimler (data/pool/umm) santral havuzundaki UEVÇB listesiyle (readPoolPlantInfo) proje santrallerine eşleştirilir.
 - `lib/services/plant-change-warnings.ts` — Güneş santrallerinde değişim uyarıları (Aşama 22.7 bağlaması; kural lib/forecast/change-detection.ts)
 - `lib/services/plant-location.ts` — Santral konumunu kaydetme (PLAN 15.1): Konum EPİAŞ santral kimliğiyle havuzdaki santral tanımına yazılır (projede olmayan sektör santralleri dahil) ve aynı kimlikteki proje santrallerine (`PowerPlant`) kopyalanır.
+- `lib/services/portfolio-forecast.ts` — portföy üretim tahmini (Teklif masası, Bugün kokpiti): sunucunun sabah yazdığı değişmeyen kayıtlardan
 - `lib/services/pre-bid-context.ts` — Teklif öncesi görünüm bağlamı: EPİAŞ'ta bulunan ek veriler (ÖNİZLEME; hesap lib/analysis/pre-bid-context.ts)
 - `lib/services/pre-bid-effects.ts` — Teklif öncesi görünüm: yeni verilerin etkisi, veri toplama (hesap lib/analysis/pre-bid-effects.ts; ÖNİZLEME)
 - `lib/services/pre-bid.ts` — Teklif öncesi görünüm: veri toplama (hesap lib/analysis/pre-bid.ts; ÖNİZLEME): Girdiler: veri tabanından doğrulanmış PTF (son ~150 gün), veri havuzundan yük tahmini, gerçek zamanlı rüzgâr ve KGÜP güneşi, EPİAŞ'tan rüzgâr tahmini geçmişi (/…
@@ -355,6 +361,7 @@
 - `lib/services/ptf-forecast-page.ts` — teklif öncesi sayfası: PTF motoru tahmini (kayıt yazmaz): Motor (lib/services/ptf-engine.ts) iki modeli geçmişle eğitip son 60 günü yeniden oynatır; yaklaşık bir dakika işlemciyi tutar.
 - `lib/services/ptf-history.ts` — PTF motoru: gün verisini toplar (hesap lib/ptf/*): PTF veri tabanından (doğrulanmış EPİAŞ / dosya kaynakları); yük tahmin planı, tüketim, gerçek zamanlı rüzgâr ve güneş, kaynak bazında KGÜP sistem havuzundan (`data/pool/system/<yıl>`); EPİ…
 - `lib/services/ptf-recent.ts` — Son günlerin PTF'si (Aşama 22.6 kısıntı gölge sürümü için): MarketData'ya piyasa eşitlemesi (scripts/market-sync.mts --recent) düne kadar yazar: SMF uç noktası bitişin geçmişte olmasını ister.
+- `lib/services/ptf-scorecard.ts` — PTF motoru karnesi (Bugün kokpiti): kayıtlar + gerçekleşen PTF: Yalnız dosya (değişmeyen günlük kayıtlar) ve veritabanı (gerçekleşen PTF) okur; EPİAŞ'a istek atmaz.
 - `lib/services/ptf-solar.ts` — PTF motoru: ülke güneşi bölge hava verisini okur (hesap lib/ptf/solar.ts): data/pool/ptf/solar-regions.json (bölge noktaları ve ağırlıkları) ve data/pool/ptf/solar-weather/<nokta>/<yıl>.json.gz (ECMWF "2 gün önceki" küresel ışınım; scripts…
 - `lib/services/ptf-wind.ts` — PTF motoru: ülke rüzgârı bölge hava verisini okur (hesap lib/ptf/wind.ts): data/pool/ptf/wind-regions.json ve data/pool/ptf/wind-weather/<nokta>/<yıl>.json.gz (ECMWF 100 m, d2; scripts/ptf/wind-regions.mts).
 - `lib/services/realized-production.ts` — Gerçekleşen üretim, kaynağıyla (karne, PLAN 21.4; kural lib/pool/provisional.ts): Saat başına UEVM (kesin) ya da UEVM henüz yayımlanmamışsa EPİAŞ gerçek zamanlı üretimi (geçici, "GZÜ").
@@ -407,12 +414,13 @@
 - `lib/strategy/index.ts`
 - `lib/strategy/insights.ts` — Kural Tabanlı (Rule-Based) Strateji ve İçgörü Motoru: SAF ve deterministik fonksiyonlar: 1.
 
-## lib/ui (5)
+## lib/ui (6)
 
 - `lib/ui/cockpit-alerts.ts` — Bugün kokpitinin uyarı listesi (saf, I/O yok): Girdiler: yarının kayıt durumu (ops-status), canlı piyasa notları ve projelerin veri boşlukları.
 - `lib/ui/day-phase.ts` — günün fazı (saf, I/O yok): üst şerit ve Bugün kokpiti: Enerji ticareti gününün saatleri sabit: yarının tahmini kesimden sonra (12:05), GÖP teklif kapanışı 12:30, fiyat 14:00'te açıklanır.
 - `lib/ui/last-project.ts` — son açılan proje (yalnız kolaylık: menüdeki "Üretim tahmini" bağlantısı onun tahminine gider)
 - `lib/ui/ops-chips.ts` — üst şeritteki kayıt rozetleri (saf, I/O yok): yarının PTF, güneş ve rüzgâr kayıtları: Kayıt yazılmışsa yeşil (kesimden sonra yazıldıysa sarı); yazılmamışsa beklenen saate kadar nötr "bekleniyor", saat geçtiyse kırmızı "yok".
+- `lib/ui/today-view.ts` — Bugün kokpiti "Görünüm" seçici (yalnız bölüm sırası; veri ya da yetki değişmez): Aynı uygulama farklı işler için: üretici teklif hazırlar, piyasa analisti fiyata bakar, toplayıcı portföyü izler, yönetim sonuca.
 - `lib/ui/use-tr-clock.ts` — Türkiye saati (gün başından dakika); sunucuda ve ilk çizimde null (taşma uyuşmazlığı olmasın), sonra `everyMs`'de bir güncellenir
 
 ## lib/utils.ts (1)
@@ -455,7 +463,7 @@
 - `lib/wind-engine/pipeline.ts` — RES günlük akışı: taze girdiler, kanıtla sürüm seçimi, kesimden önce değişmez kayıt.
 - `lib/wind-engine/registry.ts` — Rüzgâr günlük kayıt sürümleri.
 
-## components (64)
+## components (65)
 
 - `components/aggregator-benchmark-tab.tsx` — Sektör karnesi · Toplayıcılar sekmesi (PLAN 9.1): EPİAŞ'taki toplayıcıların aynı yöntemle kıyası.
 - `components/app-shell.tsx` — Uygulama kabuğu: sol menü (lg+), üstte saat şeridi, telefonda çekmece ve altta dört kısayol.
@@ -474,6 +482,7 @@
 - `components/low-price-exposure-card.tsx` — Büyük tutarlar M ₺, orta tutarlar bin ₺
 - `components/market-data-status.tsx` — Sonuç sayfasında her zaman görünen piyasa verisi göstergesi: projenin saatlerinin ne kadarının EPİAŞ'tan çekilmiş (veya dosyadan yüklenmiş) fiyatla hesaplandığı, son çekim zamanı ve ay ay durum.
 - `components/market-data-upload-dialog.tsx` — EPİAŞ web servislerine erişilemediğinde (örn. yurt dışı IP engeli), Şeffaflık Platformu'ndan indirilen PTF / SMF / Sistem Yönü / GİP AÖF raporlarını dosya olarak yükleme diyaloğu.
+- `components/market/bid-table.tsx` — Saat saat karar tablosu: PTF tahmini + aralık, portföy üretim tahmini, fiyat riski.
 - `components/market/brief.tsx` — Teklif kapanışına (Türkiye 12:30, hedef günden bir önceki gün) kalan süre; geçmişse null
 - `components/market/chart-card.tsx` — Doğrulanmış renk seti: seçilen dönem vurgulu, önceki yıl gri; sistem yönü kırmızı (açık) ↔ mavi (fazla), dengede gri
 - `components/market/daily-dashboard.tsx` — Karma renkleri: rüzgâr / güneş / lisanssız güneş açık tonlar, termik koyu

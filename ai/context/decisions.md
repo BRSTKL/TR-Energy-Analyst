@@ -93,3 +93,10 @@ yeniden üretin. Ayrıntılı geçmiş `PLAN.md` (süren aşamalar, son kayıtla
 - Duman testi kapsamı değişen kodu kullanan sayfalara göre (19.10).
 - Hafıza ve özet notlar eskiyebilir: "açık" denen bir işi önermeden önce kodda kontrol et (ör. KÜPST son plan işi
   notlarda açık görünüyordu ama yapılmıştı).
+
+## Günlük rutin ekranları (02.11.2026)
+
+- Teklif masası tahmin ve risk gösterir, **teklif miktarı önermez**: kendi KGÜP, pozisyon ve sözleşme verisi yok (kullanıcı: yalnız açık veri).
+- Bugün'deki "Görünüm" seçici yalnız bölüm sırasını değiştirir; veri ya da yetki değişmez, hiçbir bölüm gizlenmez.
+- PTF karnesi 30 günden azsa ekranda "kanıt zayıf" yazılır; üretim karnesi için en erken Kasım ortası (GZÜ gerçekleşen üretimi iki gün gecikmeli).
+- Portföy üretim toplamı sunucunun değişmeyen sabah kayıtlarından okunur (hesap yok); HES ve kayıtta olmayan santraller toplama girmez, sayısı ekranda yazılır.

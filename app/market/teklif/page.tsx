@@ -11,10 +11,12 @@ import { PreBidContextPanel } from "@/components/market/pre-bid-context";
 import { PreBidEffectsPanel } from "@/components/market/pre-bid-effects";
 import { PreBidBody, PreBidStatusCard } from "@/components/market/pre-bid-view";
 import { PriceLimitNote } from "@/components/market/price-limit-note";
+import { BidTable } from "@/components/market/bid-table";
 import { PtfEnginePanel } from "@/components/market/ptf-engine-panel";
 import { buildBrief } from "@/lib/analysis/pre-bid-brief";
 import type { PreBidView } from "@/lib/analysis/pre-bid";
 import type { PriceLimit } from "@/lib/analysis/price-limit";
+import type { PtfLogHour } from "@/lib/ptf/forecast-log";
 import type { PreBidContext } from "@/lib/services/pre-bid-context";
 import type { PreBidEffects } from "@/lib/services/pre-bid-effects";
 
@@ -46,6 +48,7 @@ export default function BriefPage() {
   const [effectsError, setEffectsError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [engineMean, setEngineMean] = useState<number | null>(null);
+  const [engineHours, setEngineHours] = useState<PtfLogHour[] | null>(null);
 
   // Üç kaynak aynı anda; hızlı olan (model) ilk dolar, bağlam ve ölçüm geldikçe kartlar tamamlanır
   useEffect(() => {
@@ -189,8 +192,14 @@ export default function BriefPage() {
           </p>
         </div>
 
-        <PtfEnginePanel date={date} reload={reload} onMean={setEngineMean} />
+        <PtfEnginePanel
+          date={date}
+          reload={reload}
+          onMean={setEngineMean}
+          onHours={setEngineHours}
+        />
         <PriceLimitNote limit={core?.limit ?? null} />
+        <BidTable date={date} ptf={engineHours} limit={core?.limit ?? null} />
 
         {ctxError && (
           <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">

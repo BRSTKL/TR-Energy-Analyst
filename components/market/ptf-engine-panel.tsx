@@ -30,6 +30,7 @@ import { ChartCard } from "@/components/market/chart-card";
 import { hh } from "@/components/market/daily-dashboard";
 import { DAY_CLASS_LABEL, type DayClass } from "@/lib/analysis/daily-market";
 import { accuracySummary, type AccuracySummary } from "@/lib/ptf/accuracy";
+import type { PtfLogHour } from "@/lib/ptf/forecast-log";
 import { nf } from "@/lib/format";
 import type { PtfPageForecast } from "@/lib/services/ptf-forecast-page";
 import type { PtfInputStatus } from "@/lib/services/ptf-engine";
@@ -131,11 +132,14 @@ export function PtfEnginePanel({
   date,
   reload,
   onMean,
+  onHours,
 }: {
   date: string;
   /** Artınca yeniden hesaplatır ("Yenile") */
   reload: number;
   onMean?: (mean: number | null) => void;
+  /** Saatlik tahmin (teklif masası tablosu için); tahmin kurulamadıysa null */
+  onHours?: (hours: PtfLogHour[] | null) => void;
 }) {
   const [data, setData] = useState<PtfPageForecast | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -179,6 +183,8 @@ export function PtfEnginePanel({
   const ok = p && p.ok ? p : null;
   const mean = ok ? avg(ok.log.hours.map((h) => h.p50)) : null;
   useEffect(() => onMean?.(mean), [mean, onMean]);
+  const hoursOk = ok?.log.hours ?? null;
+  useEffect(() => onHours?.(hoursOk), [hoursOk, onHours]);
 
   const computing = data?.state === "computing";
   const elapsed = data?.startedAt

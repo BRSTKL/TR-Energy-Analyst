@@ -20,23 +20,7 @@ import {
   type NavItem,
 } from "@/components/nav/nav-config";
 import { dayPhase, formatCountdown } from "@/lib/ui/day-phase";
-import { forecastHref, LAST_PROJECT_EVENT, readLastProject } from "@/lib/ui/last-project";
 import { useTrMinutes } from "@/lib/ui/use-tr-clock";
-
-function useLastProject(): string | null {
-  const [id, setId] = useState<string | null>(null);
-  useEffect(() => {
-    const read = () => setId(readLastProject());
-    read();
-    window.addEventListener(LAST_PROJECT_EVENT, read);
-    window.addEventListener("storage", read);
-    return () => {
-      window.removeEventListener(LAST_PROJECT_EVENT, read);
-      window.removeEventListener("storage", read);
-    };
-  }, []);
-  return id;
-}
 
 function NavLink({
   item,
@@ -88,14 +72,11 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname() ?? "/";
   const active = activeNavId(pathname);
   const minutes = useTrMinutes();
-  const lastProject = useLastProject();
   const phase = minutes === null ? null : dayPhase(minutes);
   const closeBadge =
     phase && phase.id === "closing" && phase.minutesToClose !== null
       ? { text: formatCountdown(phase.minutesToClose), urgent: phase.urgent }
       : null;
-  const hrefOf = (it: NavItem) =>
-    it.id === "forecast" ? forecastHref(lastProject) : it.href;
   return (
     <nav
       aria-label="Ana menü"
@@ -111,7 +92,7 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
               <NavLink
                 key={it.id}
                 item={it}
-                href={hrefOf(it)}
+                href={it.href}
                 active={active === it.id}
                 badge={it.id === "pre-bid" ? closeBadge : null}
                 onNavigate={onNavigate}
@@ -154,7 +135,6 @@ function Brand() {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "/";
   const [drawer, setDrawer] = useState(false);
-  const lastProject = useLastProject();
   const active = activeNavId(pathname);
 
   useEffect(() => setDrawer(false), [pathname]);
@@ -215,7 +195,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           return (
             <Link
               key={id}
-              href={id === "forecast" ? forecastHref(lastProject) : it.href}
+              href={it.href}
               aria-current={on ? "page" : undefined}
               className={`flex flex-col items-center gap-0.5 py-2 text-[11px] ${on ? "font-medium text-indigo-700" : "text-slate-500"}`}
             >

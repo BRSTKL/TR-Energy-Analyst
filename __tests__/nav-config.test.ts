@@ -49,11 +49,11 @@ describe("activeNavId", () => {
     expect(activeNavId("/market/gunluk")).toBe("daily");
     expect(activeNavId("/market")).toBe("market");
   });
-  it("proje sayfaları Portföy'e, üretim tahmini Gün içi'ne, EPİAŞ ekleme kendi öğesine", () => {
+  it("proje sayfaları (üretim tahmini dahil) Portföy'e, EPİAŞ ekleme kendi öğesine", () => {
     expect(activeNavId("/projects")).toBe("projects");
     expect(activeNavId("/projects/abc/results")).toBe("projects");
     expect(activeNavId("/projects/abc/planning")).toBe("projects");
-    expect(activeNavId("/projects/abc/forecast")).toBe("forecast");
+    expect(activeNavId("/projects/abc/forecast")).toBe("projects");
     expect(activeNavId("/projects/epias")).toBe("epias");
   });
   it("analiz ve alt öğeler; sondaki eğik çizgi önemsiz", () => {

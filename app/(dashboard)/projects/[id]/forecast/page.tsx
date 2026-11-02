@@ -4,7 +4,7 @@ import type { ForecastBands } from "@/lib/solar-engine/models/calibrated-bands";
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { ComposedChart, LineChart, ResponsiveContainer } from "recharts";
 import { ChartArea as Area, ChartGrid as CartesianGrid, ChartLegend as Legend, ChartLine as Line, ChartTip as Tooltip, ChartXAxis as XAxis, ChartYAxis as YAxis } from "@/components/ui/chart";
@@ -14,6 +14,7 @@ import { ForecastReferenceCard } from "@/components/forecast-reference-card";
 import { ForecastScorecardCard } from "@/components/forecast-scorecard-card";
 import type { ProjectLiveForecast, LivePlantForecast } from "@/lib/solar-engine/forecast";
 import type { ReferenceRow, ReferenceSummary } from "@/lib/services/production-loss";
+import type { PortfolioProduction } from "@/lib/services/portfolio-forecast";
 
 interface ForecastResponse extends ProjectLiveForecast {
   reference: { period: { from: string; to: string }; generatedAt: string; rows: ReferenceRow[]; summary: ReferenceSummary | null } | null;
@@ -88,6 +89,8 @@ const shortDay = (d: string) => `${Number(d.slice(8, 10))} ${MONTHS[Number(d.sli
  */
 export default function ForecastPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const [port, setPort] = useState<PortfolioProduction | null>(null);
   const [bandDate, setBandDate] = useState<string | null>(null);
   const [solarBands, setSolarBands] = useState<Record<number, ForecastBands>>({});
   const [data, setData] = useState<ForecastResponse | null>(null);
@@ -112,6 +115,16 @@ export default function ForecastPage() {
     return () => abort.abort();
   }, [id, tech]);
 
+  // Proje seçici ve sunucunun sabah kaydı (yalnız dosya okur); alınamazsa sayfa onsuz çalışır
+  useEffect(() => {
+    const abort = new AbortController();
+    fetch("/api/ops/portfolio-forecast", { signal: abort.signal })
+      .then((r) => r.json())
+      .then((d) => { if (!abort.signal.aborted && d.success) setPort(d as PortfolioProduction); })
+      .catch(() => {});
+    return () => abort.abort();
+  }, []);
+
   useEffect(() => {
     if (tech !== "GES") return;
     const abort = new AbortController(); setSolarBands({});
@@ -131,6 +144,12 @@ export default function ForecastPage() {
   const productionValue = (v: number | null) => v === null ? "—" : nf(v);
   const fetchedAt = data?.weatherFetchedAt ? new Date(data.weatherFetchedAt).toLocaleString("tr-TR", { timeZone: "Europe/Istanbul", hour: "2-digit", minute: "2-digit", day: "numeric", month: "long" }) : null;
   const ref = data?.reference?.summary ?? null;
+  // Sunucunun sabah yazdığı değişmeyen kayıt ile bu sayfanın canlı hesabı yan yana (kayıt karnenin dayanağı, canlı hesap güncel hava)
+  const rec = port && data && port.date === data.days[0] ? port.projects.find((p) => p.projectId === id)?.[tech === "GES" ? "solar" : "wind"] ?? null : null;
+  const liveTotal = forecastDaySummary(portfolioForecastHours(ok.map((p) => p.hours ?? [])), 0).totalMwh;
+  const recordNote = rec
+    ? `Sunucunun sabah kaydı (${new Date(Date.parse(rec.issuedAt) + 3 * 3_600_000).toISOString().slice(11, 16)}, ${rec.onTime ? "kesimden önce" : "kesimden sonra"}): ${nf(rec.mwh)} MWh · ${rec.ok}/${rec.total} santral.${liveTotal === null ? "" : ` Bu sayfanın şimdiki canlı hesabı: ${nf(liveTotal)} MWh (güncel hava ile; kayıt değişmez, karne kayda göre yapılır).`}`
+    : null;
   const ym = (s: string) => `${MONTHS[Number(s.slice(5, 7)) - 1]} ${s.slice(0, 4)}`;
 
   return (
@@ -143,9 +162,27 @@ export default function ForecastPage() {
         <p className="text-sm text-slate-600">{tech === "GES" ? "Güneş" : "Rüzgâr"} santrallerinin yarın ve öbür gün saat saat beklenen üretimi.</p>
       </div>
 
+      {port && port.projects.length > 1 && (
+        <label className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+          Proje
+          <select
+            value={id}
+            onChange={(e) => router.push(`/projects/${e.target.value}/forecast`)}
+            className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-900"
+          >
+            {port.projects.map((p) => (
+              <option key={p.projectId} value={p.projectId}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
       <div className="flex gap-2" role="group" aria-label="Santral türü">
         {(["GES", "RES"] as const).map(t => <button key={t} onClick={() => setTech(t)} aria-pressed={tech === t} className="rounded border px-4 py-2 text-sm">{t === "GES" ? "Güneş" : "Rüzgâr"}</button>)}
       </div>
+      {recordNote && <p className="text-xs text-slate-500">{recordNote}</p>}
       {error && (
         <Card className="shadow-sm">
           <CardContent className="p-4 text-sm text-amber-800">{error}</CardContent>

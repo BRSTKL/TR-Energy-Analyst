@@ -14,6 +14,9 @@ import {
 } from "@/components/ui/table";
 import { Kpi, nf, SectionHead, Skeleton } from "@/components/summary-parts";
 import type { DailyMarket } from "@/lib/analysis/daily-market";
+import { evidenceLabel, SCORECARD_MIN_DAYS } from "@/lib/ptf/scorecard";
+import type { PortfolioProduction } from "@/lib/services/portfolio-forecast";
+import type { PtfScorecard } from "@/lib/services/ptf-scorecard";
 import type { OpsStatus } from "@/lib/services/ops-status";
 import type { ProjectKpis } from "@/lib/services/project-kpis";
 import { buildAlerts, formatHours, type CockpitAlert } from "@/lib/ui/cockpit-alerts";
@@ -26,6 +29,15 @@ import {
 import { forecastHref, LAST_PROJECT_EVENT, readLastProject } from "@/lib/ui/last-project";
 import { opsChips } from "@/lib/ui/ops-chips";
 import { useTrMinutes } from "@/lib/ui/use-tr-clock";
+import {
+  DEFAULT_ROLE,
+  ROLES,
+  SECTION_ORDER,
+  readRole,
+  writeRole,
+  type TodayRole,
+  type TodaySection,
+} from "@/lib/ui/today-view";
 
 /**
  * Bugün kokpiti (ana sayfa): günün saatlerine göre şimdi hangi adımdasınız, yarın için ne hazır, piyasa şimdi nasıl, dünün
@@ -289,10 +301,12 @@ function PtfCard({ load }: { load: Load<OpsStatus> }) {
 
 function ProductionCard({
   load,
+  portfolio,
   minutes,
   forecastLink,
 }: {
   load: Load<OpsStatus>;
+  portfolio: Load<PortfolioProduction>;
   minutes: number | null;
   forecastLink: string;
 }) {
@@ -325,6 +339,7 @@ function ProductionCard({
           </li>
         ))}
       </ul>
+      <PortfolioLines load={portfolio} />
       <p className="mt-2 text-xs text-slate-500">
         Santral bazında tahmin proje sayfasında.
       </p>
@@ -334,6 +349,119 @@ function ProductionCard({
       >
         Üretim tahmini <ArrowRight className="h-3.5 w-3.5" />
       </Link>
+    </div>
+  );
+}
+
+/** Portföyün yarınki güneş + rüzgâr tahmini (sunucunun sabah kayıtları): toplam, tepe saat, proje başına */
+function PortfolioLines({ load }: { load: Load<PortfolioProduction> }) {
+  if (load.state === "loading") return null;
+  if (load.state === "error")
+    return <p className="mt-2 text-xs text-amber-800">Portföy toplamı alınamadı: {load.message}</p>;
+  const { total, projects } = load.data;
+  if (!total.hours)
+    return (
+      <p className="mt-2 text-xs text-slate-500">
+        Portföy toplamı için güneş / rüzgâr kaydı henüz yok.
+      </p>
+    );
+  const peak = total.hours.reduce((b, v, h) => (v > total.hours![b] ? h : b), 0);
+  const withProd = projects.filter((p) => p.hours).sort((a, b) => b.mwh - a.mwh);
+  return (
+    <div className="mt-3 border-t border-slate-100 pt-2">
+      <p className="text-xl font-bold tabular-nums text-slate-900">
+        {nf(total.mwh)} <span className="text-sm font-medium text-slate-500">MWh portföy toplamı</span>
+      </p>
+      <p className="text-xs text-slate-500">
+        En yüksek saat {hh(peak)} ({nf(total.hours[peak], 1)} MWh). Güneş ve rüzgâr; HES yok.
+      </p>
+      <ul className="mt-1 space-y-0.5 text-xs text-slate-600">
+        {withProd.slice(0, 4).map((p) => (
+          <li key={p.projectId} className="flex justify-between gap-2">
+            <span className="truncate">{p.name}</span>
+            <span className="tabular-nums">{nf(p.mwh)} MWh</span>
+          </li>
+        ))}
+        {withProd.length > 4 && <li className="text-slate-400">+{withProd.length - 4} proje daha</li>}
+      </ul>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- PTF karnesi
+
+/** Gerçek ve tahmin 24 saat, tek bakışta (yalnız çizgi; ayrıntı Teklif öncesi / Günlük pano'da) */
+function MiniLines({ actual, forecast }: { actual: number[]; forecast: number[] }) {
+  const all = [...actual, ...forecast];
+  const lo = Math.min(...all);
+  const hi = Math.max(...all);
+  const y = (v: number) => 4 + (1 - (v - lo) / Math.max(1, hi - lo)) * 52;
+  const pts = (a: number[]) => a.map((v, h) => `${(h / 23) * 236 + 2},${y(v).toFixed(1)}`).join(" ");
+  return (
+    <svg viewBox="0 0 240 60" className="h-16 w-full" role="img" aria-label="Gerçek ve tahmin edilen saatlik PTF">
+      <polyline points={pts(actual)} fill="none" stroke="#0f172a" strokeWidth="1.8" />
+      <polyline points={pts(forecast)} fill="none" stroke="#4f46e5" strokeWidth="1.8" strokeDasharray="4 3" />
+    </svg>
+  );
+}
+
+function ScoreCard({ load }: { load: Load<PtfScorecard> }) {
+  if (load.state === "loading") return <Skeleton h="h-40" />;
+  if (load.state === "error") return <Failed what="PTF karnesi" message={load.message} />;
+  const { last, last7, all, late, pending, records } = load.data;
+  if (!last)
+    return (
+      <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm">
+        <p className="text-xs font-medium text-slate-500">Dünkü PTF tahmini ne kadar tuttu</p>
+        <p className="mt-2">
+          Skorlanacak gün yok ({records} kayıt; {pending} günün gerçekleşen fiyatı henüz yok,{" "}
+          {late} kayıt kesimden sonra yazıldığı için sayılmaz).
+        </p>
+      </div>
+    );
+  const meanPrice = last.actual.reduce((s, v) => s + v, 0) / 24;
+  const rel = meanPrice > 0 ? (last.mae / meanPrice) * 100 : null;
+  const vsRef = last.refMae && last.refMae > 0 ? ((last.refMae - last.mae) / last.refMae) * 100 : null;
+  const weak = (all?.days ?? 0) < SCORECARD_MIN_DAYS;
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-medium text-slate-500">Dünkü PTF tahmini ne kadar tuttu</p>
+        <span className="text-[11px] text-slate-400">{trDay(last.date)}</span>
+      </div>
+      <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
+        {nf(last.mae)} <span className="text-sm font-medium text-slate-500">TL/MWh ortalama sapma</span>
+      </p>
+      <p className="text-xs text-slate-600">
+        {rel !== null && <>Fiyatın %{nf(rel, 1)}&apos;i. </>}
+        {vsRef !== null && (
+          <>
+            Basit yönteme göre %{nf(Math.abs(vsRef), 0)} {vsRef >= 0 ? "daha yakın" : "daha uzak"}.{" "}
+          </>
+        )}
+        Gerçek fiyat {last.inside}/{last.banded} saatte tahmin aralığında kaldı.
+      </p>
+      <div className="mt-2">
+        <MiniLines actual={last.actual} forecast={last.p50} />
+        <p className="flex gap-3 text-[11px] text-slate-500">
+          <span>
+            <span className="font-bold text-slate-900">━</span> gerçekleşen
+          </span>
+          <span>
+            <span className="font-bold text-indigo-600">╌</span> tahmin
+          </span>
+        </p>
+      </div>
+      {last7 && (
+        <p className="mt-2 text-xs text-slate-600">
+          Son {last7.days} gün: {nf(last7.mae)} TL/MWh
+          {last7.vsRefPct !== null && <> (basit yönteme göre %{nf(last7.vsRefPct, 0)})</>}
+          {last7.coveragePct !== null && <>, aralık kapsaması %{nf(last7.coveragePct, 0)} (hedef %80)</>}.
+        </p>
+      )}
+      <p className={`mt-1 text-xs ${weak ? "font-medium text-amber-800" : "text-slate-500"}`}>
+        {evidenceLabel(all?.days ?? 0)}
+      </p>
     </div>
   );
 }
@@ -541,6 +669,10 @@ export default function TodayPage() {
     "/api/market/daily",
     (d) => d.day as DailyMarket
   );
+  const portfolio = useLoad<PortfolioProduction>("/api/ops/portfolio-forecast", (d) => d as PortfolioProduction);
+  const scorecard = useLoad<PtfScorecard>("/api/ops/ptf-scorecard", (d) => d as PtfScorecard);
+  const [role, setRole] = useState<TodayRole>(DEFAULT_ROLE);
+  useEffect(() => setRole(readRole()), []);
   const [rows, setRows] = useState<Load<ProjectKpis[]>>({ state: "loading" });
   const [lastProject, setLastProject] = useState<string | null>(null);
 
@@ -612,6 +744,84 @@ export default function TodayPage() {
         })()
       : "PTF ve üretim tahmini, 12:30'a kadar";
 
+  const sections: Record<TodaySection, React.ReactNode> = {
+    tomorrow: (
+      <section className="space-y-3">
+        <SectionHead
+          title="Yarın için"
+          sub="Sunucunun sabah yazdığı değişmeyen günlük kayıtlar (PTF 12:03, güneş ve rüzgâr sabah)"
+        />
+        <div className="grid gap-4 md:grid-cols-2">
+          <PtfCard load={status} />
+          <ProductionCard load={status} portfolio={portfolio} minutes={minutes} forecastLink={fLink} />
+        </div>
+        <Link
+          href="/market/teklif"
+          className="inline-flex items-center gap-1 text-sm font-medium text-indigo-700 hover:underline"
+        >
+          Saat saat teklif masası <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      </section>
+    ),
+    score: (
+      <section className="space-y-3">
+        <SectionHead
+          title="Akşam: dünün karnesi"
+          sub="Motorun dünkü kaydı gerçekleşen fiyatla karşılaştırılır"
+        />
+        <div className="grid gap-4 md:grid-cols-2">
+          <ScoreCard load={scorecard} />
+          <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm">
+            <p className="text-xs font-medium text-slate-500">Üretim tahmini karnesi</p>
+            <p className="mt-2">
+              Güneş ve rüzgâr tahmininin ileriye dönük karnesi için kayıt toplanıyor; santral
+              bazında gerçekleşen üretim iki gün gecikmeyle yayımlandığı için en erken Kasım
+              ortasında anlamlı olur. O zamana kadar yalnız geçmişe dönük sınama var.
+            </p>
+          </div>
+        </div>
+      </section>
+    ),
+    market: (
+      <section className="space-y-3">
+        <SectionHead
+          title="Piyasa"
+          sub="Bugün şu ana kadar ve dün"
+          href="/market/gunluk"
+          cta="Günlük pano"
+        />
+        <div className="grid gap-4 md:grid-cols-2">
+          <MarketCard
+            title="Bugün"
+            load={todayMarket}
+            href="/market/gunluk"
+            cta="Bugün sekmesi"
+            what="Bugünün piyasası"
+          />
+          <MarketCard
+            title="Dünün sonucu"
+            load={yesterday}
+            href="/market/gunluk"
+            cta="Geçmiş gün"
+            what="Dünün sonucu"
+          />
+        </div>
+      </section>
+    ),
+    alerts: <Alerts alerts={alerts} pending={status.state === "loading"} />,
+    portfolio: (
+      <section className="space-y-3">
+        <SectionHead
+          title="Portföyüm"
+          sub="Proje başına hızlı geçiş"
+          href="/projects"
+          cta="Tüm projeler"
+        />
+        <Portfolio rows={rows} />
+      </section>
+    ),
+  };
+
   return (
     <div className="min-h-screen bg-slate-50/60 pb-16">
       <header className="border-b bg-white">
@@ -629,53 +839,29 @@ export default function TodayPage() {
       <main className="mx-auto max-w-7xl space-y-8 px-4 py-6 sm:px-6 lg:px-8">
         <PhaseCard minutes={minutes} bidReady={bidReady} />
 
-        <section className="space-y-3">
-          <SectionHead
-            title="Yarın için"
-            sub="Sunucunun 12:03'te yazdığı değişmeyen günlük kayıtlar"
-          />
-          <div className="grid gap-4 md:grid-cols-2">
-            <PtfCard load={status} />
-            <ProductionCard load={status} minutes={minutes} forecastLink={fLink} />
-          </div>
-        </section>
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Görünüm">
+          <span className="text-xs font-medium text-slate-500">Görünüm</span>
+          {ROLES.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              title={r.hint}
+              aria-pressed={role === r.id}
+              onClick={() => {
+                setRole(r.id);
+                writeRole(r.id);
+              }}
+              className={`rounded-full border px-3 py-1 text-xs font-medium ${role === r.id ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+            >
+              {r.label}
+            </button>
+          ))}
+          <span className="text-xs text-slate-400">yalnız bölüm sırasını değiştirir</span>
+        </div>
 
-        <section className="space-y-3">
-          <SectionHead
-            title="Piyasa"
-            sub="Bugün şu ana kadar ve dün"
-            href="/market/gunluk"
-            cta="Günlük pano"
-          />
-          <div className="grid gap-4 md:grid-cols-2">
-            <MarketCard
-              title="Bugün"
-              load={todayMarket}
-              href="/market/gunluk"
-              cta="Bugün sekmesi"
-              what="Bugünün piyasası"
-            />
-            <MarketCard
-              title="Dünün sonucu"
-              load={yesterday}
-              href="/market/gunluk"
-              cta="Geçmiş gün"
-              what="Dünün sonucu"
-            />
-          </div>
-        </section>
-
-        <Alerts alerts={alerts} pending={status.state === "loading"} />
-
-        <section className="space-y-3">
-          <SectionHead
-            title="Portföyüm"
-            sub="Proje başına hızlı geçiş"
-            href="/projects"
-            cta="Tüm projeler"
-          />
-          <Portfolio rows={rows} />
-        </section>
+        {SECTION_ORDER[role].map((id) => (
+          <React.Fragment key={id}>{sections[id]}</React.Fragment>
+        ))}
 
         <p className="text-xs text-slate-500">
           Dönem özeti, sektördeki yeriniz ve karşılaştırmalar için{" "}
