@@ -4,9 +4,9 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-561 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+565 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
-## Sayfalar (app/**/page.tsx) (28)
+## Sayfalar (app/**/page.tsx) (29)
 
 - `/projects/[id]/backtest` (`app/(dashboard)/projects/[id]/backtest/page.tsx`) — Aşama 14: yön tahminiyle plan ayarı (projenin fiyat profiliyle, KÜPST dahil)
 - `/projects/[id]/candidates` (`app/(dashboard)/projects/[id]/candidates/page.tsx`) — YEKDEM çıkışı rozeti: bu yıl çıkan ya da süresi bu yıl / yakında dolan
@@ -36,8 +36,9 @@
 - `/sector/aggregators/[id]` (`app/sector/aggregators/[id]/page.tsx`) — Toplayıcı ayrıntısı (PLAN 9.2): kıyas tablosundaki bir satırın içi.
 - `/sector` (`app/sector/page.tsx`) — "2025" ya da "2026 (Ocak–Ağustos)"
 - `/yekdem` (`app/yekdem/page.tsx`) — YEKDEM çıkış takvimi: hangi yıl kaç santral ve kaç MW serbest piyasaya geçiyor.
+- `/yeni-santraller` (`app/yeni-santraller/page.tsx`) — Yeni santral radarı: veri havuzunda ilk üretimi görülen rüzgâr, güneş ve hidro santralleri.
 
-## API (app/api/**/route.ts) (75)
+## API (app/api/**/route.ts) (76)
 
 - `GET, PUT, DELETE /api/account/epias` — GET /api/account/epias: hesap e-postası ve kayıtlı EPİAŞ hesabının özeti (şifre dönmez).
 - `POST /api/account/epias/test` — POST /api/account/epias/test: kayıtlı (yoksa .env) EPİAŞ hesabıyla yeni bilet alarak bağlantıyı dener.
@@ -68,6 +69,7 @@
 - `GET /api/market/pre-bid` — GET /api/market/pre-bid?date=YYYY-AA-GG (ÖNİZLEME): Teklif öncesi görünüm: hedef gün için saatlik PTF beklentisi ve ± aralık (lib/analysis/pre-bid.ts).
 - `GET /api/market/ptf-forecast` — GET /api/market/ptf-forecast?date=YYYY-AA-GG[&refresh=1]: PTF motorunun hedef gün tahmini, girdilerin durumu ve günlük kayıt (lib/services/ptf-forecast-page.ts).
 - `GET /api/market` — "2026 (Ocak–Ağustos)", tam yıl için "2025"; ay ortasında biten dönem "2026 (Ocak – 19 Ekim)" ya da "1–19 Ekim 2026"; ay başında başlamayan ya da yıl aşan dönemde tarih aralığı
+- `GET /api/new-plants` — GET /api/new-plants : Yeni santral radarı (lib/services/new-plants.ts)
 - `GET /api/ops/portfolio-forecast` — GET /api/ops/portfolio-forecast[?date=YYYY-AA-GG]: Projelerin santrallerinin güneş ve rüzgâr üretim tahmini, sunucunun sabah yazdığı değişmeyen kayıtlardan (tarih verilmezse yarın).
 - `GET /api/ops/ptf-scorecard` — GET /api/ops/ptf-scorecard: PTF motorunun ileriye dönük karnesi: değişmeyen günlük kayıtlar gerçekleşen PTF'yle karşılaştırılır (son gün, son 7 gün, hepsi).
 - `GET /api/ops/status` — GET /api/ops/status: Yarının günlük tahmin kayıtlarının (PTF, güneş, rüzgâr) durumu: üst şerit ve Bugün kokpiti.
@@ -125,7 +127,7 @@
 - `app/not-found.tsx` — Türkçe 404 (hata ayıklama testi 16.10.2026: Next'in İngilizce varsayılan sayfası çıkıyordu)
 - `app/projects/loading.tsx`
 
-## lib/analysis (51)
+## lib/analysis (52)
 
 - `lib/analysis/aggregator-benchmark.ts` — Toplayıcılar arası kıyas (PLAN 8.7): EPİAŞ'taki her toplayıcının portföyündeki lisanslı santraller için aynı yöntem: saatlik sapma (UEVM − ilk KGÜP), EPİAŞ resmi dengesizlik fiyatı.
 - `lib/analysis/aggregator-detail.ts` — Toplayıcı ayrıntısı (PLAN 9.2): Kıyas tablosundaki bir toplayıcının içi: santraller (tek başına maliyet, sektör medyanına göre), aylık netleşme ve sahiplerin (üreticilerin) portföye katkısı.
@@ -154,6 +156,7 @@
 - `lib/analysis/intraday-trade.ts` — Gün içi düzeltmenin işlem maliyeti (GİP ağırlıklı ortalama fiyatıyla tahmin): İlk KGÜP gün öncesinde PTF'den taahhüt edilen pozisyondur; son KGÜP gün içi piyasası kapandıktan sonraki pozisyondur.
 - `lib/analysis/market-summary.ts` — Piyasa özeti: Bir ticaret masasının her sabah baktığı piyasa göstergeleri, saatlik EPİAŞ verisinden: PTF ve SMF dağılımı, SMF–PTF makası (dengesizlik fiyatının gün öncesi fiyattan ne kadar uzaklaştığı), sistem yönü, sıfır ve düşük fiyatlı …
 - `lib/analysis/neighbors.ts` — Komşu ülke fiyatları ve sınır akışları görünümü (havuz: lib/pool/entsoe-codec.ts; SAF, I/O yok)
+- `lib/analysis/new-plants.ts` — Yeni santral radarı: veri havuzunda ilk üretimi görülen santraller (SAF, I/O yok): Bir santralin "ilk üretimi", havuzdaki UEVM serisinin ilk dolu saatidir.
 - `lib/analysis/outage-capacity.ts` — Piyasa geneli arızalı kapasite (Aşama 14: yön modelinin dış girdisi): Kaynak: EPİAŞ piyasa mesaj sistemi bildirimleri (havuz: data/pool/umm).
 - `lib/analysis/outage-detection.ts` — Olası arıza / kısıntı saatleri: Tahmin yüksekken üretimin sıfıra yakın olduğu kesintisiz bloklar çoğunlukla tahmin hatası değildir: santral arızası, bakım ya da TEİAŞ yük atma talimatıdır (YAT, santral bazında yayımlanmaz).
 - `lib/analysis/outage-list.ts` — Arıza izleme: bildirim listesi ve saatlik kapasite kaybı (SAF, I/O yok): Kaynak EPİAŞ piyasa mesaj sistemi bildirimleridir (havuz data/pool/umm).
@@ -338,7 +341,7 @@
 - `lib/sector/period.ts` — Sektör analizlerinin dönemi: içinde bulunulan yılın sektör karnesinin dönem sonu (scripts/sector-collect.mts; piyasa verisi olan son gün).
 - `lib/sector/plant-technology.ts` — Sektör taramasında santral teknolojisi (PLAN Bekleyen işler: EPDK ↔ karne, adım 2b): Eskiden tür yalnız addan tahmin ediliyordu (`guessTechnologyFromName`); adında tür eki olmayan santraller ("OYMAPINAR", "BORÇKA", "HASAN UĞURLU") ve tanın…
 
-## lib/services (61)
+## lib/services (62)
 
 - `lib/services/aggregator-data.ts` — Toplayıcı kıyası ve ayrıntısı için veri okuma (PLAN 8.7, 9.2): Santral saatleri veri havuzundan (ilk KGÜP ve UEVM), türü ve sahibi sektör karnesi dosyalarından ya da havuz tanımından, fiyatlar veritabanındaki EPİAŞ resmi dengesizlik fiyatl…
 - `lib/services/aggregator-membership.ts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" ekiyle kayıtlı tüm katılımcıların santral listesi çekilir ve .cache/epias/ aggregator-membership.json'a yazılır.
@@ -359,6 +362,7 @@
 - `lib/services/imbalance-prices.ts` — EPİAŞ resmi dengesizlik fiyatları: EPİAŞ Şeffaflık Platformu her saat için sistemin pozitif ve negatif dengesizlik tutarını (TL) ve miktarını (MWh) yayımlar.
 - `lib/services/installed-capacity.ts` — Kurulu güç kaynağı (EPİAŞ YEKDEM katılımcı listeleri, EPDK lisansları): Kural ve eşleştirme: lib/epias-plant/installed-capacity.ts.
 - `lib/services/live-day.ts` — Canlı gün: bugünün şu ana kadarki verisi ve yarının açıklanmış verisi (EPİAŞ'tan istek anında)
+- `lib/services/new-plants.ts` — Yeni santral radarı (/yeni-santraller): veri havuzunda ilk üretimi görülen santraller (diskten)
 - `lib/services/ops-status.ts` — günlük iş durumu (Bugün kokpiti ve üst şerit): yarının tahmin kayıtları yazıldı mı: Yalnız dosya okur (değişmeyen günlük kayıtlar: PTF, güneş, rüzgâr); EPİAŞ'a ya da hava servisine istek atmaz, bu yüzden her sayfada üst şeritten sık sorula…
 - `lib/services/outage-monitor.ts` — Arıza izleme (/ariza): havuzdaki EPİAŞ arıza / bakım bildirimleri (diskten, EPİAŞ'a bağlanmaz)
 - `lib/services/outage-notices.ts` — Rapor için EPİAŞ arıza / bakım bildirimleri (Aşama 12.4): havuzdaki bildirimler (data/pool/umm) santral havuzundaki UEVÇB listesiyle (readPoolPlantInfo) proje santrallerine eşleştirilir.

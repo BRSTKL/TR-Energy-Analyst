@@ -15,6 +15,7 @@ import {
   Factory,
   ZapOff,
   CalendarRange,
+  Radar,
   GitCompareArrows,
   LayoutDashboard,
   LineChart,
@@ -33,6 +34,7 @@ export type NavId =
   | "market"
   | "outages"
   | "yekdem"
+  | "radar"
   | "sector"
   | "compare"
   | "summary"
@@ -140,6 +142,14 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { id: "market", label: "Piyasa özeti", href: "/market", icon: LineChart },
       {
+        id: "radar",
+        label: "Yeni santral radarı",
+        short: "Radar",
+        href: "/yeni-santraller",
+        icon: Radar,
+        hint: "Veri havuzunda ilk üretimi görülen santraller: hangi ay kaç santral ve MW devreye girdi",
+      },
+      {
         id: "yekdem",
         label: "YEKDEM çıkışları",
         short: "YEKDEM",
@@ -191,6 +201,7 @@ export function activeNavId(pathname: string): NavId | null {
   if (is(p, "/santraller")) return "plants";
   if (is(p, "/ariza")) return "outages";
   if (is(p, "/yekdem")) return "yekdem";
+  if (is(p, "/yeni-santraller")) return "radar";
   if (is(p, "/projects/epias")) return "epias";
   if (is(p, "/projects")) return "projects";
   if (is(p, "/sector")) return "sector";

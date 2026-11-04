@@ -5,6 +5,23 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 05.11.2026 · Claude · Yeni santral radarı (`claude/yeni-santral-radar`, önizleme; yüklenmedi)
+
+- Kullanıcı fikir listesinden "Yeni santral radarı"nı önizleme olarak istedi: havuzdaki santrallerin ilk üretim saatinden yeni devreye
+  girenler, ay ay MW ve liste.
+- **Yapılan:** `/yeni-santraller` (Analiz grubu), saf kural `lib/analysis/new-plants.ts`, servis `lib/services/new-plants.ts` (UEVM
+  serilerini 2024–2027 dosyalarından tarar, 6 saat bellek), API `/api/new-plants`. Kurulu güç CLAUDE.md kuralıyla (YEKDEM → EPDK → en
+  yüksek üretimden alt sınır, `~` ve "Tahmini" rozeti); kart bağlantıları Santral rehberine.
+- **Veri ölçümü (sunucu havuzu, 04.11.2026):** 1.489 analiz edilen santralden 273'ünün hiç üretim verisi yok. İlk üretim Şubat 2025
+  sonrası olan 61 santral çıktı; bunların 59'u 01.03.2025'te başlayan K3_ lisanssız toplamları (EPİAŞ listeye o gün aldı; devreye girme
+  değil) ve LÜM_ / LÜY toplamları: hariç tutuldu. Kendi dosyasının ilk saatinden dolu başlayan 9 santral de (ör. yalnız 2026 dosyası, ilk
+  üretim 01.01.2026) hariç: devreye giriş anı bilinemez. Sonuç 52 santral, 2.581 MW (2.191 MW kayıtlı, 389 MW tahmini); son 12 ay 29
+  santral, 1.350 MW. Tüm ilk üretimler gün başı 00:00; 15'i ayın 1'inde (ilk gün hassasiyetinde, bazıları ay başı kaydı olabilir).
+- **Sınırlar:** sahip şirket yalnız 52 santralin 2'sinde biliniyor (EPİAŞ yeni santrallerin çoğunun sahibini yayımlamıyor; sahip
+  dizini ve karne yalnız eski santralleri kapsıyor): "rakip şirket büyümesi" bu sayfayla bugün yapılamaz. Ekim 2026 UEVM'si
+  (17 Kasım civarı) gelene kadar son ay Eylül.
+- **Sıradaki:** sahip doldurma (resolvePlantMeta ile EPİAŞ'tan; ağ ve önbellek yazımı, onay gerekir); şirket profili sayfası.
+
 ## 04.11.2026 · Claude · YEKDEM çıkış takvimi (`claude/yekdem-takvim`, yüklenmedi)
 
 - Kullanıcı sayfa eksiklerinden "YEKDEM çıkış takvimi"ni istedi: hesap vardı (`lib/services/yekdem-exit.ts`, aday sayfasında filtre ve
