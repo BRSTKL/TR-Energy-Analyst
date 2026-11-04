@@ -135,7 +135,7 @@ const STEPS: Array<{
     id: "prep",
     title: "Hazırlık",
     sub: "Dünün sonucu, açık veriler",
-    href: "/market/gunluk",
+    href: "/market/gunluk?sekme=gecmis",
   },
   {
     id: "bid",
@@ -143,12 +143,12 @@ const STEPS: Array<{
     sub: "PTF ve üretim tahmini, 12:30'a kadar",
     href: "/market/teklif",
   },
-  { id: "results", title: "Sonuç 14:00", sub: "Açıklanan PTF", href: "/market/gunluk" },
+  { id: "results", title: "Sonuç 14:00", sub: "Açıklanan PTF", href: "/market/gunluk?sekme=yarin" },
   {
     id: "intraday",
     title: "Gün içi",
     sub: "GİP, dengesizlik yönü",
-    href: "/market/gunluk",
+    href: "/market/gunluk?sekme=bugun",
   },
 ];
 const CURRENT_STEP: Record<DayPhaseId, number> = {
@@ -831,21 +831,21 @@ export default function TodayPage() {
         <SectionHead
           title="Piyasa"
           sub="Bugün şu ana kadar ve dün"
-          href="/market/gunluk"
+          href="/market/gunluk?sekme=bugun"
           cta="Günlük pano"
         />
         <div className="grid gap-4 md:grid-cols-2">
           <MarketCard
             title="Bugün"
             load={todayMarket}
-            href="/market/gunluk"
+            href="/market/gunluk?sekme=bugun"
             cta="Bugün sekmesi"
             what="Bugünün piyasası"
           />
           <MarketCard
             title="Dünün sonucu"
             load={yesterday}
-            href="/market/gunluk"
+            href="/market/gunluk?sekme=gecmis"
             cta="Geçmiş gün"
             what="Dünün sonucu"
           />

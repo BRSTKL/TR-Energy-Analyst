@@ -309,6 +309,17 @@ export default function SectorPage() {
             </div>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Sektör karnesi {data.label}</h1>
             <MethodLink section="sektor" label="Yöntem ve varsayımlar" />
+            {/* Açıklama ve yıl seçici seçili sekmeye göre: karne sekmeleri dışındakiler bu yıl seçiciyi ve karne kuralını kullanmaz */}
+            {tab !== "plants" && tab !== "aggregators" ? (
+              <p className="mt-1 max-w-3xl text-xs text-slate-600 sm:text-sm">
+                {tab === "system"
+                  ? "Sistem yönü: açık ve fazla saatleri tüketim tarafı mı, santraller mi yarattı. Dönem ve yıl seçimi sekmenin içinde."
+                  : tab === "map"
+                    ? "Harita: il bazında lisanslı kurulu güç."
+                    : "Kayıp üretim: güneş, rüzgâr ve hidro santrallerinde kaybedilen üretim; dönem her kartta yazar."}{" "}
+                Santral karnesi için Santraller sekmesi.
+              </p>
+            ) : (
             <p className="mt-1 max-w-3xl text-xs text-slate-600 sm:text-sm">
               EPİAŞ&apos;ta üretimi yayımlanan lisanslı {techs.map((t) => TECH_LABEL[t].toLocaleLowerCase("tr-TR")).join(", ")} santrallerinin
               MWh başına dengesizlik riski, aynı motorla ve santral tek başına uzlaştırılmış varsayımıyla (tahmin kalitesi kıyası). Dönemin en
@@ -319,10 +330,12 @@ export default function SectorPage() {
               .
               {data.view === "k1" && " Olası arıza / kısıntı saatleri hariç (K1)."}
             </p>
+            )}
           </div>
           <div className="flex items-center gap-2">
-            {data.years.length > 1 && (
+            {data.years.length > 1 && (tab === "plants" || tab === "aggregators") && (
               <select
+                aria-label="Karne yılı"
                 className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm"
                 value={data.year}
                 onChange={(e) => setYear(Number(e.target.value))}

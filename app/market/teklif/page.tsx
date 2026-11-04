@@ -133,15 +133,11 @@ export default function BriefPage() {
                 <ArrowLeft className="h-3 w-3" /> Bugün
               </Link>
               <span className="text-slate-300">/</span>
-              <Link href="/market" className="text-slate-500 hover:text-slate-900">
-                Piyasa
-              </Link>
-              <span className="text-slate-300">/</span>
               <span className="font-medium text-slate-700">Teklif öncesi</span>
             </div>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-              {date === tomorrow ? "Yarın" : `${date.slice(8, 10)}.${date.slice(5, 7)}`}{" "}
-              için teklif öncesi özet
+              Teklif öncesi · {date === tomorrow ? "yarın " : ""}
+              {`${date.slice(8, 10)}.${date.slice(5, 7)}.${date.slice(0, 4)}`}
             </h1>
             <MethodLink section="gunluk-pano" label="Yöntem ve varsayımlar" />
           </div>
@@ -163,7 +159,7 @@ export default function BriefPage() {
               disabled={date === trToday()}
               onClick={() => setDate(trToday())}
             >
-              Bugün (deneme)
+              Bugün (geçmişle sınama)
             </Button>
             <input
               type="date"

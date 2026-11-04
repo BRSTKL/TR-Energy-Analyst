@@ -28,10 +28,10 @@ describe("menü yapılandırması", () => {
     const ids = ALL_NAV_ITEMS.map((i) => i.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
-  it("gün sırasına göre gruplar: Bugün, Gün içi, Portföy, Analiz", () => {
+  it("gün sırasına göre gruplar: Bugün, Günlük iş, Portföy, Analiz", () => {
     expect(NAV_GROUPS.map((g) => g.label)).toEqual([
       "Bugün",
-      "Gün içi",
+      "Günlük iş",
       "Portföy",
       "Analiz",
     ]);

@@ -66,7 +66,7 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     id: "intraday",
-    label: "Gün içi",
+    label: "Günlük iş",
     items: [
       {
         id: "pre-bid",
@@ -74,7 +74,7 @@ export const NAV_GROUPS: NavGroup[] = [
         short: "Teklif",
         href: "/market/teklif",
         icon: Target,
-        hint: "Yarının PTF tahmini ve teklif öncesi bağlam",
+        hint: "Yarının PTF tahmini ve teklif öncesi bağlam (12:30'a kadar)",
       },
       {
         id: "daily",
@@ -103,6 +103,13 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/projects/epias",
         icon: CloudDownload,
       },
+      {
+        id: "summary",
+        label: "Portföy özeti",
+        href: "/ozet",
+        icon: FileBarChart,
+        hint: "Dönem özeti, projeler ve sektördeki yeriniz",
+      },
     ],
   },
   {
@@ -112,13 +119,6 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: "market", label: "Piyasa özeti", href: "/market", icon: LineChart },
       { id: "sector", label: "Sektör karnesi", href: "/sector", icon: Award },
       { id: "compare", label: "Karşılaştırma", href: "/compare", icon: GitCompareArrows },
-      {
-        id: "summary",
-        label: "Portföy özeti",
-        href: "/ozet",
-        icon: FileBarChart,
-        hint: "Dönem özeti, projeler ve sektördeki yeriniz",
-      },
     ],
   },
 ];

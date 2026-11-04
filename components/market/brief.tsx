@@ -357,7 +357,7 @@ export function SignalSection({
     <section className="space-y-4" aria-labelledby="sinyaller">
       <div>
         <h2 id="sinyaller" className="text-lg font-semibold text-slate-900">
-          Bugün ne değişti?
+          Yarının fiyatı için bağlam: bugün ne değişti?
         </h2>
         <p className="mt-1 text-sm text-slate-600">{brief.tallyLine}</p>
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">

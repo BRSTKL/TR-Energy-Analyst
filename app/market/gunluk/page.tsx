@@ -32,8 +32,26 @@ const MODES: Array<[Mode, string]> = [
   ["tomorrow", "Yarın"],
 ];
 
+/** Sekme adreste tutulur (?sekme=bugun|yarin|gecmis): bağlantılar doğru sekmeyi açar, sayfa yenilenince sekme korunur */
+const MODE_PARAM: Record<Mode, string> = { day: "gecmis", today: "bugun", tomorrow: "yarin" };
+const modeFromUrl = (): Mode | null => {
+  const v = new URLSearchParams(window.location.search).get("sekme");
+  const hit = (Object.keys(MODE_PARAM) as Mode[]).find((m) => MODE_PARAM[m] === v);
+  return hit ?? null;
+};
+
 export default function DailyMarketPage() {
-  const [mode, setMode] = useState<Mode>("day");
+  const [mode, setModeState] = useState<Mode>("day");
+  useEffect(() => {
+    const m = modeFromUrl();
+    if (m) setModeState(m);
+  }, []);
+  const setMode = useCallback((m: Mode) => {
+    setModeState(m);
+    const url = new URL(window.location.href);
+    url.searchParams.set("sekme", MODE_PARAM[m]);
+    window.history.replaceState(null, "", url.toString());
+  }, []);
   const [requested, setRequested] = useState<string | null>(null);
   const [day, setDay] = useState<DailyMarket | null>(null);
   const [available, setAvailable] = useState<Availability | null>(null);
@@ -94,10 +112,6 @@ export default function DailyMarketPage() {
                 className="flex items-center gap-1 text-slate-500 hover:text-slate-900"
               >
                 <ArrowLeft className="h-3 w-3" /> Bugün
-              </Link>
-              <span className="text-slate-300">/</span>
-              <Link href="/market" className="text-slate-500 hover:text-slate-900">
-                Piyasa
               </Link>
               <span className="text-slate-300">/</span>
               <span className="font-medium text-slate-700">Günlük pano</span>
@@ -190,7 +204,7 @@ export default function DailyMarketPage() {
             href="/market/teklif"
             className="inline-flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-900"
           >
-            Teklif öncesi karar sayfası <ArrowRight className="h-3.5 w-3.5" />
+            Teklif öncesi <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>
 

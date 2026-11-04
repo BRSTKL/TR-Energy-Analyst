@@ -108,7 +108,7 @@ export function DayStrip() {
         {chips.map((c) => (
           <Link
             key={c.key}
-            href="/"
+            href={c.key === "ptf" ? "/market/teklif" : "/"}
             title={c.title}
             className={`rounded-md border px-2 py-0.5 font-medium tabular-nums ${TONE[c.tone]}`}
           >
