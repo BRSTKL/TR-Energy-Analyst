@@ -13,6 +13,7 @@ import {
   ChartXAxis as XAxis,
   ChartYAxis as YAxis,
   CHART_COLOR,
+  SERIES,
 } from "@/components/ui/chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartCard } from "@/components/market/chart-card";
@@ -146,7 +147,8 @@ export function TomorrowViewPanel({
       <div className="grid gap-4 lg:grid-cols-2">
         <ChartCard
           title="Yarının PTF'si ve kıyas bandı"
-          description="TL/MWh. Gri bant: aynı sınıftaki son günlerin çeyrekler arası aralığı, kesikli çizgi ortanca; kırmızı kesikli: fiyat limiti."
+          description="Düz çizgi açıklanan PTF. Gri bant: aynı sınıftaki son günlerin çeyrekler arası aralığı, noktalı çizgi ortanca; kırmızı kesikli: fiyat limiti."
+          unit="TL/MWh"
         >
           <ComposedChart
             data={view.rows}
@@ -187,26 +189,14 @@ export function TomorrowViewPanel({
               fillOpacity={0.2}
               isAnimationActive={false}
             />
-            <Line
-              name="Kıyas ortancası"
-              dataKey="refMedian"
-              stroke={CHART_COLOR.slateLight}
-              strokeDasharray="4 4"
-              strokeWidth={1.5}
-              isAnimationActive={false}
-            />
-            <Line
-              name="Yarının PTF'si"
-              dataKey="ptf"
-              stroke={CHART_COLOR.blue}
-              isAnimationActive={false}
-            />
+            <Line name="Kıyas ortancası" dataKey="refMedian" {...SERIES.reference} isAnimationActive={false} />
+            <Line name="Yarının PTF'si (açıklanan)" dataKey="ptf" {...SERIES.actual} isAnimationActive={false} />
           </ComposedChart>
         </ChartCard>
 
         <ChartCard
           title="Yük tahmini ve kıyas"
-          description="MW. Yarın için yayımlanan yük tahmini; kesikli çizgi aynı sınıftaki son günlerin yük tahmini ortancası."
+          description="Yarın için yayımlanan yük tahmini (kesikli); noktalı çizgi aynı sınıftaki son günlerin yük tahmini ortancası."
         >
           <ComposedChart
             data={view.rows}
@@ -216,24 +206,12 @@ export function TomorrowViewPanel({
             <XAxis {...axis.x} />
             <YAxis tickFormatter={(v: number) => nf(v / 1000)} unit=" GW" width={62} />
             <Tooltip
-              formatter={(v: unknown) => `${nf(Number(v ?? 0))} MW`}
+              formatter={(v: unknown) => `${nf(Number(v ?? 0) / 1000, 1)} GW`}
               labelFormatter={(h) => hh(Number(h))}
             />
             <Legend />
-            <Line
-              name="Yük tahmini"
-              dataKey="lep"
-              stroke={CHART_COLOR.slate}
-              isAnimationActive={false}
-            />
-            <Line
-              name="Kıyas ortancası"
-              dataKey="lepRef"
-              stroke={CHART_COLOR.slateLight}
-              strokeDasharray="4 4"
-              strokeWidth={1.5}
-              isAnimationActive={false}
-            />
+            <Line name="Yük tahmini" dataKey="lep" {...SERIES.forecast} isAnimationActive={false} />
+            <Line name="Kıyas ortancası" dataKey="lepRef" {...SERIES.reference} isAnimationActive={false} />
           </ComposedChart>
         </ChartCard>
 

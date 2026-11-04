@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartCard } from "@/components/market/chart-card";
-import { CHART_COLOR } from "@/components/ui/chart";
+import { CHART_COLOR, SERIES, STATUS_COLOR } from "@/components/ui/chart";
 import { DIRECTION_LABEL, DailyTable } from "@/components/market/daily-table";
 import { PriceLimitNote } from "@/components/market/price-limit-note";
 import {
@@ -83,10 +83,11 @@ const MIX_COLOR: Record<MixKey, string> = {
   coal: CHART_COLOR.gray,
   other: CHART_COLOR.violet,
 };
+/** Sistem yönü: açık mavi, fazla turuncu (ortak STATUS_COLOR; kırmızı–mavi yerine renk körü için güvenli çift) */
 const DIRECTION_COLOR: Record<string, string> = {
-  DEFICIT: CHART_COLOR.red,
-  SURPLUS: CHART_COLOR.blue,
-  BALANCED: CHART_COLOR.slateLight,
+  DEFICIT: STATUS_COLOR.deficit,
+  SURPLUS: STATUS_COLOR.surplus,
+  BALANCED: STATUS_COLOR.balanced,
 };
 
 const axis = {
@@ -253,7 +254,8 @@ export function DailyDashboard({
       <div className="grid gap-4 lg:grid-cols-2">
         <ChartCard
           title="PTF, SMF ve kıyas bandı"
-          description={`TL/MWh. Gri bant: son ${REFERENCE_DAYS} günün aynı sınıftaki (${DAY_CLASS_LABEL[day.dayClass]}) günlerinin çeyrekler arası aralığı, kesikli çizgi ortanca.`}
+          description={`Düz çizgiler açıklanan PTF ve SMF. Gri bant: son ${REFERENCE_DAYS} günün aynı sınıftaki (${DAY_CLASS_LABEL[day.dayClass]}) günlerinin çeyrekler arası aralığı, noktalı çizgi ortanca.`}
+          unit="TL/MWh"
         >
           <ComposedChart
             data={day.rows}
@@ -294,32 +296,16 @@ export function DailyDashboard({
               fillOpacity={0.2}
               isAnimationActive={false}
             />
-            <Line
-              name="Kıyas ortancası"
-              dataKey="refMedian"
-              stroke={CHART_COLOR.slateLight}
-              strokeDasharray="4 4"
-              strokeWidth={1.5}
-              isAnimationActive={false}
-            />
-            <Line
-              name="PTF"
-              dataKey="ptf"
-              stroke={CHART_COLOR.blue}
-              isAnimationActive={false}
-            />
-            <Line
-              name="SMF"
-              dataKey="smf"
-              stroke={CHART_COLOR.orange}
-              isAnimationActive={false}
-            />
+            <Line name="Kıyas ortancası" dataKey="refMedian" {...SERIES.reference} isAnimationActive={false} />
+            <Line name="PTF" dataKey="ptf" {...SERIES.actual} isAnimationActive={false} />
+            <Line name="SMF" dataKey="smf" {...SERIES.actual} stroke={CHART_COLOR.violet} isAnimationActive={false} />
           </ComposedChart>
         </ChartCard>
 
         <ChartCard
           title="Net yük ve akşam rampası"
-          description="MW (saatlik ortalama). Net yük (tüketim taraflı) = tüketim − rüzgâr − güneş planı; kesikli: arz taraflı = termik, hidro, diğer + net ithalat. Mavi şerit: en büyük 3 saatlik artış."
+          unit="GW (ipucunda MW)"
+          description="Saatlik ortalama. Net yük (tüketim taraflı) = tüketim − rüzgâr − güneş planı; noktalı: arz taraflı = termik, hidro, diğer + net ithalat. Mavi şerit: en büyük 3 saatlik artış."
         >
           <ComposedChart
             data={day.rows}
@@ -375,7 +361,8 @@ export function DailyDashboard({
               name="Net yük (arz taraflı)"
               dataKey="netSupply"
               stroke={CHART_COLOR.red}
-              strokeDasharray="4 4"
+              strokeDasharray="1 4"
+              strokeLinecap="round"
               isAnimationActive={false}
             />
           </ComposedChart>
@@ -419,14 +406,17 @@ export function DailyDashboard({
 
         <ChartCard
           title="Net talimat ve sistem yönü"
-          description="MWh. Çubuk: o saatte verilen net yük alma (+) ya da yük atma (−) talimatı; renk sistem yönü."
+          description="MWh. Çubuk: o saatte verilen net yük alma (+) ya da yük atma (−) talimatı; renk sistem yönü (mavi açık, turuncu fazla; ipucunda yazıyla)."
         >
           <BarChart data={day.rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
             <CartesianGrid />
             <XAxis {...axis.x} />
             <YAxis {...axis.y} tickFormatter={(v: number) => nf(v)} />
             <Tooltip
-              formatter={(v: unknown) => `${nf(Number(v ?? 0))} MWh`}
+              formatter={(v: unknown, _n: unknown, e: { payload?: { direction?: string | null } }) => {
+                const dir = DIRECTION_LABEL[e?.payload?.direction ?? ""];
+                return `${nf(Number(v ?? 0))} MWh${dir ? ` · ${dir}` : ""}`;
+              }}
               labelFormatter={(h) => hh(Number(h))}
               cursor={{ fill: "#f1f5f9" }}
             />

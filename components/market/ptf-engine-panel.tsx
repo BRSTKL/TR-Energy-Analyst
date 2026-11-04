@@ -24,6 +24,7 @@ import {
   ChartXAxis as XAxis,
   ChartYAxis as YAxis,
   CHART_COLOR,
+  SERIES,
 } from "@/components/ui/chart";
 import { Card, CardContent } from "@/components/ui/card";
 import { ChartCard } from "@/components/market/chart-card";
@@ -463,7 +464,8 @@ function OkView({
       <div className="grid gap-4 lg:grid-cols-2">
         <ChartCard
           title="Saat saat PTF tahmini"
-          description="TL/MWh. Mavi çizgi tahmin, açık mavi bant olası aralık, gri kesikli benzer günlerin ortancası, açık gri önceki gün, kırmızı kesikli fiyat limiti."
+          description="Kesikli çizgi tahmin, açık bant olası aralık, düz koyu çizgi açıklanan PTF (varsa); noktalı çizgiler benzer günlerin ortancası ve önceki gün, kırmızı çizgi fiyat limiti."
+          unit="TL/MWh"
         >
           <ComposedChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
             <CartesianGrid />
@@ -491,57 +493,34 @@ function OkView({
                 }}
               />
             )}
-            <Area
-              name="Olası aralık"
-              dataKey="band"
-              stroke="none"
-              fill={CHART_COLOR.blue}
-              fillOpacity={0.15}
-              isAnimationActive={false}
-            />
-            <Line
-              name="Benzer günler"
-              dataKey="base"
-              stroke={CHART_COLOR.slateLight}
-              strokeDasharray="4 4"
-              strokeWidth={1.5}
-              isAnimationActive={false}
-            />
+            <Area name="Olası aralık" dataKey="band" {...SERIES.band} isAnimationActive={false} />
+            <Line name="Benzer günler" dataKey="base" {...SERIES.reference} isAnimationActive={false} />
             <Line
               name="Önceki gün"
               dataKey="ptfD1"
+              {...SERIES.reference}
               stroke={CHART_COLOR.gray}
-              strokeOpacity={0.45}
-              strokeWidth={1.5}
+              strokeOpacity={0.5}
               isAnimationActive={false}
             />
             {d.actual && (
-              <Line
-                name="Gerçekleşen"
-                dataKey="actual"
-                stroke={CHART_COLOR.orange}
-                isAnimationActive={false}
-              />
+              <Line name="Açıklanan PTF" dataKey="actual" {...SERIES.actual} isAnimationActive={false} />
             )}
-            <Line
-              name="Tahmin"
-              dataKey="p50"
-              stroke={CHART_COLOR.blue}
-              isAnimationActive={false}
-            />
+            <Line name="Tahmin" dataKey="p50" {...SERIES.forecast} isAnimationActive={false} />
           </ComposedChart>
         </ChartCard>
 
         <ChartCard
           title="Tahmine giren yük, rüzgâr ve güneş"
-          description="MW. Net yük = yük tahmini − rüzgâr − güneş: termik santrallerin karşılayacağı kısım; fiyatı en çok bu belirler."
+          description="Hepsi hedef gün için tahmin. Net yük = yük tahmini − rüzgâr − güneş: termik santrallerin karşılayacağı kısım; fiyatı en çok bu belirler."
+          forecastOnly
         >
           <ComposedChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
             <CartesianGrid />
             <XAxis dataKey="hour" interval={2} tickFormatter={(h: number) => hh(h)} />
             <YAxis tickFormatter={(v: number) => nf(v / 1000)} unit=" GW" width={62} />
             <Tooltip
-              formatter={(v: unknown) => `${nf(Number(v ?? 0))} MW`}
+              formatter={(v: unknown) => `${nf(Number(v ?? 0) / 1000, 1)} GW`}
               labelFormatter={(h) => hh(Number(h))}
             />
             <Legend />
@@ -554,9 +533,7 @@ function OkView({
             <Line
               name="Benzer günlerin yükü"
               dataKey="lepRef"
-              stroke={CHART_COLOR.slateLight}
-              strokeDasharray="4 4"
-              strokeWidth={1.5}
+              {...SERIES.reference}
               isAnimationActive={false}
             />
             <Line

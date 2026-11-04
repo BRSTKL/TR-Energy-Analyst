@@ -379,14 +379,15 @@ export function PreBidBody({
         <div id="kart-girdiler" className="scroll-mt-24">
           <ChartCard
             title="Girdiler: yük, rüzgâr tahmini, net yük"
-            description="MW. Yük tahmini ve EPİAŞ rüzgâr tahmini yarın için yayımlanmış hâliyle; net yük = yük − rüzgâr − güneş vekili (önceki 7 günün aynı saat KGÜP güneş ortancası)."
+            description="Yük tahmini ve EPİAŞ rüzgâr tahmini yarın için yayımlanmış hâliyle; net yük = yük − rüzgâr − güneş vekili (önceki 7 günün aynı saat KGÜP güneş ortancası)."
+            forecastOnly
           >
             <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
               <CartesianGrid />
               <XAxis {...axis.x} />
               <YAxis tickFormatter={(v: number) => nf(v / 1000)} unit=" GW" width={62} />
               <Tooltip
-                formatter={(v: unknown) => `${nf(Number(v ?? 0))} MW`}
+                formatter={(v: unknown) => `${nf(Number(v ?? 0) / 1000, 1)} GW`}
                 labelFormatter={(h) => hh(Number(h))}
               />
               <Legend />

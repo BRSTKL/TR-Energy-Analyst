@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { ComposedChart, LineChart, ResponsiveContainer } from "recharts";
-import { ChartArea as Area, ChartGrid as CartesianGrid, ChartLegend as Legend, ChartLine as Line, ChartTip as Tooltip, ChartXAxis as XAxis, ChartYAxis as YAxis } from "@/components/ui/chart";
+import { ChartArea as Area, ChartGrid as CartesianGrid, ChartLegend as Legend, ChartLine as Line, ChartTip as Tooltip, ChartXAxis as XAxis, ChartYAxis as YAxis, SERIES, STATUS_COLOR } from "@/components/ui/chart";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ForecastReferenceCard } from "@/components/forecast-reference-card";
@@ -56,9 +56,10 @@ function HourlyChart({ hours, days, bands }: { hours: Array<number | null>; days
           <YAxis tick={{ fontSize: 11 }} stroke={COLOR.axis} tickLine={false} axisLine={false} width={48} domain={[0, "auto"]} />
           <Tooltip labelFormatter={(label) => hourText(Number(String(label).slice(0, 2)))} formatter={(v: unknown) => (v === null || v === undefined ? "–" : Array.isArray(v) ? `${nf(Number(v[0]))}–${nf(Number(v[1]))} MWh` : `${nf(Number(v))} MWh`)} />
           <Legend wrapperStyle={{ fontSize: 12 }} formatter={(v: string) => <span className="text-slate-600">{v}</span>} />
-          {bands && <Area name="Tahmin aralığı (deneysel)" dataKey="band" fill="#2a78d6" fillOpacity={0.16} stroke="none" isAnimationActive={false} />}
-          <Line name={dayLabel(days[0], 0)} dataKey="d1" stroke={COLOR.day1} strokeWidth={2} dot={false} isAnimationActive={false} />
-          {days[1] && <Line name={dayLabel(days[1], 1)} dataKey="d2" stroke={COLOR.day2} strokeWidth={2} dot={false} isAnimationActive={false} />}
+          {bands && <Area name="Tahmin aralığı (deneysel)" dataKey="band" {...SERIES.band} isAnimationActive={false} />}
+          {/* İki çizgi de tahmin: kesikli (ortak kural); öbür gün daha açık ton */}
+          <Line name={`${dayLabel(days[0], 0)} · tahmin`} dataKey="d1" {...SERIES.forecast} isAnimationActive={false} />
+          {days[1] && <Line name={`${dayLabel(days[1], 1)} · tahmin`} dataKey="d2" {...SERIES.forecast} stroke={STATUS_COLOR.reference} isAnimationActive={false} />}
         </ComposedChart>
       </ResponsiveContainer>
     </div>

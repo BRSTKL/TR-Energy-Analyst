@@ -28,6 +28,38 @@ export const CHART_COLOR = {
   gray: "#6b7280",
 } as const;
 
+/**
+ * Veri durumu ve sistem yönü renkleri (kullanıcı onayı 04.11.2026). Gerçekleşen / tahmin / aralık / benzer gün ayrımı
+ * yalnız renkle değil çizgi biçimiyle de verilir (SERIES); sistem açığı mavi, fazlası turuncu (kırmızı–yeşil yerine,
+ * renk körü için güvenli çift).
+ */
+export const STATUS_COLOR = {
+  actual: "#1E293B",
+  forecast: "#4F46E5",
+  band: "#E0E7FF",
+  reference: "#94A3B8",
+  scenario: "#B45309",
+  deficit: "#1D4ED8",
+  surplus: "#C2410C",
+  balanced: "#CBD5E1",
+} as const;
+
+/**
+ * Seri biçimleri: her grafikte aynı anlam. `<Line {...SERIES.forecast} name="Tahmin" dataKey="p50" />` gibi kullanılır.
+ * - actual: açıklanmış / ölçülmüş değer, düz koyu çizgi
+ * - forecast: tahmin, kesikli çizgi
+ * - band: tahmin aralığı, açık bant (Area)
+ * - reference: benzer günler, önceki gün gibi kıyas çizgisi, noktalı gri
+ * - scenario: senaryo / varsayım, noktalı turuncu-kahve
+ */
+export const SERIES = {
+  actual: { stroke: STATUS_COLOR.actual, strokeWidth: 2 },
+  forecast: { stroke: STATUS_COLOR.forecast, strokeWidth: 2, strokeDasharray: "6 4" },
+  band: { stroke: "none", fill: STATUS_COLOR.band, fillOpacity: 0.9 },
+  reference: { stroke: STATUS_COLOR.reference, strokeWidth: 1.5, strokeDasharray: "1 4", strokeLinecap: "round" as const },
+  scenario: { stroke: STATUS_COLOR.scenario, strokeWidth: 1.5, strokeDasharray: "1 4", strokeLinecap: "round" as const },
+} as const;
+
 export function ChartContainer({ config, className, children }: { config: ChartConfig; className?: string; children: React.ReactElement }) {
   const vars = Object.fromEntries(Object.entries(config).map(([key, v]) => [`--color-${key}`, v.color])) as React.CSSProperties;
   return (
@@ -53,18 +85,37 @@ export function RingDot({ color, className }: { color: string; className?: strin
   return <span className={cn("inline-block size-3.5 shrink-0 rounded-full border-4 bg-background", className)} style={{ borderColor: color }} />;
 }
 
+/**
+ * Gösterge örneği: kesikli ya da noktalı çizgi o biçimde, bant ve çubuk kare olarak çizilir. Böylece gerçekleşen / tahmin
+ * ayrımı göstergede de renkten bağımsız okunur.
+ */
+export function LegendSwatch({ color, dash, kind = "line" }: { color: string; dash?: string; kind?: "line" | "rect" | "dot" }) {
+  if (kind === "dot") return <RingDot color={color} />;
+  if (kind === "rect") return <span className="inline-block size-3 shrink-0 rounded-sm" style={{ background: color }} aria-hidden="true" />;
+  return (
+    <svg width="22" height="8" viewBox="0 0 22 8" className="shrink-0" aria-hidden="true">
+      <line x1="1" y1="4" x2="21" y2="4" stroke={color} strokeWidth={2.5} strokeDasharray={dash} strokeLinecap={dash?.startsWith("1 ") ? "round" : "butt"} />
+    </svg>
+  );
+}
+
 /** Grafiğin altında ortalanmış gösterge */
-export function ChartLegendDots({ items }: { items: Array<{ label: string; color: string }> }) {
+export function ChartLegendDots({ items }: { items: Array<{ label: string; color: string; dash?: string; kind?: "line" | "rect" | "dot" }> }) {
   return (
     <div className="mt-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-1.5">
       {items.map((it) => (
         <div key={it.label} className="flex items-center gap-2">
-          <RingDot color={it.color} />
+          <LegendSwatch color={it.color} dash={it.dash} kind={it.kind ?? "dot"} />
           <span className="text-sm text-muted-foreground">{it.label}</span>
         </div>
       ))}
     </div>
   );
+}
+
+/** Eksen birimi: grafiğin sol üstünde küçük yazı ("TL/MWh", "MW") */
+export function ChartUnit({ children }: { children: React.ReactNode }) {
+  return <div className="mb-1 ps-4 text-xs text-muted-foreground">{children}</div>;
 }
 
 interface TooltipEntry {
@@ -115,7 +166,7 @@ export function ChartTooltipCard({
             <div key={`${e.dataKey ?? e.name}-${i}`} className="flex items-center gap-2 text-xs">
               <RingDot color={e.color ?? "currentColor"} />
               {name !== "" && name !== undefined && <span className="text-muted-foreground">{name}:</span>}
-              <span className="ml-auto font-semibold text-popover-foreground">{value}</span>
+              <span className="ml-auto font-semibold tabular-nums text-popover-foreground">{value}</span>
             </div>
           );
         })}
@@ -189,14 +240,24 @@ export function ChartTip(props: React.ComponentProps<typeof Tooltip>) {
   return <Tooltip {...rest} cursor={theCursor} content={content ?? <ChartTooltipCard formatter={formatter} labelFormatter={labelFormatter} />} />;
 }
 
-function RingLegend({ payload }: { payload?: ReadonlyArray<{ value?: unknown; color?: string; type?: string }> }) {
+type LegendItem = { value?: unknown; color?: string; type?: string; payload?: { strokeDasharray?: string | number; stroke?: string; fill?: string } };
+
+/** Seri biçiminden gösterge örneği: çizgi (kesikliyse kesikli), bant / çubuk kare */
+function swatchFor(p: LegendItem) {
+  const dash = p.payload?.strokeDasharray;
+  const isLine = p.type === "line" && p.payload?.stroke !== "none";
+  if (!isLine) return <LegendSwatch color={p.payload?.fill && p.payload.fill !== "none" ? p.payload.fill : p.color ?? "currentColor"} kind="rect" />;
+  return <LegendSwatch color={p.color ?? "currentColor"} dash={dash === undefined ? undefined : String(dash)} />;
+}
+
+function RingLegend({ payload }: { payload?: ReadonlyArray<LegendItem> }) {
   const items = (payload ?? []).filter((p) => p.type !== "none" && p.value !== undefined && p.value !== "");
   if (!items.length) return null;
   return (
     <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1.5 pt-2">
       {items.map((p, i) => (
         <div key={`${String(p.value)}-${i}`} className="flex items-center gap-2">
-          <RingDot color={p.color ?? "currentColor"} />
+          {swatchFor(p)}
           <span className="text-sm text-muted-foreground">{String(p.value)}</span>
         </div>
       ))}
