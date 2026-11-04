@@ -17,7 +17,7 @@ const HOUR = 3_600_000;
 
 let memo: { key: string; docs: UmmYear[] } | null = null;
 
-async function loadDocs(): Promise<UmmYear[]> {
+export async function loadDocs(): Promise<UmmYear[]> {
   let names: string[];
   try {
     names = (await fs.readdir(ummDir())).filter((n) => /^\d{4}\.json\.gz$/.test(n)).sort();

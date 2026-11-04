@@ -5,6 +5,17 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 04.11.2026 · Claude · Arıza izleme sayfası (`claude/ariza-izleme`, yüklenmedi)
+
+- Kullanıcı sayfa eksiklerinden "Arıza izleme"yi istedi: veri ve hesap vardı (`data/pool/umm`, `outage-capacity.ts`), liste ekranı yoktu.
+- **Yapılan:** `/ariza` (Analiz grubu): süren bildirim sayısı ve çıkan MW, son 14 günün saatlik çıkan kapasite grafiği, pencere seçici
+  (şu an süren / son 24 saat / son 7 gün), aranabilir tablo (santral, şirket, çıkan MW, kurulu MW, başlangıç, bildirilen bitiş,
+  neden; rüzgâr/güneş/hidro santraller rehber kartına bağlanır). Saf kod `lib/analysis/outage-list.ts`, servis
+  `lib/services/outage-monitor.ts`, API `/api/outages`. Hesap kuralı `outage-capacity.ts` ile aynı (kayıp = kurulu − olay anı kapasite).
+- **Sınırlar (sayfada yazıyor):** bildirimlerde yayım zamanı ve yakıt türü yok; "süren" bildirilen başlangıç ve bitişe göre, bitiş
+  tahmin olabilir; grafik son bildirim çekimine kadar (sonrası eksik sayılmasın diye kesilir). Piyasaya etki iddiası yok.
+- **Kontrol:** 1.037 test, tsc, lint, `--only ariza` duman testi (masaüstü + telefon). Mac UMM verisi 27.10'dan eski; sunucuda taze görünmeli.
+
 ## 04.11.2026 · Claude · Santral rehberi (`claude/santral-rehberi`, yüklenmedi; `claude/menu-portfoy` üstünde)
 
 - Kullanıcı menüye yeni sayfa olarak araçlar istedi; mevcut sayfalarla karşılaştırıp "Santral rehberi" seçildi (herhangi bir santral için

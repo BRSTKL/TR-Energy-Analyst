@@ -154,6 +154,7 @@ const checks: Check[] = [
   { url: "/sector", label: "Sektör karnesi" },
   { url: "/compare", label: "Karşılaştırma" },
   { url: "/santraller", label: "Santral rehberi" },
+  { url: "/ariza", label: "Arıza izleme" },
   { url: "/methodology", label: "Metodoloji" },
 ];
 try {

@@ -13,6 +13,7 @@ import {
   FileBarChart,
   FolderKanban,
   Factory,
+  ZapOff,
   GitCompareArrows,
   LayoutDashboard,
   LineChart,
@@ -29,6 +30,7 @@ export type NavId =
   | "plants"
   | "epias"
   | "market"
+  | "outages"
   | "sector"
   | "compare"
   | "summary"
@@ -135,6 +137,14 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Analiz",
     items: [
       { id: "market", label: "Piyasa özeti", href: "/market", icon: LineChart },
+      {
+        id: "outages",
+        label: "Arıza izleme",
+        short: "Arıza",
+        href: "/ariza",
+        icon: ZapOff,
+        hint: "Şu an devre dışı olan santraller ve çıkan kapasite (EPİAŞ arıza ve bakım bildirimleri)",
+      },
       { id: "sector", label: "Sektör karnesi", href: "/sector", icon: Award },
     ],
   },
@@ -169,6 +179,7 @@ export function activeNavId(pathname: string): NavId | null {
   if (is(p, "/market/gunluk")) return "daily";
   if (is(p, "/market")) return "market";
   if (is(p, "/santraller")) return "plants";
+  if (is(p, "/ariza")) return "outages";
   if (is(p, "/projects/epias")) return "epias";
   if (is(p, "/projects")) return "projects";
   if (is(p, "/sector")) return "sector";

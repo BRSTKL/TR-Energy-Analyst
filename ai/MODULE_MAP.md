@@ -4,9 +4,9 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-553 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+557 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
-## Sayfalar (app/**/page.tsx) (26)
+## Sayfalar (app/**/page.tsx) (27)
 
 - `/projects/[id]/backtest` (`app/(dashboard)/projects/[id]/backtest/page.tsx`) — Aşama 14: yön tahminiyle plan ayarı (projenin fiyat profiliyle, KÜPST dahil)
 - `/projects/[id]/candidates` (`app/(dashboard)/projects/[id]/candidates/page.tsx`) — YEKDEM çıkışı rozeti: bu yıl çıkan ya da süresi bu yıl / yakında dolan
@@ -20,6 +20,7 @@
 - `/projects/[id]/results` (`app/(dashboard)/projects/[id]/results/page.tsx`) — PLAN 19.3: capture rate'in sektördeki yeri
 - `/projects/[id]/validation` (`app/(dashboard)/projects/[id]/validation/page.tsx`) — Kör doğrulama paketi (Bekleyen işler: kalibrasyon): şirketten veri istemeden, açık veriyle hesaplanan ayın uzlaştırma tutarlarını tek sayfada gösterir ve yalnız "faturanızla fark hangi aralıkta?" diye sorar.
 - `/account` (`app/account/page.tsx`)
+- `/ariza` (`app/ariza/page.tsx`) — Arıza izleme: EPİAŞ piyasa mesaj sistemindeki arıza ve bakım bildirimleri.
 - `/compare` (`app/compare/page.tsx`) — Verinin son yılından sonraki yıl (YEKDEM'den çıkış bu yıl için sorulur)
 - `/login` (`app/login/page.tsx`) — Yalnız uygulama içi yol ("/..." ama "//..." değil): dışarıya yönlendirme olmasın.
 - `/market/gunluk` (`app/market/gunluk/page.tsx`) — Günlük pano: piyasada bir günde ne oldu / ne oluyor (gözlem).
@@ -35,7 +36,7 @@
 - `/sector/aggregators/[id]` (`app/sector/aggregators/[id]/page.tsx`) — Toplayıcı ayrıntısı (PLAN 9.2): kıyas tablosundaki bir satırın içi.
 - `/sector` (`app/sector/page.tsx`) — "2025" ya da "2026 (Ocak–Ağustos)"
 
-## API (app/api/**/route.ts) (73)
+## API (app/api/**/route.ts) (74)
 
 - `GET, PUT, DELETE /api/account/epias` — GET /api/account/epias: hesap e-postası ve kayıtlı EPİAŞ hesabının özeti (şifre dönmez).
 - `POST /api/account/epias/test` — POST /api/account/epias/test: kayıtlı (yoksa .env) EPİAŞ hesabıyla yeni bilet alarak bağlantıyı dener.
@@ -69,8 +70,9 @@
 - `GET /api/ops/portfolio-forecast` — GET /api/ops/portfolio-forecast[?date=YYYY-AA-GG]: Projelerin santrallerinin güneş ve rüzgâr üretim tahmini, sunucunun sabah yazdığı değişmeyen kayıtlardan (tarih verilmezse yarın).
 - `GET /api/ops/ptf-scorecard` — GET /api/ops/ptf-scorecard: PTF motorunun ileriye dönük karnesi: değişmeyen günlük kayıtlar gerçekleşen PTF'yle karşılaştırılır (son gün, son 7 gün, hepsi).
 - `GET /api/ops/status` — GET /api/ops/status: Yarının günlük tahmin kayıtlarının (PTF, güneş, rüzgâr) durumu: üst şerit ve Bugün kokpiti.
+- `GET /api/outages` — GET /api/outages?window=active|24h|7d : Arıza izleme (lib/services/outage-monitor.ts)
 - `GET /api/plants/[id]` — GET /api/plants/<EPİAŞ santral kimliği>?year= : Santral kartı (lib/services/plant-card.ts)
-- `GET /api/plants` — GET /api/plants?q=&type=RES|HES|GES&limit=: Santral rehberi: havuzdaki santrallerde ad ya da sahip şirkete göre arama (en çok 100 sonuç).
+- `GET /api/plants` — GET /api/plants?q=&type=RES|HES|GES&limit=: Santral rehberi: havuzdaki santrallerde ad ya da sahip şirkete göre arama (en çok 500 sonuç).
 - `POST /api/pool/plant` — POST /api/pool/plant { powerPlantId, startDay, endDay, kgupVersion?
 - `GET /api/projects/[id]/backtest` — GET /api/projects/[id]/backtest: Her santral için kaydırmalı geriye dönük testi iki fiyat rejiminde çalıştırır: - "project": projenin fiyat profili (mevzuat modunda her saat kendi tarihinin kuralıyla) - "rules2026": tüm veri 2026 kuralları…
 - `GET /api/projects/[id]/budget` — GET /api/projects/[id]/budget?spread=y2026|y2025|wide&rule=r2026|r2025|strict&level=low|normal|high|custom&gwh=1000&intraday=1|0&inflation=25
@@ -121,7 +123,7 @@
 - `app/not-found.tsx` — Türkçe 404 (hata ayıklama testi 16.10.2026: Next'in İngilizce varsayılan sayfası çıkıyordu)
 - `app/projects/loading.tsx`
 
-## lib/analysis (49)
+## lib/analysis (50)
 
 - `lib/analysis/aggregator-benchmark.ts` — Toplayıcılar arası kıyas (PLAN 8.7): EPİAŞ'taki her toplayıcının portföyündeki lisanslı santraller için aynı yöntem: saatlik sapma (UEVM − ilk KGÜP), EPİAŞ resmi dengesizlik fiyatı.
 - `lib/analysis/aggregator-detail.ts` — Toplayıcı ayrıntısı (PLAN 9.2): Kıyas tablosundaki bir toplayıcının içi: santraller (tek başına maliyet, sektör medyanına göre), aylık netleşme ve sahiplerin (üreticilerin) portföye katkısı.
@@ -152,6 +154,7 @@
 - `lib/analysis/neighbors.ts` — Komşu ülke fiyatları ve sınır akışları görünümü (havuz: lib/pool/entsoe-codec.ts; SAF, I/O yok)
 - `lib/analysis/outage-capacity.ts` — Piyasa geneli arızalı kapasite (Aşama 14: yön modelinin dış girdisi): Kaynak: EPİAŞ piyasa mesaj sistemi bildirimleri (havuz: data/pool/umm).
 - `lib/analysis/outage-detection.ts` — Olası arıza / kısıntı saatleri: Tahmin yüksekken üretimin sıfıra yakın olduğu kesintisiz bloklar çoğunlukla tahmin hatası değildir: santral arızası, bakım ya da TEİAŞ yük atma talimatıdır (YAT, santral bazında yayımlanmaz).
+- `lib/analysis/outage-list.ts` — Arıza izleme: bildirim listesi ve saatlik kapasite kaybı (SAF, I/O yok): Kaynak EPİAŞ piyasa mesaj sistemi bildirimleridir (havuz data/pool/umm).
 - `lib/analysis/outage-validation.ts` — Olası arıza bloklarının resmi bildirimlerle doğrulanması (Aşama 12.4): detectOutages (outage-detection.ts) planın yüksek, üretimin sıfıra yakın olduğu blokları işaretler; neden bilinmez.
 - `lib/analysis/planning-efficiency.ts` — — Planlama Verimliliği & "Ne Olurdu?" Simülasyon Motoru: Tüm fonksiyonlar SAF (pure) olarak tasarlanmıştır: - Dışsal yan etkisi yoktur (No side-effects, no I/O, no DB).
 - `lib/analysis/plant-comparison.ts` — Santral / Teknoloji Karşılaştırma ve Capture Price Analizi: Her santral, teknoloji grubu (RES, HES, GES) ve portföy için aynı birim metrikleri üretir.
@@ -332,7 +335,7 @@
 - `lib/sector/period.ts` — Sektör analizlerinin dönemi: içinde bulunulan yılın sektör karnesinin dönem sonu (scripts/sector-collect.mts; piyasa verisi olan son gün).
 - `lib/sector/plant-technology.ts` — Sektör taramasında santral teknolojisi (PLAN Bekleyen işler: EPDK ↔ karne, adım 2b): Eskiden tür yalnız addan tahmin ediliyordu (`guessTechnologyFromName`); adında tür eki olmayan santraller ("OYMAPINAR", "BORÇKA", "HASAN UĞURLU") ve tanın…
 
-## lib/services (59)
+## lib/services (60)
 
 - `lib/services/aggregator-data.ts` — Toplayıcı kıyası ve ayrıntısı için veri okuma (PLAN 8.7, 9.2): Santral saatleri veri havuzundan (ilk KGÜP ve UEVM), türü ve sahibi sektör karnesi dosyalarından ya da havuz tanımından, fiyatlar veritabanındaki EPİAŞ resmi dengesizlik fiyatl…
 - `lib/services/aggregator-membership.ts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" ekiyle kayıtlı tüm katılımcıların santral listesi çekilir ve .cache/epias/ aggregator-membership.json'a yazılır.
@@ -354,6 +357,7 @@
 - `lib/services/installed-capacity.ts` — Kurulu güç kaynağı (EPİAŞ YEKDEM katılımcı listeleri, EPDK lisansları): Kural ve eşleştirme: lib/epias-plant/installed-capacity.ts.
 - `lib/services/live-day.ts` — Canlı gün: bugünün şu ana kadarki verisi ve yarının açıklanmış verisi (EPİAŞ'tan istek anında)
 - `lib/services/ops-status.ts` — günlük iş durumu (Bugün kokpiti ve üst şerit): yarının tahmin kayıtları yazıldı mı: Yalnız dosya okur (değişmeyen günlük kayıtlar: PTF, güneş, rüzgâr); EPİAŞ'a ya da hava servisine istek atmaz, bu yüzden her sayfada üst şeritten sık sorula…
+- `lib/services/outage-monitor.ts` — Arıza izleme (/ariza): havuzdaki EPİAŞ arıza / bakım bildirimleri (diskten, EPİAŞ'a bağlanmaz)
 - `lib/services/outage-notices.ts` — Rapor için EPİAŞ arıza / bakım bildirimleri (Aşama 12.4): havuzdaki bildirimler (data/pool/umm) santral havuzundaki UEVÇB listesiyle (readPoolPlantInfo) proje santrallerine eşleştirilir.
 - `lib/services/plant-card.ts` — Santral kartı (Santral rehberi): bir santralin kayıtlı bilgisi ve gerçekleşen satış fiyatı: Veri havuzundaki herhangi bir santral için (projede olması gerekmez): - Kimlik: ad, tür, sahip şirket, hidro alt türü (sektör karnesi / GEM / ad ek…
 - `lib/services/plant-change-warnings.ts` — Güneş santrallerinde değişim uyarıları (Aşama 22.7 bağlaması; kural lib/forecast/change-detection.ts)
