@@ -178,7 +178,7 @@ function PhaseCard({ minutes, bidReady }: { minutes: number | null; bidReady: st
       <CardContent className="space-y-4 p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            <p className="text-xs font-medium text-slate-500">
               Şimdi
             </p>
             <h2 className="text-xl font-bold text-slate-900">{phaseText(phase)}</h2>

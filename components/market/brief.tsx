@@ -89,7 +89,7 @@ export function BriefHeadline({
     <Card className="border-slate-300 shadow-sm">
       <CardContent className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:p-6">
         <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+          <p className="text-xs font-medium text-slate-500">
             {dmy(h.date)} {weekday} · {h.dayClassLabel} günü
           </p>
           <p className="mt-2 text-xs text-slate-500">Ortalama fiyat beklentisi</p>
@@ -380,7 +380,7 @@ export function SignalSection({
         if (!list.length && !(ctxLoading && g !== "talep")) return null;
         return (
           <div key={g}>
-            <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+            <h3 className="mb-2 text-sm font-semibold text-slate-500">
               {GROUP_LABEL[g]}
             </h3>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

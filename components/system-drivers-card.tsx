@@ -339,7 +339,7 @@ function MonthTable({ y, side }: { y: SystemDriversYear; side: Side }) {
           <TableHead rowSpan={2} className={`${group} align-bottom`}>
             Kim yarattı?
           </TableHead>
-          <TableHead colSpan={5} className={`${group} h-8 text-center text-xs font-semibold uppercase tracking-wide text-slate-500`}>
+          <TableHead colSpan={5} className={`${group} h-8 text-center text-xs font-semibold text-slate-500`}>
             {w.gap} yaratanlar, MW
           </TableHead>
           <TableHead rowSpan={2} className={`${group} text-right align-bottom`}>

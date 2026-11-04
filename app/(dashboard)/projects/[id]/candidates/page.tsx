@@ -235,7 +235,8 @@ export default function CandidatesPage() {
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span className="break-words">
               Toplayıcıların santral listeleri henüz toplanmadı; &quot;başka toplayıcıda&quot; ayrımı yapılamıyor ve bu santraller hedef
-              görünebilir. Toplamak için (VPN açık): <code>node --env-file=.env node_modules/.bin/tsx scripts/aggregator-collect.mts</code>
+              görünebilir. Listeler sunucudaki toplama işiyle güncellenir (yönetici:{" "}
+              <code>scripts/aggregator-collect.mts</code>).
             </span>
           </div>
         )}

@@ -299,7 +299,7 @@ export default function ProjectInsightsPage() {
               <Card className="border-slate-200 shadow-sm">
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                    <CardTitle className="text-xs font-medium text-slate-500">
                       Hakim Sistem Yönü
                     </CardTitle>
                     <Compass className="h-4 w-4 text-slate-400" />
@@ -358,7 +358,7 @@ export default function ProjectInsightsPage() {
               <Card className="border-slate-200 shadow-sm">
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                    <CardTitle className="text-xs font-medium text-slate-500">
                       Zaman Yoğunlaşması
                     </CardTitle>
                     <Clock className="h-4 w-4 text-slate-400" />
@@ -383,7 +383,7 @@ export default function ProjectInsightsPage() {
               <Card className="border-slate-200 shadow-sm">
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                    <CardTitle className="text-xs font-medium text-slate-500">
                       Tahmin Hatası Artışı
                     </CardTitle>
                     <AlertTriangle className="h-4 w-4 text-amber-500" />
@@ -406,7 +406,7 @@ export default function ProjectInsightsPage() {
               <Card className="border-slate-200 shadow-sm">
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                    <CardTitle className="text-xs font-medium text-slate-500">
                       Sistematik Yanlılık (Bias)
                     </CardTitle>
                     <Target className="h-4 w-4 text-slate-400" />
@@ -558,7 +558,7 @@ export default function ProjectInsightsPage() {
                     >
                       {{ HIGH: "Yüksek Öncelik", MEDIUM: "Orta Öncelik", LOW: "Düşük Öncelik" }[sug.priority]}
                     </span>
-                    <span className="text-2xs font-medium uppercase tracking-wider text-slate-400">
+                    <span className="text-2xs font-medium text-slate-400">
                       {sug.category}
                     </span>
                   </div>

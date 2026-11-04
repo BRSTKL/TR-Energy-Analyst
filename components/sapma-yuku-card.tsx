@@ -5,6 +5,7 @@ import { AlertTriangle, Info, Loader2, RefreshCw, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusChip } from "@/components/ui/status-chip";
+import { tlCompact } from "@/lib/format";
 import type { PlantReportData } from "@/lib/report/plant-report";
 import { deviationLoad, monthlyRange } from "@/lib/report/deviation-load";
 import { HYDRO_KIND_LABEL } from "@/lib/sector/benchmark";
@@ -32,10 +33,8 @@ export interface SapmaSummary {
   check: { unknownOwner: string[]; yekdemNextUnknown: string[]; missing: Array<{ company: string; plants: string[] }> };
 }
 
-const tl = (v: number) =>
-  Math.abs(v) >= 1e6
-    ? `${(v / 1e6).toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} milyon ₺`
-    : `${Math.round(v).toLocaleString("tr-TR")} ₺`;
+/** Tutar: uygulamanın tek kısaltması (lib/format tlCompact: "51,4 M ₺"); sonuç kutularıyla aynı yazım */
+const tl = (v: number) => tlCompact(v);
 
 const Chip = ({ kind }: { kind: "exact" | "assumption" | "estimate" | "scenario" }) => <StatusChip kind={kind} />;
 
@@ -220,7 +219,7 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh, plantScoped = false
                   {tiles.map(([label, v, tone]) => (
                     <div key={label as string} className="rounded-md bg-slate-50 p-2">
                       <p className={`text-lg font-bold ${tone}`}>{Math.round(v as number).toLocaleString("tr-TR")}</p>
-                      <p className="text-2xs text-slate-500">{label} · ₺/MWh</p>
+                      <p className="text-2xs text-slate-500">{label} · TL/MWh</p>
                     </div>
                   ))}
                 </div>

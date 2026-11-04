@@ -641,7 +641,7 @@ export default function ProjectResultsPage() {
                   {tlCompact(currentKPI.totalRevenue)}
                 </div>
                 <p className="mt-1 flex items-center gap-1 text-xs font-medium text-emerald-600">
-                  Birim gelir: {nf(currentKPI.unitRevenue, 1)} ₺/MWh
+                  Birim gelir: {nf(currentKPI.unitRevenue, 1)} TL/MWh
                 </p>
                 {(data.sapma?.yekdem?.plantNames.length ?? 0) > 0 && (
                   <p className="mt-1 text-2xs text-slate-500">
@@ -689,7 +689,7 @@ export default function ProjectResultsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-slate-900">
-                  {nf(currentKPI.unitImbalanceCost, 1)} <span className="text-sm font-normal text-slate-500">₺/MWh</span>
+                  {nf(currentKPI.unitImbalanceCost, 1)} <span className="text-sm font-normal text-slate-500">TL/MWh</span>
                 </div>
                 <p className="mt-1 text-xs font-medium text-amber-700">
                   Üretim ağırlıklı ortalama (∑Maliyet / ∑MWh)
@@ -762,7 +762,7 @@ export default function ProjectResultsPage() {
           <Card className="shadow-sm">
             <CardHeader>
               <CardTitle className="text-base font-semibold">
-                Aylık Birim Dengesizlik Maliyeti Trendi (₺/MWh)
+                Aylık Birim Dengesizlik Maliyeti Trendi (TL/MWh)
               </CardTitle>
               <CardDescription>
                 {selectedPlantId === "all" && data.plants.length > TREND_MAX_LINES
@@ -788,11 +788,11 @@ export default function ProjectResultsPage() {
                       tick={{ fontSize: 11 }}
                       stroke="#64748b"
                       width={84}
-                      tickFormatter={(val) => `${nf(Number(val))} ₺/MWh`}
+                      tickFormatter={(val) => `${nf(Number(val))} TL/MWh`}
                     />
                     <Tooltip
                       formatter={(val: any) =>
-                        `${Number(val || 0).toLocaleString("tr-TR", { maximumFractionDigits: 2 })} ₺/MWh`
+                        `${Number(val || 0).toLocaleString("tr-TR", { maximumFractionDigits: 2 })} TL/MWh`
                       }
                     />
                     <Legend wrapperStyle={{ paddingTop: 10, fontSize: 12 }} />
@@ -963,7 +963,7 @@ export default function ProjectResultsPage() {
                         Toplam Gelir (₺) <ArrowUpDown className="h-3 w-3" />
                       </div>
                     </TableHead>
-                    <TableHead className="text-right">Birim Gelir (₺/MWh)</TableHead>
+                    <TableHead className="text-right">Birim Gelir (TL/MWh)</TableHead>
                     <TableHead
                       className="cursor-pointer text-right hover:text-slate-900"
                       onClick={() => handleSort("totalImbalanceCost")}
@@ -977,7 +977,7 @@ export default function ProjectResultsPage() {
                       onClick={() => handleSort("unitImbalanceCost")}
                     >
                       <div className="flex items-center justify-end gap-1">
-                        Birim Maliyet (₺/MWh) <ArrowUpDown className="h-3 w-3" />
+                        Birim Maliyet (TL/MWh) <ArrowUpDown className="h-3 w-3" />
                       </div>
                     </TableHead>
                   </TableRow>

@@ -157,7 +157,7 @@ export default function ValidationPage() {
         {data && (
           <article className="space-y-5 rounded-lg border border-slate-200 bg-white p-6 shadow-sm print:border-0 print:p-0 print:shadow-none">
             <header className="space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-widest text-emerald-700">TR-Energy Analyst · Doğrulama talebi</p>
+              <p className="text-xs font-semibold text-emerald-700">TR-Energy Analyst · Doğrulama talebi</p>
               <h1 className="text-xl font-bold text-slate-900">
                 {monthLabel(data.month)} dengesizlik hesabımız faturanıza ne kadar yakın?
               </h1>

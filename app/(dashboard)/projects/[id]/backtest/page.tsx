@@ -177,7 +177,7 @@ export default function BacktestPage() {
                   <CardContent className="overflow-x-auto">
                     <table className="w-full min-w-[720px] text-sm">
                       <thead>
-                        <tr className="border-b text-left text-xs uppercase tracking-wider text-slate-500">
+                        <tr className="border-b text-left text-xs text-slate-500">
                           <th className="py-2 pr-3">Kural</th>
                           <th className="py-2 pr-3 text-right">Geriye dönük test</th>
                           <th className="py-2 pr-3 text-right">Aynı dönem (iyimser)</th>
@@ -334,7 +334,7 @@ function DirectionCard({
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-sm">
               <thead>
-                <tr className="border-b text-left text-xs uppercase tracking-wider text-slate-500">
+                <tr className="border-b text-left text-xs text-slate-500">
                   <th className="py-2 pr-3">Kural</th>
                   <th className="py-2 pr-3 text-right">Geriye dönük test</th>
                   <th className="py-2 pr-3 text-right">Aynı dönem (iyimser)</th>

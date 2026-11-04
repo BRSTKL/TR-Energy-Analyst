@@ -269,12 +269,12 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Ölçek:</span>
+            <span className="text-xs font-semibold text-slate-500">Ölçek:</span>
             {pill<Scale>("large", scale, setScale, `Büyük (${gwh(LARGE)} üstü)`)}
             {pill<Scale>("mid", scale, setScale, `Orta (${gwh(MID)}–${gwh(LARGE)})`)}
             {pill<Scale>("small", scale, setScale, "Küçük")}
             {pill<Scale>("all", scale, setScale, "Tümü")}
-            <span className="ml-3 text-xs font-semibold uppercase tracking-wider text-slate-500" title={`Üretiminin en az %${MIN_TECH_SHARE} kadarı bu teknoloji olan toplayıcılar`}>
+            <span className="ml-3 text-xs font-semibold text-slate-500" title={`Üretiminin en az %${MIN_TECH_SHARE} kadarı bu teknoloji olan toplayıcılar`}>
               Teknoloji (üretimin %{MIN_TECH_SHARE}+):
             </span>
             {pill<Mix>("all", mix, setMix, "Tümü", "mix")}

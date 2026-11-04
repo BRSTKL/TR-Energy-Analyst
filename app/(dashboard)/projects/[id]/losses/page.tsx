@@ -206,10 +206,13 @@ export default function LossPage() {
                   EPİAŞ&apos;ta konum yok; konum OpenStreetMap ya da Global Energy Monitor kaydından bulunur ve elle doğrulanır. Ardından o konum için hava verisi
                   çekilir.
                 </p>
-                <p className="text-xs text-slate-500">
-                  Komutlar: <code>scripts/plant-location.mts set &lt;EPİAŞ kimliği&gt; &lt;enlem&gt; &lt;boylam&gt; USER &quot;&lt;kaynak&gt;&quot;</code>, sonra{" "}
-                  <code>scripts/weather-sync.mts</code>.
-                </p>
+                <details className="text-xs text-slate-500">
+                  <summary className="cursor-pointer">Yönetici için komut</summary>
+                  <p className="mt-1">
+                    <code>scripts/plant-location.mts set &lt;EPİAŞ kimliği&gt; &lt;enlem&gt; &lt;boylam&gt; USER &quot;&lt;kaynak&gt;&quot;</code>, sonra{" "}
+                    <code>scripts/weather-sync.mts</code>.
+                  </p>
+                </details>
               </CardContent>
             </Card>
           )}
@@ -298,11 +301,17 @@ export default function LossPage() {
           {wind && wind.plants.length > 0 && !wind.plants.some((p) => p.windYears.length > 0) && (
             <Card className="border-amber-200 bg-amber-50/50 shadow-sm">
               <CardContent className="space-y-2 p-4 text-sm text-slate-700">
-                <p>Bu projenin rüzgâr santrallerinin {wind.plants.some((p) => p.locationSource) ? "rüzgâr verisi henüz çekilmedi" : "konumu henüz girilmedi"}.</p>
-                <p className="text-xs text-slate-500">
-                  Komutlar: <code>scripts/location-autofill.mts --gem --res</code> (Global Energy Monitor kaydı) ya da <code>scripts/plant-location.mts set</code>, sonra{" "}
-                  <code>scripts/wind-sync.mts</code>.
+                <p>
+                  Bu projenin rüzgâr santrallerinin {wind.plants.some((p) => p.locationSource) ? "rüzgâr verisi henüz çekilmedi" : "konumu henüz girilmedi"}. Kayıp
+                  ölçümü için önce konum (Global Energy Monitor kaydından ya da elle), ardından o konumun rüzgâr verisi gerekir.
                 </p>
+                <details className="text-xs text-slate-500">
+                  <summary className="cursor-pointer">Yönetici için komut</summary>
+                  <p className="mt-1">
+                    <code>scripts/location-autofill.mts --gem --res</code> ya da <code>scripts/plant-location.mts set</code>, sonra{" "}
+                    <code>scripts/wind-sync.mts</code>.
+                  </p>
+                </details>
               </CardContent>
             </Card>
           )}

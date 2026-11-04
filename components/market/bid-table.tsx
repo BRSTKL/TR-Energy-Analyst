@@ -130,7 +130,7 @@ export function BidTable({
           </div>
           <div className="overflow-x-auto rounded-lg border bg-white shadow-sm">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <thead className="bg-slate-50 text-left text-xs text-slate-500">
                 <tr>
                   <th className="px-3 py-2">Saat</th>
                   <th className="px-3 py-2 text-right">PTF tahmini</th>

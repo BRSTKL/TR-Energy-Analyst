@@ -446,7 +446,7 @@ function SectorLossBody({ data, tech, tabs }: { data: SectorCurtailment; tech: T
             </p>
           ) : (
             <p className="text-xs text-amber-800">
-              Kar verisi henüz yok: kışın plansız kaybın bir kısmı karla örtülü panelden olabilir (scripts/snow-sync.mts ile çekilince ayrılır).
+              Kar verisi henüz yok: kışın plansız kaybın bir kısmı karla örtülü panelden olabilir (kar verisi çekilince ayrılır).
             </p>
           ))}
 

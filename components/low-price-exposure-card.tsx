@@ -95,8 +95,8 @@ export function LowPriceExposureCard({
       <CardHeader>
         <CardTitle className="text-base font-semibold">Düşük ve sıfır fiyatlı saat maruziyeti</CardTitle>
         <CardDescription>
-          PTF&apos;nin {num(LOW_PRICE_MAX)} ₺/MWh altına indiği saatlerde (sıfır fiyat: PTF ≤ {num(ZERO_PRICE_MAX)} ₺) ne kadar
-          üretildi ve bu üretim dönemin düz ortalama PTF&apos;sine ({num(comparison.baseloadPtf)} ₺/MWh) göre ne kadar az değerlendi.
+          PTF&apos;nin {num(LOW_PRICE_MAX)} TL/MWh altına indiği saatlerde (sıfır fiyat: PTF ≤ {num(ZERO_PRICE_MAX)} ₺) ne kadar
+          üretildi ve bu üretim dönemin düz ortalama PTF&apos;sine ({num(comparison.baseloadPtf)} TL/MWh) göre ne kadar az değerlendi.
           Bu, ucuz saatlerin brüt etkisidir; santralin pahalı saatlerde baz PTF&apos;nin üstünde sattığı üretim hesaba katılmaz.
           Net tablo capture rate sütunundadır.
         </CardDescription>
@@ -129,7 +129,7 @@ export function LowPriceExposureCard({
           </div>
         ) : (
           <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-            Dönemde PTF&apos;nin {num(LOW_PRICE_MAX)} ₺/MWh altına indiği saatlerde üretim yok.
+            Dönemde PTF&apos;nin {num(LOW_PRICE_MAX)} TL/MWh altına indiği saatlerde üretim yok.
           </p>
         )}
         <div className="overflow-x-auto">
@@ -142,7 +142,7 @@ export function LowPriceExposureCard({
                 <TableHead className="text-right">{num(LOW_PRICE_MAX)} ₺ altında (MWh)</TableHead>
                 <TableHead className="text-right">Saat</TableHead>
                 <TableHead className="text-right">Değer kaybı</TableHead>
-                <TableHead className="text-right">₺/MWh (tüm üretim)</TableHead>
+                <TableHead className="text-right">TL/MWh (tüm üretim)</TableHead>
                 <TableHead className="text-right">Brüt etki (puan)</TableHead>
                 <TableHead className="text-right">Net capture rate</TableHead>
                 {showPosition && <TableHead className="text-right">Sektördeki yer</TableHead>}

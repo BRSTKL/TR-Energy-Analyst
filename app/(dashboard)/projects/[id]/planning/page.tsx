@@ -681,7 +681,7 @@ export default function PlanningEfficiencyPage() {
           {/* KPI 1: Planlama Verimlilik Oranı */}
           <Card className="border-slate-200 shadow-sm transition-shadow hover:shadow-md">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
+              <CardTitle className="text-xs font-medium text-slate-500">
                 Planlama Verimliliği
               </CardTitle>
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
@@ -724,7 +724,7 @@ export default function PlanningEfficiencyPage() {
           {/* KPI 2: Toplam Dengesizlik Kaybı */}
           <Card className="border-slate-200 shadow-sm transition-shadow hover:shadow-md">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
+              <CardTitle className="text-xs font-medium text-slate-500">
                 Dengesizlik Kaybı (TL)
               </CardTitle>
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-100 text-rose-700">
@@ -751,7 +751,7 @@ export default function PlanningEfficiencyPage() {
           {/* KPI 3: Tespit Edilen Tahmin Yanlılığı */}
           <Card className="border-slate-200 shadow-sm transition-shadow hover:shadow-md">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
+              <CardTitle className="text-xs font-medium text-slate-500">
                 Tahmin Yanlılığı (Bias)
               </CardTitle>
               <span
@@ -804,7 +804,7 @@ export default function PlanningEfficiencyPage() {
           >
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle
-                className={`text-xs font-medium uppercase tracking-wider ${
+                className={`text-xs font-medium ${
                   upliftOutcome === "loss" ? "text-rose-800" : "text-emerald-800"
                 }`}
               >
@@ -930,7 +930,7 @@ export default function PlanningEfficiencyPage() {
 
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="rounded-lg bg-white/10 px-4 py-2.5 backdrop-blur-sm">
-                    <div className="text-2xs uppercase tracking-wider text-slate-300">
+                    <div className="text-2xs text-slate-300">
                       Mevcut Fiili Gelir
                     </div>
                     <div className="text-base font-bold text-white">
@@ -941,7 +941,7 @@ export default function PlanningEfficiencyPage() {
                     <ArrowRight className="h-4 w-4" />
                   </div>
                   <div className="rounded-lg bg-emerald-500/20 px-4 py-2.5 border border-emerald-400/30 backdrop-blur-sm">
-                    <div className="text-2xs uppercase tracking-wider text-emerald-200">
+                    <div className="text-2xs text-emerald-200">
                       Simüle Edilen Gelir
                     </div>
                     <div className="text-base font-bold text-emerald-300">
@@ -1193,7 +1193,7 @@ export default function PlanningEfficiencyPage() {
                 <TableRow className="bg-slate-50/80">
                   <TableHead className="w-12 text-center text-xs">#</TableHead>
                   <TableHead className="text-xs">Tarih</TableHead>
-                  <TableHead className="text-right text-xs">Kayıp (₺/MWh)</TableHead>
+                  <TableHead className="text-right text-xs">Kayıp (TL/MWh)</TableHead>
                   <TableHead className="text-right text-xs">Gerçekleşen (MWh)</TableHead>
                   <TableHead className="text-right text-xs">Tahmin (MWh)</TableHead>
                   <TableHead className="text-right text-xs">Net Sapma</TableHead>
@@ -1344,7 +1344,7 @@ export default function PlanningEfficiencyPage() {
                         {/* KPI 2: Teorik tavan (referans) */}
                         <Card className="border-slate-200 shadow-sm">
                           <CardHeader className="pb-2">
-                            <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                            <CardTitle className="text-xs font-medium text-slate-500">
                               Teorik tavan (mükemmel öngörü)
                             </CardTitle>
                           </CardHeader>
@@ -1365,7 +1365,7 @@ export default function PlanningEfficiencyPage() {
                       <section className="grid gap-4 sm:grid-cols-3 [&>*]:min-w-0">
                         <Card className="border-slate-200 shadow-sm">
                           <CardContent className="p-4">
-                            <div className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                            <div className="text-xs font-medium text-slate-500">
                               Her saat kapatılsaydı (net)
                             </div>
                             <div className="mt-1 text-xl font-bold text-slate-900">{tl(arb.netIfAlwaysClosedTl)}</div>
@@ -1376,7 +1376,7 @@ export default function PlanningEfficiencyPage() {
                         </Card>
                         <Card className="border-slate-200 shadow-sm">
                           <CardContent className="p-4">
-                            <div className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                            <div className="text-xs font-medium text-slate-500">
                               GİP&apos;in dezavantajlı olduğu saatler
                             </div>
                             <div className="mt-1 text-xl font-bold text-slate-900">
@@ -1389,11 +1389,11 @@ export default function PlanningEfficiencyPage() {
                         </Card>
                         <Card className="border-slate-200 shadow-sm">
                           <CardContent className="p-4">
-                            <div className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                            <div className="text-xs font-medium text-slate-500">
                               Net fiyat avantajı
                             </div>
                             <div className="mt-1 text-xl font-bold text-slate-900">
-                              {arb.avgOpportunityPerMwh.toLocaleString("tr-TR")} ₺/MWh
+                              {arb.avgOpportunityPerMwh.toLocaleString("tr-TR")} TL/MWh
                             </div>
                             <p className="mt-1 text-xs text-slate-500">
                               Kapatılan her MWh dengesizlik için ortalama · GİP kapsamı %{arb.gipCoveragePercent}
@@ -1526,7 +1526,7 @@ export default function PlanningEfficiencyPage() {
                             />
                             <Tooltip
                               formatter={(value: any, name?: any) => [
-                                `${Number(value).toLocaleString("tr-TR")} ₺/MWh`,
+                                `${Number(value).toLocaleString("tr-TR")} TL/MWh`,
                                 name === "gipFiyat"
                                   ? "GİP AOF"
                                   : name === "dengesizlikFiyat"
@@ -1541,7 +1541,7 @@ export default function PlanningEfficiencyPage() {
                             <Line
                               type="monotone"
                               dataKey="gipFiyat"
-                              name="GİP AOF (₺/MWh)"
+                              name="GİP AOF (TL/MWh)"
                               stroke="#8b5cf6"
                               strokeWidth={2.5}
                               dot={{ r: 3 }}
@@ -1550,7 +1550,7 @@ export default function PlanningEfficiencyPage() {
                             <Line
                               type="monotone"
                               dataKey="dengesizlikFiyat"
-                              name="Dengesizlik Fiyatı (₺/MWh)"
+                              name="Dengesizlik Fiyatı (TL/MWh)"
                               stroke="#f59e0b"
                               strokeWidth={2.5}
                               dot={{ r: 3 }}
@@ -1560,7 +1560,7 @@ export default function PlanningEfficiencyPage() {
                               <Line
                                 type="monotone"
                                 dataKey="ptfFiyat"
-                                name="PTF (₺/MWh)"
+                                name="PTF (TL/MWh)"
                                 stroke="#94a3b8"
                                 strokeWidth={1.5}
                                 strokeDasharray="4 4"
@@ -1646,7 +1646,7 @@ export default function PlanningEfficiencyPage() {
                               {hourItem.gipPrice.toLocaleString("tr-TR")} ₺
                             </TableCell>
                             <TableCell className="text-right font-mono text-xs font-bold text-amber-700">
-                              +{hourItem.priceDifference.toLocaleString("tr-TR")} ₺/MWh
+                              +{hourItem.priceDifference.toLocaleString("tr-TR")} TL/MWh
                             </TableCell>
                             <TableCell className="text-right font-mono text-xs font-bold text-emerald-600">
                               {hourItem.opportunityTl.toLocaleString("tr-TR")} ₺
@@ -1696,7 +1696,7 @@ export default function PlanningEfficiencyPage() {
                         {selectedDayDetail.period} — 24 Saatlik Üretim ve Fiyat Drill-Down Analizi
                       </DialogTitle>
                       <DialogDescription className="text-xs text-slate-500">
-                        Left Axis: Gerçekleşen vs Tahmin (MWh) • Right Axis: PTF vs SMF (₺/MWh)
+                        Left Axis: Gerçekleşen vs Tahmin (MWh) • Right Axis: PTF vs SMF (TL/MWh)
                       </DialogDescription>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1728,7 +1728,7 @@ export default function PlanningEfficiencyPage() {
                         axisLine={false}
                         tickFormatter={(v) => `${v} MWh`}
                       />
-                      {/* Sağ Eksen: ₺/MWh */}
+                      {/* Sağ Eksen: TL/MWh */}
                       <YAxis
                         yAxisId="right"
                         orientation="right"
@@ -1748,7 +1748,7 @@ export default function PlanningEfficiencyPage() {
                           if (name === "Gerçekleşen MWh" || name === "Tahmin MWh") {
                             return [`${nf(Number(val || 0), 1)} MWh`, name];
                           }
-                          return [`${nf(Number(val || 0), 1)} ₺/MWh`, name];
+                          return [`${nf(Number(val || 0), 1)} TL/MWh`, name];
                         }}
                       />
                       <Legend verticalAlign="top" height={36} />
@@ -1781,7 +1781,7 @@ export default function PlanningEfficiencyPage() {
                         yAxisId="right"
                         type="monotone"
                         dataKey="ptf"
-                        name="PTF (₺/MWh)"
+                        name="PTF (TL/MWh)"
                         stroke="#10b981"
                         strokeWidth={2}
                         dot={false}
@@ -1791,7 +1791,7 @@ export default function PlanningEfficiencyPage() {
                         yAxisId="right"
                         type="monotone"
                         dataKey="smf"
-                        name="SMF (₺/MWh)"
+                        name="SMF (TL/MWh)"
                         stroke="#ef4444"
                         strokeWidth={2}
                         dot={false}

@@ -15,7 +15,7 @@ const MONTHS_SHORT = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", 
 const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
 const nf = (v: number, d = 0) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
 const monthLabel = (m: string) => `${MONTHS_SHORT[Number(m.slice(5, 7)) - 1]} ${m.slice(2, 4)}`;
-const tl = (v: number) => (v >= 1e6 ? `${nf(v / 1e6, 2)} M TL` : `${nf(v / 1e3)} bin TL`);
+const tl = (v: number) => (v >= 1e6 ? `${nf(v / 1e6, 2)} M ₺` : `${nf(v / 1e3)} bin ₺`);
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const CELL: Record<HourLossState, string> = { planned: LOSS_COLOR.planned, unplanned: LOSS_COLOR.unplanned, normal: "#dfe7ef", none: "transparent" };
 const STATE_LABEL: Record<HourLossState, string> = {

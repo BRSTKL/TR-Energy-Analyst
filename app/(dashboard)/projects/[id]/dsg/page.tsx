@@ -248,7 +248,7 @@ export default function DsgScenarioPage() {
                   ].map(([title, value, note], i) => (
                     <Card key={title} className={i === 2 ? "border-emerald-200 bg-emerald-50/50" : ""}>
                       <CardContent className="p-4">
-                        <div className="text-xs font-medium uppercase tracking-wider text-slate-500">{title}</div>
+                        <div className="text-xs font-medium text-slate-500">{title}</div>
                         <div className={`mt-1 text-2xl font-bold ${i === 2 ? "text-emerald-700" : "text-slate-900"}`}>
                           {value}
                         </div>
@@ -375,7 +375,7 @@ export default function DsgScenarioPage() {
                       <>
                         <table className="w-full min-w-[720px] text-sm">
                           <thead>
-                            <tr className="border-b text-left text-xs uppercase tracking-wider text-slate-500">
+                            <tr className="border-b text-left text-xs text-slate-500">
                               <th className="py-2 pr-3">Üye</th>
                               <th className="py-2 pr-3 text-right">Tek başına</th>
                               {data.allocation.map((m) => (

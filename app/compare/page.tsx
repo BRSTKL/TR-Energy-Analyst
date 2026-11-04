@@ -322,7 +322,7 @@ export default function ComparePage() {
                     if (m.section) {
                       out.push(
                         <TableRow key={`s-${m.section}`} className="bg-slate-50 hover:bg-slate-50">
-                          <TableCell colSpan={rows.length + 1} className="py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                          <TableCell colSpan={rows.length + 1} className="py-1.5 text-xs font-semibold text-slate-600">
                             {m.section}
                           </TableCell>
                         </TableRow>

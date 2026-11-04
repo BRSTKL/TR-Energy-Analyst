@@ -139,7 +139,7 @@ export function GipScenarioPanel({ projectId, scope }: { projectId: string; scop
   return (
     <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50/60 to-white shadow-sm lg:col-span-2">
       <CardHeader className="pb-2">
-        <CardTitle className="text-xs font-medium uppercase tracking-wider text-emerald-800">
+        <CardTitle className="text-xs font-medium text-emerald-800">
           Üst sınır (kusursuz öngörü): hatanın %{share} payı doğru yönde GİP&apos;te kapatılırsa {loading && "· hesaplanıyor…"}
         </CardTitle>
       </CardHeader>

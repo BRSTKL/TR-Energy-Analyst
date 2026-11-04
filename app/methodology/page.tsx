@@ -94,7 +94,7 @@ function Table({ head, rows }: { head: string[]; rows: React.ReactNode[][] }) {
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-[13px]">
         <thead>
-          <tr className="border-b border-slate-300 text-left text-xs uppercase tracking-wide text-slate-500">
+          <tr className="border-b border-slate-300 text-left text-xs text-slate-500">
             {head.map((h) => (
               <th key={h} className="py-1.5 pr-3 font-semibold">
                 {h}
@@ -150,7 +150,7 @@ export default function MethodologyPage() {
 
       <div className="mx-auto grid max-w-6xl gap-8 px-4 pt-6 sm:px-6 grid-cols-1 lg:grid-cols-[220px_1fr] lg:px-8 print:block print:max-w-none print:px-0">
         <nav className="print:hidden lg:sticky lg:top-6 lg:self-start">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">İçindekiler</p>
+          <p className="text-xs font-semibold text-slate-500">İçindekiler</p>
           <ol className="mt-2 space-y-1 text-sm">
             {SECTIONS.map((s, i) => (
               <li key={s.id}>

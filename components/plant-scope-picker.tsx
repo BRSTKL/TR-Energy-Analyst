@@ -37,7 +37,7 @@ export function PlantScopePicker({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {label && <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</span>}
+      {label && <span className="text-xs font-semibold text-slate-500">{label}</span>}
       <Button variant={value === allId ? "default" : "outline"} size="sm" onClick={() => onChange(allId)} className="h-8 gap-1.5 text-xs">
         <Layers className="h-3.5 w-3.5" />
         {allLabel}
