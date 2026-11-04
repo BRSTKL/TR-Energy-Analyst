@@ -3,14 +3,20 @@
 Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kayıt dört şey söyler: **yapılan**, **karar**,
 **yarım / engel**, **sıradaki**. 15 kayıttan eskileri silinir; kalıcı olanı `context/decisions.md`'ye taşınır.
 
-## Şu an üzerinde çalışılıyor
-
-Başlarken satır ekle, bitince sil. Burada dosyası olan bir işe dokunma.
-
-| Ajan | Dal | Dosyalar / klasörler | Başlangıç |
-|---|---|---|---|
-
 ---
+
+## 04.11.2026 · Claude · Codex tarafı kaldırıldı (`claude/codex-kaldir`)
+
+- Kullanıcı Codex'le geliştirmeyi bıraktı. Silinen: `AGENTS.md`, `ai/skills/selection.md` (Codex skill rehberi), bu
+  dosyadaki "üzerinde çalışılıyor" tablosu. `ai/execution/parallel-work.md` → `working-rules.md` (Codex'siz dal,
+  veri, sunucu kuralları). CLAUDE.md, README, `ai/README.md`, `checks.md` Codex'siz.
+- Codex dalları (`codex/tanitim-videosu`, `codex/tahmin-bantlari-ruzgar`; ikisi de `main`'de) ve
+  `~/.codex/worktrees/tahmin-main-yukleme` çalışma ağacı kaldırıldı; uzak `codex/tahmin-bantlari-ruzgar` silindi.
+- Video dalının commit edilmemiş işi: `tr-energy-tur-paylasim.mp4` → `Raporlar/Tanitim/`, `video-screens.mts` ve
+  Codex'in 26–30.10 PICKUP kayıtları → `Raporlar/Tanitim/codex-arsiv/` (git dışı). Yayın öncesi iddia denetimi hâlâ
+  gerekli. Ayrıca `git stash` içinde. O daldaki bilinen sorun notu (resmî dengesizlik fiyatı farkı) `known-issues.md`'ye
+  taşındı.
+- Kökteki `index.html` başka bir projenin (kişisel portfolyo) dosyası; dokunulmadı.
 
 ## 02.11.2026 · Claude · Günlük rutin Faz 1 + Faz 3: teklif masası, portföy üretimi, PTF karnesi, Bugün görünümleri (yüklendi, b339196)
 

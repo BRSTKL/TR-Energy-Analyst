@@ -8,7 +8,7 @@ yapıyoruz, neden böyle, kurallar neler, en son ne oldu. Yapı, "her proje ayn�
 
 | Dosya | Ne zaman okunur | İçerik |
 |---|---|---|
-| [`PICKUP.md`](PICKUP.md) | **her oturumun başında** | Oturum devri: yapılan, karar, yarım, sıradaki; şu an kim neyle uğraşıyor |
+| [`PICKUP.md`](PICKUP.md) | **her oturumun başında** | Oturum devri: yapılan, karar, yarım, sıradaki |
 | [`DEPENDENCIES.md`](DEPENDENCIES.md) | dış veri, servis ya da kütüphane gerektiğinde | EPİAŞ, Open-Meteo, EPDK, GEM, OSM, TCMB; npm paketleri; sunucu |
 | [`context/foundation.md`](context/foundation.md) | ilk kez | Proje kimliği: kimin için, hangi soruyu yanıtlar, kapsam, başarı ölçütü |
 | [`context/domain.md`](context/domain.md) | piyasa terimi ya da formül görünce | Türkiye elektrik piyasası sözlüğü, dengesizlik / KÜPST formülleri, mevzuat kaynakları |
@@ -18,10 +18,9 @@ yapıyoruz, neden böyle, kurallar neler, en son ne oldu. Yapı, "her proje ayn�
 | [`MODULE_MAP.md`](MODULE_MAP.md) | bir dosyayı ararken | **Otomatik** dosya dosya harita (`npm run ai:map`) |
 | [`constraints/README.md`](constraints/README.md) | kod yazarken | Bağlayıcı kurallar (CLAUDE.md'ye bağlanır) + kod kuralları ve yasak kalıplar |
 | [`execution/status.md`](execution/status.md) | iş seçerken | Yol haritasının durumu (PLAN.md özeti), açık işler |
-| [`execution/parallel-work.md`](execution/parallel-work.md) | Codex ile Claude aynı anda çalışırken | Dal, dosya sahipliği, sunucu, çakışma kuralları |
+| [`execution/working-rules.md`](execution/working-rules.md) | dal açarken, birleştirirken, sunucuya yüklerken | Dal, veri, sunucu, geliştirme sunucusu, çakışma kuralları |
 | [`quality/checks.md`](quality/checks.md) | commit'ten önce | Test, rapor denetimi, duman testi, denetçi kontrol listeleri |
 | [`quality/known-issues.md`](quality/known-issues.md) | hata ayıklarken | Bilinen sorunlar, tuzaklar, sınırlar |
-| [`skills/selection.md`](skills/selection.md) | skill seçerken veya alan kontrolü gerektiğinde | Kurulum doğrulama, risk düzeyi, uzmanlık kontrol listeleri |
 | [`skills/recipes.md`](skills/recipes.md) | sık yapılan bir işi yaparken | Tarifler: yeni sayfa, yeni EPİAŞ ucu, yeni eşitleme adımı, yükleme… |
 
 ## Kaynak sırası (çelişki olursa)

@@ -1,6 +1,6 @@
 # TR-Energy Analyst
 
-> Yapay zekâ ajanları (Codex, Claude Code…) için giriş: [`AGENTS.md`](AGENTS.md) ve [`ai/`](ai/README.md) klasörü.
+> Proje kuralları [`CLAUDE.md`](CLAUDE.md)'de, proje notları [`ai/`](ai/README.md) klasöründe.
 
 Türkiye elektrik piyasasında yenilenebilir santral portföylerinin (RES, GES, HES) **dengesizlik maliyetini** EPİAŞ'ın kamuya açık verisinden saat saat hesaplayan, sektörle kıyaslayan ve karar üreten bir analiz uygulaması.
 

@@ -93,6 +93,10 @@ yeniden üretin. Ayrıntılı geçmiş `PLAN.md` (süren aşamalar, son kayıtla
 - Duman testi kapsamı değişen kodu kullanan sayfalara göre (19.10).
 - Hafıza ve özet notlar eskiyebilir: "açık" denen bir işi önermeden önce kodda kontrol et (ör. KÜPST son plan işi
   notlarda açık görünüyordu ama yapılmıştı).
+- **Codex ile paralel çalışma bırakıldı** (04.11.2026, kullanıcı): proje yalnız Claude ile geliştirilir. `AGENTS.md`,
+  Codex skill rehberi (`ai/skills/selection.md`) ve PICKUP'taki "üzerinde çalışılıyor" tablosu kaldırıldı;
+  dal / sunucu kuralları `ai/execution/working-rules.md`'de kaldı. Codex'in tanıtım videosu işi
+  `Raporlar/Tanitim/` altında (git dışı).
 
 ## Günlük rutin ekranları (02.11.2026)
 

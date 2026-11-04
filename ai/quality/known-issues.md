@@ -7,12 +7,23 @@ Tarihli; önermeden ya da "düzeltildi" demeden önce kodda kontrol edin.
 - **Büyük projede geçmişle sınama ilk açılışta yavaş** (22.10): Inavitas (66 santral) sunucuda soğuk istekte ~2 dk
   (sunucu işlemcisi tek çekirdekte Mac'ten ~5 kat yavaş). Sonraki açılışlar önbellekten 0,1 sn. Seçenekler (karar
   bekliyor): pencere ara toplamları (3–4 kat), çok çekirdek, diskte önbellek + ısıtma.
+- **Resmî dengesizlik fiyatı EPİAŞ'ın bugünkü değerinden küçük farklı** (27.10'da ölçüldü; bilerek eşitlenmedi): veritabanındaki
+  `imbalancePosPrice` / `imbalanceNegPrice` Eylül 2025 – Ağustos 2026'da (12 ay) neredeyse her saatte EPİAŞ'ın tutar ÷ miktar
+  yanıtından farklı; 2024 – Ağustos 2025 ve Eylül 2026 birebir aynı. Fark: Eylül–Aralık 2025 ≈ 0,01 TL/MWh (yuvarlama
+  düzeyi); Ocak–Ağustos 2026 ortalama 0,01–0,1 (pozitif) ve 0,1–0,5 (negatif) TL/MWh, p99 ≤ 6, tek saatte en büyüğü 34.
+  Sebep doğrulanmadı (büyük ihtimalle EPİAŞ'ın uzlaştırmayı sonradan düzeltmesi). Etki, aynı motorla 15 projenin 27.303 GWh'inde
+  hesaplandı: toplam dengesizlik maliyeti %−0,004 (santral toplamı 3.903,38 → 3.903,21 M TL) / %−0,008 (netleşmiş); en büyük
+  proje etkisi %−0,009 (santral toplamı) ve %−0,047 (netleşmiş, Inavitas); en büyük ay Şubat 2026 %−0,032; işaret aylara göre
+  değişiyor. KÜPST etkilenmez (PTF / SMF). Yeniden eşitleme (`syncOfficialImbalancePrices`) bütün hesapları son basamakta
+  değiştirir ve EPİAŞ yeniden düzeltirse fark döner; bu yüzden yapılmadı. Yalnız bir metinde "EPİAŞ ile birebir" iddiası
+  gerekiyorsa eşitleyin. Ekim 2026'nın resmî fiyatı ay kapanana kadar yok: o saatlerde
+  motor formüle düşer ve 2026'da formül resmî fiyattan yaklaşık %10 sapar; o ayı kapsayan rakamlar düşük güvenlidir.
 - **Metodoloji sayfası telefonda ~112 px yatay taşıyor** (20.10'da görüldü; doğrulanmadı).
 - **Metodoloji bulguları "2026 Ocak–Ağustos"** sayılarını alıntılıyor; tarihli ve doğru ama karne Ocak–Eylül'e
   güncellendi.
 - **Kar verisi** (`scripts/snow-sync.mts`) Open-Meteo günlük sınırında (429) yarım kalmış olabilir; ekranda "Kar
   verisi henüz yok" görünüyorsa yeniden çalıştırılır, ardından `sector-curtailment`.
-- **Kapalı biçim maliyet kopyaları** (22.10, Codex incelemesi): Δ·(PTF − pozitif) / |Δ|·(negatif − PTF) birkaç yerde
+- **Kapalı biçim maliyet kopyaları** (22.10, kod incelemesi): Δ·(PTF − pozitif) / |Δ|·(negatif − PTF) birkaç yerde
   ayrı yazılmış (`lib/report/plant-report.ts` üç blok, `lib/analysis/backtest.ts` `costWithMultiplier`,
   `lib/analysis/dsg-scenarios.ts`). Fiyatlar motordan geldiği için sonuç doğru; ama tek bir yardımcıya
   (`lib/calculations/engine.ts`) taşınması bekliyor. Taşırken çıktı birebir aynı kalmalı (bkz. `checks.md`).

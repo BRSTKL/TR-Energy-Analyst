@@ -13,7 +13,7 @@
 | Yeni dış kaynak, kesim saati, koordinat kaynağı | [veri kaynağı listesi](../../.claude/agents/veri-kaynagi-arastirmaci.md): birincil kaynaktan doğrula |
 | Commit öncesi rapor kapısı | [rapor denetçisi listesi](../../.claude/agents/rapor-denetcisi.md) |
 
-`.claude/agents/` dosyaları Claude'da alt ajan olarak çalışır; diğer ajanlar aynı maddeleri elle uygular.
+`.claude/agents/` dosyaları Claude'da alt ajan olarak çalışır.
 
 ## Duman testi (`scripts/smoke-test.mts`)
 
