@@ -23,6 +23,7 @@ const TECH: Record<string, string> = { RES: "Rüzgâr", GES: "Güneş", HES: "Hi
 export default function PlantDirectoryPage() {
   const [q, setQ] = useState("");
   const [type, setType] = useState<(typeof TYPES)[number]["id"]>("ALL");
+  const [limit, setLimit] = useState(50);
   const [res, setRes] = useState<{ total: number; items: DirectoryEntry[]; directorySize: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,7 +33,7 @@ export default function PlantDirectoryPage() {
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
-        const r = await fetch(`/api/plants?q=${encodeURIComponent(q)}&type=${type}`, { signal: ctrl.signal });
+        const r = await fetch(`/api/plants?q=${encodeURIComponent(q)}&type=${type}&limit=${limit}`, { signal: ctrl.signal });
         const j = await r.json();
         if (!j.success) throw new Error(j.error ?? "Santral listesi alınamadı");
         setRes(j);
@@ -47,7 +48,7 @@ export default function PlantDirectoryPage() {
       clearTimeout(timer);
       ctrl.abort();
     };
-  }, [q, type]);
+  }, [q, type, limit]);
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-4 py-6 sm:px-6">
@@ -65,7 +66,10 @@ export default function PlantDirectoryPage() {
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
           <input
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={(e) => {
+              setQ(e.target.value);
+              setLimit(50);
+            }}
             placeholder="Santral ya da şirket adı"
             className="h-10 w-full rounded-md border bg-white pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           />
@@ -76,7 +80,10 @@ export default function PlantDirectoryPage() {
               key={t.id}
               type="button"
               aria-pressed={type === t.id}
-              onClick={() => setType(t.id)}
+              onClick={() => {
+                setType(t.id);
+                setLimit(50);
+              }}
               className={`rounded-md px-3 py-1.5 text-sm font-medium ${type === t.id ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
             >
               {t.label}
@@ -99,7 +106,7 @@ export default function PlantDirectoryPage() {
             {res.total === 0
               ? "Eşleşen santral yok."
               : res.total > res.items.length
-                ? `${res.total} santral eşleşti, ilk ${res.items.length} gösteriliyor. Aramayı daraltın.`
+                ? `${res.total} santral eşleşti, ${res.items.length} tanesi gösteriliyor.`
                 : `${res.total} santral`}
             {loading && <Loader2 className="ml-2 inline h-3.5 w-3.5 animate-spin" aria-label="Yenileniyor" />}
           </p>
@@ -131,6 +138,16 @@ export default function PlantDirectoryPage() {
               </CardContent>
             </Card>
           )}
+          {res.total > res.items.length && limit < 500 && (
+            <button
+              type="button"
+              onClick={() => setLimit((n) => Math.min(500, n + 100))}
+              className="h-9 rounded-md border bg-white px-4 text-sm font-medium hover:bg-slate-50"
+            >
+              Daha fazla göster
+            </button>
+          )}
+          {res.total > res.items.length && limit >= 500 && <p className="text-sm text-slate-500">Daha fazlası için aramayı daraltın.</p>}
         </>
       )}
     </div>
