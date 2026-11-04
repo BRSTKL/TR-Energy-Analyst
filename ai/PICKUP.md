@@ -5,6 +5,26 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 04.11.2026 · Claude · Arayüz: kaynak dili (`claude/arayuz-kaynak-dili`, 8 commit, yüklenmedi)
+
+- Canlı sunucuda (b339196) arayüz incelemesi, sonra onaylı plan (`~/.claude/plans/pasted-content-id-ae5a-…md`) 6 adımda uygulandı.
+  Hesap, veri kaynağı ve iş kuralı değişmedi; yalnız sunum.
+- **Yapılan:** Bugün tarihi derleme gününde donuyordu (sunucuda "Pazartesi 2 Kasım"), artık tarayıcıda. Kurulu güç
+  "4.608 MW" → "4,6 MW" (sonuç, içgörü, içe aktarma). Grafiklerde ortak çizgi dili `components/ui/chart.tsx` `SERIES` /
+  `STATUS_COLOR` (gerçekleşen düz koyu, tahmin kesikli, aralık bant, kıyas noktalı; sistem açığı mavi, fazla turuncu;
+  kullanıcı onayı). Ortak rozet `components/ui/status-chip.tsx`. Sonuçlarda dönem (`monthRangeLabel`) ve "Kesin hesap ·
+  ilk plana göre, fatura değil". Tahmin doğruluğu kartında tek işaret (plan fazlası). Sayının aşaması: Teklif öncesi ve
+  Bugün'de açıklanan PTF varsa o, yoksa 12:05 kaydı ana sayı, canlı hesap ikinci. Menü "Gün içi" → "Günlük iş", Portföy
+  özeti Portföy'de; Günlük pano sekmesi adreste (`?sekme=`). Sektör: Sistem yönüyle açılması (27.10) korundu, başlık
+  sekmeye göre. Büyük harf etiketler, "₺/MWh" → "TL/MWh", ekrandaki betik komutları "Yönetici için" altında.
+- **Kontrol:** 987 test, tsc, lint temiz; tam duman testi 53/53 (uyarılar yavaş API). Yerelde gözle: Bugün tarihi, Teklif
+  öncesi (açıklanan 2.729 önde, çizgi dili), Sonuçlar (dönem, 4,6 MW, rozet), Üretim tahmini telefonda. Mac'te günlük kayıt
+  olmadığı için "kayıt önde" ve Bugün'ün "açıklanan PTF" kartı yerelde görülmedi; sunucuda yüklemeden sonra bakılmalı.
+  `check:reports` çalıştırılmadı (rapor / hesap koduna dokunulmadı).
+- **Sıradaki:** `main`'e birleştirme ve sunucuya yükleme kullanıcı onayıyla. Açık kalanlar (incelemede O6/O7): sonuçlarda
+  telefonda ana sayının geç gelmesi ve kesilen sekme şeridi, Bugün'ün kendini yenilememesi, Portföy özetinde hatanın
+  "veri yok" görünmesi, planlamadaki kırmızı–yeşil skala, iki grafik paleti.
+
 ## 04.11.2026 · Claude · Codex tarafı kaldırıldı (`claude/codex-kaldir`)
 
 - Kullanıcı Codex'le geliştirmeyi bıraktı. Silinen: `AGENTS.md`, `ai/skills/selection.md` (Codex skill rehberi), bu
