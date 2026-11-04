@@ -260,6 +260,7 @@ describe("sistem geneli havuz biçimi", () => {
     // 20 Ekim 13:00'te (Türkiye) çekildi; aynı gün sonraki çalışmalar yeniden çekmez
     doc.fetched["10"] = "2026-10-20T10:00:00.000Z";
     doc.consumption[hourIndex(2026, "2026-10-19T23:00:00+03:00")!] = 30000;
+    doc.rt.wind[hourIndex(2026, "2026-10-19T23:00:00+03:00")!] = 4000;
     expect(systemNeedsFetch(doc, 10, new Date("2026-10-20T20:30:00Z"))).toBe(false);
     // Türkiye saatiyle gece yarısından sonra (21 Ekim 00:30) yeni gün: yenilenir
     expect(systemNeedsFetch(doc, 10, new Date("2026-10-20T21:30:00Z"))).toBe(true);
@@ -269,8 +270,19 @@ describe("sistem geneli havuz biçimi", () => {
     expect(systemNeedsFetch(doc, 10, new Date("2026-10-20T22:30:00Z"))).toBe(true);
     // Dünün son saati doluysa gün içinde bir daha çekilmez
     doc.consumption[yesterdayLast] = 31000;
+    doc.rt.wind[yesterdayLast] = 5000;
     expect(systemNeedsFetch(doc, 10, new Date("2026-10-20T22:30:00Z"))).toBe(false);
     expect(systemNeedsFetch(doc, 10, new Date("2026-10-21T21:30:00Z"))).toBe(true);
+  });
+
+  it("dünün son saatinde tüketim dolu ama rüzgâr boşsa da bir saat sonra yeniden denenir", () => {
+    const doc = emptySystemYear(2026);
+    const last = hourIndex(2026, "2026-10-20T23:00:00+03:00")!;
+    doc.fetched["10"] = "2026-10-20T21:10:00.000Z";
+    doc.consumption[last] = 31000;
+    expect(systemNeedsFetch(doc, 10, new Date("2026-10-20T22:30:00Z"))).toBe(true);
+    doc.rt.wind[last] = 5000;
+    expect(systemNeedsFetch(doc, 10, new Date("2026-10-20T22:30:00Z"))).toBe(false);
   });
 
   it("yenileme: eksik ay çekilir, yeni çekilen geçici ay bekler, içinde bulunulan ay düne kadar", () => {

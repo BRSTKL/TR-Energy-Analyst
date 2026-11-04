@@ -247,10 +247,14 @@ export function systemMonthStatus(doc: SystemYear | null, month: number): MonthS
 /** Türkiye saatiyle gün ("YYYY-AA-GG") */
 const trDay = (ms: number) => new Date(ms + 3 * HOUR).toISOString().slice(0, 10);
 
-/** Dünün son saatinde (23:00) gerçek zamanlı tüketim yok mu? Dün bu belgenin yılına düşmüyorsa false */
+/**
+ * Dünün son saatinde (23:00) gerçek zamanlı tüketim ya da rüzgâr üretimi yok mu? Dün bu belgenin yılına düşmüyorsa false.
+ * Rüzgâr da bakılır: gerçek zamanlı üretim tüketimden geç yayımlanır; yalnız tüketime bakınca 3 Kasım 2026'da rüzgârın
+ * 23:00 saati boş kaldı ve gün boyu yeniden denenmedi (net yük 23/24).
+ */
 function yesterdayMissing(doc: SystemYear, now: Date): boolean {
   const i = hourIndex(doc.year, `${trDay(now.getTime() - 24 * HOUR)}T23:00:00`);
-  return i !== null && doc.consumption[i] === null;
+  return i !== null && (doc.consumption[i] === null || doc.rt.wind[i] === null);
 }
 
 /**

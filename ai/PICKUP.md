@@ -5,6 +5,15 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 04.11.2026 · Claude · Sistem serisi: dünün rüzgâr saati için yeniden deneme (`claude/sistem-yeniden-dene`)
+
+- Günlük panoda 3 Kasım "net yük 23/24" idi: sunucu havuzunda rüzgârın 23:00 saati boştu. Kasım ayı 4 Kasım 01:23'te çekilmiş, o an
+  gerçek zamanlı üretimin son saati yayımlanmamıştı; yeniden deneme kuralı (`yesterdayMissing`) yalnız tüketime baktığı için tekrar
+  çekilmedi. EPİAŞ'ta değer vardı (5.191,6 MW).
+- **Yapılan:** `lib/pool/system-codec.ts` `yesterdayMissing` artık rüzgâra da bakar (gerçek zamanlı üretim tüketimden geç yayımlanır);
+  test eklendi. 1.019 test, tsc, `check:reports` 0 hata.
+- **Sıradaki:** yüklemeden sonra bir saat içinde saatlik iş 3 Kasım'ı kendiliğinden doldurur; yoksa sunucuda `system-sync.mts --recent`.
+
 ## 04.11.2026 · Claude · Günlük pano sadeleşti (`claude/pano-sade`)
 
 - Kullanıcı sekmelerin (Geçmiş gün / Bugün / Yarın / Teklif öncesi) kafa karıştırdığını söyledi; önizleme gösterildi, onaylandı.
