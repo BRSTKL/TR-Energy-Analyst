@@ -12,6 +12,7 @@ import {
   CloudDownload,
   FileBarChart,
   FolderKanban,
+  Factory,
   GitCompareArrows,
   LayoutDashboard,
   LineChart,
@@ -25,6 +26,7 @@ export type NavId =
   | "pre-bid"
   | "daily"
   | "projects"
+  | "plants"
   | "epias"
   | "market"
   | "sector"
@@ -98,6 +100,14 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: FolderKanban,
       },
       {
+        id: "plants",
+        label: "Santral rehberi",
+        short: "Santraller",
+        href: "/santraller",
+        icon: Factory,
+        hint: "Herhangi bir santralin kurulu gücü, konumu, YEKDEM durumu ve gerçekleşen satış fiyatı",
+      },
+      {
         id: "epias",
         label: "EPİAŞ'tan santral ekle",
         href: "/projects/epias",
@@ -158,6 +168,7 @@ export function activeNavId(pathname: string): NavId | null {
   if (is(p, "/market/teklif")) return "pre-bid";
   if (is(p, "/market/gunluk")) return "daily";
   if (is(p, "/market")) return "market";
+  if (is(p, "/santraller")) return "plants";
   if (is(p, "/projects/epias")) return "epias";
   if (is(p, "/projects")) return "projects";
   if (is(p, "/sector")) return "sector";

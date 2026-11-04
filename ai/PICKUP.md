@@ -5,6 +5,21 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 04.11.2026 · Claude · Santral rehberi (`claude/santral-rehberi`, yüklenmedi; `claude/menu-portfoy` üstünde)
+
+- Kullanıcı menüye yeni sayfa olarak araçlar istedi; mevcut sayfalarla karşılaştırıp "Santral rehberi" seçildi (herhangi bir santral için
+  kart; projede olması gerekmez). Gerçekleşen satış fiyatı hesabı zaten vardı (`capture-rate.ts`, sonuç sayfası, rapor); eksik olan
+  santral başına ay ay tablo ve günün saatine göre dağılım bu sayfada.
+- **Yapılan:** `/santraller` (arama: ad ya da sahip şirket, tür süzgeci) ve `/santraller/<EPİAŞ kimliği>` (kart). Servisler
+  `lib/services/plant-directory.ts` (havuz + karne sahipleri, 30 dk bellek) ve `plant-card.ts`; saf kod `lib/analysis/plant-search.ts`
+  ve `plant-profile.ts` (`hourOfDayProfile`; ay kırılımı mevcut `monthlyCapture`). API: `/api/plants`, `/api/plants/[id]`.
+- **Kart:** kurulu güç (CLAUDE.md kuralıyla: YEKDEM → EPDK → en yüksek üretim; tahmin `~` ve "Tahmini" rozeti, kapasite faktörü yalnız
+  kayıtlı güçte), konum ve kaynağı (ilçe merkezi tahmin), YEKDEM durumu, yıl seçici, üretim, ortalama satış fiyatı, baz PTF, capture
+  oranı ve sektördeki yeri, profil kaybı, sıfır/düşük fiyatlı saat payı, ay ay tablo, saat grafiği. Fiyat = PTF; dengesizlik ve KÜPST yok.
+- **Kontrol:** 1.030 test, tsc, lint, `--only santraller` duman testi (masaüstü + telefon; smoke-test'e iki sayfa eklendi). Mac verisi eski;
+  sunucuda gözle bakılmalı.
+- **Sıradaki:** sektör tablosundan karta bağlantı; şirket profili sayfası; sonra Arıza izleme.
+
 ## 04.11.2026 · Claude · Menü: karşılaştırma Portföy altına, "Portföy özeti" → "Dönem özeti" (`claude/menu-portfoy`, yüklenmedi)
 
 - Kullanıcı: karşılaştırma sayfası Portföy başlığına alınsın, sayfadaki "← Bugün" kalksın, "Portföy özeti" sayfanın içeriğini

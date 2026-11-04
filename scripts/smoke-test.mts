@@ -153,6 +153,7 @@ const checks: Check[] = [
   { url: "/market/teklif", label: "Teklif öncesi özet" },
   { url: "/sector", label: "Sektör karnesi" },
   { url: "/compare", label: "Karşılaştırma" },
+  { url: "/santraller", label: "Santral rehberi" },
   { url: "/methodology", label: "Metodoloji" },
 ];
 try {
@@ -162,6 +163,12 @@ try {
   if (id !== undefined) checks.push({ url: `/sector/aggregators/${id}`, label: "Toplayıcı ayrıntısı" });
 } catch {
   // toplayıcı kıyası toplanmamışsa atlanır
+}
+try {
+  const pl = await getJson<{ items?: Array<{ id: number }> }>("/api/plants?limit=1");
+  if (pl.items?.[0]) checks.push({ url: `/santraller/${pl.items[0].id}`, label: "Santral kartı" });
+} catch {
+  // santral dizini yoksa atlanır
 }
 const PROJECT_PAGES = ["results", "plants", "backtest", "validation", "losses", "forecast", "candidates", "dsg", "insights", "planning", "import"];
 for (const p of chosen) for (const pg of PROJECT_PAGES) checks.push({ url: `/projects/${p.id}/${pg}`, label: `${p.name.slice(0, 24)} · ${pg}` });
