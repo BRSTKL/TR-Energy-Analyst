@@ -22,6 +22,10 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
   (1.308 MW) toplayıcı portföyündeki santral: EPİAŞ sahibini yayımlamıyor. Radar bu dosyayı da okur (`loadNewOwnerEntries`) ve
   "Şirketlere göre devreye giren kapasite" tablosu var (Enerjisa 5 santral 559 MW, Eksim 5 / 270 MW, Kalyon YEKA GES 3 / 150 MW…).
   Mac'te önizleme için dosya sunucudan kopyalandı.
+- **Toplayıcı eşleşmesi:** sahibi bilinmeyen 27 santralin 19'u (800 MW) toplayıcı üyelik listesinde (`aggregator-membership.json`,
+  17.10.2026 tarihli, 30 toplayıcı); 8'i (ör. DAMLA-2, ÇAYHAN 1, PAMUK, ARTURNA, G24-KARAPINAR GES) ikisinde de yok (liste tarihinden sonra
+  katılmış olabilir). Radarda "Toplayıcılara göre" tablosu ve listede "toplayıcı: X": Inavitas 7 santral / 350 MW, Pure Energy 5 / 153,
+  Rönesans Reflex 2 / 136, Erkim 2 / 100, Enko 5 / 79, Aksa 3 / 76.
 - **Sınırlar:** Ekim 2026 UEVM'si (17 Kasım civarı) gelene kadar son ay Eylül. Yeni santral çıktıkça sahip için doldurma yinelenmeli
   ("EPİAŞ bilgilerini güncelle" ya da aynı çağrı).
 - **Sıradaki:** radarı yükle; sahip doldurmayı aylık işe bağlamak; şirket profili sayfası.

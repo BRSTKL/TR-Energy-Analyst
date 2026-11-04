@@ -176,6 +176,44 @@ export default function NewPlantRadarPage() {
         </CardContent>
       </Card>
 
+      {data.aggregators.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Toplayıcılara göre devreye giren kapasite</CardTitle>
+            <CardDescription>
+              Toplayıcı üyelik listesine göre ({data.membershipAsOf ? `${data.membershipAsOf.slice(8, 10)}.${data.membershipAsOf.slice(5, 7)}.${data.membershipAsOf.slice(0, 4)} tarihli` : "tarihsiz"}). Hiçbir toplayıcıda
+              görünmeyen {nf(data.noAggregator.plants)} santral ({nf(data.noAggregator.mw)} MW) burada yok; listeden sonra katılmış ya da toplayıcısız olabilir.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="overflow-x-auto p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Toplayıcı</TableHead>
+                  <TableHead className="text-right">Santral</TableHead>
+                  <TableHead className="text-right">Kurulu güç (MW)</TableHead>
+                  <TableHead className="text-right">Kayıtlı / tahmini (MW)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.aggregators.map((a) => (
+                  <TableRow key={a.aggregator}>
+                    <TableCell className="max-w-[24rem] truncate font-medium" title={a.aggregator}>
+                      {a.aggregator}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{nf(a.plants)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{nf(a.mw, 1)}</TableCell>
+                    <TableCell className="text-right tabular-nums text-slate-600">
+                      {nf(a.recordedMw, 1)} / {nf(a.estimatedMw, 1)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-base font-semibold">Devreye giren santraller</h2>
         <div className="flex gap-1 rounded-lg border bg-white p-1" role="group" aria-label="Tür">
@@ -230,8 +268,8 @@ export default function NewPlantRadarPage() {
                     </Link>
                   </TableCell>
                   <TableCell>{TECH[p.type]}</TableCell>
-                  <TableCell className="max-w-[16rem] truncate text-slate-600" title={p.owner ?? ""}>
-                    {p.owner ?? "bilinmiyor"}
+                  <TableCell className="max-w-[16rem] truncate text-slate-600" title={p.owner ?? p.aggregators.join(", ")}>
+                    {p.owner ?? (p.aggregators[0] ? `toplayıcı: ${p.aggregators[0]}` : "bilinmiyor")}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {p.recorded ? "" : "~"}

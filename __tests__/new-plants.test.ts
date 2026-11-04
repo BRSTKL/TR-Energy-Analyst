@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { monthlyNewPlants, monthKey, ownerRanking, RADAR_FROM, selectNewPlants, totalsOf, type FirstSeen, type NewPlant } from "@/lib/analysis/new-plants";
+import { aggregatorRanking, monthlyNewPlants, monthKey, ownerRanking, RADAR_FROM, selectNewPlants, totalsOf, type FirstSeen, type NewPlant } from "@/lib/analysis/new-plants";
 
 const at = (y: number, m: number, d = 1) => Date.UTC(y, m - 1, d);
 const f = (id: number, name: string, firstMs: number, peakMwh = 10, type: FirstSeen["type"] = "RES", poolStartMs = Date.UTC(2025, 0, 1)): FirstSeen => ({ id, name, type, firstMs, peakMwh, poolStartMs });
@@ -31,6 +31,7 @@ describe("selectNewPlants", () => {
 const np = (id: number, firstMs: number, mw: number, recorded: boolean, type: NewPlant["type"] = "RES"): NewPlant => ({
   ...f(id, `S${id}`, firstMs, 1, type),
   owner: null,
+  aggregators: [],
   mw,
   capacitySource: recorded ? "EPDK_LICENSE" : "PEAK_ESTIMATE",
   capacityLabel: "x",
@@ -72,5 +73,22 @@ describe("ownerRanking", () => {
       { owner: "A ENERJİ A.Ş.", plants: 2, mw: 70, recordedMw: 50, estimatedMw: 20 },
     ]);
     expect(r.unknown).toEqual({ plants: 1, mw: 7 });
+  });
+});
+
+describe("aggregatorRanking", () => {
+  const withAgg = (p: NewPlant, aggregators: string[]): NewPlant => ({ ...p, aggregators });
+  it("toplayıcıya göre toplam, MW azalan; birden çok toplayıcıda ilki; hiçbirinde olmayanlar ayrı", () => {
+    const r = aggregatorRanking([
+      withAgg(np(1, at(2025, 3), 50, true), ["X"]),
+      withAgg(np(2, at(2025, 4), 20, false), ["X", "Y"]),
+      withAgg(np(3, at(2025, 5), 100, true), ["Y"]),
+      withAgg(np(4, at(2025, 6), 7, true), []),
+    ]);
+    expect(r.rows).toEqual([
+      { aggregator: "Y", plants: 1, mw: 100, recordedMw: 100, estimatedMw: 0 },
+      { aggregator: "X", plants: 2, mw: 70, recordedMw: 50, estimatedMw: 20 },
+    ]);
+    expect(r.none).toEqual({ plants: 1, mw: 7 });
   });
 });

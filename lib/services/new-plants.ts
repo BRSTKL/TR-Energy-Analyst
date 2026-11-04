@@ -8,6 +8,7 @@
  */
 
 import {
+  aggregatorRanking,
   monthKey,
   monthlyNewPlants,
   ownerRanking,
@@ -15,6 +16,7 @@ import {
   totalsOf,
   RADAR_FROM,
   type FirstSeen,
+  type AggregatorRow,
   type NewPlant,
   type OwnerRow,
   type RadarMonth,
@@ -23,6 +25,7 @@ import {
 } from "@/lib/analysis/new-plants";
 import { CAPACITY_SOURCE_LABEL, isRecordedCapacity } from "@/lib/epias-plant/installed-capacity";
 import { listPoolPlants, readPoolPlantInfo, readPoolYear } from "@/lib/pool/pool-store";
+import { loadAggregatorMembership } from "@/lib/services/aggregator-membership";
 import { loadNewOwnerEntries, loadOwnerEntries } from "@/lib/services/epias-plants";
 import { resolveInstalledCapacities } from "@/lib/services/installed-capacity";
 import { sectorFacts } from "@/lib/services/plant-directory";
@@ -44,6 +47,11 @@ export interface NewPlantRadar {
   /** Sahip şirkete göre devreye giren kapasite; sahibi bilinmeyenler `unknownOwners`'ta */
   owners: OwnerRow[];
   unknownOwners: { plants: number; mw: number };
+  /** Toplayıcıya göre devreye giren kapasite; hiçbirinde olmayanlar `noAggregator`'da */
+  aggregators: AggregatorRow[];
+  noAggregator: { plants: number; mw: number };
+  /** Toplayıcı üyelik listesinin tarihi (YYYY-AA-GG); liste yoksa null */
+  membershipAsOf: string | null;
 }
 
 let memo: { at: number; promise: Promise<NewPlantRadar> } | null = null;
@@ -106,6 +114,7 @@ async function build(now = new Date()): Promise<NewPlantRadar> {
     for (const [id, o] of await loadNewOwnerEntries(year).catch(() => [])) if (!owners.has(id)) owners.set(id, o.organizationName);
     for (const [id, o] of await loadOwnerEntries(year).catch(() => [])) if (!owners.has(id)) owners.set(id, o.organizationName);
   }
+  const membership = await loadAggregatorMembership().catch(() => null);
   const ownerOf = (id: number) => facts.get(id)?.owner ?? owners.get(id) ?? null;
 
   const lastYear = Math.max(2026, ...picked.map((p) => new Date(p.firstMs).getUTCFullYear()));
@@ -116,6 +125,7 @@ async function build(now = new Date()): Promise<NewPlantRadar> {
   const plants: NewPlant[] = picked.map((p, i) => ({
     ...p,
     owner: ownerOf(p.id),
+    aggregators: membership?.byPlant.get(p.id)?.map((a) => a.name) ?? [],
     mw: matches[i].mw,
     capacitySource: matches[i].source,
     capacityLabel: CAPACITY_SOURCE_LABEL[matches[i].source],
@@ -123,6 +133,7 @@ async function build(now = new Date()): Promise<NewPlantRadar> {
   }));
 
   const ranking = ownerRanking(plants);
+  const aggRanking = aggregatorRanking(plants);
   const toMonth = dataThrough ?? monthKey(now.getTime());
   const months = monthlyNewPlants(plants, monthKey(RADAR_FROM), toMonth);
   const last12From = monthKey(Date.UTC(Number(toMonth.slice(0, 4)), Number(toMonth.slice(5, 7)) - 12, 1));
@@ -137,6 +148,9 @@ async function build(now = new Date()): Promise<NewPlantRadar> {
     plants,
     owners: ranking.rows,
     unknownOwners: ranking.unknown,
+    aggregators: aggRanking.rows,
+    noAggregator: aggRanking.none,
+    membershipAsOf: membership?.asOf ?? null,
   };
 }
 

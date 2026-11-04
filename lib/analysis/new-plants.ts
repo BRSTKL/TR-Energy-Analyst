@@ -31,6 +31,8 @@ export interface FirstSeen {
 
 export interface NewPlant extends FirstSeen {
   owner: string | null;
+  /** Santralin üye olduğu toplayıcı(lar) (toplayıcı üyelik listesinden, kısa ad); listede yoksa boş */
+  aggregators: string[];
   /** MW ve kaynağı (CLAUDE.md kurulu güç kuralı); `recorded` false ise en yüksek saatlik üretimden alt sınır */
   mw: number;
   capacitySource: string;
@@ -125,4 +127,36 @@ export function ownerRanking(plants: NewPlant[]): { rows: OwnerRow[]; unknown: {
     byOwner.set(key, r);
   }
   return { rows: Array.from(byOwner.values()).sort((a, b) => b.mw - a.mw || a.owner.localeCompare(b.owner, "tr")), unknown };
+}
+
+export interface AggregatorRow {
+  aggregator: string;
+  plants: number;
+  mw: number;
+  recordedMw: number;
+  estimatedMw: number;
+}
+
+/**
+ * Toplayıcıya göre devreye giren kapasite (MW azalan). Santral birden çok toplayıcıda görünürse ilkinde sayılır (üyelik listesi
+ * dönem birleşimidir). Hiçbir toplayıcıda olmayan santraller `none`'da.
+ */
+export function aggregatorRanking(plants: NewPlant[]): { rows: AggregatorRow[]; none: { plants: number; mw: number } } {
+  const by = new Map<string, AggregatorRow>();
+  const none = { plants: 0, mw: 0 };
+  for (const p of plants) {
+    const a = p.aggregators[0];
+    if (!a) {
+      none.plants++;
+      none.mw += p.mw;
+      continue;
+    }
+    const r = by.get(a) ?? { aggregator: a, plants: 0, mw: 0, recordedMw: 0, estimatedMw: 0 };
+    r.plants++;
+    r.mw += p.mw;
+    if (p.recorded) r.recordedMw += p.mw;
+    else r.estimatedMw += p.mw;
+    by.set(a, r);
+  }
+  return { rows: Array.from(by.values()).sort((a, b) => b.mw - a.mw || a.aggregator.localeCompare(b.aggregator, "tr")), none };
 }
