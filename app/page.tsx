@@ -706,9 +706,23 @@ export default function TodayPage() {
   const portfolio = useLoad<PortfolioProduction>("/api/ops/portfolio-forecast", (d) => d as PortfolioProduction);
   // Yarının PTF'si 13:00–14:00'te açıklanır; 14:00'ten sonra açıklanan değer sorulur (sunucuda 5 dk bellekte)
   const afterResults = minutes !== null && minutes >= 14 * 60;
-  const tomorrowLive = useLoad<{ date: string; published: boolean; mean: number | null }>(
+  const tomorrowLive = useLoad<{
+    date: string;
+    published: boolean;
+    mean: number | null;
+    hours: Array<{ hour: number; ptf: number | null; level: "cap" | "near" | "zero" | null }>;
+  }>(
     afterResults ? "/api/market/live?day=tomorrow" : null,
-    (d) => ({ date: d.view?.date, published: !!d.view?.published?.ptf, mean: d.view?.ptf?.mean ?? null })
+    (d) => ({
+      date: d.view?.date,
+      published: !!d.view?.published?.ptf,
+      mean: d.view?.ptf?.mean ?? null,
+      hours: (d.view?.rows ?? []).map((r: { hour: number; ptf: number | null; level: "cap" | "near" | "zero" | null }) => ({
+        hour: r.hour,
+        ptf: r.ptf,
+        level: r.level,
+      })),
+    })
   );
   const announced: AnnouncedPtf =
     tomorrowLive.state === "ok" && tomorrowLive.data.published && tomorrowLive.data.mean !== null
@@ -775,9 +789,13 @@ export default function TodayPage() {
                 .map((r) => ({ id: r.id, name: r.name, gaps: r.dataGaps.length }))
             : [],
         forecastHref: fLink,
+        announced:
+          tomorrowLive.state === "ok" && tomorrowLive.data.published
+            ? { date: tomorrowLive.data.date, hours: tomorrowLive.data.hours }
+            : null,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [status, rows, minutes, fLink, today]
+    [status, rows, minutes, fLink, today, tomorrowLive]
   );
   const bidReady =
     status.state === "ok" && minutes !== null

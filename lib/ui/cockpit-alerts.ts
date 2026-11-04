@@ -43,6 +43,11 @@ export interface AlertInput {
   projectGaps: Array<{ id: string; name: string; gaps: number }>;
   /** Üretim tahmini bağlantısı (son proje ya da proje listesi) */
   forecastHref: string;
+  /**
+   * Yarının açıklanmış PTF'si (14:00 sonrası, tomorrow-view satırları; level: limitte / limite yakın / sıfır). Verilirse
+   * limit ve ucuz saat uyarıları tahminden değil açıklanan fiyattan yazılır.
+   */
+  announced?: { date: string; hours: Array<{ hour: number; ptf: number | null; level: "cap" | "near" | "zero" | null }> } | null;
 }
 
 const ORDER: Record<AlertTone, number> = { bad: 0, warn: 1, info: 2 };
@@ -69,20 +74,43 @@ export function buildAlerts(input: AlertInput): CockpitAlert[] {
     for (const e of status.errors)
       out.push({ id: `read-${e}`, tone: "warn", text: `Kayıt okunamadı (${e})` });
     const p = status.ptf;
-    if (p && p.nearCapHours.length)
-      out.push({
-        id: "near-cap",
-        tone: "warn",
-        text: `Yarın ${p.nearCapHours.length} saat fiyat limitine yakın tahmin ediliyor (${formatHours(p.nearCapHours)}).`,
-        href: "/market/teklif",
-      });
-    if (p && p.min.value < 300)
-      out.push({
-        id: "near-zero",
-        tone: "info",
-        text: `Yarın en ucuz saat ${hh(p.min.hour)} (${Math.round(p.min.value).toLocaleString("tr-TR")} TL/MWh): sıfır fiyat riski.`,
-        href: "/market/teklif",
-      });
+    const a = input.announced && (!p || input.announced.date === p.targetDate) ? input.announced : null;
+    if (a) {
+      // Fiyat açıklandı: uyarı açıklanan değerden (tahmin artık kıyas sayısıdır)
+      const cap = a.hours.filter((h) => h.level === "cap").map((h) => h.hour);
+      const near = a.hours.filter((h) => h.level === "near").map((h) => h.hour);
+      if (cap.length || near.length)
+        out.push({
+          id: "near-cap",
+          tone: "warn",
+          text: `Yarının açıklanan PTF'si: ${[cap.length ? `${cap.length} saat limitte` : "", near.length ? `${near.length} saat limite yakın` : ""].filter(Boolean).join(", ")} (${formatHours([...cap, ...near])}).`,
+          href: "/market/gunluk?sekme=yarin",
+        });
+      const priced = a.hours.filter((h): h is { hour: number; ptf: number; level: typeof h.level } => h.ptf !== null);
+      const min = priced.reduce<(typeof priced)[number] | null>((m, h) => (m === null || h.ptf < m.ptf ? h : m), null);
+      if (min && min.ptf < 300)
+        out.push({
+          id: "near-zero",
+          tone: "info",
+          text: `Yarının açıklanan PTF'sinde en ucuz saat ${hh(min.hour)} (${Math.round(min.ptf).toLocaleString("tr-TR")} TL/MWh).`,
+          href: "/market/gunluk?sekme=yarin",
+        });
+    } else {
+      if (p && p.nearCapHours.length)
+        out.push({
+          id: "near-cap",
+          tone: "warn",
+          text: `Yarın ${p.nearCapHours.length} saat fiyat limitine yakın tahmin ediliyor (${formatHours(p.nearCapHours)}).`,
+          href: "/market/teklif",
+        });
+      if (p && p.min.value < 300)
+        out.push({
+          id: "near-zero",
+          tone: "info",
+          text: `Yarın en ucuz saat ${hh(p.min.hour)} (${Math.round(p.min.value).toLocaleString("tr-TR")} TL/MWh): sıfır fiyat riski.`,
+          href: "/market/teklif",
+        });
+    }
   }
   for (const [i, n] of input.liveNotes.slice(0, 3).entries())
     out.push({ id: `live-${i}`, tone: "warn", text: n, href: "/market/gunluk" });

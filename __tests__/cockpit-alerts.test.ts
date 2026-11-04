@@ -92,6 +92,36 @@ describe("buildAlerts", () => {
     );
     expect(a[1].text).toContain("12:00");
   });
+  it("PTF açıklandıysa limit ve ucuz saat uyarısı açıklanan fiyattan", () => {
+    const hours = Array.from({ length: 24 }, (_, h) => ({
+      hour: h,
+      ptf: h === 4 ? 150 : 3000,
+      level: (h === 18 ? "cap" : h === 19 ? "near" : null) as "cap" | "near" | null,
+    }));
+    const a = buildAlerts({
+      ...base,
+      status: status({ ptf: ptf({ nearCapHours: [17, 18], min: { hour: 12, value: 120 } }) }),
+      announced: { date: "2026-10-30", hours },
+    });
+    expect(a.map((x) => x.id)).toEqual(["near-cap", "near-zero"]);
+    expect(a[0].text).toBe("Yarının açıklanan PTF'si: 1 saat limitte, 1 saat limite yakın (18:00–19:00).");
+    expect(a[0].text).not.toContain("tahmin");
+    expect(a[1].text).toContain("04:00 (150 TL/MWh)");
+    // Açıklanan fiyatta limite yakın saat yoksa tahminin eski uyarısı da gösterilmez
+    const none = buildAlerts({
+      ...base,
+      status: status({ ptf: ptf({ nearCapHours: [17, 18] }) }),
+      announced: { date: "2026-10-30", hours: hours.map((h) => ({ ...h, ptf: 3000, level: null })) },
+    });
+    expect(none).toEqual([]);
+    // Başka günün verisi kayıtla eşleşmez: tahmin uyarısı kalır
+    const other = buildAlerts({
+      ...base,
+      status: status({ ptf: ptf({ nearCapHours: [17] }) }),
+      announced: { date: "2026-10-31", hours },
+    });
+    expect(other[0].text).toContain("tahmin ediliyor");
+  });
   it("kısmi rüzgâr kaydı sarı; durum alınamadıysa nedeni yazılır", () => {
     const partial = { ...(log as object), ok: 120, total: 122 } as never;
     const a = buildAlerts({ ...base, status: status({ wind: partial }) });
