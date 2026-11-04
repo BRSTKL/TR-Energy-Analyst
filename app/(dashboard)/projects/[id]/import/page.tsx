@@ -479,7 +479,7 @@ export default function ImportPage() {
                         <div>
                           <p className="text-sm font-semibold text-slate-900">{plant.name}</p>
                           <p className="text-xs text-slate-500">
-                            {plant.type} · {plant.capacityMw} MW · mevcut {plant.recordCount.toLocaleString("tr-TR")} kayıt
+                            {plant.type} · {plant.capacityMw.toLocaleString("tr-TR", { maximumFractionDigits: 1 })} MW · mevcut {plant.recordCount.toLocaleString("tr-TR")} kayıt
                           </p>
                         </div>
                         <label className="flex items-center gap-1.5 text-xs text-slate-600">

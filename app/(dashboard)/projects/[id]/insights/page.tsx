@@ -660,7 +660,7 @@ export default function ProjectInsightsPage() {
                     </span>
                   </div>
                   <CardDescription className="text-xs">
-                    {comp.plantType} Teknolojisi • {comp.capacityMw} MW Kurulu Güç
+                    {comp.plantType} Teknolojisi • {comp.capacityMw.toLocaleString("tr-TR", { maximumFractionDigits: 1 })} MW Kurulu Güç
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">

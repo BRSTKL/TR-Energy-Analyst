@@ -829,8 +829,10 @@ export default function TodayPage() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
             Bugün
           </h1>
-          <p className="mt-1 text-sm text-slate-600" suppressHydrationWarning>
-            {trDay(new Date(Date.now() + 3 * 3_600_000).toISOString().slice(0, 10))}.
+          <p className="mt-1 text-sm text-slate-600">
+            {/* Tarih tarayıcıda hesaplanır: sunucuda çizilen sayfa derleme gününü gösterip donuyordu */}
+            {minutes !== null &&
+              `${trDay(new Date(Date.now() + 3 * 3_600_000).toISOString().slice(0, 10))}. `}
             Yarın için ne hazır, piyasa şimdi nasıl.
           </p>
         </div>

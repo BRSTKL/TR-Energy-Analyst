@@ -90,9 +90,9 @@ export function DayStrip() {
         />
         <span
           className="hidden font-medium tabular-nums text-slate-700 sm:inline"
-          suppressHydrationWarning
         >
-          {trDateLabel(Date.now())}
+          {/* Tarayıcıda hesaplanır (minutes ilk çizimde null): sunucudaki derleme saati görünmesin */}
+          {minutes !== null && trDateLabel(Date.now())}
         </span>
         <span
           className={`truncate rounded-md border px-2 py-0.5 font-medium ${phaseTone}`}

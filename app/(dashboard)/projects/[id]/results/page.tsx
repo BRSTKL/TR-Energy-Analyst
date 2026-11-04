@@ -581,7 +581,7 @@ export default function ProjectResultsPage() {
             label="Görünüm:"
             allId="all"
             allLabel={`Tüm Portföy (${data.plants.length} Santral)`}
-            plants={data.plants.map((p) => ({ id: p.plantId, name: p.plantName, type: p.plantType, detail: `${p.capacityMw} MW` }))}
+            plants={data.plants.map((p) => ({ id: p.plantId, name: p.plantName, type: p.plantType, detail: `${p.capacityMw.toLocaleString("tr-TR", { maximumFractionDigits: 1 })} MW` }))}
             value={selectedPlantId}
             onChange={setSelectedPlantId}
           />

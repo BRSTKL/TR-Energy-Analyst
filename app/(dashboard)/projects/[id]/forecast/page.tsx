@@ -180,7 +180,7 @@ export default function ForecastPage() {
       )}
 
       <div className="flex gap-2" role="group" aria-label="Santral türü">
-        {(["GES", "RES"] as const).map(t => <button key={t} onClick={() => setTech(t)} aria-pressed={tech === t} className="rounded border px-4 py-2 text-sm">{t === "GES" ? "Güneş" : "Rüzgâr"}</button>)}
+        {(["GES", "RES"] as const).map(t => <button key={t} onClick={() => setTech(t)} aria-pressed={tech === t} className={`rounded border px-4 py-2 text-sm ${tech === t ? "border-blue-300 bg-blue-50 font-semibold text-blue-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}>{t === "GES" ? "Güneş" : "Rüzgâr"}</button>)}
       </div>
       {recordNote && <p className="text-xs text-slate-500">{recordNote}</p>}
       {error && (

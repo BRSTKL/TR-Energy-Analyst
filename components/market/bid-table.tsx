@@ -148,7 +148,7 @@ export function BidTable({
                       {r.low === null || r.high === null ? "–" : `${nf(r.low)} – ${nf(r.high)}`}
                     </td>
                     <td className="px-3 py-1.5 text-right tabular-nums">
-                      {r.mwh === null ? "–" : r.mwh.toFixed(1)}
+                      {r.mwh === null ? "–" : nf(r.mwh, 1)}
                     </td>
                     <td className="px-3 py-1.5">
                       {r.risk && (
