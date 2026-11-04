@@ -2,7 +2,7 @@
 
 import { PLAN_EXCESS_HINT, planExcessFromActualVsForecast } from "@/lib/conventions";
 import React, { useEffect, useMemo, useState } from "react";
-import { ResponsiveContainer, BarChart, ReferenceLine, Cell } from "recharts";
+import { ResponsiveContainer, BarChart, ReferenceLine } from "recharts";
 import { ChartBar as Bar, ChartGrid as CartesianGrid, ChartLegend as Legend, ChartTip as Tooltip, ChartXAxis as XAxis, ChartYAxis as YAxis } from "@/components/ui/chart";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -112,7 +112,8 @@ export function ForecastAccuracyCard({ projectId, refreshKey }: { projectId: str
     () =>
       (selected?.hourOfDay ?? []).map((h) => ({
         label: h.key,
-        meanError: Number((h.netErrorMwh / (h.hours || 1)).toFixed(2)),
+        // Ortak işaret kuralı (lib/conventions.ts): plan − gerçekleşen; hata gerçekleşen − tahmin olduğundan ters işaret
+        planExcess: Number((-h.netErrorMwh / (h.hours || 1)).toFixed(2)),
       })),
     [selected]
   );
@@ -189,7 +190,7 @@ export function ForecastAccuracyCard({ projectId, refreshKey }: { projectId: str
 
               <div>
                 <h4 className="mb-2 text-xs font-semibold text-slate-700">
-                  Günün Saatine Göre Ortalama Hata (MWh) — {selected.plantName}
+                  Günün saatine göre ortalama plan fazlası (MWh) — {selected.plantName}
                 </h4>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
@@ -202,16 +203,12 @@ export function ForecastAccuracyCard({ projectId, refreshKey }: { projectId: str
                         labelFormatter={(l) => `Saat ${l}:00`}
                       />
                       <ReferenceLine y={0} stroke="#94a3b8" />
-                      <Bar dataKey="meanError" name="Ortalama hata" radius={[3, 3, 0, 0]}>
-                        {hourlyChart.map((h) => (
-                          <Cell key={h.label} fill={h.meanError >= 0 ? "#10b981" : "#f43f5e"} />
-                        ))}
-                      </Bar>
+                      <Bar dataKey="planExcess" name="Plan fazlası" fill="#0ea5e9" radius={[3, 3, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
                 <p className="mt-1 text-2xs text-slate-500">
-                  Yeşil: tahminden fazla üretim · Kırmızı: tahminden az üretim
+                  + : plan gerçekleşenden fazla (santral eksik üretti) · − : santral planından fazla üretti. Aylık grafik ve tabloyla aynı işaret.
                 </p>
               </div>
             </div>
@@ -227,7 +224,7 @@ export function ForecastAccuracyCard({ projectId, refreshKey }: { projectId: str
                       <TableHead>Tarih / Saat</TableHead>
                       <TableHead className="text-right">Tahmin (MWh)</TableHead>
                       <TableHead className="text-right">Gerçekleşen (MWh)</TableHead>
-                      <TableHead className="text-right">Hata (MWh)</TableHead>
+                      <TableHead className="text-right">Plan fazlası (MWh)</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -238,11 +235,9 @@ export function ForecastAccuracyCard({ projectId, refreshKey }: { projectId: str
                         </TableCell>
                         <TableCell className="text-right font-mono">{num(w.forecastMwh, 2)}</TableCell>
                         <TableCell className="text-right font-mono">{num(w.actualMwh, 2)}</TableCell>
-                        <TableCell
-                          className={`text-right font-mono ${w.errorMwh >= 0 ? "text-emerald-700" : "text-rose-700"}`}
-                        >
-                          {w.errorMwh > 0 ? "+" : ""}
-                          {num(w.errorMwh, 2)}
+                        <TableCell className="text-right font-mono">
+                          {-w.errorMwh > 0 ? "+" : ""}
+                          {num(-w.errorMwh, 2)}
                         </TableCell>
                       </TableRow>
                     ))}

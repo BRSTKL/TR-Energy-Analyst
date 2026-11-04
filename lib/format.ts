@@ -74,3 +74,25 @@ export const ownerShort = (name: string) => {
   const head = name.split(/\s+(?:SAN\.?|SANAYİ|VE|TİC\.?|TİCARET|A\.?\s?Ş\.?|ANONİM|LTD\.?|LİMİTED)(?=\s|$|\.)/i)[0].trim();
   return clip(head.length >= 5 ? head : name, 38);
 };
+
+const MONTH_NAMES_TR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+
+/**
+ * "YYYY-MM" ay listesinden dönem etiketi: ["2026-01", …, "2026-09"] → "Ocak–Eylül 2026"; tek ay → "Eylül 2026";
+ * yıl aşan → "Aralık 2025 – Eylül 2026". Boş listede null. Aradaki eksik aylar ayrıca sayılır (`missing`).
+ */
+export function monthRangeLabel(yearMonths: string[]): { label: string; months: number; missing: number; last: string } | null {
+  const ym = [...new Set(yearMonths.filter((s) => /^\d{4}-\d{2}$/.test(s)))].sort();
+  if (!ym.length) return null;
+  const [fy, fm] = ym[0].split("-").map(Number);
+  const [ly, lm] = ym[ym.length - 1].split("-").map(Number);
+  const name = (m: number) => MONTH_NAMES_TR[m - 1];
+  const label =
+    ym.length === 1
+      ? `${name(fm)} ${fy}`
+      : fy === ly
+        ? `${name(fm)}–${name(lm)} ${fy}`
+        : `${name(fm)} ${fy} – ${name(lm)} ${ly}`;
+  const span = (ly - fy) * 12 + (lm - fm) + 1;
+  return { label, months: ym.length, missing: span - ym.length, last: `${name(lm)} ${ly}` };
+}

@@ -31,7 +31,6 @@ import {
   ArrowUpDown,
   Download,
   FileSpreadsheet,
-  Flame,
   Layers,
   RefreshCw,
   Sun,
@@ -63,7 +62,8 @@ import type { NettingResult } from "@/lib/analysis/portfolio-netting";
 
 import { MethodLink } from "@/components/method-link";
 import { sumHourProfiles, type HourBucket } from "@/lib/analysis/hour-profile";
-import { energy, nf, tlAxis, tlCompact } from "@/lib/format";
+import { energy, monthRangeLabel, nf, tlAxis, tlCompact } from "@/lib/format";
+import { StatusChip } from "@/components/ui/status-chip";
 interface PlantResult {
   plantId: string;
   plantName: string;
@@ -164,6 +164,9 @@ export default function ProjectResultsPage() {
       ...plant.yearly,
     };
   }, [data, selectedPlantId]);
+
+  // Sayfadaki bütün tutarların dönemi: verideki aylar (başlıkta yazılır)
+  const period = useMemo(() => (data ? monthRangeLabel(data.portfolio.monthly.map((m) => m.yearMonth)) : null), [data]);
 
   // Grafik 1: Aylık Toplam Gelir vs Dengesizlik Maliyeti
   const monthlyRevenueChartData = useMemo(() => {
@@ -462,6 +465,14 @@ export default function ProjectResultsPage() {
                   </span>
                 )}
                 <span>{data.summary.plantCount} santral</span>
+                {period && (
+                  <>
+                    <span>·</span>
+                    <span className="font-medium text-slate-700">
+                      Dönem: {period.label} ({period.months} ay{period.missing > 0 ? `, ${period.missing} ay eksik` : ""})
+                    </span>
+                  </>
+                )}
                 <span>·</span>
                 <span>{data.summary.capacityMw.toLocaleString("tr-TR", { maximumFractionDigits: 0 })} MW</span>
                 <span>·</span>
@@ -602,8 +613,8 @@ export default function ProjectResultsPage() {
             {/* Toplam Üretim */}
             <Card className="border-slate-200 shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                  Toplam Üretim
+                <CardTitle className="text-xs font-medium text-slate-500">
+                  Toplam üretim
                 </CardTitle>
                 <Activity className="h-4 w-4 text-slate-400" />
               </CardHeader>
@@ -620,8 +631,8 @@ export default function ProjectResultsPage() {
             {/* Toplam Gelir */}
             <Card className="border-slate-200 shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                  {(data.sapma?.yekdem?.plantNames.length ?? 0) > 0 ? "Piyasa değeri (PTF)" : "Toplam Gelir"}
+                <CardTitle className="text-xs font-medium text-slate-500">
+                  {(data.sapma?.yekdem?.plantNames.length ?? 0) > 0 ? "Piyasa değeri (PTF)" : "Toplam gelir"}
                 </CardTitle>
                 <ArrowDownRight className="h-4 w-4 text-emerald-500" />
               </CardHeader>
@@ -640,13 +651,16 @@ export default function ProjectResultsPage() {
               </CardContent>
             </Card>
 
-            {/* Toplam Dengesizlik Maliyeti */}
-            <Card className="border-slate-200 shadow-sm">
+            {/* Toplam Dengesizlik Maliyeti: sayfanın ana sayısı */}
+            <Card className="border-rose-200 shadow-sm ring-1 ring-rose-100">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                  Dengesizlik Maliyeti
+                <CardTitle className="text-xs font-medium text-slate-500">
+                  Dengesizlik maliyeti
                 </CardTitle>
-                <Flame className="h-4 w-4 text-rose-500" />
+                <StatusChip
+                  kind="exact"
+                  title="Açık veriden (EPİAŞ PTF, SMF, KGÜP, UEVM) dönemin kuralıyla hesaplandı. Fatura tutarı değildir: ilk plana göre hesaplanır, uzlaştırma son plana göre yapılır."
+                />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-rose-600" title={`${nf(currentKPI.totalImbalanceCost)} ₺`}>
@@ -659,14 +673,17 @@ export default function ProjectResultsPage() {
                       : "Şirket bazında uzlaştırma"
                     : "Santral tek başına uzlaştırılsaydı"}
                 </p>
+                {data.summary?.source.includes("ilk") && (
+                  <p className="mt-1 text-2xs text-slate-500">İlk plana göre; fatura tutarı değildir.</p>
+                )}
               </CardContent>
             </Card>
 
             {/* Ağırlıklı Birim Dengesizlik Maliyeti */}
             <Card className="border-slate-200 shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                  Birim Dengesizlik Maliyeti
+                <CardTitle className="text-xs font-medium text-slate-500">
+                  Birim dengesizlik maliyeti
                 </CardTitle>
                 <TrendingDown className="h-4 w-4 text-amber-500" />
               </CardHeader>
@@ -770,7 +787,8 @@ export default function ProjectResultsPage() {
                     <YAxis
                       tick={{ fontSize: 11 }}
                       stroke="#64748b"
-                      tickFormatter={(val) => `${nf(Number(val))} ₺`}
+                      width={84}
+                      tickFormatter={(val) => `${nf(Number(val))} ₺/MWh`}
                     />
                     <Tooltip
                       formatter={(val: any) =>
@@ -833,7 +851,7 @@ export default function ProjectResultsPage() {
                   <YAxis
                     tick={{ fontSize: 11 }}
                     stroke="#64748b"
-                    tickFormatter={(val) => `${val} MWh`}
+                    tickFormatter={(val) => `${nf(Number(val))} MWh`}
                   />
                   <Tooltip
                     formatter={(val: any) =>

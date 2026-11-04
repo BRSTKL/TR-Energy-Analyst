@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { AlertTriangle, Info, Loader2, RefreshCw, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusChip } from "@/components/ui/status-chip";
 import type { PlantReportData } from "@/lib/report/plant-report";
 import { deviationLoad, monthlyRange } from "@/lib/report/deviation-load";
 import { HYDRO_KIND_LABEL } from "@/lib/sector/benchmark";
@@ -36,16 +37,7 @@ const tl = (v: number) =>
     ? `${(v / 1e6).toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} milyon ₺`
     : `${Math.round(v).toLocaleString("tr-TR")} ₺`;
 
-const Chip = ({ kind }: { kind: "exact" | "assumption" | "estimate" | "scenario" }) => {
-  const style = {
-    exact: "bg-teal-50 text-teal-800",
-    assumption: "bg-indigo-50 text-indigo-800",
-    estimate: "bg-amber-50 text-amber-800",
-    scenario: "bg-orange-50 text-orange-800",
-  }[kind];
-  const label = { exact: "Kesin hesap", assumption: "Varsayıma bağlı", estimate: "Tahmini", scenario: "Senaryo" }[kind];
-  return <span className={`rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide ${style}`}>{label}</span>;
-};
+const Chip = ({ kind }: { kind: "exact" | "assumption" | "estimate" | "scenario" }) => <StatusChip kind={kind} />;
 
 function Tile({ label, value, sub, tone, chip }: { label: string; value: string; sub?: string; tone: string; chip?: React.ReactNode }) {
   return (
