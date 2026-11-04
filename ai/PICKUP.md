@@ -5,6 +5,26 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 04.11.2026 · Claude · PTF motorunda kapılı otomatik sürüm seçimi (`claude/ptf-sampiyon`, yüklenmedi)
+
+- Kullanıcı "kendini geliştiren model" istedi; güvenli sürüm olarak şampiyon defteri planlandı ve onaylandı (eşik %3, hidro aday).
+- **Yapılan:** `lib/ptf/champion.ts` (saf karar: günlük ortalama hata karnesi, `reviewChampion` çekirdeği + `minGain`),
+  `champion-store.ts` (defter), `model-ids.ts` (istemciye güvenli kimlikler), `lib/services/ptf-champion.ts` (kayıt + gerçekleşen PTF
+  okur, karar verir, defteri yalnız kayıt yazıldıktan sonra yazar), `ptf-engine.ts` (sürüm başına kurulum: her sürüm kendi aralığını
+  ve seviye düzeltmesini üretir; ana kayıt şampiyondan, temel sürüm her zaman gölgede), `scripts/ptf/forecast-daily.mts` (karar +
+  bildirim), ekranda "Canlı sürüm" satırı, `scripts/ptf/champion-sim.mts` (geçmiş simülasyon).
+- **Doğrulama:** temel sürümün çıktısı yeniden düzenlemeden önce ve sonra iki hedef günde (20 ve 26.10.2026) birebir aynı (log, gölge,
+  üyeler, seviye, aralık, ekran serileri); her sürüm şampiyon yapılınca kendi aralığıyla yazıyor; bilinmeyen sürüm temele düşüp not
+  düşüyor. 1.010+ test, tsc, lint, `--only teklif,Bugün` duman testi temiz.
+- **Sızıntı denetimi:** sızıntı yok. Bulunup düzeltilenler: her gün kayan pencereyle yeniden sınama yanlış terfi şansını artırır
+  (artık haftada en çok bir kez, `REVIEW_EVERY_DAYS`); geçmiş gün denemesi bugünkü şampiyonu kullanıyordu (artık gelecek hedef dışında
+  karar yok, motor defterin geçmişinden seçer); defter ile kayıttaki `modelId` ayrışabilirdi (sürüm kurulamayıp temele düşülürse defter
+  yazılmaz). Belgelenenler: temele dönüş bilerek kolay; eşik ve hidro adayı sınama sonuçlarına bakılarak seçildi (iyimser).
+- **Beklenti (ölçüm):** geçmiş simülasyonda politika yalnız ≈%0,5–1,0 hata düşürüyor (hidro %1,1, rüzgâr ortalaması %0,8 daha iyi
+  adaylar); %5 eşikte rüzgârda hiç terfi olmazdı. Sunucuda canlı kayıt 31.10'dan beri; ilk karar en erken 28.11.2026.
+- **Sıradaki:** onayla `main`'e birleştirme ve sunucuya yükleme (yeni zamanlayıcı yok; defter ilk kararda kendiliğinden oluşur). Sonra
+  Kasım sonunda ilk kararı ve `champion.json`'ı sunucuda kontrol et.
+
 ## 04.11.2026 · Claude · Teklif öncesi sayfası sadeleştirildi (`claude/teklif-sade`)
 
 - Kullanıcı "çok yazı ve uyarı var" dedi; önizleme gösterildi, onaylandı. 722 → 385 kelime, 3.206 → 2.250 px. Hesap, veri ve

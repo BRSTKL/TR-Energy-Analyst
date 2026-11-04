@@ -31,6 +31,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Fold, FoldList } from "@/components/market/fold";
 import { buildBidRows } from "@/lib/ptf/bid-table";
+import { PTF_BASE_MODEL, PTF_SHADOW_AVG_WIND, PTF_SHADOW_HYDRO } from "@/lib/ptf/model-ids";
 import type { PriceLimit } from "@/lib/analysis/price-limit";
 import { ChartCard } from "@/components/market/chart-card";
 import { hh } from "@/components/market/daily-dashboard";
@@ -51,6 +52,14 @@ const clock = (iso: string) =>
     timeZone: "Europe/Istanbul",
   });
 const gw = (mw: number) => `${nf(mw / 1000, 1)} GW`;
+
+/** Sürüm kimliklerinin okunur adı (lib/ptf/champion.ts); bilinmeyen kimlik olduğu gibi gösterilir */
+const MODEL_LABEL: Record<string, string> = {
+  [PTF_BASE_MODEL]: "temel sürüm",
+  [PTF_SHADOW_AVG_WIND]: "rüzgârda EPİAŞ ve kendi tahminimizin ortalaması",
+  [PTF_SHADOW_HYDRO]: "hidro özellikli sürüm",
+};
+const modelLabel = (id: string) => MODEL_LABEL[id] ?? id;
 
 const INPUT_LABEL: Record<PtfInputStatus["key"], string> = {
   lep: "Yük tahmini (hedef gün)",
@@ -289,6 +298,7 @@ export function PtfEnginePanel({
           date={date}
           preview={ok}
           record={data?.record ?? null}
+          champion={data?.champion ?? null}
           mean={mean ?? 0}
           limit={limit ?? null}
           folds={folds}
@@ -513,6 +523,7 @@ function OkView({
   date,
   preview,
   record,
+  champion,
   mean,
   limit,
   folds,
@@ -521,6 +532,7 @@ function OkView({
   date: string;
   preview: OkPreview;
   record: PtfPageForecast["record"];
+  champion: PtfPageForecast["champion"];
   mean: number;
   limit: PriceLimit | null;
   folds?: React.ReactNode;
@@ -703,16 +715,19 @@ function OkView({
                 : "Dünkü kayıt yok: günlük seviye düzeltmesi uygulanmadı."}
             </p>
             <p className="text-slate-600">
+              Canlı sürüm: {modelLabel(log.modelId)}
+              {champion?.last
+                ? ` (${dmy(champion.last.on)} kaydından beri; önceki: ${modelLabel(champion.last.from)}; ${champion.last.reason}).`
+                : ". Sürüm henüz değişmedi: bir deneme sürümü ancak son 28 günün karnesinde sağlam biçimde daha iyi çıkarsa canlı olur."}
+            </p>
+            <p className="text-slate-600">
               Düzeltmeden önce iki modelin ortalaması: doğrusal model{" "}
               {nf(avg(log.members["LEAR-ridge"]))}, ağaç tabanlı model{" "}
               {nf(avg(log.members.GBM))} TL/MWh.
-              {log.shadow?.["ptf-ens-v1-ruzgar-ortalama"] &&
-                ` Deneme sürümleri (düzeltmeli): rüzgârda EPİAŞ ve kendi tahminimizin ortalaması ${nf(avg(log.shadow["ptf-ens-v1-ruzgar-ortalama"]))}`}
-              {log.shadow?.["ptf-ens-v1-hidro"] &&
-                `${log.shadow["ptf-ens-v1-ruzgar-ortalama"] ? "," : " Deneme sürümü (düzeltmeli):"} hidro özellikli ${nf(avg(log.shadow["ptf-ens-v1-hidro"]))}`}
-              {(log.shadow?.["ptf-ens-v1-ruzgar-ortalama"] ||
-                log.shadow?.["ptf-ens-v1-hidro"]) &&
-                " TL/MWh."}
+              {Object.keys(log.shadow ?? {}).length > 0 &&
+                ` Diğer sürümler (düzeltmeli): ${Object.entries(log.shadow ?? {})
+                  .map(([id, v]) => `${modelLabel(id)} ${nf(avg(v))}`)
+                  .join(", ")} TL/MWh.`}
             </p>
           </div>
         </Fold>

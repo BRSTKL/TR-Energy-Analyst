@@ -10,6 +10,8 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { currentChampion } from "@/lib/ptf/champion";
+import { readPtfChampion } from "@/lib/ptf/champion-store";
 import type { PtfForecastLog } from "@/lib/ptf/forecast-log";
 import { readPtfLog } from "@/lib/ptf/forecast-log-store";
 import type { PtfDisplaySeries, PtfInputStatus } from "@/lib/services/ptf-engine";
@@ -40,8 +42,14 @@ export interface PtfPageForecast {
   state: "ready" | "computing";
   startedAt: string | null;
   preview: PtfPreview | null;
-  /** Sabahki değişmeyen kayıt (yazıldıysa) */
-  record: { issuedAt: string; onTime: boolean; mean: number } | null;
+  /** Sabahki değişmeyen kayıt (yazıldıysa); `modelId` kaydı yazan sürüm */
+  record: { issuedAt: string; onTime: boolean; mean: number; modelId: string } | null;
+  /** Canlı sürüm ve son değişiklik (lib/ptf/champion.ts); defter okunamazsa null */
+  champion: {
+    modelId: string;
+    /** Son değişikliğin ilk canlı hedef günü, önceki sürüm ve gerekçe; hiç değişmediyse null */
+    last: { on: string; from: string; reason: string } | null;
+  } | null;
 }
 
 const running = new Map<string, { startedAt: string; done: Promise<void> }>();
@@ -125,6 +133,18 @@ export async function getPtfPageForecast(
         issuedAt: log.issuedAt,
         onTime: log.onTime,
         mean: log.hours.reduce((s, h) => s + h.p50, 0) / log.hours.length,
+        modelId: log.modelId,
+      }
+    : null;
+  const reg = await readPtfChampion().catch(() => null);
+  const prevState = reg?.state?.history.at(-1);
+  const champion = reg
+    ? {
+        modelId: currentChampion(reg),
+        last:
+          reg.state && prevState
+            ? { on: reg.state.since, from: prevState.modelId, reason: prevState.reason }
+            : null,
       }
     : null;
   const preview = readPreview(date);
@@ -137,5 +157,6 @@ export async function getPtfPageForecast(
     startedAt: r?.startedAt ?? null,
     preview,
     record,
+    champion,
   };
 }

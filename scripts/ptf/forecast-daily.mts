@@ -23,6 +23,8 @@ import {
 import { notify } from "@/lib/notify";
 import { liveDay } from "@/lib/services/pre-bid";
 import { forecastPtf, PtfForecastError } from "@/lib/services/ptf-engine";
+import { currentChampion } from "@/lib/ptf/champion";
+import { decidePtfChampion } from "@/lib/services/ptf-champion";
 import { savePtfPreview } from "@/lib/services/ptf-forecast-page";
 
 const arg = (n: string) => {
@@ -90,10 +92,26 @@ if (auto) {
   }
 }
 
+// Şampiyon kararı (lib/ptf/champion.ts): son 28 günün karnesine göre hedef günün canlı sürümü. Defter, günlük kayıt yazıldıktan
+// sonra güncellenir; karar alınamazsa mevcut defter geçerlidir (motor kendisi okur).
+let champion: Awaited<ReturnType<typeof decidePtfChampion>> | null = null;
+try {
+  champion = await decidePtfChampion(target);
+  if (champion.decision)
+    console.log(
+      `şampiyon kararı: ${champion.decision.from} -> ${champion.decision.to} (${champion.decision.reason})`
+    );
+} catch (e) {
+  console.log(`Şampiyon kararı alınamadı (mevcut sürüm korunur): ${e instanceof Error ? e.message : e}`);
+}
+
 const t0 = Date.now();
 let result;
 try {
-  result = await forecastPtf(target);
+  // Geçmiş gün denemesinde (--dry) sürümü motor defterin geçmişinden seçer (o gün canlı olan); kayıt gelecekteki hedefe yazılır
+  result = await forecastPtf(target, new Date(), {
+    champion: champion && target > today ? currentChampion(champion.registry) : undefined,
+  });
 } catch (e) {
   if (auto && e instanceof PtfForecastError) giveUp(e.message);
   throw e;
@@ -113,12 +131,32 @@ for (const h of log.hours)
       `  ${String(h.hour).padStart(2, "0")}:00  ${nf(h.p50).padStart(6)}  (${nf(h.q10)} – ${nf(h.q90)})`
     );
 for (const n of notes) console.log(`not: ${n}`);
-if (dry) console.log("(kuru çalışma; yazılmadı)");
+if (dry) console.log("(kuru çalışma; yazılmadı, şampiyon defteri değişmedi)");
 else {
   const wrote = await writePtfLog(log);
   console.log(
     wrote ? `yazıldı (${target})` : `kayıt başka bir çalışmayla yazılmış; dokunulmadı`
   );
+  // Defter yalnız günlük kayıt gerçekten yazıldıysa güncellenir
+  if (wrote && champion?.reviewed) {
+    try {
+      if (champion.decision && log.modelId !== champion.decision.to) {
+        // Defter, kayda gerçekte yazılan sürümle tutarlı olmalı: istenen sürüm kurulamayıp temele düşüldüyse yazılmaz
+        console.log(
+          `Şampiyon defteri yazılmadı: kayıt ${log.modelId} ile yazıldı, karar ${champion.decision.to} idi (sürüm kurulamadı); sonraki çalışma yeniden dener.`
+        );
+      } else {
+        await champion.commit();
+        if (champion.decision)
+          notify(
+            "PTF motoru: canlı sürüm değişti",
+            `${champion.decision.from} yerine ${champion.decision.to} (${target} kaydından itibaren). ${champion.decision.reason}`
+          );
+      }
+    } catch (e) {
+      console.log(`Şampiyon defteri yazılamadı: ${e instanceof Error ? e.message : e}`);
+    }
+  }
   if (wrote && auto) {
     const n = forecastNotification(log, notes);
     notify(n.title, n.text);

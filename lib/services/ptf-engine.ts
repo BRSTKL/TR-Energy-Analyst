@@ -7,7 +7,15 @@
  * Kesimden sonra bilinen hiçbir veri kullanılmaz (lib/ptf/history.ts kuralı).
  */
 
-import { buildFeatures, FEATURE_NAMES } from "@/lib/ptf/features";
+import {
+  championAt,
+  EMPTY_REGISTRY,
+  PTF_BASE_MODEL,
+  PTF_SHADOW_AVG_WIND,
+  PTF_SHADOW_HYDRO,
+} from "@/lib/ptf/champion";
+import { readPtfChampion } from "@/lib/ptf/champion-store";
+import { buildFeatures, FEATURE_NAMES, type DayFeatures } from "@/lib/ptf/features";
 import {
   bandsFrom,
   cutoffMs,
@@ -43,11 +51,12 @@ import { liveRegionWeather } from "@/lib/services/ptf-solar";
 import { forecastWind, WIND_SCALE_DAYS, windIndex } from "@/lib/ptf/wind";
 import { liveRegionWind, loadRegionWind } from "@/lib/services/ptf-wind";
 
-export const ENGINE_MODEL_ID = "ptf-ens-v1";
+/** Sürüm kimlikleri lib/ptf/champion.ts'te (karar kuralıyla aynı yer); burada eski adlarıyla da dışa verilir */
+export const ENGINE_MODEL_ID = PTF_BASE_MODEL;
 /** Gölge sürüm: rüzgârda EPİAŞ ve kendi tahminin ortalaması */
-export const SHADOW_AVG_WIND_ID = "ptf-ens-v1-ruzgar-ortalama";
+export const SHADOW_AVG_WIND_ID = PTF_SHADOW_AVG_WIND;
 /** Gölge sürüm: hidro özellikleri (dünkü baraj + akarsu planı, net yük − hidro, son 28 güne göre sapma) */
-export const SHADOW_HYDRO_ID = "ptf-ens-v1-hidro";
+export const SHADOW_HYDRO_ID = PTF_SHADOW_HYDRO;
 const BAND_DAYS = 60;
 const HISTORY_FLOOR = "2024-01-01";
 /** Eğitim penceresi (728) + aralık günleri (60) + referans (28) + pay */
@@ -193,13 +202,16 @@ function inputStatus(
   ];
 }
 
-/** Gölge sürüm tanımı: aynı hat (LEAR + GBM, seviye düzeltmesi), farklı girdi seçimi */
-interface ShadowSpec {
+/** Sürüm tanımı: aynı hat (LEAR + GBM, seviye düzeltmesi), farklı girdi seçimi */
+interface VariantSpec {
   id: string;
   windPolicy?: "average";
   exclude: ReadonlySet<string>;
 }
-const SHADOWS: ShadowSpec[] = [
+/** Temel sürüm: motorun varsayılan girdi seçimi */
+const BASE_VARIANT: VariantSpec = { id: ENGINE_MODEL_ID, exclude: new Set(ENGINE_EXCLUDE) };
+/** Gölge sürümler: her gün temel sürümle birlikte tahmin yapar; canlı kayda ancak kanıtla (lib/ptf/champion.ts) geçer */
+const SHADOWS: VariantSpec[] = [
   { id: SHADOW_AVG_WIND_ID, windPolicy: "average", exclude: new Set(ENGINE_EXCLUDE) },
   {
     id: SHADOW_HYDRO_ID,
@@ -207,10 +219,27 @@ const SHADOWS: ShadowSpec[] = [
   },
 ];
 
+/** Bir sürümün sonucu: saatlik tahmin (seviye düzeltmeli), son 60 günün düzeltilmiş hataları ve girdi özellikleri */
+interface VariantResult {
+  id: string;
+  f: DayFeatures;
+  pl: number[];
+  pg: number[];
+  p50: number[];
+  errors: number[][];
+  recentMae: number | null;
+  meanPrice: number | null;
+  baselineMae: number | null;
+}
+
+/**
+ * `opts.champion`: ana kayda yazılacak sürüm (günlük iş şampiyon kararını verdikten sonra geçirir); verilmezse defterdeki
+ * sürüm (hedef gün için geçerli olan: geçmiş gün denemesi o gün canlı olan sürümü kullanır).
+ */
 export async function forecastPtf(
   target: string,
   now = new Date(),
-  opts: { prevLog?: PtfForecastLog | null } = {}
+  opts: { prevLog?: PtfForecastLog | null; champion?: string } = {}
 ): Promise<EngineForecast> {
   const notes: string[] = [];
   const live: string[] = [];
@@ -301,46 +330,19 @@ export async function forecastPtf(
       notes.filter((n) => !n.endsWith("tahmin kurulamaz.")) // girdi durumunda zaten var
     );
 
-  const ctx = { days, exclude: new Set(ENGINE_EXCLUDE) };
-  const cache = new FeatureCache(ctx);
-  const lear = learModel(ctx, cache);
-  const gbm = gbmModel(ctx, cache);
-  // Son 61 gün (60 hata günü + düzeltmenin dayandığı önceki gün): örneklem dışı tahminler; modeller burada kendi takvimiyle
-  // yeniden kurulur
-  const past = replay(
-    [lear, gbm],
-    days,
-    shiftDay(target, -(BAND_DAYS + 1)),
-    shiftDay(target, -1)
-  );
   const ens = (preds: Record<string, number[]>) =>
     preds["LEAR-ridge"].map((v, h) => (v + preds["GBM"][h]) / 2);
-
-  const f = buildFeatures(new PtfView(days, target));
-  const pl = lear.predict(target);
-  const pg = gbm.predict(target);
-  const col = (name: (typeof FEATURE_NAMES)[number]) => {
+  const col = (f: DayFeatures | null, name: (typeof FEATURE_NAMES)[number]) => {
     const j = FEATURE_NAMES.indexOf(name);
     return f ? f.rows.map((r) => r[j]) : [];
   };
-  const inputs = inputStatus(
-    t,
-    p,
-    f ? col("windKind")[0] : null,
-    f ? col("sunKind")[0] : null
-  );
-  if (!f || !pl || !pg)
-    throw new PtfForecastError(
-      `Tahmin kurulamadı (${target}): ${notes.join(" ") || "özellik ya da model eksik"}`,
-      inputs,
-      notes
-    );
 
-  // Seviye düzeltmesi: dünkü kayıttaki düzeltilmemiş tahmin ile gerçekleşenin farkı (kayıt yoksa 0)
+  // Seviye düzeltmesi: dünkü kayıttaki düzeltilmemiş tahmin ile gerçekleşenin farkı (kayıt yoksa 0). Her sürüm kendi dünkü
+  // düzeltilmemiş tahminini kullanır (kayıtta hepsi var: `level.raw`)
   const prevLog =
     opts.prevLog !== undefined ? opts.prevLog : await readPtfLog(prev).catch(() => null);
   const level: PtfLevelInfo = { gamma: LEVEL_GAMMA, applied: {}, raw: {} };
-  const levelFor = (id: string, rawToday: number[]) => {
+  const levelFor = (id: string, rawToday: number[], cap: number | null) => {
     const rawPrev = rawFromLog(prevLog, id);
     const adj = levelAdjustment(p.ptf, rawPrev);
     level.applied[id] = {
@@ -348,63 +350,107 @@ export async function forecastPtf(
       basis: rawPrev ? prev : null,
     };
     level.raw[id] = rawToday.map((v) => Math.round(v * 100) / 100);
-    return applyLevel(rawToday, adj, f.cap);
+    return applyLevel(rawToday, adj, cap);
   };
-  const rawEns = pl.map((v, h) => (v + pg[h]) / 2);
-  const p50 = levelFor(ENGINE_MODEL_ID, rawEns);
 
-  // Aralık: son 60 günün DÜZELTİLMİŞ birleşim hataları (düzeltme geçmişte de aynı kuralla uygulanmış gibi)
-  const pastCorrected = correctLevel(
-    past.map((r) => ({ day: r.day, actual: r.actual, preds: { ENS: ens(r.preds) } })),
-    "ENS",
-    "COR",
-    LEVEL_GAMMA,
-    null,
-    f.cap
-  ).slice(-BAND_DAYS);
-  const errors = pastCorrected.map((r) => r.actual.map((a, h) => a - r.preds.COR[h]));
-  const recentMae = errors.length
-    ? errors.reduce((s, e) => s + e.reduce((x, v) => x + Math.abs(v), 0) / H, 0) /
-      errors.length
-    : null;
-  // Sade başarı özeti için: aynı günlerin ortalama gerçek fiyatı ve basit yöntemin (benzer günlerin ortancası) sapması
-  const meanPrice = pastCorrected.length
-    ? pastCorrected.reduce((s, r) => s + r.actual.reduce((x, v) => x + v, 0) / H, 0) /
-      pastCorrected.length
-    : null;
-  let baseSum = 0;
-  let baseDays = 0;
-  for (const r of pastCorrected) {
-    const b = cache.get(r.day)?.base;
-    if (!b) continue;
-    baseSum += r.actual.reduce((x, a, h) => x + Math.abs(a - b[h]), 0) / H;
-    baseDays++;
-  }
-  const baselineMae = baseDays === pastCorrected.length && baseDays > 0 ? baseSum / baseDays : null;
+  /**
+   * Bir sürümü kurar: modeller yalnız geçmişle eğitilir; son 61 gün (60 hata günü + düzeltmenin dayandığı önceki gün) aynı
+   * modellerle yeniden oynatılır (örneklem dışı tahminler, modeller kendi takvimiyle yeniden kurulur) ve aralık bu sürümün
+   * DÜZELTİLMİŞ hatalarından kurulur (düzeltme geçmişte de aynı kuralla uygulanmış gibi). Kurulamazsa `f` ile birlikte null döner.
+   */
+  const buildVariant = (spec: VariantSpec): { result: VariantResult | null; f: DayFeatures | null } => {
+    const sctx = { days, exclude: spec.exclude, windPolicy: spec.windPolicy };
+    const scache = new FeatureCache(sctx);
+    const lear = learModel(sctx, scache);
+    const gbm = gbmModel(sctx, scache);
+    const past = replay(
+      [lear, gbm],
+      days,
+      shiftDay(target, -(BAND_DAYS + 1)),
+      shiftDay(target, -1)
+    );
+    const f = buildFeatures(new PtfView(days, target), { windPolicy: spec.windPolicy });
+    const pl = lear.predict(target);
+    const pg = gbm.predict(target);
+    if (!f || !pl || !pg) return { result: null, f };
+    const p50 = levelFor(
+      spec.id,
+      pl.map((v, h) => (v + pg[h]) / 2),
+      f.cap
+    );
+    const pastCorrected = correctLevel(
+      past.map((r) => ({ day: r.day, actual: r.actual, preds: { ENS: ens(r.preds) } })),
+      "ENS",
+      "COR",
+      LEVEL_GAMMA,
+      null,
+      f.cap
+    ).slice(-BAND_DAYS);
+    const errors = pastCorrected.map((r) => r.actual.map((a, h) => a - r.preds.COR[h]));
+    const recentMae = errors.length
+      ? errors.reduce((s, e) => s + e.reduce((x, v) => x + Math.abs(v), 0) / H, 0) /
+        errors.length
+      : null;
+    // Sade başarı özeti için: aynı günlerin ortalama gerçek fiyatı ve basit yöntemin (benzer günlerin ortancası) sapması
+    const meanPrice = pastCorrected.length
+      ? pastCorrected.reduce((s, r) => s + r.actual.reduce((x, v) => x + v, 0) / H, 0) /
+        pastCorrected.length
+      : null;
+    let baseSum = 0;
+    let baseDays = 0;
+    for (const r of pastCorrected) {
+      const b = scache.get(r.day)?.base;
+      if (!b) continue;
+      baseSum += r.actual.reduce((x, a, h) => x + Math.abs(a - b[h]), 0) / H;
+      baseDays++;
+    }
+    const baselineMae =
+      baseDays === pastCorrected.length && baseDays > 0 ? baseSum / baseDays : null;
+    return { result: { id: spec.id, f, pl, pg, p50, errors, recentMae, meanPrice, baselineMae }, f };
+  };
 
+  // Temel sürüm zorunlu: kurulamazsa tahmin yok (ekran hangi girdinin eksik olduğunu gösterir)
+  const base = buildVariant(BASE_VARIANT);
+  if (!base.result)
+    throw new PtfForecastError(
+      `Tahmin kurulamadı (${target}): ${notes.join(" ") || "özellik ya da model eksik"}`,
+      inputStatus(
+        t,
+        p,
+        base.f ? col(base.f, "windKind")[0] : null,
+        base.f ? col(base.f, "sunKind")[0] : null
+      ),
+      notes
+    );
+  const variants = new Map<string, VariantResult>([[ENGINE_MODEL_ID, base.result]]);
   // Gölge sürümler: ana sürümle aynı hat ve aynı düzeltme, farklı girdi. Rüzgârda EPİAŞ ve kendi tahminin ortalaması
   // (sınama döneminde %2,9 daha iyi göründü, seçimde ölçülemedi); hidro özellikleri (sınamada %3,6, hipotez sınama
-  // dönemine bakılarak kuruldu). İleriye dönük kayıtla karşılaştırılır; ana sürüme ancak kanıtla geçer.
-  const shadow: Record<string, number[]> = {};
+  // dönemine bakılarak kuruldu). Her gün kaydedilir; canlı kayda ancak kanıtla geçer (lib/ptf/champion.ts).
   for (const sp of SHADOWS) {
     try {
-      const sctx = { days, exclude: sp.exclude, windPolicy: sp.windPolicy };
-      const scache = new FeatureCache(sctx);
-      const sl = learModel(sctx, scache);
-      const sg = gbmModel(sctx, scache);
-      replay([sl, sg], days, shiftDay(target, -(BAND_DAYS + 1)), shiftDay(target, -1)); // yeniden kurma takvimi ana sürümle aynı kalsın
-      const a = sl.predict(target);
-      const b = sg.predict(target);
-      if (a && b)
-        shadow[sp.id] = levelFor(
-          sp.id,
-          a.map((v, h) => (v + b[h]) / 2)
-        ).map((v) => Math.round(v * 100) / 100);
+      const v = buildVariant(sp).result;
+      if (v) variants.set(sp.id, v);
     } catch (e) {
       notes.push(`Gölge sürüm (${sp.id}) kurulamadı: ${e instanceof Error ? e.message : e}`);
     }
   }
-  const bands = bandsFrom(errors, p50, f.cap);
+
+  // Canlı kayda yazılacak sürüm: istenen sürüm; kurulamadıysa temel sürüm (kayıttaki `modelId` gerçekte kullanılanı söyler)
+  const wanted =
+    opts.champion ??
+    championAt(await readPtfChampion().catch(() => EMPTY_REGISTRY), target);
+  let chosen = variants.get(wanted);
+  if (!chosen) {
+    notes.push(`Canlı sürüm (${wanted}) kurulamadı: temel sürüm kullanıldı.`);
+    chosen = base.result;
+  }
+  const f = chosen.f;
+  const inputs = inputStatus(t, p, col(f, "windKind")[0], col(f, "sunKind")[0]);
+  const shadow: Record<string, number[]> = {};
+  for (const [id, v] of Array.from(variants))
+    if (id !== chosen.id) shadow[id] = v.p50.map((x) => Math.round(x * 100) / 100);
+
+  const bands = bandsFrom(chosen.errors, chosen.p50, f.cap);
   const cutoff = cutoffMs(target);
   return {
     log: {
@@ -413,14 +459,14 @@ export async function forecastPtf(
       issuedAt: now.toISOString(),
       cutoff: new Date(cutoff).toISOString(),
       onTime: now.getTime() <= cutoff,
-      modelId: ENGINE_MODEL_ID,
-      hours: p50.map((v, h) => ({
+      modelId: chosen.id,
+      hours: chosen.p50.map((v, h) => ({
         hour: h,
         p50: Math.round(v * 100) / 100,
         q10: bands[h].q10,
         q90: bands[h].q90,
       })),
-      members: { "LEAR-ridge": pl, GBM: pg },
+      members: { "LEAR-ridge": chosen.pl, GBM: chosen.pg },
       shadow,
       level,
       inputs: {
@@ -429,26 +475,31 @@ export async function forecastPtf(
         fallbacks: f.fallbacks,
         live,
       },
-      band: { days: errors.length, recentMae, meanPrice, baselineMae },
+      band: {
+        days: chosen.errors.length,
+        recentMae: chosen.recentMae,
+        meanPrice: chosen.meanPrice,
+        baselineMae: chosen.baselineMae,
+      },
       cap: f.cap,
     },
     notes,
     inputs,
     display: {
       base: f.base,
-      ptfD1: col("ptfD1"),
-      lep: col("lep"),
-      lepRef: sum(col("lep"), col("lepDev").map((v) => -v)),
-      wind: col("wind"),
-      sun: col("sun"),
-      net: col("net"),
-      kgupThermal: sum(col("kgupGas"), col("kgupImpCoal"), col("kgupLignite")),
-      kgupHydro: sum(col("kgupDam"), col("kgupRiver")),
+      ptfD1: col(f, "ptfD1"),
+      lep: col(f, "lep"),
+      lepRef: sum(col(f, "lep"), col(f, "lepDev").map((v) => -v)),
+      wind: col(f, "wind"),
+      sun: col(f, "sun"),
+      net: col(f, "net"),
+      kgupThermal: sum(col(f, "kgupGas"), col(f, "kgupImpCoal"), col(f, "kgupLignite")),
+      kgupHydro: sum(col(f, "kgupDam"), col(f, "kgupRiver")),
       actual,
       level: {
         gamma: LEVEL_GAMMA,
-        adj: level.applied[ENGINE_MODEL_ID].adj,
-        basis: level.applied[ENGINE_MODEL_ID].basis,
+        adj: level.applied[chosen.id].adj,
+        basis: level.applied[chosen.id].basis,
       },
     },
   };

@@ -204,6 +204,11 @@ Her girdi hedef günün saatleri için örneklem dışı üretilir ve fiyat mode
 
 ### Aşama 6 — Birleşim, kilitli test ve gölge kullanım (hafta 9–12 ve sonrası)
 
+> **04.11.2026: kapılı otomatik sürüm seçimi kuruldu** (`lib/ptf/champion.ts`, `lib/services/ptf-champion.ts`, defter
+> `data/pool/forecast-log/ptf/champion.json`). Gölge sürümler (rüzgâr ortalaması, hidro) canlı kayda ancak son 28 günün karnesinde
+> sağlam biçimde daha iyi çıkarsa geçer; ilk karar en erken ilk gerçek kayıttan (31.10.2026) 28 gün sonra. Ayrıntı ve eşik
+> gerekçesi `ai/context/decisions.md`; geçmiş simülasyon `scripts/ptf/champion-sim.mts`.
+
 - Birleşim ağırlıkları geçmiş örneklem dışı tahminlerden öğrenilir (negatif olmayan, toplamı 1); test hatasına bakılarak seçilmez.
 - Şampiyon defteri (`champions.json`, güneş motorundaki gibi): son 28 gün, ≥20 ortak gün, ≥%5 daha iyi, 7 günlük blok bootstrap + Bonferroni, 28 gün soğuma, geri dönüş. Aday → geriye dönük test → gölge → şampiyon.
 - İzleme: kayıt eksikliği (`late`), veri yaşı, girdi başına tazelik; kesime 30 dakika kala o günün kaydı yoksa bildirim (güneş motorundaki 22.7(d)).

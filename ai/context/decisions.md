@@ -84,6 +84,17 @@ yeniden üretin. Ayrıntılı geçmiş `PLAN.md` (süren aşamalar, son kayıtla
 - **Sunucu İstanbul'da** (22.10): EPİAŞ coğrafi engel riski olmasın diye Almanya reddedildi. Docker yok, alan adı yok,
   Tailscale ile özel erişim.
 - **Giriş ekranı** (22.10): tek hesap; EPİAŞ hesabı uygulamada şifreli.
+- **PTF motorunda kapılı otomatik sürüm seçimi** (04.11.2026, kullanıcı onayıyla): motor her gün temel sürümle (`ptf-ens-v1`) iki
+  gölge sürümü (rüzgârda EPİAŞ ve kendi tahminin ortalaması, hidro özellikli) birlikte hesaplar; canlı kayda hangisinin
+  yazılacağını `lib/ptf/champion.ts` karara bağlar (defter `data/pool/forecast-log/ptf/champion.json`). Kural güneş ve rüzgârla
+  aynı çekirdek (`reviewChampion`): son 28 günün karnesi, en az 20 ortak gün, haftalık blok önyüklemesi, 28 gün bekleme; farklar:
+  eşik **%3** (güneşte %5; gölge sürümler yalnız girdi seçiminde ayrılır, sınamada %2,9 ve %3,6 görülmüştü, bu yüzden %5'te hiçbiri
+  geçmezdi), sınama **haftada en çok bir kez** (her gün kayan pencereyle bakmak yanlış terfi şansını artırır), temele dönüş
+  terfiden kolay (tek karşılaştırma, güven 0,95; terfi 2 aday için 0,975), ilk gerçek kayıttan 28 gün dolmadan terfi yok. Bu kural
+  seçilirken sınamada görülen farklara bakıldı: eşik ve hidro adayı iyimser; asıl kanıt ileriye dönük kayıttır. Geçmiş simülasyon
+  (`scripts/ptf/champion-sim.mts`): hidro adayı yalnız %1,1, rüzgâr ortalaması %0,8 daha iyi; politika bunun yaklaşık %65'ini yakalar
+  (%5 eşikte rüzgârda hiç terfi yok). Yani beklenen kazanç ≈ %1; değer terfinin kanıtla ve kayıtlı olması. Sızıntı denetimi temiz
+  (T günü kararı yalnız T-1 ve öncesini okur).
 
 ## Çalışma biçimi
 

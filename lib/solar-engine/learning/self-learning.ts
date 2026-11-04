@@ -146,14 +146,14 @@ export function comparePair(champion: Record<string, number>, challenger: Record
   return { days: days.length, costRatio, pBetter: better / BOOTSTRAP };
 }
 
-const passes = (t: PairTest, candidates: number) => t.days >= MIN_COMMON_DAYS && t.costRatio <= 1 - MIN_GAIN && t.pBetter >= 1 - (1 - CONFIDENCE) / Math.max(1, candidates);
+const passes = (t: PairTest, candidates: number, minGain = MIN_GAIN) => t.days >= MIN_COMMON_DAYS && t.costRatio <= 1 - minGain && t.pBetter >= 1 - (1 - CONFIDENCE) / Math.max(1, candidates);
 
 /**
  * Bir santral için karar: `daily[modelId]` son REVIEW_DAYS günün günlük maliyetleri (kayıp saatler hariç). Canlı sürüm
  * temel değilse ve temel sürüm ona göre geçerse temele dönülür; değilse en düşük maliyet oranıyla geçen aday terfi eder.
  * Değişiklik yoksa null.
  */
-export function reviewChampion(epiasPlantId: number, current: string, daily: Record<string, Record<string, number>>, rules: { baseModel?: string; candidates?: readonly string[] } = {}): (ChampionDecision & { test: PairTest }) | null {
+export function reviewChampion(epiasPlantId: number, current: string, daily: Record<string, Record<string, number>>, rules: { baseModel?: string; candidates?: readonly string[]; minGain?: number } = {}): (ChampionDecision & { test: PairTest }) | null {
   const baseModel = rules.baseModel ?? BASE_MODEL;
   const champ = daily[current];
   const none: PairTest = { days: 0, costRatio: NaN, pBetter: 0 };
@@ -163,13 +163,13 @@ export function reviewChampion(epiasPlantId: number, current: string, daily: Rec
   const candidates = Object.keys(daily).filter((id) => id !== current && promotable(id) && (!rules.candidates || rules.candidates.includes(id)));
   if (current !== baseModel && daily[baseModel]) {
     const back = comparePair(champ, daily[baseModel], epiasPlantId);
-    if (passes(back, 1))
+    if (passes(back, 1, rules.minGain))
       return { epiasPlantId, from: current, to: baseModel, reason: `geri dönüş: temel sürüm ${back.days} günde maliyetin ×${back.costRatio.toFixed(2)}'i (olasılık ${back.pBetter.toFixed(2)})`, test: back };
   }
   let best: { id: string; test: PairTest } | null = null;
   for (const id of candidates) {
     const t = comparePair(champ, daily[id], epiasPlantId);
-    if (passes(t, candidates.length) && (!best || t.costRatio < best.test.costRatio)) best = { id, test: t };
+    if (passes(t, candidates.length, rules.minGain) && (!best || t.costRatio < best.test.costRatio)) best = { id, test: t };
   }
   if (!best) return null;
   return {

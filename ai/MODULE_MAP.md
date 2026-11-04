@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-540 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+545 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
 ## Sayfalar (app/**/page.tsx) (24)
 
@@ -289,16 +289,19 @@
 - `lib/projects/description.ts` — Proje açıklaması: Eski sürümler EPİAŞ'tan eklenen santrallerin kaynak bilgisini proje açıklamasına not olarak ekliyordu: "EPİAŞ açık verisi: KGÜP ilk versiyon (plan) ve UEVM (gerçekleşen).
 - `lib/projects/name.ts` — Proje adı: Proje adı rapor kapağında, dosya adında ve proje kartında görünür.
 
-## lib/ptf (14)
+## lib/ptf (17)
 
 - `lib/ptf/accuracy.ts` — PTF motoru: son günlerde fiyata ne kadar yakın tahmin etti (saf, I/O yok): Kayıttaki `band` son 60 günün düzeltilmiş birleşim hatasını, aynı günlerin ortalama fiyatını ve basit yöntemin (benzer günlerin ortancası) hatasını taşır.
 - `lib/ptf/auto.ts` — PTF motoru: günlük otomatik çalışmanın kararı ve telefon özeti (saf, I/O yok; betik scripts/ptf/forecast-daily.mts)
 - `lib/ptf/bid-table.ts` — teklif masası: saat saat karar tablosu (saf, I/O yok): Her saat için PTF tahmini ve aralığı, portföyün üretim tahmini ve fiyat riski.
+- `lib/ptf/champion-store.ts` — PTF şampiyon defterinin dosyası (kural lib/ptf/champion.ts): data/pool/forecast-log/ptf/champion.json: canlı sürüm ve geçmişi.
+- `lib/ptf/champion.ts` — PTF motoru: şampiyon sürüm (saf, I/O yok; dosya champion-store.ts, günlük işe bağlama: lib/services/ptf-champion.ts)
 - `lib/ptf/features.ts` — PTF motoru: özellikler (saf, I/O yok; bütün erişim PtfView üzerinden, bilgi kuralı history.ts)
 - `lib/ptf/forecast-log-store.ts` — PTF tahmin kaydının dosyası (biçim lib/ptf/forecast-log.ts): data/pool/forecast-log/ptf/<YYYY-MM>/<YYYY-MM-DD>.json.gz: hedef gün başına bir dosya, yalnız yoksa yazılır (geçici dosya + `link`, salt okunur).
 - `lib/ptf/forecast-log.ts` — PTF motoru: günlük tahmin kaydı (saf, I/O yok; dosya forecast-log-store.ts): Her hedef gün için bir kez yazılan, bir daha değişmeyen kayıt: ileriye dönük skorun tek dayanağı.
 - `lib/ptf/history.ts` — PTF motoru: gün verisi ve bilgi zamanı kuralı (saf, I/O yok): Motor hedef gün T'nin 24 saatlik PTF'sini T-1 günü öğlen (kesim, varsayılan 12:05 Türkiye) bilinen veriyle tahmin eder.
 - `lib/ptf/level.ts` — PTF motoru: günlük seviye düzeltmesi (saf, I/O yok; deney: scripts/ptf/level-correction.mts, variants.mts)
+- `lib/ptf/model-ids.ts` — PTF motoru: sürüm kimlikleri (bağımlılıksız; istemci bileşenleri de okur): Karar kuralı lib/ptf/champion.ts'te; kimlikler değiştirilmez ve silinmez (günlük kayıtlar bunlara göre okunur).
 - `lib/ptf/models.ts` — PTF motoru: modeller (saf, I/O yok): Her model hedef gün T için 24 saatlik PTF tahmini verir; eğitim yalnız T'den önceki günlerin etiketleriyle (T-1'in PTF'si kesimde bilinir) ve aynı bilgi kuralıyla kurulmuş özelliklerle yapılır.
 - `lib/ptf/replay.ts` — PTF motoru: günlük yeniden oynatma ve skor (saf, I/O yok): `replay`: hedef günleri sırayla gezer, her modelden 24 saatlik tahmin alır (model kendi eğitimini yalnız geçmişle yapar) ve gerçekleşenle karşılaştırır.
 - `lib/ptf/scorecard.ts` — PTF motoru: ileriye dönük karne (saf, I/O yok; dosya okuma lib/services/ptf-scorecard.ts): Değişmeyen günlük kayıtlar (`PtfForecastLog`) gerçekleşen PTF'yle karşılaştırılır.
@@ -323,7 +326,7 @@
 - `lib/sector/period.ts` — Sektör analizlerinin dönemi: içinde bulunulan yılın sektör karnesinin dönem sonu (scripts/sector-collect.mts; piyasa verisi olan son gün).
 - `lib/sector/plant-technology.ts` — Sektör taramasında santral teknolojisi (PLAN Bekleyen işler: EPDK ↔ karne, adım 2b): Eskiden tür yalnız addan tahmin ediliyordu (`guessTechnologyFromName`); adında tür eki olmayan santraller ("OYMAPINAR", "BORÇKA", "HASAN UĞURLU") ve tanın…
 
-## lib/services (56)
+## lib/services (57)
 
 - `lib/services/aggregator-data.ts` — Toplayıcı kıyası ve ayrıntısı için veri okuma (PLAN 8.7, 9.2): Santral saatleri veri havuzundan (ilk KGÜP ve UEVM), türü ve sahibi sektör karnesi dosyalarından ya da havuz tanımından, fiyatlar veritabanındaki EPİAŞ resmi dengesizlik fiyatl…
 - `lib/services/aggregator-membership.ts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" ekiyle kayıtlı tüm katılımcıların santral listesi çekilir ve .cache/epias/ aggregator-membership.json'a yazılır.
@@ -357,6 +360,7 @@
 - `lib/services/project-hourly.ts` — Proje bir toplayıcı portföyüyse: santraller bu adla tek dengede uzlaştırılır (organizationId = AGGREGATOR_ORG_ID)
 - `lib/services/project-kpis.ts` — Proje karşılaştırması için özet göstergeler: Her proje Dengesizlik Karnesi ile aynı motordan geçer (şirket bazında uzlaştırma, KÜPST, YEKDEM varsayımları, 2026 kuralları, sektör sırası); karşılaştırma tablosundaki rakamlar rapordakilerle b…
 - `lib/services/project-records.ts` — Projeyi saatlik kayıtları ve piyasa verisiyle yükleme: İki kaynak: - Havuzdan okunan santral (poolBacked, PLAN 7.7): saatler veri havuzundan (data/pool), projenin dönemi içinde.
+- `lib/services/ptf-champion.ts` — PTF motoru: şampiyon kararının veri tarafı (kural lib/ptf/champion.ts): Hedef gün T için kayıtlı günlük kayıtları (hedefin bir öncesine kadar son 28 gün) ve gerçekleşen PTF'yi okur, karar verir.
 - `lib/services/ptf-engine.ts` — PTF motoru: yarının tahmini (hesap lib/ptf/*; veri lib/services/ptf-history.ts): Hedef gün T için: geçmiş günler havuzdan ve veri tabanından; kesimde bilinen ama havuzda henüz olmayanlar EPİAŞ'tan canlı (T'nin yük planı ve rüzgâr tahmini, …
 - `lib/services/ptf-forecast-page.ts` — teklif öncesi sayfası: PTF motoru tahmini (kayıt yazmaz): Motor (lib/services/ptf-engine.ts) iki modeli geçmişle eğitip son 60 günü yeniden oynatır; yaklaşık bir dakika işlemciyi tutar.
 - `lib/services/ptf-history.ts` — PTF motoru: gün verisini toplar (hesap lib/ptf/*): PTF veri tabanından (doğrulanmış EPİAŞ / dosya kaynakları); yük tahmin planı, tüketim, gerçek zamanlı rüzgâr ve güneş, kaynak bazında KGÜP sistem havuzundan (`data/pool/system/<yıl>`); EPİ…
@@ -617,9 +621,10 @@
 - `scripts/analysis/wind-forecast-backtest.mts` — Rüzgâr üretim tahmini geriye dönük testi (kullanıcı 18.10.2026; güneşteki scripts/analysis/forecast-backtest.mts'in rüzgâr karşılığı).
 - `scripts/analysis/wind-live-backtest.mts` — Güncel sunucu kopyasında 120 günlük, günlük kayan RES temel sınaması.
 
-## scripts/ptf (12)
+## scripts/ptf (13)
 
 - `scripts/ptf/bad-days.mts` — PTF motoru: kötü gün incelemesi (yalnız okur).
+- `scripts/ptf/champion-sim.mts` — PTF motoru: şampiyon politikasının geçmiş simülasyonu (yalnız okur; .cache/ptf/replay-*.json üstünde)
 - `scripts/ptf/forecast-daily.mts` — PTF motoru: yarının saatlik PTF tahmini, değişmeyen kayıt (data/pool/forecast-log/ptf/<ay>/<gün>.json.gz).
 - `scripts/ptf/forecast-preview.mts` — PTF motoru: teklif öncesi sayfası için tahmin (kayıt yazmaz).
 - `scripts/ptf/level-correction.mts` — PTF motoru: günlük seviye düzeltmesi denemesi (yalnız okur; replay çıktısı üstünde, yeni tahmin üretmez).
