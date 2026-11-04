@@ -140,6 +140,42 @@ export default function NewPlantRadarPage() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Şirketlere göre devreye giren kapasite</CardTitle>
+          <CardDescription>
+            Sahibi bilinen {nf(data.ownersKnown)} santral. Sahibi bilinmeyen {nf(data.unknownOwners.plants)} santral ({nf(data.unknownOwners.mw)} MW) burada yok: EPİAŞ
+            toplayıcı portföyüne giren yeni santrallerin sahibini yayımlamıyor.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="overflow-x-auto p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Şirket</TableHead>
+                <TableHead className="text-right">Santral</TableHead>
+                <TableHead className="text-right">Kurulu güç (MW)</TableHead>
+                <TableHead className="text-right">Kayıtlı / tahmini (MW)</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.owners.slice(0, 15).map((o) => (
+                <TableRow key={o.owner}>
+                  <TableCell className="max-w-[24rem] truncate font-medium" title={o.owner}>
+                    {o.owner}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{nf(o.plants)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{nf(o.mw, 1)}</TableCell>
+                  <TableCell className="text-right tabular-nums text-slate-600">
+                    {nf(o.recordedMw, 1)} / {nf(o.estimatedMw, 1)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-base font-semibold">Devreye giren santraller</h2>
         <div className="flex gap-1 rounded-lg border bg-white p-1" role="group" aria-label="Tür">
@@ -228,7 +264,7 @@ export default function NewPlantRadarPage() {
             Kurulu güç kayıttan (YEKDEM, EPDK lisansı) alınır; kayıt yoksa en yüksek saatlik üretimdir ve gerçek gücün altında kalabilir (~ ve &ldquo;Tahmini&rdquo; rozeti).
           </li>
           <li>
-            Sahip şirket yalnız sektör karnesinde ya da sahip dizininde olan santrallerde yazılır; EPİAŞ yeni santrallerin çoğunun sahibini yayımlamaz ({data.ownersKnown} /{" "}
+            Sahip şirket EPİAŞ&apos;ın şirket ve santral listelerinden gelir. Toplayıcı portföyüne giren yeni santrallerin sahibini EPİAŞ yayımlamaz ({data.ownersKnown} /{" "}
             {data.plants.length} santralde biliniyor).
           </li>
           <li>Üretim verisi aylık uzlaştırmadan sonra yayımlanır; son ayın yeni santralleri o ay yayımlanana kadar görünmez.</li>

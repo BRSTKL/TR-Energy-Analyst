@@ -94,3 +94,35 @@ export function totalsOf(plants: NewPlant[]): RadarTotals {
   }
   return t;
 }
+
+export interface OwnerRow {
+  owner: string;
+  plants: number;
+  mw: number;
+  recordedMw: number;
+  estimatedMw: number;
+}
+
+/**
+ * Sahip şirkete göre devreye giren kapasite (MW azalan). Sahibi bilinmeyen santraller satıra girmez; sayısı ve MW'ı `unknown`'da.
+ * Şirket adı yazım farkıyla ayrılmasın diye boşluklar tekleştirilir (EPİAŞ adlarında çift boşluk var).
+ */
+export function ownerRanking(plants: NewPlant[]): { rows: OwnerRow[]; unknown: { plants: number; mw: number } } {
+  const byOwner = new Map<string, OwnerRow>();
+  const unknown = { plants: 0, mw: 0 };
+  for (const p of plants) {
+    if (!p.owner) {
+      unknown.plants++;
+      unknown.mw += p.mw;
+      continue;
+    }
+    const key = p.owner.replace(/\s+/g, " ").trim();
+    const r = byOwner.get(key) ?? { owner: key, plants: 0, mw: 0, recordedMw: 0, estimatedMw: 0 };
+    r.plants++;
+    r.mw += p.mw;
+    if (p.recorded) r.recordedMw += p.mw;
+    else r.estimatedMw += p.mw;
+    byOwner.set(key, r);
+  }
+  return { rows: Array.from(byOwner.values()).sort((a, b) => b.mw - a.mw || a.owner.localeCompare(b.owner, "tr")), unknown };
+}

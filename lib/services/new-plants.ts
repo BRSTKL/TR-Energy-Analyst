@@ -10,18 +10,20 @@
 import {
   monthKey,
   monthlyNewPlants,
+  ownerRanking,
   selectNewPlants,
   totalsOf,
   RADAR_FROM,
   type FirstSeen,
   type NewPlant,
+  type OwnerRow,
   type RadarMonth,
   type RadarTotals,
   type RadarType,
 } from "@/lib/analysis/new-plants";
 import { CAPACITY_SOURCE_LABEL, isRecordedCapacity } from "@/lib/epias-plant/installed-capacity";
 import { listPoolPlants, readPoolPlantInfo, readPoolYear } from "@/lib/pool/pool-store";
-import { loadOwnerEntries } from "@/lib/services/epias-plants";
+import { loadNewOwnerEntries, loadOwnerEntries } from "@/lib/services/epias-plants";
 import { resolveInstalledCapacities } from "@/lib/services/installed-capacity";
 import { sectorFacts } from "@/lib/services/plant-directory";
 
@@ -39,6 +41,9 @@ export interface NewPlantRadar {
   totals: RadarTotals;
   last12: RadarTotals;
   plants: NewPlant[];
+  /** Sahip şirkete göre devreye giren kapasite; sahibi bilinmeyenler `unknownOwners`'ta */
+  owners: OwnerRow[];
+  unknownOwners: { plants: number; mw: number };
 }
 
 let memo: { at: number; promise: Promise<NewPlantRadar> } | null = null;
@@ -96,7 +101,11 @@ async function build(now = new Date()): Promise<NewPlantRadar> {
 
   const facts = await sectorFacts();
   const owners = new Map<number, string>();
-  for (const year of [2026, 2025]) for (const [id, o] of await loadOwnerEntries(year).catch(() => [])) if (!owners.has(id)) owners.set(id, o.organizationName);
+  for (const year of [2026, 2025]) {
+    // Yeni şirketler ayrı dosyada birikir ("EPİAŞ bilgilerini güncelle" ve sahip doldurma); tam dizinden önce okunur
+    for (const [id, o] of await loadNewOwnerEntries(year).catch(() => [])) if (!owners.has(id)) owners.set(id, o.organizationName);
+    for (const [id, o] of await loadOwnerEntries(year).catch(() => [])) if (!owners.has(id)) owners.set(id, o.organizationName);
+  }
   const ownerOf = (id: number) => facts.get(id)?.owner ?? owners.get(id) ?? null;
 
   const lastYear = Math.max(2026, ...picked.map((p) => new Date(p.firstMs).getUTCFullYear()));
@@ -113,6 +122,7 @@ async function build(now = new Date()): Promise<NewPlantRadar> {
     recorded: isRecordedCapacity(matches[i].source),
   }));
 
+  const ranking = ownerRanking(plants);
   const toMonth = dataThrough ?? monthKey(now.getTime());
   const months = monthlyNewPlants(plants, monthKey(RADAR_FROM), toMonth);
   const last12From = monthKey(Date.UTC(Number(toMonth.slice(0, 4)), Number(toMonth.slice(5, 7)) - 12, 1));
@@ -125,6 +135,8 @@ async function build(now = new Date()): Promise<NewPlantRadar> {
     totals: totalsOf(plants),
     last12: totalsOf(plants.filter((p) => monthKey(p.firstMs) > last12From)),
     plants,
+    owners: ranking.rows,
+    unknownOwners: ranking.unknown,
   };
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { monthlyNewPlants, monthKey, RADAR_FROM, selectNewPlants, totalsOf, type FirstSeen, type NewPlant } from "@/lib/analysis/new-plants";
+import { monthlyNewPlants, monthKey, ownerRanking, RADAR_FROM, selectNewPlants, totalsOf, type FirstSeen, type NewPlant } from "@/lib/analysis/new-plants";
 
 const at = (y: number, m: number, d = 1) => Date.UTC(y, m - 1, d);
 const f = (id: number, name: string, firstMs: number, peakMwh = 10, type: FirstSeen["type"] = "RES", poolStartMs = Date.UTC(2025, 0, 1)): FirstSeen => ({ id, name, type, firstMs, peakMwh, poolStartMs });
@@ -55,5 +55,22 @@ describe("monthlyNewPlants / totalsOf", () => {
   });
   it("monthKey", () => {
     expect(monthKey(at(2026, 1, 31))).toBe("2026-01");
+  });
+});
+
+describe("ownerRanking", () => {
+  const withOwner = (p: NewPlant, owner: string | null): NewPlant => ({ ...p, owner });
+  it("sahibe göre toplam, MW azalan; çift boşluk tek sayılır; bilinmeyenler ayrı", () => {
+    const r = ownerRanking([
+      withOwner(np(1, at(2025, 3), 50, true), "A  ENERJİ A.Ş."),
+      withOwner(np(2, at(2025, 4), 20, false), "A ENERJİ A.Ş."),
+      withOwner(np(3, at(2025, 5), 100, true), "B A.Ş."),
+      withOwner(np(4, at(2025, 6), 7, true), null),
+    ]);
+    expect(r.rows).toEqual([
+      { owner: "B A.Ş.", plants: 1, mw: 100, recordedMw: 100, estimatedMw: 0 },
+      { owner: "A ENERJİ A.Ş.", plants: 2, mw: 70, recordedMw: 50, estimatedMw: 20 },
+    ]);
+    expect(r.unknown).toEqual({ plants: 1, mw: 7 });
   });
 });

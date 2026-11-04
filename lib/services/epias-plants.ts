@@ -226,6 +226,15 @@ export async function scanNewOrganizations(year: number, baseScanned: Iterable<n
   return owners;
 }
 
+/** `scanNewOrganizations` ile birikmiş yeni şirketlerin santral → sahip kayıtları (EPİAŞ'a bağlanmaz); dosya yoksa boş */
+export async function loadNewOwnerEntries(year: number): Promise<Array<[number, PlantOwner]>> {
+  try {
+    return (JSON.parse(await fs.readFile(newOrgsFile(year), "utf8")) as { entries: Array<[number, PlantOwner]> }).entries ?? [];
+  } catch {
+    return [];
+  }
+}
+
 /** Diskteki en yakın yılın tam sahip dizini (EPİAŞ'a bağlanmaz); yoksa boş */
 export async function loadOwnerEntries(year: number): Promise<Array<[number, PlantOwner]>> {
   return (await nearestOwnerIndex(year))?.entries ?? [];

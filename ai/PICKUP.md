@@ -17,10 +17,14 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
   değil) ve LÜM_ / LÜY toplamları: hariç tutuldu. Kendi dosyasının ilk saatinden dolu başlayan 9 santral de (ör. yalnız 2026 dosyası, ilk
   üretim 01.01.2026) hariç: devreye giriş anı bilinemez. Sonuç 52 santral, 2.581 MW (2.191 MW kayıtlı, 389 MW tahmini); son 12 ay 29
   santral, 1.350 MW. Tüm ilk üretimler gün başı 00:00; 15'i ayın 1'inde (ilk gün hassasiyetinde, bazıları ay başı kaydı olabilir).
-- **Sınırlar:** sahip şirket yalnız 52 santralin 2'sinde biliniyor (EPİAŞ yeni santrallerin çoğunun sahibini yayımlamıyor; sahip
-  dizini ve karne yalnız eski santralleri kapsıyor): "rakip şirket büyümesi" bu sayfayla bugün yapılamaz. Ekim 2026 UEVM'si
-  (17 Kasım civarı) gelene kadar son ay Eylül.
-- **Sıradaki:** sahip doldurma (resolvePlantMeta ile EPİAŞ'tan; ağ ve önbellek yazımı, onay gerekir); şirket profili sayfası.
+- **Sahip doldurma (kullanıcı onayıyla, 05.11.2026):** `resolvePlantMeta(ids, 2026)` sunucuda çalıştırıldı (1 sn, EPİAŞ'a salt okunur
+  istek; `.cache/epias/plant-owners-2026-new.json` güncellendi, 47 kayıt). 52 yeni santralin 25'inin sahibi bulundu (önce 2); kalan 27
+  (1.308 MW) toplayıcı portföyündeki santral: EPİAŞ sahibini yayımlamıyor. Radar bu dosyayı da okur (`loadNewOwnerEntries`) ve
+  "Şirketlere göre devreye giren kapasite" tablosu var (Enerjisa 5 santral 559 MW, Eksim 5 / 270 MW, Kalyon YEKA GES 3 / 150 MW…).
+  Mac'te önizleme için dosya sunucudan kopyalandı.
+- **Sınırlar:** Ekim 2026 UEVM'si (17 Kasım civarı) gelene kadar son ay Eylül. Yeni santral çıktıkça sahip için doldurma yinelenmeli
+  ("EPİAŞ bilgilerini güncelle" ya da aynı çağrı).
+- **Sıradaki:** radarı yükle; sahip doldurmayı aylık işe bağlamak; şirket profili sayfası.
 
 ## 04.11.2026 · Claude · YEKDEM çıkış takvimi (`claude/yekdem-takvim`, yüklenmedi)
 
