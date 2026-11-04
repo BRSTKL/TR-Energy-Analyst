@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Download, Loader2 } from "lucide-react";
+import { Download, Info, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { bidCsv, bidTotals, buildBidRows, RISK_LABEL, type BidRisk } from "@/lib/ptf/bid-table";
@@ -68,6 +68,7 @@ export function BidTable({
     URL.revokeObjectURL(a.href);
   };
 
+  const hasProd = !!prod?.total.hours;
   const logs = prod?.logs;
   const late = [logs?.solar, logs?.wind].some((l) => l && !l.onTime);
 
@@ -83,8 +84,8 @@ export function BidTable({
         {!prod && !error && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
       </div>
       <p className="text-sm text-slate-600">
-        PTF tahmini, portföyünüzün üretim tahmini ve fiyat riski yan yana. Teklif miktarı önerisi
-        vermez: kendi KGÜP, pozisyon ve sözleşme verisi bu uygulamada yok.
+        PTF tahmini, üretim tahmini ve risk yan yana. Teklif miktarı önerisi vermez (kendi KGÜP ve
+        sözleşme verisi yok).
       </p>
 
       {!rows.length && (
@@ -101,10 +102,11 @@ export function BidTable({
         </div>
       )}
       {prod && !prod.total.hours && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          {date} için güneş / rüzgâr üretim kaydı yok ya da projelerdeki santraller kayıtta değil;
-          üretim sütunu boş. Kayıtlar sunucuda sabah yazılır (güneş 09:30, rüzgâr 10:00).
-        </div>
+        <p className="flex items-start gap-1.5 text-sm text-slate-600">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+          Bu gün için güneş / rüzgâr üretim kaydı yok (sunucu sabah yazar); tablo yalnız fiyat
+          riskini gösterir.
+        </p>
       )}
       {late && (
         <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
@@ -119,23 +121,20 @@ export function BidTable({
 
       {rows.length > 0 && (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Stat label="Ortalama PTF" value={`${nf(totals.meanPtf)} TL/MWh`} />
-            <Stat
-              label="Üretim ağırlıklı PTF"
-              value={totals.weightedPtf === null ? "–" : `${nf(totals.weightedPtf)} TL/MWh`}
-            />
-            <Stat label="Üretim tahmini" value={totals.mwh === null ? "–" : `${nf(totals.mwh)} MWh`} />
-            <Stat label="Riskli saat" value={`${totals.riskHours} / 24`} />
-          </div>
+          {hasProd && totals.weightedPtf !== null && totals.mwh !== null && (
+            <p className="text-sm text-slate-700">
+              Üretim ağırlıklı PTF <b className="tabular-nums">{nf(totals.weightedPtf)} TL/MWh</b> ·
+              üretim tahmini <b className="tabular-nums">{nf(totals.mwh)} MWh</b>
+            </p>
+          )}
           <div className="overflow-x-auto rounded-lg border bg-white shadow-sm">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-left text-xs text-slate-500">
                 <tr>
                   <th className="px-3 py-2">Saat</th>
-                  <th className="px-3 py-2 text-right">PTF tahmini</th>
-                  <th className="px-3 py-2 text-right">Aralık</th>
-                  <th className="px-3 py-2 text-right">Üretim (MWh)</th>
+                  <th className="px-3 py-2 text-right">PTF tahmini (TL/MWh)</th>
+                  <th className="px-3 py-2 text-right">Aralık (TL/MWh)</th>
+                  {hasProd && <th className="px-3 py-2 text-right">Üretim (MWh)</th>}
                   <th className="px-3 py-2">Risk</th>
                 </tr>
               </thead>
@@ -147,9 +146,11 @@ export function BidTable({
                     <td className="px-3 py-1.5 text-right tabular-nums text-slate-500">
                       {r.low === null || r.high === null ? "–" : `${nf(r.low)} – ${nf(r.high)}`}
                     </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums">
-                      {r.mwh === null ? "–" : nf(r.mwh, 1)}
-                    </td>
+                    {hasProd && (
+                      <td className="px-3 py-1.5 text-right tabular-nums">
+                        {r.mwh === null ? "–" : nf(r.mwh, 1)}
+                      </td>
+                    )}
                     <td className="px-3 py-1.5">
                       {r.risk && (
                         <span
@@ -175,14 +176,5 @@ export function BidTable({
         </>
       )}
     </section>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border bg-white p-3 shadow-sm">
-      <div className="text-xs text-slate-500">{label}</div>
-      <div className="mt-0.5 text-base font-semibold tabular-nums text-slate-900">{value}</div>
-    </div>
   );
 }

@@ -9,13 +9,17 @@ const day = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}`
  * Fiyat limiti notu. Limit verideki platodan çıkarılır (lib/analysis/price-limit.ts), resmî değer gibi sunulmaz. Son 7 günde
  * tavanda saat varsa uyarı tonu.
  */
-export function PriceLimitNote({ limit }: { limit: PriceLimit | null }) {
+export function PriceLimitNote({ limit, bare = false }: { limit: PriceLimit | null; bare?: boolean }) {
   if (!limit) return null;
   const hot = limit.hoursLast7 > 0;
   const Icon = hot ? AlertTriangle : Info;
   return (
     <div
-      className={`flex gap-2 rounded-md border p-3 text-sm ${hot ? "border-amber-200 bg-amber-50 text-amber-900" : "border-slate-200 bg-white text-slate-700"}`}
+      className={
+        bare
+          ? "flex gap-2 text-sm text-slate-700"
+          : `flex gap-2 rounded-md border p-3 text-sm ${hot ? "border-amber-200 bg-amber-50 text-amber-900" : "border-slate-200 bg-white text-slate-700"}`
+      }
     >
       <Icon className="mt-0.5 h-4 w-4 shrink-0" />
       <p>

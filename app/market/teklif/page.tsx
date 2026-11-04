@@ -2,11 +2,13 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, FlaskConical, Loader2, RefreshCw } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MethodLink } from "@/components/method-link";
 import { shift } from "@/components/market/daily-dashboard";
 import { SignalSection } from "@/components/market/brief";
+import { Fold } from "@/components/market/fold";
+import { nf } from "@/lib/format";
 import { PreBidContextPanel } from "@/components/market/pre-bid-context";
 import { PreBidEffectsPanel } from "@/components/market/pre-bid-effects";
 import { PreBidBody, PreBidStatusCard } from "@/components/market/pre-bid-view";
@@ -135,11 +137,24 @@ export default function BriefPage() {
               <span className="text-slate-300">/</span>
               <span className="font-medium text-slate-700">Teklif öncesi</span>
             </div>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-              Teklif öncesi · {date === tomorrow ? "yarın " : ""}
-              {`${date.slice(8, 10)}.${date.slice(5, 7)}.${date.slice(0, 4)}`}
+            <h1 className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+              <span>
+                Teklif öncesi · {date === tomorrow ? "yarın " : ""}
+                {`${date.slice(8, 10)}.${date.slice(5, 7)}.${date.slice(0, 4)}`}
+              </span>
+              <span
+                className="rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-xs font-medium text-violet-800"
+                title="Önizleme: yarının saatlik PTF tahmini ve teklif öncesi bilinen veriler tek sayfada. Al/sat önerisi vermez; alınamayan veriyi açıkça yazar."
+              >
+                Önizleme
+              </span>
             </h1>
-            <MethodLink section="gunluk-pano" label="Yöntem ve varsayımlar" />
+            <p className="mt-1 text-sm text-slate-600">
+              {date === tomorrow
+                ? "Yarının fiyatı ve riskli saatler."
+                : "Geçmiş gün: hesap o günün kesiminde bilinen veriyle yapıldı ve gerçekleşenle karşılaştırılır."}{" "}
+              <MethodLink section="gunluk-pano" label="Yöntem ve varsayımlar" />
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {(loading || ctxLoading) && (
@@ -178,91 +193,87 @@ export default function BriefPage() {
       </header>
 
       <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-        <div className="flex gap-2 rounded-md border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900">
-          <FlaskConical className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>
-            <b>Önizleme.</b> Yarının saatlik PTF tahmini (tahmin motoru) ve teklif öncesi
-            bilinen verilerin tek sayfada özeti. Al/sat önerisi vermez; alınamayan veriyi
-            açıkça yazar. Geçmiş bir günü seçerseniz hesap o günün kesiminde bilinen
-            veriyle yapılır ve gerçekleşenle karşılaştırılır.
-          </p>
-        </div>
-
         <PtfEnginePanel
           date={date}
           reload={reload}
           onMean={setEngineMean}
           onHours={setEngineHours}
-        />
-        <PriceLimitNote limit={core?.limit ?? null} />
-        <BidTable date={date} ptf={engineHours} limit={core?.limit ?? null} />
-
-        {ctxError && (
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-            Bağlam verileri alınamadı: {ctxError}
-          </div>
-        )}
-        {effectsError && (
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-            Etki ölçümü alınamadı: {effectsError}
-          </div>
-        )}
-
-        <SignalSection brief={brief} ctxLoading={ctxLoading} onDetail={openDetail} />
-
-        <details
-          className="rounded-lg border bg-white shadow-sm"
-          open={open}
-          onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}
+          limit={core?.limit ?? null}
+          folds={
+            <>
+              {core?.limit && (
+                <Fold title="Fiyat limiti" hint={`${nf(core.limit.cap)} TL/MWh`}>
+                  <PriceLimitNote limit={core.limit} bare />
+                </Fold>
+              )}
+              <Fold
+                title="Yarının fiyatı için bağlam"
+                hint={
+                  ctxLoading
+                    ? "yükleniyor"
+                    : ctxError
+                      ? "alınamadı"
+                      : `${brief.tally.up} yukarı, ${brief.tally.down} aşağı iten`
+                }
+              >
+                {ctxError && <p className="text-sm text-amber-900">Bağlam verileri alınamadı: {ctxError}</p>}
+                <SignalSection brief={brief} ctxLoading={ctxLoading} onDetail={openDetail} bare />
+              </Fold>
+              <Fold
+                title="Daha fazla ayrıntı"
+                hint="bağlam kartları, ölçüm, eski model"
+                id="tum-ayrintilar"
+                open={open}
+                onToggle={setOpen}
+              >
+                {ctx ? (
+                  <PreBidContextPanel date={date} expectedMean={engineMean} data={ctx} />
+                ) : (
+                  <p className="text-sm text-slate-500">
+                    {ctxError ? `Bağlam kartları alınamadı: ${ctxError}` : "Bağlam kartları yükleniyor…"}
+                  </p>
+                )}
+                {effects ? (
+                  <PreBidEffectsPanel data={effects} />
+                ) : (
+                  <p className="text-sm text-slate-500">
+                    {effectsError ? `Etki ölçümü alınamadı: ${effectsError}` : "Etki ölçümü yükleniyor…"}
+                  </p>
+                )}
+                <div className="space-y-3">
+                  <h3 className="text-base font-semibold text-slate-900">
+                    Eski önizleme modeli (karşılaştırma için)
+                  </h3>
+                  <p className="text-sm text-slate-500">
+                    Önceki basit model (yük tahmini, rüzgâr tahmini ve dünkü fiyat sapması; hata payı
+                    yaklaşık ±550 TL/MWh). Sayfadaki tahmin artık motordan gelir.
+                  </p>
+                  {loading && (
+                    <p className="flex items-center gap-2 text-sm text-slate-500">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Hesaplanıyor…
+                    </p>
+                  )}
+                  {coreError && <p className="text-sm text-red-700">{coreError}</p>}
+                  {core && !core.view.ok && (
+                    <p className="flex gap-2 text-sm text-amber-900">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      {core.view.reason}
+                    </p>
+                  )}
+                  {core?.notes.map((n) => (
+                    <p key={n} className="text-sm text-amber-900">
+                      {n}
+                    </p>
+                  ))}
+                  {okView && core && <PreBidBody view={okView} limit={core.limit} />}
+                </div>
+                <PreBidStatusCard />
+              </Fold>
+            </>
+          }
         >
-          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-800">
-            Tüm ayrıntılar: bağlam kartları, ölçüm, eski önizleme modeli ve veri durumu
-          </summary>
-          <div className="space-y-6 border-t p-4">
-            {ctx ? (
-              <PreBidContextPanel date={date} expectedMean={engineMean} data={ctx} />
-            ) : (
-              <p className="text-sm text-slate-500">
-                Bağlam kartları yükleniyor ya da alınamadı.
-              </p>
-            )}
-            {effects ? (
-              <PreBidEffectsPanel data={effects} />
-            ) : (
-              <p className="text-sm text-slate-500">
-                Etki ölçümü yükleniyor ya da alınamadı.
-              </p>
-            )}
-            <div className="space-y-3">
-              <h3 className="text-base font-semibold text-slate-900">
-                Eski önizleme modeli (karşılaştırma için)
-              </h3>
-              <p className="text-sm text-slate-500">
-                Önceki basit model (yük tahmini, rüzgâr tahmini ve dünkü fiyat sapması;
-                hata payı yaklaşık ±550 TL/MWh). Sayfadaki tahmin artık motordan gelir.
-              </p>
-              {loading && (
-                <p className="flex items-center gap-2 text-sm text-slate-500">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Hesaplanıyor…
-                </p>
-              )}
-              {coreError && <p className="text-sm text-red-700">{coreError}</p>}
-              {core && !core.view.ok && (
-                <p className="flex gap-2 text-sm text-amber-900">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  {core.view.reason}
-                </p>
-              )}
-              {core?.notes.map((n) => (
-                <p key={n} className="text-sm text-amber-900">
-                  {n}
-                </p>
-              ))}
-              {okView && core && <PreBidBody view={okView} limit={core.limit} />}
-            </div>
-            <PreBidStatusCard />
-          </div>
-        </details>
+          <BidTable date={date} ptf={engineHours} limit={core?.limit ?? null} />
+        </PtfEnginePanel>
       </main>
     </div>
   );

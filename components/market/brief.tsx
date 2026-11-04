@@ -347,19 +347,29 @@ export function SignalSection({
   brief,
   ctxLoading,
   onDetail,
+  bare = false,
 }: {
   brief: Brief;
   ctxLoading: boolean;
   onDetail: (id: string) => void;
+  /** Kapalı bir bölümün içinde: başlık bölümde, uzun özet cümlesi yerine kısa özet */
+  bare?: boolean;
 }) {
   const groups: SignalGroup[] = ["talep", "arz", "piyasa", "dis"];
+  const t = brief.tally;
   return (
-    <section className="space-y-4" aria-labelledby="sinyaller">
+    <section className="space-y-4" aria-labelledby={bare ? undefined : "sinyaller"}>
       <div>
-        <h2 id="sinyaller" className="text-lg font-semibold text-slate-900">
-          Yarının fiyatı için bağlam: bugün ne değişti?
-        </h2>
-        <p className="mt-1 text-sm text-slate-600">{brief.tallyLine}</p>
+        {!bare && (
+          <h2 id="sinyaller" className="text-lg font-semibold text-slate-900">
+            Yarının fiyatı için bağlam: bugün ne değişti?
+          </h2>
+        )}
+        <p className="mt-1 text-sm text-slate-600">
+          {bare
+            ? `${t.up + t.down + t.flat + t.info} sinyalden ${t.up} yukarı, ${t.down} aşağı, ${t.flat} nötr, ${t.info} bilgi. Kartlar tahmine girmez; bağlamdır.`
+            : brief.tallyLine}
+        </p>
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
           <span className="flex items-center gap-1 text-orange-700">
             <ArrowUp className="h-3 w-3" /> fiyatı yukarı iten

@@ -5,6 +5,18 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 04.11.2026 · Claude · Teklif öncesi sayfası sadeleştirildi (`claude/teklif-sade`)
+
+- Kullanıcı "çok yazı ve uyarı var" dedi; önizleme gösterildi, onaylandı. 722 → 385 kelime, 3.206 → 2.250 px. Hesap, veri ve
+  iş kuralı değişmedi; yalnız sunum.
+- **Yeni sıra:** üst kart (ana sayı, en pahalı / en ucuz saat, riskli saat, sapma, tek satır "Veri durumu") → 24 saatlik fiyat
+  grafiği (limite yakın saatler gölgeli) → teklif masası → kapalı bölümler (`components/market/fold.tsx`: güven, girdiler, saatlik
+  tablo, fiyat limiti, bağlam, daha fazla ayrıntı). Önceki altı uyarı kutusu tek veri durumu satırında; üretim kaydı yoksa
+  masada boş sütun yerine tek satır not.
+- **Düzeltilen tutarsızlık:** üst kart "limite yakın 3 saat", masa "riskli 12/24" diyordu; ikisi de `buildBidRows` tanımını kullanır.
+- **Kontrol:** 988 test, tsc, lint, `--only teklif` duman testi (masaüstü + 375 px) temiz. Yerelde yarın fiyatı açıklanmamış
+  ("kayıt önde") görünüm görülemedi; sunucuda sabah bakılmalı.
+
 ## 04.11.2026 · Claude · Arayüz: kaynak dili (`claude/arayuz-kaynak-dili`, 8 commit, yüklenmedi)
 
 - Canlı sunucuda (b339196) arayüz incelemesi, sonra onaylı plan (`~/.claude/plans/pasted-content-id-ae5a-…md`) 6 adımda uygulandı.

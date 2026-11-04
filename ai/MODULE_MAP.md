@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-539 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+540 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
 ## Sayfalar (app/**/page.tsx) (24)
 
@@ -463,7 +463,7 @@
 - `lib/wind-engine/pipeline.ts` — RES günlük akışı: taze girdiler, kanıtla sürüm seçimi, kesimden önce değişmez kayıt.
 - `lib/wind-engine/registry.ts` — Rüzgâr günlük kayıt sürümleri.
 
-## components (66)
+## components (67)
 
 - `components/aggregator-benchmark-tab.tsx` — Sektör karnesi · Toplayıcılar sekmesi (PLAN 9.1): EPİAŞ'taki toplayıcıların aynı yöntemle kıyası.
 - `components/app-shell.tsx` — Uygulama kabuğu: sol menü (lg+), üstte saat şeridi, telefonda çekmece ve altta dört kısayol.
@@ -487,6 +487,7 @@
 - `components/market/chart-card.tsx` — Doğrulanmış renk seti: seçilen dönem vurgulu, önceki yıl gri.
 - `components/market/daily-dashboard.tsx` — Karma renkleri: rüzgâr / güneş / lisanssız güneş açık tonlar, termik koyu
 - `components/market/daily-table.tsx` — Günlük piyasa panosunun saatlik tablosu (ana sayfada ve /market/gunluk'te aynı).
+- `components/market/fold.tsx` — Kapalı bölüm: başlık ve sağda kısa bir özet satırı ("2 yukarı, 1 aşağı"); açılınca ayrıntı.
 - `components/market/pre-bid-context.tsx` — Bulunan EPİAŞ verileriyle bağlam analizleri (ÖNİZLEME).
 - `components/market/pre-bid-effects.tsx` — Ölçülmeyen verilerin neden ölçülmediği; sayı yok, yalnız durum
 - `components/market/pre-bid-view.tsx` — Neleri bilsek daha iyi ölçerdik: etki ölçümde görülene dayanır; kaynak ve durum yanında
