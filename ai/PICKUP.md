@@ -5,6 +5,20 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 04.11.2026 · Claude · YEKDEM çıkış takvimi (`claude/yekdem-takvim`, yüklenmedi)
+
+- Kullanıcı sayfa eksiklerinden "YEKDEM çıkış takvimi"ni istedi: hesap vardı (`lib/services/yekdem-exit.ts`, aday sayfasında filtre ve
+  rozet), yıllara göre toplam yoktu.
+- **Yapılan:** `/yekdem` (Analiz grubu): şu an YEKDEM'de, bu yıl geçen, gelecek yıl en erken geçecek kartları; yıllara göre yığılmış MW
+  grafiği (kesin / belirsiz); yıl tablosu; seçilen yılın santral listesi (tür süzgeçli, santral kartına bağlantılı). Saf kod
+  `lib/analysis/yekdem-calendar.ts` (bir santral tek satırda: çıkmışlar son YEKDEM yılı + 1'de kesin; çıkacakta aralık tek yıl kesin,
+  iki yıl belirsiz ve en erken yılda sayılır; hiç görülmeyenler takvimde yok), servis `lib/services/yekdem-calendar.ts`, API `/api/yekdem`.
+- **Dürüstlük:** işletmeye giriş tarihi açık veride yok, süre ±1 yıl belirsiz; MW yalnız YEKDEM katılımcı listesindeki lisanslı güç, kaydı
+  olmayan santral sayılır ama MW'a girmez; kapsam santral rehberindeki rüzgâr/güneş/hidro santraller (lisanssız ve rehberde olmayanlar yok).
+- **Kontrol:** 1.043 test, tsc, lint, `--only yekdem` duman testi (masaüstü + telefon). Yerelde 951 santral YEKDEM'de görülmüş, 453'ü hiç
+  görülmemiş; 2026'da çıkan 105 santral / 3.406 MW (eski "82 çıktı" sayımı farklı kümeyle yapılmıştı).
+- **Sıradaki:** şirket profili sayfası; sektör tablosundan karta bağlantı.
+
 ## 04.11.2026 · Claude · Arıza izleme sayfası (`claude/ariza-izleme`, yüklenmedi)
 
 - Kullanıcı sayfa eksiklerinden "Arıza izleme"yi istedi: veri ve hesap vardı (`data/pool/umm`, `outage-capacity.ts`), liste ekranı yoktu.

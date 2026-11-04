@@ -14,6 +14,7 @@ import {
   FolderKanban,
   Factory,
   ZapOff,
+  CalendarRange,
   GitCompareArrows,
   LayoutDashboard,
   LineChart,
@@ -31,6 +32,7 @@ export type NavId =
   | "epias"
   | "market"
   | "outages"
+  | "yekdem"
   | "sector"
   | "compare"
   | "summary"
@@ -138,6 +140,14 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { id: "market", label: "Piyasa özeti", href: "/market", icon: LineChart },
       {
+        id: "yekdem",
+        label: "YEKDEM çıkışları",
+        short: "YEKDEM",
+        href: "/yekdem",
+        icon: CalendarRange,
+        hint: "Hangi yıl kaç santral ve kaç MW YEKDEM'den çıkıp serbest piyasaya geçiyor",
+      },
+      {
         id: "outages",
         label: "Arıza izleme",
         short: "Arıza",
@@ -180,6 +190,7 @@ export function activeNavId(pathname: string): NavId | null {
   if (is(p, "/market")) return "market";
   if (is(p, "/santraller")) return "plants";
   if (is(p, "/ariza")) return "outages";
+  if (is(p, "/yekdem")) return "yekdem";
   if (is(p, "/projects/epias")) return "epias";
   if (is(p, "/projects")) return "projects";
   if (is(p, "/sector")) return "sector";

@@ -4,9 +4,9 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-557 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+561 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
-## Sayfalar (app/**/page.tsx) (27)
+## Sayfalar (app/**/page.tsx) (28)
 
 - `/projects/[id]/backtest` (`app/(dashboard)/projects/[id]/backtest/page.tsx`) — Aşama 14: yön tahminiyle plan ayarı (projenin fiyat profiliyle, KÜPST dahil)
 - `/projects/[id]/candidates` (`app/(dashboard)/projects/[id]/candidates/page.tsx`) — YEKDEM çıkışı rozeti: bu yıl çıkan ya da süresi bu yıl / yakında dolan
@@ -35,8 +35,9 @@
 - `/santraller` (`app/santraller/page.tsx`) — Santral rehberi: havuzdaki santralleri ad ya da sahip şirkete göre arar; her satır santral kartına gider (/santraller/<kimlik>).
 - `/sector/aggregators/[id]` (`app/sector/aggregators/[id]/page.tsx`) — Toplayıcı ayrıntısı (PLAN 9.2): kıyas tablosundaki bir satırın içi.
 - `/sector` (`app/sector/page.tsx`) — "2025" ya da "2026 (Ocak–Ağustos)"
+- `/yekdem` (`app/yekdem/page.tsx`) — YEKDEM çıkış takvimi: hangi yıl kaç santral ve kaç MW serbest piyasaya geçiyor.
 
-## API (app/api/**/route.ts) (74)
+## API (app/api/**/route.ts) (75)
 
 - `GET, PUT, DELETE /api/account/epias` — GET /api/account/epias: hesap e-postası ve kayıtlı EPİAŞ hesabının özeti (şifre dönmez).
 - `POST /api/account/epias/test` — POST /api/account/epias/test: kayıtlı (yoksa .env) EPİAŞ hesabıyla yeni bilet alarak bağlantıyı dener.
@@ -112,6 +113,7 @@
 - `GET /api/sector` — GET /api/sector?year=2025&view=k1: Sektör karnesi: teknoloji başına dağılım, kıyaslamadaki santraller (sektördeki sırasıyla) ve şirket toplamları.
 - `GET /api/sector/system-attribution` — GET /api/sector/system-attribution?year=2026&month=01..12&side=deficit|surplus&source=wind|sun|river&level=company|aggregator|region|plant (month verilmezse bütün dönem) Sistem yönü "Kimden geldi?": seçilen kaynağın o yöne itmesinin şirket…
 - `GET /api/sector/system-drivers` — GET /api/sector/system-drivers: Sistem yönünü ne belirledi: kaynak türüne göre plan sapması (UEVM − KGÜP) ve tüketim tahmini hatası, açık ve fazla saatlerde; ay ay, günün saatine göre ve önceki yılın aynı aylarıyla (lib/analysis/system-dri…
+- `GET /api/yekdem` — GET /api/yekdem : YEKDEM çıkış takvimi (lib/services/yekdem-calendar.ts)
 
 ## app/ (diğer: düzen, yükleniyor, hata) (7)
 
@@ -123,7 +125,7 @@
 - `app/not-found.tsx` — Türkçe 404 (hata ayıklama testi 16.10.2026: Next'in İngilizce varsayılan sayfası çıkıyordu)
 - `app/projects/loading.tsx`
 
-## lib/analysis (50)
+## lib/analysis (51)
 
 - `lib/analysis/aggregator-benchmark.ts` — Toplayıcılar arası kıyas (PLAN 8.7): EPİAŞ'taki her toplayıcının portföyündeki lisanslı santraller için aynı yöntem: saatlik sapma (UEVM − ilk KGÜP), EPİAŞ resmi dengesizlik fiyatı.
 - `lib/analysis/aggregator-detail.ts` — Toplayıcı ayrıntısı (PLAN 9.2): Kıyas tablosundaki bir toplayıcının içi: santraller (tek başına maliyet, sektör medyanına göre), aylık netleşme ve sahiplerin (üreticilerin) portföye katkısı.
@@ -174,6 +176,7 @@
 - `lib/analysis/system-attribution.ts` — Sistem yönü: sürükleyen sapmanın santrallere, şirketlere, toplayıcılara ve bölgelere paylaştırılması (sektör karnesi "Sistem yönü" sekmesi, "Kimden geldi?"; 20.10.2026)
 - `lib/analysis/system-drivers.ts` — Sistem yönünü ne belirledi? (sektör karnesi, "Sistem yönü" sekmesi): Her saat, her kaynak türü için sapma = UEVM − son KGÜP (MW); tüketim için sapma = yük tahmini − gerçek zamanlı tüketim, ayın ortanca farkı çıkarılarak (seviye kamu verisi…
 - `lib/analysis/tomorrow-view.ts` — Yarın görünümü (PTF açıklandıktan sonra, genelde 13:00–14:00): Yarının açıklanmış PTF'si, yük tahmini ve GÖP eşleşme hacmi, aynı sınıftaki son günlerin ortancasıyla ve fiyat limitiyle kıyaslanır.
+- `lib/analysis/yekdem-calendar.ts` — YEKDEM çıkış takvimi: hangi yıl kaç santral ve kaç MW serbest piyasaya geçiyor (SAF, I/O yok)
 - `lib/analysis/yekdem-exit.ts` — YEKDEM çıkışları: hangi santraller serbest piyasaya çıktı ya da çıkacak?: Kural: YEKDEM fiyatları tesisin işletmeye giriş tarihinden itibaren 10 yıl uygulanır (5346 s.
 
 ## lib/auth (4)
@@ -335,7 +338,7 @@
 - `lib/sector/period.ts` — Sektör analizlerinin dönemi: içinde bulunulan yılın sektör karnesinin dönem sonu (scripts/sector-collect.mts; piyasa verisi olan son gün).
 - `lib/sector/plant-technology.ts` — Sektör taramasında santral teknolojisi (PLAN Bekleyen işler: EPDK ↔ karne, adım 2b): Eskiden tür yalnız addan tahmin ediliyordu (`guessTechnologyFromName`); adında tür eki olmayan santraller ("OYMAPINAR", "BORÇKA", "HASAN UĞURLU") ve tanın…
 
-## lib/services (60)
+## lib/services (61)
 
 - `lib/services/aggregator-data.ts` — Toplayıcı kıyası ve ayrıntısı için veri okuma (PLAN 8.7, 9.2): Santral saatleri veri havuzundan (ilk KGÜP ve UEVM), türü ve sahibi sektör karnesi dosyalarından ya da havuz tanımından, fiyatlar veritabanındaki EPİAŞ resmi dengesizlik fiyatl…
 - `lib/services/aggregator-membership.ts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" ekiyle kayıtlı tüm katılımcıların santral listesi çekilir ve .cache/epias/ aggregator-membership.json'a yazılır.
@@ -396,6 +399,7 @@
 - `lib/services/validation-pack.ts` — Kör doğrulama paketi (PLAN, Bekleyen işler: kalibrasyon): Şirketten veri istemeden raporun gerçeğe yakınlığını ölçmek için: bir ay için, açık veriyle hesapladığımız uzlaştırma tutarlarını tek sayfada göstermek; şirket yalnız "faturanızla f…
 - `lib/services/weather-preview.ts` — Hava verisi önizlemesi (PLAN 15.2; projenin "Üretim tahmini" sayfası): Projenin güneş santralleri, konum ve hava verisi durumuyla; hava verisi olan bir santral için bir günün saatlik ışınım tahmini ile gerçek üretim ve ilk KGÜP'ü yan yana,…
 - `lib/services/wind-loss.ts` — Rüzgâr santrali kayıp üretimi (proje "Kayıp üretim" sayfası; kullanıcı kararı 17.10.2026): Geçmiş rüzgârla (lib/weather/reanalysis-wind.ts) santralin üretebileceği ile ürettiği arasındaki fark, lib/forecast/wind-loss.ts `detectWindLoss` ik…
+- `lib/services/yekdem-calendar.ts` — YEKDEM çıkış takvimi (/yekdem): santral rehberindeki bütün santrallerin YEKDEM durumu ve yıllara göre toplam
 - `lib/services/yekdem-exit.ts` — YEKDEM çıkışları için veri: iki EPİAŞ YEKDEM listesini santrallere bağlar: - Kimlikli liste (renewables/data/licensed-powerplant-list): .cache/epias/yekdem-<yıl>.json, 2014'ten bugüne (listYekdemPlantIds).
 
 ## lib/solar-engine (23)
