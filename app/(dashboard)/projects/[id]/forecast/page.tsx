@@ -222,7 +222,12 @@ export default function ForecastPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-3 gap-2 sm:gap-3">
-              <StatBox label={`Yarın toplam · ${shortDay(data.days[0])}`} value={productionValue(tomorrow.totalMwh)} unit="MWh" sub={tomorrow.availableHours < 24 ? `${tomorrow.availableHours}/24 saat mevcut` : undefined} />
+              {/* Portföy görünümünde ana sayı sabah kaydı (değişmez, karnenin dayanağı); canlı hesap altta. Santral seçilince kayıt santral bazında olmadığı için canlı hesap. */}
+              {!selected && rec ? (
+                <StatBox label={`Yarın toplam · ${shortDay(data.days[0])} · sabah kaydı`} value={productionValue(rec.mwh)} unit="MWh" sub={`canlı hesap ${productionValue(tomorrow.totalMwh)} MWh${tomorrow.availableHours < 24 ? ` (${tomorrow.availableHours}/24 saat)` : ""}`} />
+              ) : (
+                <StatBox label={`Yarın toplam · ${shortDay(data.days[0])}${rec ? " · canlı hesap" : ""}`} value={productionValue(tomorrow.totalMwh)} unit="MWh" sub={tomorrow.availableHours < 24 ? `${tomorrow.availableHours}/24 saat mevcut` : undefined} />
+              )}
               {data.days[1] && <StatBox label={`Öbür gün toplam · ${shortDay(data.days[1])}`} value={productionValue(dayAfter.totalMwh)} unit="MWh" sub={dayAfter.availableHours < 24 ? `${dayAfter.availableHours}/24 saat mevcut` : undefined} />}
               <StatBox label="Yarın en yüksek saatlik üretim" value={productionValue(tomorrow.peakMwh)} unit="MWh" sub={tomorrow.peakHour === null ? "Eksik veri" : hourText(tomorrow.peakHour)} />
             </div>

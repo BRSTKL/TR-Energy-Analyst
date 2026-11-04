@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { StatusChip } from "@/components/ui/status-chip";
 import { AlertTriangle, ArrowRight, CheckCircle2, CircleDot, Info } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -77,11 +78,13 @@ const tl = (v: number) =>
 type Load<T> =
   { state: "loading" } | { state: "ok"; data: T } | { state: "error"; message: string };
 
-function useLoad<T>(url: string, pick: (d: any) => T, deps: unknown[] = []): Load<T> {
+/** url null ise istek atılmaz (durum "loading" kalır; yalnız "ok" kullanan yerler için) */
+function useLoad<T>(url: string | null, pick: (d: any) => T, deps: unknown[] = []): Load<T> {
   const [s, setS] = useState<Load<T>>({ state: "loading" });
   useEffect(() => {
     let cancelled = false;
     setS({ state: "loading" });
+    if (!url) return;
     fetch(url)
       .then((r) => r.json())
       .then((d) => {
@@ -237,7 +240,10 @@ function PhaseCard({ minutes, bidReady }: { minutes: number | null; bidReady: st
 
 // ---------------------------------------------------------------- yarının kayıtları
 
-function PtfCard({ load }: { load: Load<OpsStatus> }) {
+/** Yarının açıklanmış PTF'si (14:00 sonrası, /api/market/live?day=tomorrow); yoksa null */
+type AnnouncedPtf = { date: string; mean: number } | null;
+
+function PtfCard({ load, announced }: { load: Load<OpsStatus>; announced: AnnouncedPtf }) {
   if (load.state === "loading") return <Skeleton h="h-40" />;
   if (load.state === "error")
     return <Failed what="Yarının PTF kaydı" message={load.message} />;
@@ -258,13 +264,41 @@ function PtfCard({ load }: { load: Load<OpsStatus> }) {
         </Link>
       </div>
     );
+  // 14:00'ten sonra yarının PTF'si açıklandıysa büyük sayı odur; sabah kaydı onunla kıyaslanan sayıya döner
+  const actual = announced && announced.date === p.targetDate ? announced.mean : null;
+  if (actual !== null) {
+    const diff = p.mean - actual;
+    return (
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-xs font-medium text-slate-500">Yarının PTF&apos;si açıklandı</p>
+          <StatusChip kind="exact" label="Açıklanan" />
+        </div>
+        <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
+          {nf(actual)} <span className="text-sm font-medium text-slate-500">TL/MWh ortalama</span>
+        </p>
+        <p className="mt-2 text-xs text-slate-700">
+          Sabah tahmini ({clock(p.issuedAt)} kaydı{p.onTime ? "" : ", kesimden sonra"}){" "}
+          <b className="tabular-nums">{nf(p.mean)}</b> TL/MWh: açıklanandan{" "}
+          <b className="tabular-nums">{nf(Math.abs(diff))}</b> TL/MWh{" "}
+          {Math.abs(diff) < 0.5 ? "farklı değil" : diff > 0 ? "yüksek" : "düşük"}
+          {actual > 0 && ` (%${nf((Math.abs(diff) / actual) * 100)})`}.
+        </p>
+        <p className="mt-1 text-xs text-slate-500">Saat saat kıyas akşam karnesinde; günlük kayıt değişmez.</p>
+        <Link
+          href="/market/teklif"
+          className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-indigo-700 hover:underline"
+        >
+          Ayrıntı <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+    );
+  }
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <p className="text-xs font-medium text-slate-500">Yarının PTF tahmini</p>
-        <span className="text-[11px] text-slate-400">
-          {clock(p.issuedAt)}&apos;te yazıldı{p.onTime ? "" : " (kesimden sonra)"}
-        </span>
+        <StatusChip kind="record" label={`Kayıt ${clock(p.issuedAt)}${p.onTime ? "" : " · kesimden sonra"}`} />
       </div>
       <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
         {nf(p.mean)} <span className="text-sm font-medium text-slate-500">TL/MWh</span>
@@ -670,6 +704,16 @@ export default function TodayPage() {
     (d) => d.day as DailyMarket
   );
   const portfolio = useLoad<PortfolioProduction>("/api/ops/portfolio-forecast", (d) => d as PortfolioProduction);
+  // Yarının PTF'si 13:00–14:00'te açıklanır; 14:00'ten sonra açıklanan değer sorulur (sunucuda 5 dk bellekte)
+  const afterResults = minutes !== null && minutes >= 14 * 60;
+  const tomorrowLive = useLoad<{ date: string; published: boolean; mean: number | null }>(
+    afterResults ? "/api/market/live?day=tomorrow" : null,
+    (d) => ({ date: d.view?.date, published: !!d.view?.published?.ptf, mean: d.view?.ptf?.mean ?? null })
+  );
+  const announced: AnnouncedPtf =
+    tomorrowLive.state === "ok" && tomorrowLive.data.published && tomorrowLive.data.mean !== null
+      ? { date: tomorrowLive.data.date, mean: tomorrowLive.data.mean }
+      : null;
   const scorecard = useLoad<PtfScorecard>("/api/ops/ptf-scorecard", (d) => d as PtfScorecard);
   const [role, setRole] = useState<TodayRole>(DEFAULT_ROLE);
   useEffect(() => setRole(readRole()), []);
@@ -752,7 +796,7 @@ export default function TodayPage() {
           sub="Sunucunun sabah yazdığı değişmeyen günlük kayıtlar (PTF 12:03, güneş ve rüzgâr sabah)"
         />
         <div className="grid gap-4 md:grid-cols-2">
-          <PtfCard load={status} />
+          <PtfCard load={status} announced={announced} />
           <ProductionCard load={status} portfolio={portfolio} minutes={minutes} forecastLink={fLink} />
         </div>
         <Link

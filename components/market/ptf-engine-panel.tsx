@@ -27,6 +27,7 @@ import {
   SERIES,
 } from "@/components/ui/chart";
 import { Card, CardContent } from "@/components/ui/card";
+import { StatusChip } from "@/components/ui/status-chip";
 import { ChartCard } from "@/components/market/chart-card";
 import { hh } from "@/components/market/daily-dashboard";
 import { DAY_CLASS_LABEL, type DayClass } from "@/lib/analysis/daily-market";
@@ -215,7 +216,29 @@ export function PtfEnginePanel({
         </div>
       )}
 
-      {!p && !error && (
+      {!p && !error && data?.record && (
+        <Card className="border-slate-300 shadow-sm">
+          <CardContent className="p-5 lg:p-6">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-xs font-medium text-slate-500">{dmy(date)} · ortalama PTF tahmini</p>
+              <StatusChip
+                kind="record"
+                label={`Günlük kayıt ${clock(data.record.issuedAt)}${data.record.onTime ? "" : " · kesimden sonra"}`}
+              />
+            </div>
+            <p className="mt-1 text-4xl font-bold tabular-nums tracking-tight text-slate-900 sm:text-5xl">
+              {nf(data.record.mean)} <span className="text-lg font-medium text-slate-500">TL/MWh</span>
+            </p>
+            <p className="mt-2 inline-flex items-center gap-1.5 text-sm text-slate-600">
+              <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+              Saatlik ayrıntı için güncel girdilerle yeniden hesaplanıyor
+              {elapsed > 0 ? ` (${elapsed} sn)` : ""}; günlük kayıt değişmez.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {!p && !error && !data?.record && (
         <Card className="shadow-sm">
           <CardContent className="flex items-center gap-3 p-5 text-sm text-slate-600">
             <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
@@ -315,6 +338,90 @@ function AccuracyBox({ acc }: { acc: AccuracySummary }) {
   );
 }
 
+/**
+ * Kartın ana sayısı, sayının aşamasına göre: açıklanan PTF varsa o (tahmin onunla kıyaslanır); yoksa günlük kayıt
+ * (12:05 kesiminden önce yazılan, değişmeyen sayı: Bugün ve karne bunu kullanır); kayıt yoksa canlı yeniden hesap.
+ */
+function Headline({
+  date,
+  mean,
+  record,
+  actualMean,
+  computedAt,
+  lo,
+  hi,
+}: {
+  date: string;
+  mean: number;
+  record: PtfPageForecast["record"];
+  actualMean: number | null;
+  computedAt: string;
+  lo: number;
+  hi: number;
+}) {
+  const range = Number.isFinite(lo) && Number.isFinite(hi) ? `olası aralık (ortalama) ${nf(lo)} – ${nf(hi)}` : null;
+  const recordText = record
+    ? `günlük kayıt ${clock(record.issuedAt)}${record.onTime ? "" : ", kesimden sonra"}`
+    : null;
+  if (actualMean !== null) {
+    const ref = record ? record.mean : mean;
+    const diff = ref - actualMean;
+    return (
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-xs font-medium text-slate-500">{dmy(date)} · açıklanan ortalama PTF</p>
+          <StatusChip kind="exact" label="Açıklanan" />
+        </div>
+        <p className="mt-1 text-4xl font-bold tabular-nums tracking-tight text-slate-900 sm:text-5xl">
+          {nf(actualMean)} <span className="text-lg font-medium text-slate-500">TL/MWh</span>
+        </p>
+        <p className="mt-1 text-sm text-slate-600">
+          Tahmin ({recordText ?? `canlı hesap ${clock(computedAt)}`}){" "}
+          <b className="tabular-nums">{nf(ref)}</b>: açıklanandan {nf(Math.abs(diff))} TL/MWh{" "}
+          {Math.abs(diff) < 0.5 ? "farklı değil" : diff > 0 ? "yüksek" : "düşük"}.
+        </p>
+        {record && Math.round(record.mean) !== Math.round(mean) && (
+          <p className="text-xs text-slate-500">
+            Canlı yeniden hesap ({clock(computedAt)}): {nf(mean)} TL/MWh.
+          </p>
+        )}
+      </div>
+    );
+  }
+  if (record) {
+    return (
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-xs font-medium text-slate-500">{dmy(date)} · ortalama PTF tahmini</p>
+          <StatusChip kind="record" label={`Günlük kayıt ${clock(record.issuedAt)}${record.onTime ? "" : " · kesimden sonra"}`} />
+        </div>
+        <p className="mt-1 text-4xl font-bold tabular-nums tracking-tight text-slate-900 sm:text-5xl">
+          {nf(record.mean)} <span className="text-lg font-medium text-slate-500">TL/MWh</span>
+        </p>
+        <p className="mt-1 text-sm text-slate-600">
+          Canlı yeniden hesap ({clock(computedAt)}, güncel girdilerle):{" "}
+          <b className="tabular-nums">{nf(mean)}</b> TL/MWh
+          {range ? `, ${range}` : ""}. Saatlik grafik ve tablo canlı hesaptan.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-xs font-medium text-slate-500">{dmy(date)} · ortalama PTF tahmini</p>
+        <StatusChip kind="estimate" label={`Canlı hesap ${clock(computedAt)}`} />
+      </div>
+      <p className="mt-1 text-4xl font-bold tabular-nums tracking-tight text-slate-900 sm:text-5xl">
+        {nf(mean)} <span className="text-lg font-medium text-slate-500">TL/MWh</span>
+      </p>
+      <p className="mt-1 text-sm text-slate-600">
+        {range ? `${range[0].toUpperCase()}${range.slice(1)} TL/MWh. ` : ""}Bu gün için günlük kayıt (12:05) yok.
+      </p>
+    </div>
+  );
+}
+
 type OkPreview = Extract<NonNullable<PtfPageForecast["preview"]>, { ok: true }>;
 
 function OkView({
@@ -373,20 +480,15 @@ function OkView({
         <CardContent className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:p-6">
           <div>
             <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                  {dmy(date)} · ortalama PTF tahmini
-                </p>
-                <p className="mt-1 text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
-                  {nf(mean)}{" "}
-                  <span className="text-lg font-medium text-slate-500">TL/MWh</span>
-                </p>
-                {Number.isFinite(lo) && Number.isFinite(hi) && (
-                  <p className="mt-1 text-sm text-slate-600">
-                    Olası aralık (ortalama) {nf(lo)} – {nf(hi)} TL/MWh
-                  </p>
-                )}
-              </div>
+              <Headline
+                date={date}
+                mean={mean}
+                record={record}
+                actualMean={actualMean}
+                computedAt={preview.computedAt}
+                lo={lo}
+                hi={hi}
+              />
               {acc && <AccuracyBox acc={acc} />}
             </div>
             <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
@@ -415,9 +517,9 @@ function OkView({
           <div className="space-y-3 text-sm text-slate-700">
             {actualMean !== null && actualMae !== null && (
               <p className="rounded-md bg-sky-50 p-2 text-sky-900">
-                <b>Gerçekleşen:</b> ortalama {nf(actualMean)} TL/MWh. Tahmin saat başına
-                ortalama {nf(actualMae)} TL/MWh saptı (deneme: o günün kesiminde bilinen
-                veriyle hesaplandı).
+                <b>Açıklanan PTF:</b> ortalama {nf(actualMean)} TL/MWh. Canlı yeniden hesap saat
+                başına ortalama {nf(actualMae)} TL/MWh saptı (hesap o günün kesiminde bilinen
+                veriyle yapıldı).
               </p>
             )}
             <p>
