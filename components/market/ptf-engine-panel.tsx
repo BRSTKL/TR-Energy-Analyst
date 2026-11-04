@@ -491,7 +491,9 @@ function OkView({
               />
               {acc && <AccuracyBox acc={acc} />}
             </div>
-            <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-medium">
+              {/* Açıklanan fiyat öndeyken bu çipler tahminin olduğunu söyler */}
+              {actualMean !== null && <span className="text-slate-500">Tahminde:</span>}
               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">
                 En pahalı {hh(maxH)} · {nf(p50[maxH])}
               </span>

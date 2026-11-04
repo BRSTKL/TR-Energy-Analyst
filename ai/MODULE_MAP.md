@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-538 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+539 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
 ## Sayfalar (app/**/page.tsx) (24)
 
@@ -22,7 +22,7 @@
 - `/account` (`app/account/page.tsx`)
 - `/compare` (`app/compare/page.tsx`) — Verinin son yılından sonraki yıl (YEKDEM'den çıkış bu yıl için sorulur)
 - `/login` (`app/login/page.tsx`) — Yalnız uygulama içi yol ("/..." ama "//..." değil): dışarıya yönlendirme olmasın.
-- `/market/gunluk` (`app/market/gunluk/page.tsx`)
+- `/market/gunluk` (`app/market/gunluk/page.tsx`) — Sekme adreste tutulur (?sekme=bugun|yarin|gecmis): bağlantılar doğru sekmeyi açar, sayfa yenilenince sekme korunur
 - `/market` (`app/market/page.tsx`) — Türkçe yüzde: "+%45"
 - `/market/teklif` (`app/market/teklif/page.tsx`)
 - `/methodology` (`app/methodology/page.tsx`) — Metodoloji: uygulamadaki ve rapordaki her rakamın nereden geldiği.
@@ -463,7 +463,7 @@
 - `lib/wind-engine/pipeline.ts` — RES günlük akışı: taze girdiler, kanıtla sürüm seçimi, kesimden önce değişmez kayıt.
 - `lib/wind-engine/registry.ts` — Rüzgâr günlük kayıt sürümleri.
 
-## components (65)
+## components (66)
 
 - `components/aggregator-benchmark-tab.tsx` — Sektör karnesi · Toplayıcılar sekmesi (PLAN 9.1): EPİAŞ'taki toplayıcıların aynı yöntemle kıyası.
 - `components/app-shell.tsx` — Uygulama kabuğu: sol menü (lg+), üstte saat şeridi, telefonda çekmece ve altta dört kısayol.
@@ -484,7 +484,7 @@
 - `components/market-data-upload-dialog.tsx` — EPİAŞ web servislerine erişilemediğinde (örn. yurt dışı IP engeli), Şeffaflık Platformu'ndan indirilen PTF / SMF / Sistem Yönü / GİP AÖF raporlarını dosya olarak yükleme diyaloğu.
 - `components/market/bid-table.tsx` — Saat saat karar tablosu: PTF tahmini + aralık, portföy üretim tahmini, fiyat riski.
 - `components/market/brief.tsx` — Teklif kapanışına (Türkiye 12:30, hedef günden bir önceki gün) kalan süre; geçmişse null
-- `components/market/chart-card.tsx` — Doğrulanmış renk seti: seçilen dönem vurgulu, önceki yıl gri; sistem yönü kırmızı (açık) ↔ mavi (fazla), dengede gri
+- `components/market/chart-card.tsx` — Doğrulanmış renk seti: seçilen dönem vurgulu, önceki yıl gri.
 - `components/market/daily-dashboard.tsx` — Karma renkleri: rüzgâr / güneş / lisanssız güneş açık tonlar, termik koyu
 - `components/market/daily-table.tsx` — Günlük piyasa panosunun saatlik tablosu (ana sayfada ve /market/gunluk'te aynı).
 - `components/market/pre-bid-context.tsx` — Bulunan EPİAŞ verileriyle bağlam analizleri (ÖNİZLEME).
@@ -521,6 +521,7 @@
 - `components/ui/heatmap-skyline.tsx` — Isı haritası "silüet" görünümü (21st.dev contribution-skyline'dan esinlenen, bağımlılıksız SVG): düz ızgara (2B) ile aynı veriyi izometrik 3B sütunlara dönüştürür.
 - `components/ui/menu.tsx` — Açılır menü (radix menüsü pakette yok): `<details>` tabanlı; dışarı tıklayınca ve Esc ile kapanır.
 - `components/ui/skeleton.tsx`
+- `components/ui/status-chip.tsx` — Bir sayının durumu: kesin hesap, varsayıma bağlı, tahmini, senaryo ya da sabah kaydı.
 - `components/ui/table.tsx`
 - `components/ui/tabs.tsx`
 - `components/ui/turkiye-il-secici.tsx` — Türkiye il seçici: bölge → il, posta kodu (ilk iki hane = plaka kodu) ile arama.
