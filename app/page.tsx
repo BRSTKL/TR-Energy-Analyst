@@ -928,9 +928,9 @@ export default function TodayPage() {
         ))}
 
         <p className="text-xs text-slate-500">
-          Dönem özeti, sektördeki yeriniz ve karşılaştırmalar için{" "}
+          Dönem boyunca piyasa, projeleriniz ve sektördeki yeriniz için{" "}
           <Link href="/ozet" className="text-indigo-700 hover:underline">
-            Portföy özeti
+            Dönem özeti
           </Link>
           .
         </p>

@@ -5,6 +5,14 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 04.11.2026 · Claude · Menü: karşılaştırma Portföy altına, "Portföy özeti" → "Dönem özeti" (`claude/menu-portfoy`, yüklenmedi)
+
+- Kullanıcı: karşılaştırma sayfası Portföy başlığına alınsın, sayfadaki "← Bugün" kalksın, "Portföy özeti" sayfanın içeriğini
+  yansıtmıyor (piyasa dönemi, projelerin sapma yükü, sektördeki yer). Ad "Dönem özeti" oldu; "Karşılaştırma" menüde "Proje karşılaştırma".
+- Değişen: `nav-config.ts` (sıra ve adlar), `app/compare/page.tsx` (breadcrumb kalktı), `app/ozet/page.tsx` başlık, `app/page.tsx` bağlantı
+  metni, duman testi etiketi. Diğer sayfalardaki "← Bugün" bağlantılarına dokunulmadı.
+- Kontrol: 1.019 test, tsc, `--only ozet,compare` duman testi temiz.
+
 ## 04.11.2026 · Claude · Sistem serisi: dünün rüzgâr saati için yeniden deneme (`claude/sistem-yeniden-dene`)
 
 - Günlük panoda 3 Kasım "net yük 23/24" idi: sunucu havuzunda rüzgârın 23:00 saati boştu. Kasım ayı 4 Kasım 01:23'te çekilmiş, o an

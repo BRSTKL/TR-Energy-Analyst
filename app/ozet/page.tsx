@@ -12,7 +12,7 @@ import { EpiasSyncDialog } from "@/components/epias-sync-dialog";
 import type { ProjectKpis } from "@/lib/services/project-kpis";
 
 /**
- * Portföy özeti (eski ana sayfa; 29.10.2026'dan beri ana sayfa Bugün kokpiti). Hepsi gerçek veriden ve raporla aynı motordan gelir:
+ * Dönem özeti (eski ana sayfa; 29.10.2026'dan beri ana sayfa Bugün kokpiti). Hepsi gerçek veriden ve raporla aynı motordan gelir:
  * piyasanın son durumu (/api/market), projelerin sapma yükü ve sektördeki yeri (/api/compare), sektör karnesinin
  * teknoloji medyanları (/api/sector) ve veri durumu.
  */
@@ -249,7 +249,7 @@ export default function SummaryPage() {
     <main className="min-h-screen bg-slate-50/50 p-6 md:p-10">
       <div className="mx-auto max-w-7xl space-y-8">
         <div className="border-b pb-6">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">Portföy özeti</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">Dönem özeti</h1>
           <p className="mt-1.5 max-w-2xl text-sm text-slate-600">
             EPİAŞ açık verisiyle yenilenebilir üreticilerin dengesizlik maliyetini ölçen, sektörle kıyaslayan ve azaltma yollarını
             gösteren dönem özeti. Günlük iş akışı için Bugün sayfasına bakın.

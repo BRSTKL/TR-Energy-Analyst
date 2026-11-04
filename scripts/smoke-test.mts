@@ -145,7 +145,7 @@ const chosen = ALL
 
 const checks: Check[] = [
   { url: "/", label: "Bugün" },
-  { url: "/ozet", label: "Portföy özeti" },
+  { url: "/ozet", label: "Dönem özeti" },
   { url: "/projects", label: "Projeler" },
   { url: "/projects/epias", label: "EPİAŞ'tan proje" },
   { url: "/market", label: "Piyasa" },

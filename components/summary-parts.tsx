@@ -2,7 +2,7 @@ import React from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
-/** Özet sayfalarının (Bugün, Portföy özeti) ortak küçük bileşenleri ve biçimleyicileri */
+/** Özet sayfalarının (Bugün, Dönem özeti) ortak küçük bileşenleri ve biçimleyicileri */
 
 export const nf = (v: number, d = 0) =>
   v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });

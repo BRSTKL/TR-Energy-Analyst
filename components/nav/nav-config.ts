@@ -105,10 +105,18 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       {
         id: "summary",
-        label: "Portföy özeti",
+        label: "Dönem özeti",
         href: "/ozet",
         icon: FileBarChart,
-        hint: "Dönem özeti, projeler ve sektördeki yeriniz",
+        hint: "Dönem özeti: piyasa, projeler ve sektördeki yeriniz",
+      },
+      {
+        id: "compare",
+        label: "Proje karşılaştırma",
+        short: "Karşılaştır",
+        href: "/compare",
+        icon: GitCompareArrows,
+        hint: "Projelerin sapma yükü, netleşme kazancı ve sektördeki yeri yan yana",
       },
     ],
   },
@@ -118,7 +126,6 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { id: "market", label: "Piyasa özeti", href: "/market", icon: LineChart },
       { id: "sector", label: "Sektör karnesi", href: "/sector", icon: Award },
-      { id: "compare", label: "Karşılaştırma", href: "/compare", icon: GitCompareArrows },
     ],
   },
 ];

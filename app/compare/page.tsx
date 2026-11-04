@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Download, Loader2 } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -224,14 +224,7 @@ export default function ComparePage() {
       <header className="border-b bg-white">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-6 sm:px-6 md:flex-row md:items-end md:justify-between lg:px-8">
           <div>
-            <div className="flex items-center gap-2 text-xs">
-              <Link href="/" className="flex items-center gap-1 text-slate-500 hover:text-slate-900">
-                <ArrowLeft className="h-3 w-3" /> Bugün
-              </Link>
-              <span className="text-slate-300">/</span>
-              <span className="font-medium text-slate-700">Proje karşılaştırma</span>
-            </div>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Proje karşılaştırma</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Proje karşılaştırma</h1>
             <MethodLink section="ayristirma" label="Yöntem ve varsayımlar" />
             <p className="mt-1 max-w-3xl text-xs text-slate-600 sm:text-sm">
               Projelerin sapma yükü, netleşme kazancı, risk primi ve sektördeki yeri yan yana. Rakamlar Dengesizlik Karnesi ile aynı
