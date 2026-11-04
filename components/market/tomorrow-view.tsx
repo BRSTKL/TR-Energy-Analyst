@@ -38,30 +38,16 @@ export function TomorrowViewPanel({
   view,
   limit,
   notes,
-  updatedAt,
 }: {
   view: TomorrowView;
   limit: PriceLimit | null;
   notes: string[];
-  updatedAt: string;
 }) {
   const p = view.ptf;
   const warnings = [...view.warnings, ...notes];
   return (
     <>
-      <div className="rounded-md border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
-        {view.published.ptf
-          ? "Yarının açıklanmış verisi (PTF, yük tahmini, GÖP hacmi). Fiyat tahmini değildir: PTF zaten açıklandı; görünüm fiyatın benzer günlere ve yük seviyesine göre nerede durduğunu gösterir."
-          : "Yarının PTF'si ve GÖP hacmi 14:00'te açıklanır; şimdilik yayımlananlar (yük tahmini) gösteriliyor. Fiyat tahmini değildir."}{" "}
-        Güncelleme{" "}
-        {new Date(updatedAt).toLocaleTimeString("tr-TR", {
-          hour: "2-digit",
-          minute: "2-digit",
-          timeZone: "Europe/Istanbul",
-        })}
-        ; veri 5 dakikada bir yenilenir.
-      </div>
-      <PriceLimitNote limit={limit} />
+      <PriceLimitNote limit={limit} compact />
       {warnings.length > 0 && (
         <div className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />

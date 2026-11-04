@@ -9,10 +9,34 @@ const day = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}`
  * Fiyat limiti notu. Limit verideki platodan çıkarılır (lib/analysis/price-limit.ts), resmî değer gibi sunulmaz. Son 7 günde
  * tavanda saat varsa uyarı tonu.
  */
-export function PriceLimitNote({ limit, bare = false }: { limit: PriceLimit | null; bare?: boolean }) {
+export function PriceLimitNote({
+  limit,
+  bare = false,
+  compact = false,
+}: {
+  limit: PriceLimit | null;
+  bare?: boolean;
+  /** Tek satır özet (limit ve tavandaki saat sayısı); ayrıntı satıra tıklayınca açılır */
+  compact?: boolean;
+}) {
   if (!limit) return null;
   const hot = limit.hoursLast7 > 0;
   const Icon = hot ? AlertTriangle : Info;
+  if (compact)
+    return (
+      <details className="group rounded-md border border-slate-200 bg-white text-sm text-slate-700">
+        <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 [&::-webkit-details-marker]:hidden">
+          <Icon className={`h-4 w-4 shrink-0 ${hot ? "text-amber-600" : "text-slate-400"}`} aria-hidden="true" />
+          <span className="min-w-0 flex-1">
+            <b>PTF fiyat limiti {nf(limit.cap)} TL/MWh</b> · son {limit.windowDays} günde {limit.hoursInWindow} saat tavanda
+          </span>
+          <span className="shrink-0 text-xs text-slate-500 group-open:hidden">Ayrıntı</span>
+        </summary>
+        <div className="border-t border-slate-100 px-3 py-2">
+          <PriceLimitNote limit={limit} bare />
+        </div>
+      </details>
+    );
   return (
     <div
       className={

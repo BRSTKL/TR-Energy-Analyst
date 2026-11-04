@@ -74,7 +74,7 @@ export const NAV_GROUPS: NavGroup[] = [
         short: "Teklif",
         href: "/market/teklif",
         icon: Target,
-        hint: "Yarının PTF tahmini ve teklif öncesi bağlam (12:30'a kadar)",
+        hint: "Yarın için fiyat tahmini ve teklif masası (12:30'a kadar)",
       },
       {
         id: "daily",
@@ -82,7 +82,7 @@ export const NAV_GROUPS: NavGroup[] = [
         short: "Pano",
         href: "/market/gunluk",
         icon: CalendarClock,
-        hint: "Geçmiş gün, bugün ve yarın",
+        hint: "Piyasada ne oldu: dün, bugün ve yarının açıklanan fiyatı",
       },
     ],
   },

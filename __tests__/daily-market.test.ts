@@ -8,7 +8,9 @@ import {
   emptyRt,
   eveningRamp,
   isValidDay,
+  lastCompleteRealtimeHour,
   lastSystemDay,
+  maskAfterHour,
   mixHours,
   netLoad,
   referenceBand,
@@ -422,5 +424,34 @@ describe("günlük piyasa panosu: havuz belgesinden gün", () => {
     expect(lastSystemDay(emptySystemYear(2026))).toBeNull();
     expect(lastSystemDay(null)).toBeNull();
     expect(hourIndex(2026, "2026-10-26T05:00:00+03:00")).toBeGreaterThan(0);
+  });
+});
+
+describe("canlı gün: yayımlanmamış saatler boş kalır", () => {
+  it("son yayımlanan saatten sonrası null, öncesi olduğu gibi (gerçek sıfır korunur)", () => {
+    const s = [10, 0, 5, 7, 9];
+    expect(maskAfterHour(s, 2)).toEqual([10, 0, 5, null, null]);
+    expect(maskAfterHour(s, 4)).toEqual(s);
+  });
+  it("hiç yayım yoksa (null) hepsi boş", () => {
+    expect(maskAfterHour([1, 2, 3], null)).toEqual([null, null, null]);
+  });
+  it("zaten boş saat boş kalır", () => {
+    expect(maskAfterHour([1, null, 3], 2)).toEqual([1, null, 3]);
+  });
+});
+
+describe("canlı gün: gerçek zamanlı en yeni saat kısmi gelir", () => {
+  it("saat, bitişinden bir saat (+10 dk) sonra tam sayılır", () => {
+    // 22:26'da "21" etiketi önceki saatin %43'üydü (kısmi); 20 tam
+    expect(lastCompleteRealtimeHour(22 * 60 + 26)).toBe(20);
+    expect(lastCompleteRealtimeHour(22 * 60 + 5)).toBe(19);
+    expect(lastCompleteRealtimeHour(23 * 60 + 10)).toBe(21);
+    expect(lastCompleteRealtimeHour(23 * 60 + 59)).toBe(21);
+  });
+  it("günün ilk saatleri: tam saat yoksa null", () => {
+    expect(lastCompleteRealtimeHour(1 * 60)).toBeNull();
+    expect(lastCompleteRealtimeHour(2 * 60 + 9)).toBeNull();
+    expect(lastCompleteRealtimeHour(2 * 60 + 10)).toBe(0);
   });
 });

@@ -36,7 +36,10 @@ export interface Availability {
 
 export interface LiveInfo {
   updatedAt: string;
+  /** Tüketim ve üretimin yayımlandığı son saat */
   lastSystemHour: number | null;
+  /** SMF ve sistem yönünün yayımlandığı son saat (EPİAŞ bunları tüketimden de geç yayımlar) */
+  lastPriceHour?: number | null;
   notes: string[];
 }
 
@@ -134,26 +137,17 @@ export function DailyDashboard({
   limit: PriceLimit | null;
   live?: LiveInfo | null;
 }) {
+  // Canlı günde grafikler yalnız yayımlanmış saatleri gösterir (boş bant yok); veri geldikçe sağa uzar, sayfa 5 dakikada bir yenilenir.
+  // Tüketim ve üretim tam dolmuş son saate, talimatlar SMF'nin yayımlandığı son saate kadar (lib/services/live-day.ts)
+  const upTo = <T,>(rows: T[], last: number | null | undefined): T[] =>
+    live && last !== undefined ? rows.slice(0, last === null ? 0 : last + 1) : rows;
+  const sysRows = upTo(day.rows, live?.lastSystemHour);
+  const mixRows = upTo(day.mix, live?.lastSystemHour);
+  const instrRows = upTo(day.rows, live?.lastPriceHour);
+  const none = (rows: unknown[]) => (live && rows.length === 0 ? " Henüz yayımlanmış saat yok." : "");
   return (
     <>
-      {live && (
-        <div className="rounded-md border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
-          Canlı: bugünün EPİAŞ verisi{" "}
-          {live.lastSystemHour !== null
-            ? `${hh(live.lastSystemHour)} saatine kadar`
-            : "henüz yok"}
-          ; PTF (gün öncesi piyasası) bütün gün için açıklandı, SMF, sistem yönü ve GİP
-          geçmiş saatler için var. Rampa ve günün özeti gün tamamlanana kadar eksik
-          hesaplanır. Güncelleme{" "}
-          {new Date(live.updatedAt).toLocaleTimeString("tr-TR", {
-            hour: "2-digit",
-            minute: "2-digit",
-            timeZone: "Europe/Istanbul",
-          })}
-          ; veri 5 dakikada bir yenilenir.
-        </div>
-      )}
-      <PriceLimitNote limit={limit} />
+      <PriceLimitNote limit={limit} compact />
       {(day.warnings.length > 0 ||
         (!live && available?.systemEnd && available.systemEnd < day.date) ||
         (live && live.notes.length > 0)) && (
@@ -305,10 +299,10 @@ export function DailyDashboard({
         <ChartCard
           title="Net yük ve akşam rampası"
           unit="GW (ipucunda MW)"
-          description="Saatlik ortalama. Net yük (tüketim taraflı) = tüketim − rüzgâr − güneş planı; noktalı: arz taraflı = termik, hidro, diğer + net ithalat. Mavi şerit: en büyük 3 saatlik artış."
+          description={`Saatlik ortalama. Net yük (tüketim taraflı) = tüketim − rüzgâr − güneş planı; noktalı: arz taraflı = termik, hidro, diğer + net ithalat. Mavi şerit: en büyük 3 saatlik artış.${none(sysRows)}`}
         >
           <ComposedChart
-            data={day.rows}
+            data={sysRows}
             margin={{ top: 8, right: 12, bottom: 0, left: 0 }}
           >
             <CartesianGrid />
@@ -370,10 +364,10 @@ export function DailyDashboard({
 
         <ChartCard
           title="Üretim karması"
-          description="MW. Gerçek zamanlı üretim (lisanssız güneş hariç); açık sarı bant lisanssız güneşin KGÜP planına göre tahmini payı."
+          description={`MW. Gerçek zamanlı üretim (lisanssız güneş hariç); açık sarı bant lisanssız güneşin KGÜP planına göre tahmini payı.${none(mixRows)}`}
         >
           <ComposedChart
-            data={day.mix}
+            data={mixRows}
             margin={{ top: 8, right: 12, bottom: 0, left: 0 }}
           >
             <CartesianGrid />
@@ -406,9 +400,9 @@ export function DailyDashboard({
 
         <ChartCard
           title="Net talimat ve sistem yönü"
-          description="MWh. Çubuk: o saatte verilen net yük alma (+) ya da yük atma (−) talimatı; renk sistem yönü (mavi açık, turuncu fazla; ipucunda yazıyla)."
+          description={`MWh. Çubuk: o saatte verilen net yük alma (+) ya da yük atma (−) talimatı; renk sistem yönü (mavi açık, turuncu fazla; ipucunda yazıyla).${none(instrRows)}`}
         >
-          <BarChart data={day.rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+          <BarChart data={instrRows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
             <CartesianGrid />
             <XAxis {...axis.x} />
             <YAxis {...axis.y} tickFormatter={(v: number) => nf(v)} />
@@ -421,7 +415,7 @@ export function DailyDashboard({
               cursor={{ fill: "#f1f5f9" }}
             />
             <Bar name="Net talimat" dataKey="netInstruction" isAnimationActive={false}>
-              {day.rows.map((r) => (
+              {instrRows.map((r) => (
                 <Cell
                   key={r.hour}
                   fill={DIRECTION_COLOR[r.direction ?? ""] ?? CHART_COLOR.slateLight}

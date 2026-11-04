@@ -10,6 +10,8 @@
 
 import {
   buildDailyMarket,
+  lastCompleteRealtimeHour,
+  maskAfterHour,
   systemDay,
   sunPlanBaselineFor,
   type DailyMarket,
@@ -86,6 +88,8 @@ export interface LiveMeta {
   updatedAt: string;
   /** Tüketim verisi olan son saat (bugün); yoksa null */
   lastSystemHour: number | null;
+  /** SMF ve sistem yönü yayımlanmış son saat (bugün); EPİAŞ bunları saatler sonra yayımlar; yoksa null */
+  lastPriceHour?: number | null;
   /** Alınamayan seriler */
   notes: string[];
 }
@@ -152,7 +156,19 @@ export function loadToday(): Promise<TodayResult> {
       rt,
     };
     writeSystemMonth(doc, Number(today.slice(5, 7)), raw, new Date());
-    const system = systemDay(doc, today);
+    // Gerçek zamanlı tüketim ve üretimin en yeni saati kısmi gelir (EPİAŞ yaklaşık bir saat gecikmeyle biriktirir); yalnız tam
+    // dolmuş saatler kullanılır, sonrası boş kalır
+    const tr = new Date(Date.now() + 3 * 3_600_000);
+    const lastRt = lastCompleteRealtimeHour(tr.getUTCHours() * 60 + tr.getUTCMinutes());
+    const rawSystem = systemDay(doc, today);
+    const system = {
+      ...rawSystem,
+      consumption: maskAfterHour(rawSystem.consumption, lastRt),
+      rt: Object.fromEntries(
+        Object.entries(rawSystem.rt).map(([k, v]) => [k, maskAfterHour(v, lastRt)])
+      ) as typeof rawSystem.rt,
+      rtImportExport: maskAfterHour(rawSystem.rtImportExport, lastRt),
+    };
 
     const ptf = toSeries(mcp, (it) => numOrNull(it.price));
     const smf = toSeries(smp, (it) => numOrNull(it.systemMarginalPrice));
@@ -179,12 +195,20 @@ export function loadToday(): Promise<TodayResult> {
       };
     });
 
+    // YAL / YAT özeti dengeleme piyasasından gelir ve SMF ile aynı gecikmeyle yayımlanır; yayımlanmamış saatte kalemler "0"
+    // (talimat yok) gibi görünmesin diye son SMF saatinden sonrası boş bırakılır
+    const lastPriceHour = smf.reduce<number | null>((last, v, h) => (v !== null ? h : last), null);
     const history = await loadPtfHistory(today);
     const baseline = sunPlanBaselineFor(await readSystemYear(year), today);
     const day = buildDailyMarket({
       date: today,
       market,
-      system,
+      system: {
+        ...system,
+        netInstruction: maskAfterHour(system.netInstruction, lastPriceHour),
+        upDelivered: maskAfterHour(system.upDelivered, lastPriceHour),
+        downDelivered: maskAfterHour(system.downDelivered, lastPriceHour),
+      },
       history,
       sunPlanBaseline: baseline,
     });
@@ -195,7 +219,7 @@ export function loadToday(): Promise<TodayResult> {
     return {
       day,
       limit: await loadPriceLimit(),
-      live: { updatedAt: new Date().toISOString(), lastSystemHour, notes },
+      live: { updatedAt: new Date().toISOString(), lastSystemHour, lastPriceHour, notes },
     };
   });
 }

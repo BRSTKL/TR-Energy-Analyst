@@ -115,3 +115,9 @@ yeniden üretin. Ayrıntılı geçmiş `PLAN.md` (süren aşamalar, son kayıtla
 - Bugün'deki "Görünüm" seçici yalnız bölüm sırasını değiştirir; veri ya da yetki değişmez, hiçbir bölüm gizlenmez.
 - PTF karnesi 30 günden azsa ekranda "kanıt zayıf" yazılır; üretim karnesi için en erken Kasım ortası (GZÜ gerçekleşen üretimi iki gün gecikmeli).
 - Portföy üretim toplamı sunucunun değişmeyen sabah kayıtlarından okunur (hesap yok); HES ve kayıtta olmayan santraller toplama girmez, sayısı ekranda yazılır.
+
+## Günlük pano (04.11.2026)
+
+- Pano üç gün gösterir: Dün, Bugün, Yarın (+ başka gün). Yarın teklif işi `/market/teklif`'tedir; pano "piyasada ne oldu" sayfasıdır.
+- Yayımlanmamış saat grafikte boş bırakılmaz, hiç çizilmez; EPİAŞ yayımlanmamış saatlere 0 yazar, bu sıfırlar veri sayılmaz.
+- Gerçek zamanlı tüketim/üretimin en yeni saati kısmidir; son tam saat `lastCompleteRealtimeHour` ile bulunur.

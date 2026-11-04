@@ -22,7 +22,7 @@
 - `/account` (`app/account/page.tsx`)
 - `/compare` (`app/compare/page.tsx`) — Verinin son yılından sonraki yıl (YEKDEM'den çıkış bu yıl için sorulur)
 - `/login` (`app/login/page.tsx`) — Yalnız uygulama içi yol ("/..." ama "//..." değil): dışarıya yönlendirme olmasın.
-- `/market/gunluk` (`app/market/gunluk/page.tsx`) — Sekme adreste tutulur (?sekme=bugun|yarin|gecmis): bağlantılar doğru sekmeyi açar, sayfa yenilenince sekme korunur
+- `/market/gunluk` (`app/market/gunluk/page.tsx`) — Günlük pano: piyasada bir günde ne oldu / ne oluyor (gözlem).
 - `/market` (`app/market/page.tsx`) — Türkçe yüzde: "+%45"
 - `/market/teklif` (`app/market/teklif/page.tsx`)
 - `/methodology` (`app/methodology/page.tsx`) — Metodoloji: uygulamadaki ve rapordaki her rakamın nereden geldiği.
@@ -489,7 +489,7 @@
 - `components/market/bid-table.tsx` — Saat saat karar tablosu: PTF tahmini + aralık, portföy üretim tahmini, fiyat riski.
 - `components/market/brief.tsx` — Teklif kapanışına (Türkiye 12:30, hedef günden bir önceki gün) kalan süre; geçmişse null
 - `components/market/chart-card.tsx` — Doğrulanmış renk seti: seçilen dönem vurgulu, önceki yıl gri.
-- `components/market/daily-dashboard.tsx` — Karma renkleri: rüzgâr / güneş / lisanssız güneş açık tonlar, termik koyu
+- `components/market/daily-dashboard.tsx` — Tüketim ve üretimin yayımlandığı son saat
 - `components/market/daily-table.tsx` — Günlük piyasa panosunun saatlik tablosu (ana sayfada ve /market/gunluk'te aynı).
 - `components/market/fold.tsx` — Kapalı bölüm: başlık ve sağda kısa bir özet satırı ("2 yukarı, 1 aşağı"); açılınca ayrıntı.
 - `components/market/pre-bid-context.tsx` — Bulunan EPİAŞ verileriyle bağlam analizleri (ÖNİZLEME).

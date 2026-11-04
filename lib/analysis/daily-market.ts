@@ -518,6 +518,22 @@ export function daySlice(series: ReadonlyArray<number | null>, from: number): Se
 export const emptyRt = (): Record<SystemSource, Series24> =>
   Object.fromEntries(SYSTEM_SOURCES.map((s) => [s, Array<number | null>(HOURS).fill(null)])) as Record<SystemSource, Series24>;
 
+/**
+ * Gerçek zamanlı tüketim ve üretim EPİAŞ'ta yaklaşık bir saat gecikmeyle birikir: en yeni saat kısmi gelir (04.11.2026 22:26'da
+ * "21" etiketi önceki saatin %43'ü: veri 21:26'ya kadar). Kısmi saat grafikte gerçek düşüş gibi görünmesin diye yalnız tam
+ * dolmuş saatler sayılır: saat h, bitişinden bir saat (+10 dk pay) sonra tamdır. Türkiye saatiyle gün başından dakika verilir;
+ * tam saat yoksa null.
+ */
+export function lastCompleteRealtimeHour(nowMinutes: number): number | null {
+  const h = Math.floor((nowMinutes - 10) / 60) - 2;
+  return h < 0 ? null : Math.min(23, h);
+}
+
+/** Son yayımlanan saatten sonrasını null yapar (canlı günde yayımlanmamış saat "0" gibi görünmesin); `last` null ise hepsi null */
+export function maskAfterHour<T>(series: ReadonlyArray<T | null>, last: number | null): Array<T | null> {
+  return series.map((v, h) => (last !== null && h <= last ? v : null));
+}
+
 /** Yıl belgesinden günün 24 saatlik dilimleri; belge ya da seri yoksa (eski biçim) o seri null */
 export function systemDay(doc: SystemYear | null, date: string): DailySystem {
   const empty = (): Series24 => Array(HOURS).fill(null);

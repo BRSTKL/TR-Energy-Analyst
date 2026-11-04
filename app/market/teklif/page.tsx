@@ -151,8 +151,11 @@ export default function BriefPage() {
             </h1>
             <p className="mt-1 text-sm text-slate-600">
               {date === tomorrow
-                ? "Yarının fiyatı ve riskli saatler."
+                ? "Yarının fiyat tahmini ve riskli saatler."
                 : "Geçmiş gün: hesap o günün kesiminde bilinen veriyle yapıldı ve gerçekleşenle karşılaştırılır."}{" "}
+              <Link href="/market/gunluk?sekme=yarin" className="font-medium text-indigo-700 hover:underline">
+                Piyasada ne oldu: Günlük pano
+              </Link>{" "}
               <MethodLink section="gunluk-pano" label="Yöntem ve varsayımlar" />
             </p>
           </div>
@@ -168,17 +171,10 @@ export default function BriefPage() {
             >
               Yarın
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={date === trToday()}
-              onClick={() => setDate(trToday())}
-            >
-              Bugün (geçmişle sınama)
-            </Button>
             <input
               type="date"
-              aria-label="Hedef gün"
+              aria-label="Başka gün (geçmişle sınama)"
+              title="Geçmiş bir gün seçerseniz hesap o günün kesiminde bilinen veriyle yapılır ve gerçekleşenle karşılaştırılır"
               className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm"
               value={date}
               min="2026-06-15"

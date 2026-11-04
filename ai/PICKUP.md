@@ -5,6 +5,22 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 04.11.2026 · Claude · Günlük pano sadeleşti (`claude/pano-sade`)
+
+- Kullanıcı sekmelerin (Geçmiş gün / Bugün / Yarın / Teklif öncesi) kafa karıştırdığını söyledi; önizleme gösterildi, onaylandı.
+- **Yapılan:** gün şeridi Dün / Bugün / Yarın (+ "Başka gün"), `?sekme=gecmis|bugun|yarin` adreste tutulur; her görünümde bir durum
+  çipi ve tek cümle; Yarın görünümünde teklif masasına bağlantı. Teklif öncesinde "Bugün (geçmişle sınama)" düğmesi kalktı.
+  Fiyat limiti notu tek satıra (`PriceLimitNote compact`).
+- **Bugün grafikleri yalnız yayımlanan saatleri gösterir** (boş alan yok), yayımlandıkça dolar: SMF/sistem yönü/talimat son SMF
+  saatine, tüketim/üretim `lastCompleteRealtimeHour` ile (en yeni saat kısmi olduğundan atlanır). EPİAŞ yayımlanmamış saatlere 0
+  yazdığı için net talimat/YAL/YAT o saatlerde maskelenir (`maskAfterHour`, `lib/analysis/daily-market.ts`).
+- **Yenileme:** Bugün ve Yarın 5 dakikada bir sessizce yenilenir (sekme arka plandaysa atlanır). Tarayıcı kendi sunucumuza sorar;
+  EPİAŞ'a giden istek sunucudaki 5 dakikalık önbellekle sınırlı.
+- **Ölçülen yayın gecikmesi (04.11 22:30 TR):** PTF D-1 ~13-14, tüketim/üretim ≈1 sa (en yeni saat kısmi), SMF ve sistem yönü ≈4,5-5,5 sa
+  (22:36'da son saat 16). Resmî yayın saati bulunamadı.
+- **Kontrol:** 1.018 test, tsc, `--only gunluk,teklif` duman testi temiz.
+- **Sıradaki:** SMF yayın gecikmesini sunucuda saatlik okuyarak ölçmek (istenirse).
+
 ## 04.11.2026 · Claude · PTF motorunda kapılı otomatik sürüm seçimi (`claude/ptf-sampiyon`, yüklenmedi)
 
 - Kullanıcı "kendini geliştiren model" istedi; güvenli sürüm olarak şampiyon defteri planlandı ve onaylandı (eşik %3, hidro aday).
