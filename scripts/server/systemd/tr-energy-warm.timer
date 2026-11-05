@@ -1,0 +1,7 @@
+[Unit]
+Description=tr-energy-warm zamanlayici
+[Timer]
+OnCalendar=*-*-* *:50:00
+Persistent=true
+[Install]
+WantedBy=timers.target

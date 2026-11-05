@@ -20,6 +20,7 @@ Zamanlanmış işler ve uygulama Mac'te değil sunucuda çalışır. Mac kapalı
 | `tr-energy-db-backup` | 03:00 | `scripts/backup-db.mts daily` (`prisma/backups/`, son 5) |
 | `tr-energy-forecast-check` | 12:15 | yarının güneş/rüzgâr tahmini yazılmadıysa bildirim (yeni dosyalar kurulunca) |
 | `tr-energy-daily-summary` | 12:30 | günlük özet bildirimi |
+| `tr-energy-warm` | saatte bir (:50) ve her yüklemeden sonra | `scripts/warm-cache.mts`: proje sayfalarının ağır hesaplarını (sonuç, geçmişle sınama, içgörüler, planlama, DSG, veri kalitesi, tahmin doğruluğu) önceden yapar; önbellek doluysa yalnız sürüm denetimi. Kurulum aşağıda. |
 | `tr-energy-web` | sürekli | `next start` |
 
 Bir iş hata verirse `tr-energy-failed@` telefona ntfy bildirimi gönderir (`bin/tr-energy-notify`; kod içinden `lib/notify.ts`). Günlükler: `/var/log/tr-energy/<iş>.log`, `journalctl -u <iş>`. Durum: `systemctl list-timers 'tr-energy-*'`.
@@ -68,6 +69,16 @@ cp scripts/server/systemd/tr-energy-snapshot.{service,timer} /etc/systemd/system
 ```
 
 İlk gözlem (27.10.2026): yarının KGÜP'ü 15:13'te HTTP 400 verdi, 17:48'de 24 kayıt döndü; yayım saati bu işle ölçülür.
+
+### Önbellek ısıtma işi (05.11.2026): kurulum
+
+Önbellek bellekte durur; sunucu yeniden başlayınca ve projenin veri sürümü değişince (gece piyasa eşitlemesi, havuz güncellemesi) boşalır. Isıtma olmadan ilk ziyaretçi bekliyordu (66 santrallik projede geçmişle sınama ~2 dk). Kod `deploy.sh` ile yüklenir, sonra sunucuda (kullanıcı onayıyla):
+
+```bash
+cp scripts/server/systemd/tr-energy-warm.{service,timer} /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now tr-energy-warm.timer && systemctl start --no-block tr-energy-warm
+```
+
+`deploy.sh` web servisini yeniden başlattıktan sonra birim kuruluysa işi arka planda başlatır. Günlük: `/var/log/tr-energy/tr-energy-warm.log` (yalnız 1 sn'den uzun istekler ve özet satırı).
 
 ### PTF tahmini işi (29.10.2026): kurulum
 

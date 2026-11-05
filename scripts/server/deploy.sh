@@ -44,5 +44,7 @@ for p in $checks; do
   echo "$c $p"
   [ "$c" = 200 ] || { /usr/local/bin/tr-energy-notify "TR-Energy: yükleme sonrası hata" "$p HTTP $c (${new:0:7})"; exit 1; }
 done
+# Önbellek yeniden başlatmayla boşaldı: ağır proje hesapları arka planda önceden yapılır (birim kuruluysa)
+if systemctl cat tr-energy-warm.service >/dev/null 2>&1; then systemctl start --no-block tr-energy-warm.service && echo "önbellek ısıtma başladı"; fi
 echo "yükleme tamam"
 EOF

@@ -24,8 +24,8 @@
  * SAF fonksiyonlar: I/O yok.
  */
 
-import { costWithMultiplier, MIN_FEASIBLE_LAG_HOURS, type PricedHour, type Strategy } from "@/lib/analysis/backtest";
-import { capTradeMwh, DEFAULT_INTRADAY_REALISM, persistenceTradeGain } from "@/lib/analysis/intraday-arbitrage";
+import { costWithMultiplier, MIN_FEASIBLE_LAG_HOURS, persistenceGainsFor, type PricedHour, type Strategy } from "@/lib/analysis/backtest";
+import { capTradeMwh, DEFAULT_INTRADAY_REALISM } from "@/lib/analysis/intraday-arbitrage";
 import { kupstForHour } from "@/lib/calculations/kupst";
 import type { HourlyResult } from "@/lib/calculations/types";
 import type { InfoTime } from "@/lib/analysis/direction-features";
@@ -103,6 +103,20 @@ export function directionBiasStrategy(
   capPercent = DEFAULT_INTRADAY_REALISM.volumeCapPercent
 ): Strategy {
   const when = infoTime === "D-1" ? "gün öncesi" : "gün içi (GİP)";
+  // Saatin çarpan ızgarasındaki maliyetleri bir kez hesaplanır: 4 aylık eğitim pencereleri üst üste bindiği için aynı saat
+  // her test ayında yeniden soruluyordu (66 santrallik projede isteğin ≈ %40'ı). Değerler aynı işlemle bulunur, sonuç değişmez.
+  const memo = new WeakMap<PricedHour, { low: number[]; high: number[] }>();
+  const gridCosts = (h: PricedHour) => {
+    let c = memo.get(h);
+    if (!c) {
+      c = {
+        low: LOW_K.map((k) => directionHourCost(h, k, infoTime, kupstDelta, capPercent)),
+        high: HIGH_K.map((k) => directionHourCost(h, k, infoTime, kupstDelta, capPercent)),
+      };
+      memo.set(h, c);
+    }
+    return c;
+  };
   return {
     id: `direction-bias-${infoTime}`,
     label: `Yön tahminiyle plan ayarı · ${when}`,
@@ -112,19 +126,32 @@ export function directionBiasStrategy(
         : "Her saat için sistem yönü 2 saat önceki bilgiyle tahmin edilir ve plan GİP'te ayarlanır (işlem maliyeti GİP ağırlıklı ortalama fiyatıyla, saatlik GİP hacminin en fazla %10 payı). Eşik ve çarpanlar önceki aylardan, KÜPST dahil maliyetle öğrenilir. Ölçümdür, işlem önerisi değildir.",
     fit: (train) => {
       const pOf = (h: PricedHour) => probabilities.get(new Date(h.source.timestamp).getTime());
-      const rows = train.filter((h) => pOf(h) !== undefined);
-      const lowCost = rows.map((h) => LOW_K.map((k) => directionHourCost(h, k, infoTime, kupstDelta, capPercent)));
-      const highCost = rows.map((h) => HIGH_K.map((k) => directionHourCost(h, k, infoTime, kupstDelta, capPercent)));
+      const rows: PricedHour[] = [];
+      const ps: number[] = [];
+      for (const h of train) {
+        const p = pOf(h);
+        if (p === undefined) continue;
+        rows.push(h);
+        ps.push(p);
+      }
+      const lowCost = rows.map((h) => gridCosts(h).low);
+      const highCost = rows.map((h) => gridCosts(h).high);
       const base = rows.reduce((s, h) => s + h.baselineCost, 0);
 
       let best = { theta: 0.5, kLow: 1, kHigh: 1, cost: base };
       for (const theta of THETAS) {
         const lowSum = LOW_K.map(() => 0);
         const highSum = HIGH_K.map(() => 0);
-        rows.forEach((h, i) => {
-          if (pOf(h)! >= theta) lowCost[i].forEach((c, j) => (lowSum[j] += c));
-          else highCost[i].forEach((c, j) => (highSum[j] += c));
-        });
+        // Toplama sırası öncekiyle aynı (satır satır, çarpan çarpan): sonuç birebir aynı
+        for (let i = 0; i < rows.length; i++) {
+          if (ps[i] >= theta) {
+            const c = lowCost[i];
+            for (let j = 0; j < c.length; j++) lowSum[j] += c[j];
+          } else {
+            const c = highCost[i];
+            for (let j = 0; j < c.length; j++) highSum[j] += c[j];
+          }
+        }
         const jl = lowSum.indexOf(Math.min(...lowSum));
         const jh = highSum.indexOf(Math.min(...highSum));
         const cost = lowSum[jl] + highSum[jh];
@@ -135,7 +162,7 @@ export function directionBiasStrategy(
         cost: (h) => {
           const p = pOf(h);
           if (p === undefined) return h.baselineCost;
-          return directionHourCost(h, p >= theta ? kLow : kHigh, infoTime, kupstDelta, capPercent);
+          return p >= theta ? gridCosts(h).low[LOW_K.indexOf(kLow)] : gridCosts(h).high[HIGH_K.indexOf(kHigh)];
         },
         summary:
           kLow === 1 && kHigh === 1
@@ -192,7 +219,10 @@ export function directionPersistenceStrategy(
         const prev = h.prev(lagHours);
         return prev ? prev.actualMwh - prev.forecastMwh : 0;
       };
-      const gains = train.map((h) => ALPHA_GRID.map((a) => persistenceTradeGain(h.source, h.prev(lagHours), a, profile, realism).gainTl));
+      const alphaGains = persistenceGainsFor(lagHours, ALPHA_GRID, profile, realism);
+      const gains = train.map(alphaGains);
+      const trainP = train.map(pOf);
+      const trainErr = train.map(lastError);
       const bestAlpha = (sums: number[]) => {
         let j = 0;
         for (let i = 1; i < sums.length; i++) if (sums[i] > sums[j] + 1e-6) j = i;
@@ -202,10 +232,11 @@ export function directionPersistenceStrategy(
       let best = { theta: 0.5, aligned: 0, opposed: 0, unknown: 0, gain: -Infinity };
       for (const theta of THETAS) {
         const sums: Record<PersistenceClass, number[]> = { aligned: ALPHA_GRID.map(() => 0), opposed: ALPHA_GRID.map(() => 0), unknown: ALPHA_GRID.map(() => 0) };
-        train.forEach((h, i) => {
-          const c = persistenceClass(lastError(h), pOf(h), theta);
-          gains[i].forEach((g, j) => (sums[c][j] += g));
-        });
+        for (let i = 0; i < train.length; i++) {
+          const target = sums[persistenceClass(trainErr[i], trainP[i], theta)];
+          const g = gains[i];
+          for (let j = 0; j < g.length; j++) target[j] += g[j];
+        }
         const a = bestAlpha(sums.aligned);
         const o = bestAlpha(sums.opposed);
         const u = bestAlpha(sums.unknown);
@@ -217,7 +248,7 @@ export function directionPersistenceStrategy(
       return {
         cost: (h) => {
           const alpha = alphaFor[persistenceClass(lastError(h), pOf(h), best.theta)];
-          return h.baselineCost - persistenceTradeGain(h.source, h.prev(lagHours), alpha, profile, realism).gainTl;
+          return h.baselineCost - alphaGains(h)[ALPHA_GRID.indexOf(alpha)];
         },
         summary:
           best.aligned === 0 && best.opposed === 0

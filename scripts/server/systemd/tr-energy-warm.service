@@ -1,0 +1,13 @@
+[Unit]
+Description=Proje hesaplarini onceden yapar (onbellek isitma)
+After=tr-energy-web.service
+OnFailure=tr-energy-failed@%n.service
+[Service]
+Type=oneshot
+User=tre
+WorkingDirectory=/srv/tr-energy
+Nice=10
+ExecStart=/usr/bin/flock -n -E 0 /srv/tr-energy/.cache/warm.lock /usr/bin/node --env-file=.env node_modules/.bin/tsx --tsconfig tsconfig.json scripts/warm-cache.mts
+TimeoutStartSec=50min
+StandardOutput=append:/var/log/tr-energy/tr-energy-warm.log
+StandardError=append:/var/log/tr-energy/tr-energy-warm.log

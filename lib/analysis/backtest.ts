@@ -257,6 +257,37 @@ const ALPHA_GRID = [0, 0.25, 0.5, 0.75, 1];
  */
 export const MIN_FEASIBLE_LAG_HOURS = 2;
 
+type IntradayRealism = typeof DEFAULT_INTRADAY_REALISM;
+const persistenceMemo = new WeakMap<PricedHour, Map<string, number[]>>();
+
+/**
+ * Saatin kalıcılık kazançlarını (TL, α ızgarasının her değeri için) veren işlev. Saat başına bir kez hesaplanır: 4 aylık
+ * eğitim pencereleri üst üste bindiği için aynı saat her test ayında yeniden soruluyordu. Anahtar gecikme, ızgara, profil
+ * ve gerçekçilik ayarlarını içerir; değerler persistenceTradeGain ile aynıdır.
+ */
+export function persistenceGainsFor(
+  lagHours: number,
+  alphas: readonly number[],
+  profile: ImbalancePricingProfile,
+  realism: IntradayRealism
+): (h: PricedHour) => number[] {
+  const key = `${lagHours}|${alphas.join(",")}|${JSON.stringify(profile)}|${JSON.stringify(realism)}`;
+  return (h) => {
+    let byKey = persistenceMemo.get(h);
+    if (!byKey) {
+      byKey = new Map();
+      persistenceMemo.set(h, byKey);
+    }
+    let gains = byKey.get(key);
+    if (!gains) {
+      const prev = h.prev(lagHours);
+      gains = alphas.map((a) => persistenceTradeGain(h.source, prev, a, profile, realism).gainTl);
+      byKey.set(key, gains);
+    }
+    return gains;
+  };
+}
+
 export function persistenceStrategy(lagHours: number, capPercent = DEFAULT_INTRADAY_REALISM.volumeCapPercent): Strategy {
   const theoretical = lagHours < MIN_FEASIBLE_LAG_HOURS;
   return {
@@ -270,7 +301,8 @@ export function persistenceStrategy(lagHours: number, capPercent = DEFAULT_INTRA
         : ""),
     fit: (train, profile) => {
       const realism = { ...DEFAULT_INTRADAY_REALISM, volumeCapPercent: capPercent };
-      const gain = (h: PricedHour, alpha: number) => persistenceTradeGain(h.source, h.prev(lagHours), alpha, profile, realism).gainTl;
+      const gainsOf = persistenceGainsFor(lagHours, ALPHA_GRID, profile, realism);
+      const gain = (h: PricedHour, alpha: number) => gainsOf(h)[ALPHA_GRID.indexOf(alpha)];
       let bestAlpha = 0;
       let bestGain = 0;
       for (const alpha of ALPHA_GRID) {
@@ -328,7 +360,17 @@ export function runBacktest(
       return d.toISOString().slice(0, 7);
     });
   };
-  const windowRows = (keys: string[]) => keys.flatMap((k) => byMonth.get(k) ?? []);
+  // Aynı pencere her strateji için yeniden kuruluyordu (66 santralde ≈ 3 sn); aynı dizi paylaşılır, sıra değişmez
+  const windowCache = new Map<string, PricedHour[]>();
+  const windowRows = (keys: string[]) => {
+    const id = keys.join("|");
+    let rows = windowCache.get(id);
+    if (!rows) {
+      rows = keys.flatMap((k) => byMonth.get(k) ?? []);
+      windowCache.set(id, rows);
+    }
+    return rows;
+  };
 
   // Test ayı ancak eğitim penceresinin tüm ayları veride varsa test edilir (kısa pencereyle öğrenilmiş
   // kurallar sonucu karıştırmasın)

@@ -4,9 +4,11 @@ Tarihli; önermeden ya da "düzeltildi" demeden önce kodda kontrol edin.
 
 ## Açık sorunlar
 
-- **Büyük projede geçmişle sınama ilk açılışta yavaş** (22.10): Inavitas (66 santral) sunucuda soğuk istekte ~2 dk
-  (sunucu işlemcisi tek çekirdekte Mac'ten ~5 kat yavaş). Sonraki açılışlar önbellekten 0,1 sn. Seçenekler (karar
-  bekliyor): pencere ara toplamları (3–4 kat), çok çekirdek, diskte önbellek + ısıtma.
+- **Büyük projede geçmişle sınama ilk açılışta yavaş** (22.10; 05.11'de kısmen çözüldü): Inavitas (66 santral) sunucuda soğuk
+  istekte ~2 dk sürüyordu. 05.11: aynı saatin maliyeti üst üste binen eğitim pencerelerinde bir kez hesaplanıyor (çıktı birebir
+  aynı; Mac'te 30 → 17 sn, sunucuda tahminen ~1,5 dk) ve `tr-energy-warm` işi ağır proje hesaplarını saatlik ve yüklemeden sonra
+  önceden yapıyor; ziyaretçi soğuk hesabı yalnız iş kurulmadıysa ya da ısıtma bitmeden gelirse görür. Kalan seçenekler: pencere ara
+  toplamları, çok çekirdek, diskte önbellek.
 - **Resmî dengesizlik fiyatı EPİAŞ'ın bugünkü değerinden küçük farklı** (27.10'da ölçüldü; bilerek eşitlenmedi): veritabanındaki
   `imbalancePosPrice` / `imbalanceNegPrice` Eylül 2025 – Ağustos 2026'da (12 ay) neredeyse her saatte EPİAŞ'ın tutar ÷ miktar
   yanıtından farklı; 2024 – Ağustos 2025 ve Eylül 2026 birebir aynı. Fark: Eylül–Aralık 2025 ≈ 0,01 TL/MWh (yuvarlama

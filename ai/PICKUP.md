@@ -5,6 +5,22 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 05.11.2026 · Claude · Geçmişle sınama hızı ve önbellek ısıtma (`claude/backtest-hiz`, yüklenmedi)
+
+- Kullanıcı demo için büyük projede ilk açılış yavaşlığını çözmemizi istedi (bilinen sorun: Inavitas, 66 santral, sunucuda ~2 dk).
+- **Ölçüm (Mac, Inavitas):** istek 30 sn; %40'ı yön stratejisi (KÜPST farkı her saat, her eğitim penceresinde yeniden), %23'ü gün içi
+  kalıcılık. Sebep: 4 aylık eğitim pencereleri üst üste biniyor, aynı saat her test ayında ve her k / α değeri için yeniden hesaplanıyordu.
+- **Yapılan:** `direction-strategy.ts` saatin çarpan ızgarası maliyetlerini, `backtest.ts` `persistenceGainsFor` kalıcılık kazançlarını
+  saat başına bir kez hesaplar (WeakMap); `runBacktest` eğitim penceresini stratejiler arasında paylaşır; eşik döngüleri düz döngü
+  (toplama sırası aynı). Çıktı 3 projede (Inavitas, Zeros, Enko) bayt bayt aynı; süre 30 → 17, 27 → 16, 21 → 13 sn.
+- **Isıtma:** `scripts/warm-cache.mts` (uygulamaya HTTP ile, büyük projeden başlayarak 7 ağır uç nokta; yalnız okur),
+  `tr-energy-warm.{service,timer}` (saatte bir :50, flock), `deploy.sh` yeniden başlatmadan sonra birim kuruluysa başlatır.
+  Kurulum komutu `scripts/server/README.md`'de; **sunucuda kurulmadı** (kullanıcı onayı gerekir).
+- **Isıtma denemesi (Mac, geliştirme sunucusu):** ilk tur 15 proje × 7 uç nokta 322 sn (67 yeniden hesap, 0 hata), ikinci tur 2 sn.
+  Sunucuda ilk tur tahminen 20–30 dk (birim zaman aşımı 50 dk).
+- **Kontrol:** 1.052 test, tsc, lint, `check:reports` 0 hata, `--only backtest,planning` duman testi 12/12.
+- **Sıradaki:** onayla main'e alma, yükleme ve ısıtma biriminin kurulumu; sonra sunucuda ilk ısıtmanın süresine `tr-energy-warm.log`'dan bakmak.
+
 ## 05.11.2026 · Claude · Yeni santral radarı (`claude/yeni-santral-radar`, önizleme; yüklenmedi)
 
 - Kullanıcı fikir listesinden "Yeni santral radarı"nı önizleme olarak istedi: havuzdaki santrallerin ilk üretim saatinden yeni devreye
