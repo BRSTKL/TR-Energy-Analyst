@@ -4,17 +4,26 @@
  * Kaynak: seçilen yılın sektör karnesi (`.cache/epias/sector-<yıl>.json`: sahip şirket, üretim, dengesizlik, KÜPST, sapma).
  * Kurulu güç CLAUDE.md "Kurulu güç" kuralıyla çözülür (YEKDEM → EPDK lisansı → en yüksek saatlik üretim, alt sınır); ölçülen
  * en yüksek üretim karnenin kendi dönemindekidir (havuz yeniden okunmaz). YEKDEM durumu lib/services/yekdem-exit.ts.
- * Toplama lib/analysis/company-profile.ts (santral toplamı; şirket içi netleşme yok). EPİAŞ'a yalnız kurulu güç / YEKDEM
- * listeleri önbellekte yoksa gider. Yıl başına 30 dakika bellekte.
+ * Toplama lib/analysis/company-profile.ts (santral toplamı). Profilde ayrıca şirket içi netleşmiş dengesizlik
+ * (lib/analysis/company-netting.ts): karnenin saatlik serileri (`sector-<yıl>-hourly`) ve veritabanındaki piyasa fiyatlarıyla,
+ * karneyle aynı motor (`processHourlyRecord`, varsayılan profil); toplayıcı portföyündeki santraller
+ * (`aggregator-membership.json`) netleşmeye katılmaz. EPİAŞ'a yalnız kurulu güç / YEKDEM listeleri önbellekte yoksa gider.
+ * Yıl başına 30 dakika bellekte; netleşme şirket başına istenince hesaplanır ve aynı süre tutulur.
  *
  * Sınır: toplayıcıya geçen santral EPİAŞ'ta toplayıcının altında listelenir; karnede sahibi görünmeyen santral şirkete
  * girmez (`unknown`). Lisanssız toplamlar (K3_, LÜM_, LÜY) ve karnenin kalite süzgecinde elenen santraller yoktur.
  */
 
+import { processHourlyRecord } from "@/lib/calculations/engine";
+import { DEFAULT_IMBALANCE_PROFILE, type SystemDirection } from "@/lib/calculations/types";
+import { companyNetting, type CompanyNetting, type NettingRow } from "@/lib/analysis/company-netting";
 import { buildCompanies, companyRank, type CompanyIndex, type CompanyPlant, type CompanyRow, type CompanyTech } from "@/lib/analysis/company-profile";
 import { CAPACITY_SOURCE_LABEL, isRecordedCapacity } from "@/lib/epias-plant/installed-capacity";
+import { prisma } from "@/lib/prisma";
+import { decodeHourly } from "@/lib/sector/hourly-store";
+import { loadAggregatorMembership } from "@/lib/services/aggregator-membership";
 import { resolveInstalledCapacities } from "@/lib/services/installed-capacity";
-import { availableSectorYears, loadSectorBenchmark, loadSectorPlants } from "@/lib/services/sector";
+import { availableSectorYears, loadSectorBenchmark, loadSectorHourly, loadSectorPlants } from "@/lib/services/sector";
 import { loadYekdemExitIndex } from "@/lib/services/yekdem-exit";
 
 const TTL_MS = 30 * 60_000;
@@ -26,6 +35,8 @@ export interface CompanyData {
   /** Karnenin veri dönemi (YYYY-AA-GG) */
   period: { start: string; end: string };
   index: CompanyIndex;
+  /** Toplayıcı üyelik listesinin tarihi; liste yoksa null */
+  membershipAsOf: string | null;
   /** Kurulu güç ya da YEKDEM listesi alınamadıysa nedeni */
   errors: string[];
 }
@@ -37,6 +48,8 @@ export interface CompanyProfile {
   company: CompanyRow;
   rank: { rank: number; of: number } | null;
   plants: CompanyPlant[];
+  /** Şirket içi netleşmiş dengesizlik; hesaplanamadıysa null ve nedeni `errors`'ta */
+  netting: CompanyNetting | null;
   errors: string[];
 }
 
@@ -62,6 +75,7 @@ async function build(year: number, years: number[]): Promise<CompanyData> {
     errors.push(`YEKDEM durumu alınamadı (${e instanceof Error ? e.message : "bağlantı"})`);
   }
 
+  const membership = await loadAggregatorMembership().catch(() => null);
   const plants: CompanyPlant[] = sector.map((p, i) => ({
     id: p.epiasPlantId,
     name: p.name,
@@ -77,12 +91,14 @@ async function build(year: number, years: number[]): Promise<CompanyData> {
     rankPct: p.rankPct,
     yekdem: p.yekdem,
     yekdemStatus: yekdemOf ? yekdemOf(p) : null,
+    aggregator: membership?.byPlant.get(p.epiasPlantId)?.map((a) => a.name).join(" / ") || null,
   }));
   return {
     year,
     years,
     period: bench.period ?? { start: `${year}-01-01`, end: `${year}-12-31` },
     index: buildCompanies(plants),
+    membershipAsOf: membership?.asOf ?? null,
     errors: Array.from(new Set(errors)),
   };
 }
@@ -102,10 +118,75 @@ export async function loadCompanies(yearParam?: number | null, now = Date.now())
   return promise;
 }
 
-export async function loadCompanyProfile(slug: string, yearParam?: number | null): Promise<CompanyProfile | null> {
+type MarketRow = { timestamp: Date; ptf: number; smf: number; systemDirection: string; imbalancePosPrice: number | null; imbalanceNegPrice: number | null };
+const marketMemo = new Map<string, { at: number; promise: Promise<Map<number, MarketRow>> }>();
+
+/** Dönemin piyasa fiyatları (saat → kayıt); karneyle aynı kaynak (veritabanı) */
+function loadMarket(period: { start: string; end: string }, now = Date.now()): Promise<Map<number, MarketRow>> {
+  const key = `${period.start}|${period.end}`;
+  const hit = marketMemo.get(key);
+  if (hit && now - hit.at < TTL_MS) return hit.promise;
+  const promise = prisma.marketData
+    .findMany({
+      where: { timestamp: { gte: new Date(`${period.start}T00:00:00Z`), lte: new Date(`${period.end}T23:00:00Z`) } },
+      select: { timestamp: true, ptf: true, smf: true, systemDirection: true, imbalancePosPrice: true, imbalanceNegPrice: true },
+    })
+    .then((rows) => new Map(rows.map((m) => [m.timestamp.getTime(), m as MarketRow])));
+  marketMemo.set(key, { at: now, promise });
+  promise.catch(() => {
+    if (marketMemo.get(key)?.promise === promise) marketMemo.delete(key);
+  });
+  return promise;
+}
+
+const nettingMemo = new Map<string, { at: number; promise: Promise<CompanyNetting> }>();
+
+async function buildNetting(data: CompanyData, plants: CompanyPlant[]): Promise<CompanyNetting> {
+  const market = await loadMarket(data.period);
+  if (!market.size) throw new Error("dönemin piyasa fiyatları veritabanında yok");
+  const cost = (rows: NettingRow[]) => {
+    let costTl = 0;
+    let mwh = 0;
+    for (const r of rows) {
+      const m = market.get(r.timestamp.getTime());
+      if (!m) continue;
+      costTl += processHourlyRecord(
+        r,
+        { timestamp: m.timestamp, ptf: m.ptf, smf: m.smf, systemDirection: m.systemDirection as SystemDirection, imbalancePosPrice: m.imbalancePosPrice, imbalanceNegPrice: m.imbalanceNegPrice },
+        DEFAULT_IMBALANCE_PROFILE
+      ).imbalanceCost;
+      mwh += r.actualMwh;
+    }
+    return { costTl, mwh };
+  };
+  const series = await Promise.all(
+    plants.map(async (p) => {
+      const s = await loadSectorHourly(data.year, p.id).catch(() => null);
+      return { id: p.id, aggregator: p.aggregator ?? null, rows: s ? decodeHourly(s) : null };
+    })
+  );
+  return companyNetting(series, cost, data.membershipAsOf);
+}
+
+export async function loadCompanyProfile(slug: string, yearParam?: number | null, now = Date.now()): Promise<CompanyProfile | null> {
   const data = await loadCompanies(yearParam);
   const hit = data?.index.bySlug.get(slug);
   if (!data || !hit) return null;
+  const errors = data.errors.slice();
+  const key = `${data.year}|${slug}`;
+  let cached = nettingMemo.get(key);
+  if (!cached || now - cached.at >= TTL_MS) {
+    cached = { at: now, promise: buildNetting(data, hit.plants) };
+    nettingMemo.set(key, cached);
+    if (nettingMemo.size > 200) nettingMemo.delete(nettingMemo.keys().next().value as string);
+  }
+  let netting: CompanyNetting | null = null;
+  try {
+    netting = await cached.promise;
+  } catch (e) {
+    if (nettingMemo.get(key) === cached) nettingMemo.delete(key);
+    errors.push(`Netleşmiş maliyet hesaplanamadı (${e instanceof Error ? e.message : "veri okunamadı"})`);
+  }
   return {
     year: data.year,
     years: data.years,
@@ -113,6 +194,7 @@ export async function loadCompanyProfile(slug: string, yearParam?: number | null
     company: hit.row,
     rank: companyRank(data.index.rows, slug),
     plants: hit.plants,
-    errors: data.errors,
+    netting,
+    errors,
   };
 }

@@ -35,6 +35,8 @@ export interface CompanyPlant {
   yekdem: boolean | null;
   /** YEKDEM durumu (lib/analysis/yekdem-exit.ts `YekdemExitStatus`); liste alınamadıysa null */
   yekdemStatus: string | null;
+  /** Toplayıcı portföyünde görünüyorsa toplayıcının adı (üyelik listesi tek bir tarihin durumu); değilse null */
+  aggregator?: string | null;
 }
 
 export interface TechTotal {

@@ -5,6 +5,28 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 12.11.2026 · Claude · Şirket profilinde netleşmiş dengesizlik (`claude/sirket-netlesme`; `main`'e alınmadı, yüklenmedi)
+
+- Kullanıcı gösterilen bilgilerin doğruluğunun yüksek olmasını istedi; santral toplamı şirket maliyetini olduğundan yüksek
+  gösteriyordu. Önizleme gösterildi, onaylandı.
+- **Karar (kullanıcı onayı):** üç koşul. (1) Kayıtlı bilgiler (kurulu güç, üretim, YEKDEM) ile hesaplanan risk (maliyet) ayrı
+  başlıkta ve etiketli. (2) Maliyet iki sayı: santraller tek tek ve netleşmiş, varsayımı altında yazılı. (3) Toplayıcı
+  portföyündeki santral netleşmeye katılmaz (şirketle değil toplayıcıyla dengelenir) ve sayfada ayrı gösterilir. Şirketler
+  listesi santral bazında kalır (681 şirket için netleşme pahalı); sütun başlığı bunu yazar.
+- **Yapılan:** saf kod `lib/analysis/company-netting.ts` (`sumSeries`, `companyNetting`; kendi portföyünde 2'den az santral
+  varsa netleşmiş değer yok), `lib/services/company-profile.ts` (karnenin saatlik serileri + veritabanı fiyatları, karneyle aynı
+  motor; şirket başına istenince, 30 dk bellek; santrale `aggregator` alanı), profil sayfası yeni düzende, santral tablosunda
+  "toplayıcı: X".
+- **Ölçüm (Mac, 2026 Ocak–Eylül):** santral başına yeniden hesap karne toplamıyla birebir (Enerjisa 445,2; Borusan 246,3; Sanko
+  234,7 M TL). Netleşmiş: Enerjisa 221,5 M TL (−%50), Borusan 137,8 (−%44). Sanko'nun 11 santralinden 10'u Enko toplayıcısında
+  (163,8 M TL): netleşmiş değer hesaplanmaz.
+- **Sınırlar (sayfada yazıyor):** üyelik listesi tek tarihli (17.10.2026) ve her yıl için aynı liste kullanılır (2025 görünümünde
+  de); gün içi işlem ve talimat yok; toplayıcı dışı grup üyelikleri bilinmiyor.
+- **Kontrol:** 1.064 test, tsc, lint, `--only sirketler` duman testi 4/4; önizlemede Enerjisa ve Sanko gözle görüldü.
+  `check:reports` çalıştırılmadı (rapor koduna dokunulmadı; hesap motoru değişmedi, yalnız çağrıldı).
+- **Sıradaki:** onayla `main`'e alma ve yükleme; şirket profilinden tek tıkla rapor; sunucuda ağır hesapların ziyaretçiyi
+  bekletmemesi.
+
 ## 12.11.2026 · Claude · Şirket profili sayfası (`claude/sirket-profili`; yüklendi, f96744b)
 
 - Kullanıcı sıradaki iş olarak şirket profilini istedi.
@@ -218,17 +240,3 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
   gerekli. Ayrıca `git stash` içinde. O daldaki bilinen sorun notu (resmî dengesizlik fiyatı farkı) `known-issues.md`'ye
   taşındı.
 - Kökteki `index.html` başka bir projenin (kişisel portfolyo) dosyası; dokunulmadı.
-
-## 02.11.2026 · Claude · Günlük rutin Faz 1 + Faz 3: teklif masası, portföy üretimi, PTF karnesi, Bugün görünümleri (yüklendi, b339196)
-
-- **İstek (kullanıcı):** uygulama analiz tarafındaki herkese hitap etsin; öncelik sabah teklif kararı → gün içi → akşam karnesi → haftalık rapor; şirket verisi yok, açık veri.
-- **Yapılan:**
-  - Portföy üretim tahmini: `lib/services/portfolio-forecast.ts` (sunucunun sabah güneş / rüzgâr kayıtlarını proje santrallerinin EPİAŞ kimliğiyle toplar; aynı santral portföyde bir kez; HES ve eşleşmeyen santral "kapsam dışı" diye sayılır), `GET /api/ops/portfolio-forecast`.
-  - Teklif masası: `lib/ptf/bid-table.ts` (saf: saat saat PTF + aralık + portföy MWh + risk, CSV), `components/market/bid-table.tsx`, Teklif öncesi sayfasında PTF kartının altında. **Teklif miktarı önerisi yok** (kendi KGÜP / pozisyon verisi yok). Risk: tahmin ya da üst aralık limitte / limite yakın, alt aralık sıfıra iniyor; "geniş aralık" yalnız bilgi (%80 aralık zaten ±%25 gezer, riskli saat sayısına girmez). Excel yok, CSV (BOM, `;`) Excel'de açılır.
-  - Üretim tahmini sayfası: proje seçici (portföy API'sinden) ve "sunucunun sabah kaydı / sayfanın canlı hesabı" notu.
-  - PTF karnesi: `lib/ptf/scorecard.ts` (saf), `lib/services/ptf-scorecard.ts`, `GET /api/ops/ptf-scorecard`; `scripts/ptf/scorecard.mts` aynı fonksiyonları kullanıyor. Bugün'de "Akşam: dünün karnesi" (son gün, son 7 gün, 30 günden azsa "kanıt zayıf"); üretim karnesi için "kanıt toplanıyor" notu.
-  - Bugün: "Yarının üretimi" kartında portföy toplamı + proje başına; Görünüm seçici (Üretici / Piyasa / Toplayıcı / Yönetim; `lib/ui/today-view.ts`, `localStorage`) yalnız bölüm sırasını değiştirir.
-  - Sol menüden "Üretim tahmini" kaldırıldı (kullanıcı isteği); proje sekmelerinde zaten var, o sayfa menüde Projelerim'i yakar. Menü ortak bileşen: commit öncesi tam duman turu gerekir.
-- **Sınama:** 984 test, tsc, eslint, `check:reports` 0 hata; duman: teklif + forecast (14 sayfa) ve Bugün (masaüstü + telefon) temiz. Önizlemede (localhost:3100, Mac'te kayıt yok) tablo ve boş durum mesajları görüldü.
-- **Yüklendi (02.11 sonrası, b339196):** sunucuda salt okur doğrulandı: `/api/ops/ptf-scorecard` 2 gün, MAE 405, basit yönteme göre %46,8 (betikle aynı); `/api/ops/portfolio-forecast` 3 proje için güneş + rüzgâr toplamı (Kıvanç 518 MWh). 08:30 telefon özeti ve zamanlayıcı yazılmadı.
-- **Sıradaki:** Faz 2 (gün içi radar, portföye özel UMM arıza uyarısı), Faz 4 (haftalık özet, Markdown / PDF); yazılacak metinler `iddia-denetcisi`'nden geçer.

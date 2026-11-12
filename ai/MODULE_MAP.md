@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-572 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+573 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
 ## Sayfalar (app/**/page.tsx) (31)
 
@@ -131,7 +131,7 @@
 - `app/not-found.tsx` — Türkçe 404 (hata ayıklama testi 16.10.2026: Next'in İngilizce varsayılan sayfası çıkıyordu)
 - `app/projects/loading.tsx`
 
-## lib/analysis (53)
+## lib/analysis (54)
 
 - `lib/analysis/aggregator-benchmark.ts` — Toplayıcılar arası kıyas (PLAN 8.7): EPİAŞ'taki her toplayıcının portföyündeki lisanslı santraller için aynı yöntem: saatlik sapma (UEVM − ilk KGÜP), EPİAŞ resmi dengesizlik fiyatı.
 - `lib/analysis/aggregator-detail.ts` — Toplayıcı ayrıntısı (PLAN 9.2): Kıyas tablosundaki bir toplayıcının içi: santraller (tek başına maliyet, sektör medyanına göre), aylık netleşme ve sahiplerin (üreticilerin) portföye katkısı.
@@ -139,6 +139,7 @@
 - `lib/analysis/candidate-access.ts` — Aday santralin ulaşılabilirliği (PLAN 4.5): Aday taraması "hangi santral portföyü en iyi dengeler?" sorusunu yanıtlar; bu modül "o santrale ulaşılabilir mi?" sorusunu.
 - `lib/analysis/candidate-screening.ts` — Aday santral taraması (PLAN 4.2): Toplayıcı ya da dengeden sorumlu grup, portföyüne hangi santrali eklerse en çok kazanır?
 - `lib/analysis/capture-rate.ts` — Capture rate (PLAN 19.1): Santral ürettiği saatlerde piyasanın ortalamasına göre ne fiyat alıyor?
+- `lib/analysis/company-netting.ts` — Şirket profili: şirket içi netleşmiş dengesizlik maliyeti (SAF, I/O yok): İki sayı üretir: santraller tek tek (her santral kendi sapmasıyla fiyatlanır) ve netleşmiş (şirketin kendi portföyündeki santrallerin plan ve üretimi saat saat topla…
 - `lib/analysis/company-profile.ts` — Şirket profili: santralleri sahip şirkete göre toplar (SAF, I/O yok): Şirket = sektör karnesindeki sahip şirket adı.
 - `lib/analysis/contract-pricing.ts` — Toplayıcı sözleşme fiyatı (PLAN 16.1): Aday santrale teklif edilecek dengesizlik hizmet bedeli (TL/MWh) üç çizgiden çıkar: taban = adil prim: (Shapley payı + KÜPST) / üretim.
 - `lib/analysis/cost-change.ts` — "Maliyet neden değişti?" ayrıştırması: Aynı santrallerin iki dönemi (ör. 2025 ve 2026'nın aynı ayları) arasındaki MWh başına dengesizlik maliyeti farkını dört kaleme böler.

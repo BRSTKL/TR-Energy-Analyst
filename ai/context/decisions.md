@@ -95,6 +95,11 @@ yeniden üretin. Ayrıntılı geçmiş `PLAN.md` (süren aşamalar, son kayıtla
   (`scripts/ptf/champion-sim.mts`): hidro adayı yalnız %1,1, rüzgâr ortalaması %0,8 daha iyi; politika bunun yaklaşık %65'ini yakalar
   (%5 eşikte rüzgârda hiç terfi yok). Yani beklenen kazanç ≈ %1; değer terfinin kanıtla ve kayıtlı olması. Sızıntı denetimi temiz
   (T günü kararı yalnız T-1 ve öncesini okur).
+- **Şirket maliyeti iki sayıyla gösterilir** (12.11, kullanıcı onayı; şirket profili): santraller tek tek ve netleşmiş, ikisi de
+  "hesaplanan risk, fatura değil" etiketiyle ve kayıtlı bilgilerden (kurulu güç, üretim, YEKDEM) ayrı başlıkta. Toplayıcı
+  portföyündeki santral şirket netleşmesine katılmaz (toplayıcıyla dengelenir). Netleşme büyük fark yaratır (2026 Ocak–Eylül:
+  Enerjisa 445 → 222 M TL, Borusan 246 → 138 M TL); bir şirkete yalnız santral toplamını göstermek maliyeti yaklaşık iki kat
+  abartır. Üyelik listesi tek tarihli olduğu için netleşmiş değer de kesin değildir.
 
 ## Çalışma biçimi
 

@@ -129,7 +129,7 @@ export default function CompaniesPage() {
                       <TableHead className="text-right">Santral</TableHead>
                       <TableHead className="text-right">Kurulu güç (MW)</TableHead>
                       <TableHead className="text-right">Üretim (GWh)</TableHead>
-                      <TableHead className="text-right">Dengesizlik (TL/MWh)</TableHead>
+                      <TableHead className="text-right">Dengesizlik (TL/MWh, santral bazında)</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -170,8 +170,8 @@ export default function CompaniesPage() {
               sınırdır.
             </p>
             <p>
-              Dengesizlik santral santral hesaplanıp toplanır; şirketin santralleri arasındaki netleşme dahil değildir, gerçek maliyet daha düşük
-              olabilir. Risk göstergesidir, fatura değil.
+              Bu listede dengesizlik santral santral hesaplanıp toplanır. Şirketin santralleri arasındaki netleşmeyle hesaplanan değer şirketin
+              profilindedir. Risk göstergesidir, fatura değil.
             </p>
             {res.unknown.plants > 0 && (
               <p>

@@ -18,6 +18,7 @@ import type { CompanyProfile } from "@/lib/services/company-profile";
 const TECH: Record<string, string> = { RES: "Rüzgâr", GES: "Güneş", HES: "Hidro" };
 const nf = (v: number, d = 0) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
 const mTl = (v: number) => `${nf(v / 1e6, 1)} M TL`;
+const unit = (tl: number, mwh: number) => (mwh > 0 ? `${nf(tl / mwh, 0)} TL/MWh` : "–");
 const day = (iso: string) => iso.slice(0, 10).split("-").reverse().join(".");
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -77,6 +78,7 @@ export default function CompanyProfilePage() {
     );
 
   const c = profile.company;
+  const n = profile.netting;
   const exiting = profile.plants.filter((p) => p.yekdemStatus === "EXITED" || p.yekdemStatus === "ENDS_THIS_YEAR" || p.yekdemStatus === "ENDS_SOON");
 
   return (
@@ -110,47 +112,101 @@ export default function CompanyProfilePage() {
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <div className="rounded-lg border bg-white p-3">
-          <div className="text-xs text-slate-500">Kurulu güç</div>
-          <div className="mt-0.5 flex items-center gap-2">
-            <span className="text-lg font-semibold tabular-nums">
-              {c.estimatedMw > 0 ? "~" : ""}
-              {nf(c.mw, 1)} MW
-            </span>
-            <StatusChip kind={c.estimatedMw > 0 ? "estimate" : "record"} />
+      <section className="space-y-2">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          Kayıtlı bilgiler <StatusChip kind="record" />
+        </h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border bg-white p-3">
+            <div className="text-xs text-slate-500">Kurulu güç</div>
+            <div className="mt-0.5 flex items-center gap-2">
+              <span className="text-lg font-semibold tabular-nums">
+                {c.estimatedMw > 0 ? "~" : ""}
+                {nf(c.mw, 1)} MW
+              </span>
+              {c.estimatedMw > 0 && <StatusChip kind="estimate" />}
+            </div>
+            <div className="mt-0.5 text-xs text-slate-500">
+              {c.estimatedMw > 0 ? `${nf(c.recordedMw, 1)} MW kayıtlı, ${nf(c.estimatedMw, 1)} MW tahmini (alt sınır)` : "tamamı kayıttan (YEKDEM / EPDK)"}
+            </div>
           </div>
-          <div className="mt-0.5 text-xs text-slate-500">
-            {c.estimatedMw > 0 ? `${nf(c.recordedMw, 1)} MW kayıtlı, ${nf(c.estimatedMw, 1)} MW tahmini (alt sınır)` : "tamamı kayıttan (YEKDEM / EPDK)"}
-          </div>
+          <Stat label="Üretim" value={`${nf(c.actualMwh / 1000, 1)} GWh`} sub={`EPİAŞ gerçekleşen üretim · ${c.byType.map((t) => `${TECH[t.type]} ${nf(t.actualMwh / 1000, 0)}`).join(" · ")}`} />
+          <Stat
+            label={`YEKDEM (${profile.year})`}
+            value={`${c.yekdem.plants} santral`}
+            sub={c.yekdem.plants > 0 ? `${nf(c.yekdem.mw, 1)} MW · ${c.plants - c.yekdem.plants} santral serbest piyasada` : "hepsi serbest piyasada"}
+          />
         </div>
-        <Stat label="Üretim" value={`${nf(c.actualMwh / 1000, 1)} GWh`} sub={c.byType.map((t) => `${TECH[t.type]} ${nf(t.actualMwh / 1000, 0)}`).join(" · ")} />
-        <Stat
-          label="Dengesizlik maliyeti"
-          value={mTl(c.imbalanceCostTl)}
-          sub={c.unitImbalanceTl === null ? undefined : `${nf(c.unitImbalanceTl, 0)} TL/MWh · sapma %${nf(c.deviationPct ?? 0, 1)}`}
-        />
-        <Stat label="KÜPST" value={mTl(c.kupstTl)} sub={c.unitTotalTl === null ? undefined : `ikisi birlikte ${nf(c.unitTotalTl, 0)} TL/MWh`} />
-      </div>
+      </section>
 
-      <p className="text-xs text-slate-500">
-        Dengesizlik ve KÜPST santral santral hesaplanıp toplanır; şirketin santralleri arasındaki netleşme dahil değildir, gerçek maliyet daha
-        düşük olabilir. Risk göstergesidir, fatura değil.
-      </p>
+      <section className="space-y-2">
+        <h2 className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900">
+          Dengesizlik maliyeti <StatusChip kind="assumption" label="Hesaplanan risk · fatura değil" />
+        </h2>
+        {n ? (
+          <>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <Stat
+                label="Santraller tek tek"
+                value={mTl(n.own.sumTl + n.aggregated.sumTl)}
+                sub={`${unit(n.own.sumTl + n.aggregated.sumTl, n.own.mwh + n.aggregated.mwh)} · her santral ayrı dengelenseydi`}
+              />
+              <div className="rounded-lg border-2 border-indigo-300 bg-white p-3">
+                <div className="text-xs text-slate-500">Netleşmiş</div>
+                <div className="mt-0.5 text-lg font-semibold tabular-nums">{n.own.nettedTl === null ? "hesaplanmadı" : mTl(n.own.nettedTl)}</div>
+                <div className="mt-0.5 text-xs text-slate-500">
+                  {n.own.nettedTl === null
+                    ? n.own.plants === 1
+                      ? `şirketin kendi portföyünde 1 santral var (${mTl(n.own.sumTl)})`
+                      : "şirketin kendi portföyünde santral yok"
+                    : `${unit(n.own.nettedTl, n.own.mwh)} · ${n.own.plants} santral tek portföyde dengelenirse`}
+                </div>
+              </div>
+              {n.own.nettedTl !== null && (
+                <Stat
+                  label="Netleşmenin etkisi"
+                  value={n.own.sumTl > 0 ? `−%${nf((1 - n.own.nettedTl / n.own.sumTl) * 100, 0)}` : "–"}
+                  sub={`${mTl(n.own.sumTl - n.own.nettedTl)} · ${n.aggregated.plants > 0 ? `kendi portföyündeki ${n.own.plants} santralde (tek tek ${mTl(n.own.sumTl)})` : "santraller birbirinin sapmasını kapatıyor"}`}
+                />
+              )}
+            </div>
+            {n.aggregated.plants > 0 && (
+              <div className="rounded-lg border bg-white p-3 text-sm text-slate-700">
+                {n.aggregated.plants} santral toplayıcı portföyünde ({n.aggregated.aggregators.map((a) => `${a.name}: ${a.plants}`).join(", ")}; tek tek{" "}
+                {mTl(n.aggregated.sumTl)}). Bunlar şirketle değil toplayıcının diğer santralleriyle dengelenir; netleşmeye katılmadı.
+                {n.membershipAsOf ? ` Üyelik listesi ${day(n.membershipAsOf)} tarihli; yıl içinde giren ya da çıkan santral o günkü durumuyla sayılır.` : ""}
+              </div>
+            )}
+            <p className="text-xs text-slate-500">
+              Gün öncesi plana göre hesaplanır. Gün içi işlemler ve sistem işletmecisinin talimatları yayımlanmadığı için dahil değildir; gerçek
+              fatura bu sayıların altında olabilir. Netleşmiş değer, toplayıcıda olmayan santrallerin tek portföyde dengelendiğini varsayar.
+              {n.membershipAsOf === null ? " Toplayıcı üyelik listesi bulunamadı; hiçbir santral toplayıcıda sayılmadı." : ""}
+              {n.missing > 0 ? ` Saatlik serisi olmayan ${n.missing} santral bu bölümde yok.` : ""} KÜPST santral bazında kesilir, netleşmez:{" "}
+              {mTl(c.kupstTl)}.
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <Stat label="Santraller tek tek" value={mTl(c.imbalanceCostTl)} sub={c.unitImbalanceTl === null ? undefined : `${nf(c.unitImbalanceTl, 0)} TL/MWh`} />
+            </div>
+            <p className="text-xs text-slate-500">
+              Netleşmiş değer hesaplanamadı; gösterilen sayı santral toplamıdır ve gerçek maliyet daha düşük olabilir. KÜPST: {mTl(c.kupstTl)}.
+            </p>
+          </>
+        )}
+      </section>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">YEKDEM</CardTitle>
+          <CardTitle className="text-base">YEKDEM&apos;den çıkış</CardTitle>
           <CardDescription>
-            {c.yekdem.plants > 0
-              ? `${profile.year} listesinde ${c.yekdem.plants} santral (${nf(c.yekdem.mw, 1)} MW); ${c.plants - c.yekdem.plants} santral serbest piyasada.`
-              : `${profile.year} listesinde santrali yok; hepsi serbest piyasada.`}
+            {exiting.length > 0 ? "Yeni çıkan ya da süresi dolmak üzere olan santraller; süre ±1 yıl belirsiz." : "Yeni çıkan ya da süresi dolmak üzere olan santral yok."}
           </CardDescription>
         </CardHeader>
         {exiting.length > 0 && (
           <CardContent className="pt-0 text-sm">
-            <div className="text-xs text-slate-500">Yeni çıkan ya da süresi dolmak üzere olanlar (süre ±1 yıl belirsiz)</div>
-            <ul className="mt-1 space-y-0.5">
+            <ul className="space-y-0.5">
               {exiting.map((p) => (
                 <li key={p.id}>
                   <Link href={`/santraller/${p.id}`} className="text-indigo-700 hover:underline">
@@ -167,7 +223,10 @@ export default function CompanyProfilePage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Santraller</CardTitle>
-          <CardDescription>Sektördeki yer: aynı türdeki santraller içinde MWh başına dengesizlik sırası (düşük daha iyi).</CardDescription>
+          <CardDescription>
+            Dengesizlik santral bazındadır (netleşme yok). Sektördeki yer: aynı türdeki santraller içinde MWh başına dengesizlik sırası (düşük daha
+            iyi).
+          </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -190,6 +249,7 @@ export default function CompanyProfilePage() {
                     <Link href={`/santraller/${p.id}`} className="text-indigo-700 hover:underline">
                       {p.name}
                     </Link>
+                    {p.aggregator && <div className="text-xs font-normal text-slate-500">toplayıcı: {p.aggregator}</div>}
                   </TableCell>
                   <TableCell>{TECH[p.type]}</TableCell>
                   <TableCell className="text-right tabular-nums" title={p.capacityLabel}>
