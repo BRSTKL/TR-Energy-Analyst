@@ -49,7 +49,7 @@ portföy üretimi, PTF karnesi), santral rehberi, arıza izleme, YEKDEM çıkı�
 ## Ürün sayfaları (bugün)
 
 `/` Bugün · `/market/teklif` teklif öncesi · `/market/gunluk` günlük pano · `/ozet` dönem özeti · `/santraller` ve
-`/santraller/[id]` santral rehberi · `/sirketler` ve `/sirketler/[slug]` şirket profili (12.11, yüklenmedi) · `/yeni-santraller` yeni santral radarı · `/yekdem` YEKDEM çıkışları · `/ariza` arıza izleme
+`/santraller/[id]` santral rehberi · `/sirketler` ve `/sirketler/[slug]` şirket profili (12.11) · `/yeni-santraller` yeni santral radarı · `/yekdem` YEKDEM çıkışları · `/ariza` arıza izleme
 · `/market` piyasa özeti · `/sector` sektör karnesi (sekmeler: santraller, toplayıcılar, kayıp üretim, sistem yönü)
 · `/sector/aggregators/[id]` · `/compare` · `/methodology` · `/projects` · `/projects/epias` (EPİAŞ'tan proje kurma)
 · proje sekmeleri `results`, `plants`, `import`, `insights`, `planning`, `backtest`, `dsg`, `candidates`, `forecast`,

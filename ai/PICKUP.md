@@ -5,7 +5,7 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
-## 12.11.2026 · Claude · Şirket profili sayfası (`claude/sirket-profili`, `main`'de; sunucuya yüklenmedi)
+## 12.11.2026 · Claude · Şirket profili sayfası (`claude/sirket-profili`; yüklendi, f96744b)
 
 - Kullanıcı sıradaki iş olarak şirket profilini istedi.
 - **Yapılan:** `/sirketler` (Portföy grubu; arama, yıl seçici, kurulu güce göre sıralı) ve `/sirketler/<adın yalın hâli>` (profil:
@@ -19,7 +19,10 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
   (1.400 MW) listede yok. En büyükler EÜAŞ 44 santral / 13.490 MW, Enerjisa 17 / 1.640, Aydem 17 / 1.082.
 - **Kontrol:** 1.058 test, tsc, lint; `--only sirketler,santraller` duman testi 10/10 (masaüstü + telefon); tam tur 60/60
   (2 uyarılı sayfa; hangileri olduğu kaydedilmedi). Önizlemede liste ve Enerjisa profili gözle görüldü (santral tablosu ve telefon görünümü yalnız duman testiyle). `check:reports` çalıştırılmadı (rapor / hesap koduna dokunulmadı).
-- **Sıradaki:** kullanıcı isteyince sunucuya yükleme; şirket içi netleşmiş maliyet (saatlik karne serisinden); sektör
+- **Yüklendi (12.11 19:50):** `1928750 → f96744b`; sunucuda `/sirketler`, bir profil ve iki API ucu 200, sayılar Mac'le aynı
+  (681 şirket). Ölçülen süreler (liste 17–46 sn, profil 78 sn) yükleme sonrası başlayan önbellek ısıtma işiyle aynı ana denk
+  geldi; ısıtma yokken sunucudaki soğuk süre ölçülmedi (Mac'te ~5 sn).
+- **Sıradaki:** ısıtma bittikten sonra sunucuda soğuk süreye bakmak; şirket içi netleşmiş maliyet (saatlik karne serisinden); sektör
   tablosundan santral kartına ve şirkete bağlantı; şirketin yeni santralleri ve süren arızaları profile.
 
 ## 12.11.2026 · Claude · Durum denetimi ve not güncellemesi (`claude/notlar-guncelle`)
