@@ -5,7 +5,7 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
-## 12.11.2026 · Claude · Isıtma ziyaretçiyi bekletmesin: disk önbelleği ve yardımcı süreç (`claude/isitma-bekletmesin`)
+## 12.11.2026 · Claude · Isıtma ziyaretçiyi bekletmesin: disk önbelleği ve yardımcı süreç (`claude/isitma-bekletmesin`; yüklendi, 8662eb6)
 
 - **Sorun (sunucuda ölçüldü):** yüklemeden sonra ısıtma ~16 dk web sürecini meşgul ediyor; o sırada şirket profili gibi hafif bir
   istek 26–78 sn bekledi (ısıtma bitince 0,2–0,8 sn). Kullanıcı çözülmesini istedi.
@@ -20,8 +20,13 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 - **Kontrol:** 1.070 test (6 yeni: disk katmanı), tsc, lint, `check:reports` 0 hata; tam duman turu (üretim derlemesine karşı) 60/60, 0 hatalı, 1 uyarılı.
 - **Sınırlar:** ısıtılmamış bir hesabı ziyaretçi açarsa hesap yine web sürecinde yapılır. Yardımcı süreç ısıtma sırasında bellek
   kullanır (sunucu 6 GB, 3 çekirdek; ölçülmedi). Her yükleme disk önbelleğini geçersiz kılar (derleme kimliği değişir).
-- **Sıradaki:** onayla commit, `main` ve yükleme; yüklemeden hemen sonra sunucuda hafif bir sayfanın süresine ve
-  `tr-energy-warm.log`'a bakmak.
+- **Yüklendi ve sunucuda ölçüldü (12.11 20:44–21:01):** `63e9711 → 8662eb6`. Isıtma 1.034 sn (93 yeniden hesap, 0 hata), yardımcı
+  süreç açıldı ve kapandı. Isıtma boyunca web sürecine 5 sn'de bir hafif istek (196 istek): en uzun 6,6 sn, 1 sn'yi aşan 5
+  (öncesinde 26–78 sn). En düşük boş bellek 1.890 MB. Isıtmadan sonra en büyük projenin geçmişle sınaması web sürecinde diskten
+  0,13 sn, sonuçlar 0,07 sn; disk 3,8 MB. Hatalı birim yok.
+- **Açık:** 1 sn'yi aşan 5 isteğin sebebi bilinmiyor (3 çekirdekte işlemci paylaşımı, o saatte çalışan başka bir iş ya da
+  veritabanı beklemesi olabilir; bakılmadı). Yüklemeden sonraki ilk şirket listesi 11 sn sürdü (şirket dizini ısıtılmıyor).
+- **Sıradaki:** şirket dizinini ısıtmaya eklemek; yavaş 5 isteğin zamanına `tr-energy-warm.log` ile bakmak.
 
 ## 12.11.2026 · Claude · Şirket profilinde netleşmiş dengesizlik (`claude/sirket-netlesme`; yüklendi, 63e9711)
 
