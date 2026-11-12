@@ -7,7 +7,8 @@
  * hesap web sürecini meşgul ediyordu). Betik kendi yardımcı uygulamasını açar (`next start`, yalnız 127.0.0.1, WARM_PORT,
  * düşük öncelik), istekleri ona gönderir ve işi bitince kapatır. Sonuçlar disk önbelleğine yazılır
  * (`.cache/responses`, lib/services/response-cache.ts); ziyaretçiye bakan süreç oradan okur. İstekler sırayla, büyük projeden
- * başlayarak. Önbellek doluysa her istek yalnız sürüm denetimi ve dosya okumasıdır. Proje verisine yazmaz.
+ * başlayarak, sonunda şirket dizini (her karne yılı). Önbellek doluysa her istek yalnız sürüm denetimi ve dosya okumasıdır.
+ * Proje verisine yazmaz.
  *
  *   node --env-file=.env node_modules/.bin/tsx --tsconfig tsconfig.json scripts/warm-cache.mts
  *
@@ -117,6 +118,29 @@ for (const p of projects) {
     }
   }
 }
+// Şirket dizini (/sirketler): santral listesi diske yazılır, web süreci oradan okur (ilk ziyaretçi 11 sn bekliyordu, 12.11.2026)
+const company = async (query: string): Promise<number[]> => {
+  const t0 = Date.now();
+  try {
+    const res = await fetch(`${BASE}/api/companies?limit=1${query}`, { headers: { cookie: `tre_session=${cookie}` }, signal: AbortSignal.timeout(TIMEOUT_MS), cache: "no-store" });
+    const body = (await res.json()) as { years?: number[]; year?: number };
+    if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
+    const ms = Date.now() - t0;
+    if (ms > 1000) {
+      slow++;
+      console.log(`200 ${(ms / 1000).toFixed(1)} sn  şirket dizini ${body.year ?? ""}`);
+    }
+    return (body.years ?? []).filter((y) => y !== body.year);
+  } catch (e) {
+    // karne toplanmamışsa 404: ısıtma hatası sayılmaz
+    if (!(e instanceof Error && e.message === "HTTP 404")) {
+      failed++;
+      console.error(`hata şirket dizini${query}: ${e instanceof Error ? e.message : e}`);
+    }
+    return [];
+  }
+};
+for (const y of await company("")) await company(`&year=${y}`);
 stopHelper();
 const pruned = await pruneResponseDisk().catch(() => 0);
 if (pruned) console.log(`disk önbelleği: 14 gündür kullanılmayan ${pruned} dosya silindi`);

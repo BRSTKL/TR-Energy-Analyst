@@ -5,6 +5,19 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 12.11.2026 · Claude · Şirket dizini ısıtmada (`claude/sirket-dizini-isitma`)
+
+- **Sorun:** yüklemeden sonraki ilk şirket listesi sunucuda 11 sn sürdü; dizin ısıtılmıyordu ve yalnız bellekte tutuluyordu.
+- **Yapılan:** `lib/services/response-cache.ts` `persistedJson` (projeye bağlı olmayan JSON hesabı için disk katmanı);
+  `lib/services/company-profile.ts` santral listesini (kurulu güç ve YEKDEM eşleştirmesi) `.cache/responses/_companies` altına
+  yazar: sürüm = karne, şirket dizini ve toplayıcı üyelik dosyalarının değişme anı + gün; hatayla (eksik kayıtla) kurulan liste
+  yazılmaz. `scripts/warm-cache.mts` projelerden sonra her karne yılının şirket dizinini yardımcı süreçte kurar.
+- **Ölçüm (Mac, üretim derlemesi):** ısıtma dizini 2,7 sn'de kurdu; ardından ana süreçte ilk şirket listesi 0,02 sn, 2025 listesi
+  0,008 sn, Enerjisa profili 0,12 sn.
+- **Kontrol:** 1.072 test (2 yeni), tsc, lint; tam duman turu 60/60 (2 uyarı: yavaş API, teklif öncesi 10 sn ve Inavitas
+  geçmişle sınama 11 sn, soğuk geliştirme sunucusu).
+- **Sıradaki:** şirket profilinden tek tıkla rapor; ısıtma sırasında 1 sn'yi aşan birkaç isteğin sebebi.
+
 ## 12.11.2026 · Claude · Isıtma ziyaretçiyi bekletmesin: disk önbelleği ve yardımcı süreç (`claude/isitma-bekletmesin`; yüklendi, 8662eb6)
 
 - **Sorun (sunucuda ölçüldü):** yüklemeden sonra ısıtma ~16 dk web sürecini meşgul ediyor; o sırada şirket profili gibi hafif bir
@@ -236,23 +249,3 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 - **Düzeltilen tutarsızlık:** üst kart "limite yakın 3 saat", masa "riskli 12/24" diyordu; ikisi de `buildBidRows` tanımını kullanır.
 - **Kontrol:** 988 test, tsc, lint, `--only teklif` duman testi (masaüstü + 375 px) temiz. Yerelde yarın fiyatı açıklanmamış
   ("kayıt önde") görünüm görülemedi; sunucuda sabah bakılmalı.
-
-## 04.11.2026 · Claude · Arayüz: kaynak dili (`claude/arayuz-kaynak-dili`, 8 commit, yüklendi, 1928750)
-
-- Canlı sunucuda (b339196) arayüz incelemesi, sonra onaylı plan (`~/.claude/plans/pasted-content-id-ae5a-…md`) 6 adımda uygulandı.
-  Hesap, veri kaynağı ve iş kuralı değişmedi; yalnız sunum.
-- **Yapılan:** Bugün tarihi derleme gününde donuyordu (sunucuda "Pazartesi 2 Kasım"), artık tarayıcıda. Kurulu güç
-  "4.608 MW" → "4,6 MW" (sonuç, içgörü, içe aktarma). Grafiklerde ortak çizgi dili `components/ui/chart.tsx` `SERIES` /
-  `STATUS_COLOR` (gerçekleşen düz koyu, tahmin kesikli, aralık bant, kıyas noktalı; sistem açığı mavi, fazla turuncu;
-  kullanıcı onayı). Ortak rozet `components/ui/status-chip.tsx`. Sonuçlarda dönem (`monthRangeLabel`) ve "Kesin hesap ·
-  ilk plana göre, fatura değil". Tahmin doğruluğu kartında tek işaret (plan fazlası). Sayının aşaması: Teklif öncesi ve
-  Bugün'de açıklanan PTF varsa o, yoksa 12:05 kaydı ana sayı, canlı hesap ikinci. Menü "Gün içi" → "Günlük iş", Portföy
-  özeti Portföy'de; Günlük pano sekmesi adreste (`?sekme=`). Sektör: Sistem yönüyle açılması (27.10) korundu, başlık
-  sekmeye göre. Büyük harf etiketler, "₺/MWh" → "TL/MWh", ekrandaki betik komutları "Yönetici için" altında.
-- **Kontrol:** 987 test, tsc, lint temiz; tam duman testi 53/53 (uyarılar yavaş API). Yerelde gözle: Bugün tarihi, Teklif
-  öncesi (açıklanan 2.729 önde, çizgi dili), Sonuçlar (dönem, 4,6 MW, rozet), Üretim tahmini telefonda. Mac'te günlük kayıt
-  olmadığı için "kayıt önde" ve Bugün'ün "açıklanan PTF" kartı yerelde görülmedi; sunucuda yüklemeden sonra bakılmalı.
-  `check:reports` çalıştırılmadı (rapor / hesap koduna dokunulmadı).
-- **Sıradaki:** `main`'e birleştirme ve sunucuya yükleme kullanıcı onayıyla. Açık kalanlar (incelemede O6/O7): sonuçlarda
-  telefonda ana sayının geç gelmesi ve kesilen sekme şeridi, Bugün'ün kendini yenilememesi, Portföy özetinde hatanın
-  "veri yok" görünmesi, planlamadaki kırmızı–yeşil skala, iki grafik paleti.

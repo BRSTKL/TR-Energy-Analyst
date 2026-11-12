@@ -8,12 +8,17 @@
  * (lib/analysis/company-netting.ts): karnenin saatlik serileri (`sector-<yıl>-hourly`) ve veritabanındaki piyasa fiyatlarıyla,
  * karneyle aynı motor (`processHourlyRecord`, varsayılan profil); toplayıcı portföyündeki santraller
  * (`aggregator-membership.json`) netleşmeye katılmaz. EPİAŞ'a yalnız kurulu güç / YEKDEM listeleri önbellekte yoksa gider.
- * Yıl başına 30 dakika bellekte; netleşme şirket başına istenince hesaplanır ve aynı süre tutulur.
+ * Yıl başına 30 dakika bellekte; netleşme şirket başına istenince hesaplanır ve aynı süre tutulur. Santral listesi (pahalı
+ * kısım: kurulu güç ve YEKDEM eşleştirmesi) ayrıca diskte tutulur (`.cache/responses/_companies`); sürümü karne, şirket dizini
+ * ve toplayıcı üyelik dosyalarının değişme anı ile gündür (kurulu güç / YEKDEM kayıtları günde bir yenilenir). Önbellek ısıtma
+ * (scripts/warm-cache.mts) bunu ayrı süreçte kurar; web süreci diskten okur. Hatalı (eksik kayıtla) kurulan liste diske yazılmaz.
  *
  * Sınır: toplayıcıya geçen santral EPİAŞ'ta toplayıcının altında listelenir; karnede sahibi görünmeyen santral şirkete
  * girmez (`unknown`). Lisanssız toplamlar (K3_, LÜM_, LÜY) ve karnenin kalite süzgecinde elenen santraller yoktur.
  */
 
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import { processHourlyRecord } from "@/lib/calculations/engine";
 import { DEFAULT_IMBALANCE_PROFILE, type SystemDirection } from "@/lib/calculations/types";
 import { companyNetting, type CompanyNetting, type NettingRow } from "@/lib/analysis/company-netting";
@@ -23,6 +28,7 @@ import { prisma } from "@/lib/prisma";
 import { decodeHourly } from "@/lib/sector/hourly-store";
 import { loadAggregatorMembership } from "@/lib/services/aggregator-membership";
 import { resolveInstalledCapacities } from "@/lib/services/installed-capacity";
+import { persistedJson } from "@/lib/services/response-cache";
 import { availableSectorYears, loadSectorBenchmark, loadSectorHourly, loadSectorPlants } from "@/lib/services/sector";
 import { loadYekdemExitIndex } from "@/lib/services/yekdem-exit";
 
@@ -53,7 +59,39 @@ export interface CompanyProfile {
   errors: string[];
 }
 
-async function build(year: number, years: number[]): Promise<CompanyData> {
+interface CompanyBase {
+  period: { start: string; end: string };
+  plants: CompanyPlant[];
+  membershipAsOf: string | null;
+  errors: string[];
+}
+
+/** Disk sürümü: kaynak dosyaların değişme anı ve gün */
+async function baseVersion(year: number, now: number): Promise<string> {
+  const dir = path.join(process.cwd(), ".cache", "epias");
+  const stamps = await Promise.all(
+    [`sector-${year}.json`, `plant-owners-${year}.json`, "aggregator-membership.json"].map((f) =>
+      fs.stat(path.join(dir, f)).then(
+        (st) => Math.round(st.mtimeMs),
+        () => 0
+      )
+    )
+  );
+  return `${stamps.join(":")}:${new Date(now).toISOString().slice(0, 10)}`;
+}
+
+async function build(year: number, years: number[], now: number): Promise<CompanyData> {
+  const base = await persistedJson(
+    "_companies",
+    `plants-${year}`,
+    await baseVersion(year, now),
+    () => buildBase(year),
+    (b) => b.errors.length === 0
+  );
+  return { year, years, period: base.period, index: buildCompanies(base.plants), membershipAsOf: base.membershipAsOf, errors: base.errors };
+}
+
+async function buildBase(year: number): Promise<CompanyBase> {
   const bench = await loadSectorBenchmark(year);
   if (!bench) throw new Error(`${year} sektör karnesi yok`);
   const sector = (await loadSectorPlants(bench)).filter((p) => p.type === "RES" || p.type === "GES" || p.type === "HES");
@@ -94,10 +132,8 @@ async function build(year: number, years: number[]): Promise<CompanyData> {
     aggregator: membership?.byPlant.get(p.epiasPlantId)?.map((a) => a.name).join(" / ") || null,
   }));
   return {
-    year,
-    years,
     period: bench.period ?? { start: `${year}-01-01`, end: `${year}-12-31` },
-    index: buildCompanies(plants),
+    plants,
     membershipAsOf: membership?.asOf ?? null,
     errors: Array.from(new Set(errors)),
   };
@@ -110,7 +146,7 @@ export async function loadCompanies(yearParam?: number | null, now = Date.now())
   const year = yearParam && years.includes(yearParam) ? yearParam : years[0];
   const hit = memo.get(year);
   if (hit && now - hit.at < TTL_MS) return hit.promise;
-  const promise = build(year, years);
+  const promise = build(year, years, now);
   memo.set(year, { at: now, promise });
   promise.catch(() => {
     if (memo.get(year)?.promise === promise) memo.delete(year);

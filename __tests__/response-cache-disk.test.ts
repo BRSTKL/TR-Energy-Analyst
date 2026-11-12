@@ -11,7 +11,7 @@ vi.mock("@/lib/services/project-records", () => ({ projectPeriod: async () => nu
 
 const dir = mkdtempSync(path.join(tmpdir(), "tre-resp-"));
 process.env.RESPONSE_CACHE_DIR = dir;
-const { cachedForProject, clearResponseCache, pruneResponseDisk } = await import("@/lib/services/response-cache");
+const { cachedForProject, clearResponseCache, persistedJson, pruneResponseDisk } = await import("@/lib/services/response-cache");
 
 const files = (project: string) => {
   try {
@@ -81,5 +81,24 @@ describe("yanıt önbelleği: disk katmanı", () => {
     await cachedForProject("p1", "yeni", async () => 2, { persist: true });
     expect(await pruneResponseDisk(14)).toBe(1);
     expect(files("p1")).toHaveLength(1);
+  });
+});
+
+describe("persistedJson", () => {
+  it("sürüm aynıyken diskten okur, değişince yeniden hesaplar", async () => {
+    const compute = vi.fn(async () => ({ plants: [1, 2] }));
+    expect(await persistedJson("_companies", "plants-2026", "v1", compute)).toEqual({ plants: [1, 2] });
+    expect(await persistedJson("_companies", "plants-2026", "v1", compute)).toEqual({ plants: [1, 2] });
+    expect(compute).toHaveBeenCalledTimes(1);
+    await persistedJson("_companies", "plants-2026", "v2", compute);
+    expect(compute).toHaveBeenCalledTimes(2);
+    expect(files("_companies")).toHaveLength(1);
+  });
+  it("shouldPersist false ise sonuç diske yazılmaz", async () => {
+    const compute = vi.fn(async () => ({ errors: ["liste alınamadı"] }));
+    await persistedJson("_companies", "plants-2025", "v1", compute, (v) => v.errors.length === 0);
+    await persistedJson("_companies", "plants-2025", "v1", compute, (v) => v.errors.length === 0);
+    expect(compute).toHaveBeenCalledTimes(2);
+    expect(files("_companies")).toHaveLength(0);
   });
 });

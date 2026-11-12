@@ -200,6 +200,20 @@ export async function pruneResponseDisk(maxAgeDays = 14, now = Date.now()): Prom
 }
 
 /**
+ * Projeye bağlı olmayan, JSON'a birebir çevrilebilen bir hesabı disk katmanında tutar (`.cache/responses/<scope>/…`). Sürüm
+ * çağıranın verdiği dizgi + kod sürümüdür; tutmazsa hesaplanır ve üzerine yazılır. Bellek katmanı çağıranındır. `shouldPersist`
+ * false dönerse sonuç diske yazılmaz (ör. eksik veriyle üretilmiş sonuç kalıcı olmasın).
+ */
+export async function persistedJson<T>(scope: string, key: string, version: string, compute: () => Promise<T>, shouldPersist: (value: T) => boolean = () => true): Promise<T> {
+  const v = `${await codeVersion()}:${version}`;
+  const saved = await readDisk(scope, key, v);
+  if (saved) return saved.value as T;
+  const value = await compute();
+  if (shouldPersist(value)) await writeDisk(scope, key, v, value);
+  return value;
+}
+
+/**
  * Projenin bir hesabını önbellekten döndürür; sürüm değiştiyse ya da yoksa hesaplar. `key` aynı projede farklı
  * hesapları ayırır (ör. "results", "dsg?plants=…"). Proje yoksa compute yine çağrılır (404 cevabı ona aittir).
  * `persist`: sonuç diske de yazılır ve bellekte yoksa diskten okunur; yalnız JSON'a birebir çevrilebilen değerler için

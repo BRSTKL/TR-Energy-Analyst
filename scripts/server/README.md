@@ -20,7 +20,7 @@ Zamanlanmış işler ve uygulama Mac'te değil sunucuda çalışır. Mac kapalı
 | `tr-energy-db-backup` | 03:00 | `scripts/backup-db.mts daily` (`prisma/backups/`, son 5) |
 | `tr-energy-forecast-check` | 12:15 | yarının güneş/rüzgâr tahmini yazılmadıysa bildirim (yeni dosyalar kurulunca) |
 | `tr-energy-daily-summary` | 12:30 | günlük özet bildirimi |
-| `tr-energy-warm` | saatte bir (:50) ve her yüklemeden sonra | `scripts/warm-cache.mts`: proje sayfalarının ağır hesaplarını (sonuç, geçmişle sınama, içgörüler, planlama, DSG, veri kalitesi, tahmin doğruluğu) önceden yapar; önbellek doluysa yalnız sürüm denetimi. Hesap ziyaretçiye bakan süreçte değil, betiğin açıp kapattığı yardımcı uygulamada (`127.0.0.1:3111`) yapılır; sonuç `.cache/responses` altına yazılır ve web süreci oradan okur. Kurulum aşağıda. |
+| `tr-energy-warm` | saatte bir (:50) ve her yüklemeden sonra | `scripts/warm-cache.mts`: proje sayfalarının ağır hesaplarını (sonuç, geçmişle sınama, içgörüler, planlama, DSG, veri kalitesi, tahmin doğruluğu) ve şirket dizinini önceden yapar; önbellek doluysa yalnız sürüm denetimi. Hesap ziyaretçiye bakan süreçte değil, betiğin açıp kapattığı yardımcı uygulamada (`127.0.0.1:3111`) yapılır; sonuç `.cache/responses` altına yazılır ve web süreci oradan okur. Kurulum aşağıda. |
 | `tr-energy-web` | sürekli | `next start` |
 
 Bir iş hata verirse `tr-energy-failed@` telefona ntfy bildirimi gönderir (`bin/tr-energy-notify`; kod içinden `lib/notify.ts`). Günlükler: `/var/log/tr-energy/<iş>.log`, `journalctl -u <iş>`. Durum: `systemctl list-timers 'tr-energy-*'`.
