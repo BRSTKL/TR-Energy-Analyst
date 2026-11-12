@@ -5,7 +5,7 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
-## 12.11.2026 · Claude · Şirket profilinde netleşmiş dengesizlik (`claude/sirket-netlesme`; `main`'e alınmadı, yüklenmedi)
+## 12.11.2026 · Claude · Şirket profilinde netleşmiş dengesizlik (`claude/sirket-netlesme`; yüklendi, 63e9711)
 
 - Kullanıcı gösterilen bilgilerin doğruluğunun yüksek olmasını istedi; santral toplamı şirket maliyetini olduğundan yüksek
   gösteriyordu. Önizleme gösterildi, onaylandı.
@@ -24,7 +24,10 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
   de); gün içi işlem ve talimat yok; toplayıcı dışı grup üyelikleri bilinmiyor.
 - **Kontrol:** 1.064 test, tsc, lint, `--only sirketler` duman testi 4/4; önizlemede Enerjisa ve Sanko gözle görüldü.
   `check:reports` çalıştırılmadı (rapor koduna dokunulmadı; hesap motoru değişmedi, yalnız çağrıldı).
-- **Sıradaki:** onayla `main`'e alma ve yükleme; şirket profilinden tek tıkla rapor; sunucuda ağır hesapların ziyaretçiyi
+- **Yüklendi (12.11 20:15):** `f96744b → 63e9711`; sunucuda Enerjisa (445,2 → 221,5 M TL) ve Sanko (10 santral toplayıcıda,
+  netleşmiş yok) Mac'le aynı. Profil API'si 26 ve 77 sn sürdü, yine yükleme sonrası ısıtma işi çalışırken; ısıtma yokken
+  sunucudaki süre hâlâ ölçülmedi.
+- **Sıradaki:** ısıtma bitince sunucuda profil süresini ölçmek (yavaşsa ağır hesapları web sürecinden ayırmak); şirket profilinden tek tıkla rapor; sunucuda ağır hesapların ziyaretçiyi
   bekletmemesi.
 
 ## 12.11.2026 · Claude · Şirket profili sayfası (`claude/sirket-profili`; yüklendi, f96744b)
