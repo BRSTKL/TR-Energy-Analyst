@@ -27,7 +27,10 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 - **Yüklendi (12.11 20:15):** `f96744b → 63e9711`; sunucuda Enerjisa (445,2 → 221,5 M TL) ve Sanko (10 santral toplayıcıda,
   netleşmiş yok) Mac'le aynı. Profil API'si 26 ve 77 sn sürdü, yine yükleme sonrası ısıtma işi çalışırken; ısıtma yokken
   sunucudaki süre hâlâ ölçülmedi.
-- **Sıradaki:** ısıtma bitince sunucuda profil süresini ölçmek (yavaşsa ağır hesapları web sürecinden ayırmak); şirket profilinden tek tıkla rapor; sunucuda ağır hesapların ziyaretçiyi
+- **Süre ölçümü (12.11 20:24, ısıtma bittikten sonra, şirket dizini bellekteyken):** netleşmenin ilk hesabı Borusan 0,2 sn,
+  Aydem 0,6 sn, EÜAŞ (44 santral) 0,8 sn; 2025 yılının ilk açılışı (dizin + netleşme) 3,2 sn; tekrar istek 0,01 sn. Yani hesap
+  hızlı; 26–78 sn'lik beklemeler ısıtma işinin web sürecini meşgul etmesinden (yüklemeden sonra ~16 dk: 20:07–20:24).
+- **Sıradaki:** ısıtma sırasında ziyaretçinin beklememesi (ağır hesapları web sürecinden ayırmak); şirket profilinden tek tıkla rapor; sunucuda ağır hesapların ziyaretçiyi
   bekletmemesi.
 
 ## 12.11.2026 · Claude · Şirket profili sayfası (`claude/sirket-profili`; yüklendi, f96744b)
