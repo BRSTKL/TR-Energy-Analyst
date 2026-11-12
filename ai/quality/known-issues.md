@@ -10,7 +10,8 @@ Tarihli; önermeden ya da "düzeltildi" demeden önce kodda kontrol edin.
   önceden yapıyor; ziyaretçi soğuk hesabı yalnız iş kurulmadıysa ya da ısıtma bitmeden gelirse görür. Kalan seçenekler: pencere ara
   toplamları, çok çekirdek, diskte önbellek.
 - **Önbellek ısıtma sürerken bütün sayfalar yavaşlıyordu** (12.11'de ölçüldü ve aynı gün büyük ölçüde çözüldü; sunucuda
-  ısıtma boyunca 196 hafif isteğin en uzunu 6,6 sn, 1 sn'yi aşan 5, sebebi bilinmiyor): yüklemeden sonra `tr-energy-warm` ~16 dk çalışıp web sürecini meşgul ediyor, hafif bir istek 26–78 sn bekliyordu.
+  ilk ölçümde ısıtma boyunca 196 `/api/companies` isteğinin en uzunu 6,6 sn, 1 sn'yi aşan 5; 13.11'de 179
+  `/api/auth/status` isteğinin en uzunu 0,03 sn; şirket dizini artık ısıtmada kuruluyor): yüklemeden sonra `tr-energy-warm` ~16 dk çalışıp web sürecini meşgul ediyor, hafif bir istek 26–78 sn bekliyordu.
   Çözüm: ısıtma kendi yardımcı uygulamasını açar (`127.0.0.1:3111`), sonuçlar `.cache/responses` altına yazılır, web süreci
   diskten okur. Mac'te üretim derlemesiyle: ısıtma sırasında ana sürece 103 hafif isteğin en uzunu 0,003 sn; büyük projenin
   geçmişle sınaması diskten 0,02 sn. Kalan: ziyaretçi ısıtılmamış bir hesabı (santral / parametre seçimi, ya da ısıtma o projeye

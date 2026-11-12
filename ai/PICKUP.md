@@ -5,7 +5,7 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
-## 12.11.2026 · Claude · Şirket dizini ısıtmada (`claude/sirket-dizini-isitma`)
+## 12.11.2026 · Claude · Şirket dizini ısıtmada (`claude/sirket-dizini-isitma`; yüklendi, 968f7e2)
 
 - **Sorun:** yüklemeden sonraki ilk şirket listesi sunucuda 11 sn sürdü; dizin ısıtılmıyordu ve yalnız bellekte tutuluyordu.
 - **Yapılan:** `lib/services/response-cache.ts` `persistedJson` (projeye bağlı olmayan JSON hesabı için disk katmanı);
@@ -16,7 +16,12 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
   0,008 sn, Enerjisa profili 0,12 sn.
 - **Kontrol:** 1.072 test (2 yeni), tsc, lint; tam duman turu 60/60 (2 uyarı: yavaş API, teklif öncesi 10 sn ve Inavitas
   geçmişle sınama 11 sn, soğuk geliştirme sunucusu).
-- **Sıradaki:** şirket profilinden tek tıkla rapor; ısıtma sırasında 1 sn'yi aşan birkaç isteğin sebebi.
+- **Yüklendi ve sunucuda ölçüldü (13.11 00:28–00:43):** ısıtma 926 sn (93 yeniden hesap, 0 hata; şirket dizini 2026 12,4 sn,
+  2025 2,8 sn yardımcı süreçte). Isıtma boyunca web sürecine 5 sn'de bir hafif istek (`/api/auth/status`, 179 istek): en uzun
+  0,03 sn, 1 sn'yi aşan yok. Isıtmadan sonra web sürecinde ilk şirket listesi 0,27 sn (önce 11 sn), 2025 0,09 sn, Enerjisa
+  profili 0,6 sn. Hatalı birim yok. Not: önceki ölçümde hafif istek `/api/companies` idi (en uzun 6,6 sn); iki ölçüm aynı
+  isteği kullanmadığı için o 5 yavaş isteğin giderildiği söylenemez.
+- **Sıradaki:** şirket profilinden tek tıkla rapor.
 
 ## 12.11.2026 · Claude · Isıtma ziyaretçiyi bekletmesin: disk önbelleği ve yardımcı süreç (`claude/isitma-bekletmesin`; yüklendi, 8662eb6)
 
