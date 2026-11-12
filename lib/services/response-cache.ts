@@ -9,11 +9,19 @@
  *   - havuzdan okunan santrallerin havuz dosyalarının değişme anı
  *   - sektör karnesi ve toplayıcı kıyası önbellek dosyalarının değişme anı
  * Yanlış (eski) rakam göstermemek için sürüm her istekte hesaplanır (hafif: birkaç sorgu ve dosya stat'ı).
- * Sunucu yeniden başlarsa önbellek boşalır; ilk istek yeniden hesaplar.
+ *
+ * İki katman: bellek (süreç içi) ve disk (`.cache/responses/<proje>/<anahtarın özeti>.json.gz`; yalnız proje rotalarının JSON
+ * cevapları, `persist`). Disk katmanı iki iş görür: (1) önbellek ısıtma ayrı bir süreçte hesaplar (scripts/warm-cache.mts),
+ * ziyaretçiye bakan süreç sonucu diskten okur ve ağır hesap sırasında meşgul olmaz; (2) sunucu yeniden başlayınca veri ve
+ * kod sürümü aynıysa hesap yeniden yapılmaz. Kod sürümü üretimde derleme kimliğidir (`.next/BUILD_ID`): yeni yüklemeden
+ * sonra eski kodun diskteki sonucu kullanılmaz.
  */
 
+import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { promisify } from "node:util";
+import { gunzip, gzip } from "node:zlib";
 import { prisma } from "@/lib/prisma";
 import { poolDir } from "@/lib/pool/pool-store";
 import { projectPeriod } from "@/lib/services/project-records";
@@ -33,11 +41,16 @@ const inflight = (g.__trResponseInflight ??= new Map());
 /**
  * Geliştirmede hesap kodunun sürümü: lib/ ve app/api/ altındaki dosyaların en son değişme anı (5 sn bellekte). Sunucu
  * açıkken motor değişince önbellek eski rakamı vermesin (DSG son plana geçince sayfa ilk planlı sonucu gösteriyordu).
- * Üretim derlemesinde kod çalışırken değişmediği için 0.
+ * Üretim derlemesinde kod çalışırken değişmez: derleme kimliği (`.next/BUILD_ID`) kullanılır, süreç boyunca bir kez okunur.
  */
 let codeStamp = { at: 0, value: 0 };
-async function codeVersion(): Promise<number> {
-  if (process.env.NODE_ENV === "production") return 0;
+let buildId: Promise<string> | null = null;
+async function codeVersion(): Promise<number | string> {
+  if (process.env.NODE_ENV === "production")
+    return (buildId ??= fs.readFile(path.join(process.cwd(), ".next", "BUILD_ID"), "utf8").then(
+      (v) => v.trim() || "0",
+      () => "0"
+    ));
   if (Date.now() - codeStamp.at < 5000) return codeStamp.value;
   let max = 0;
   const walk = async (dir: string) => {
@@ -112,11 +125,87 @@ export async function projectVersion(projectId: string): Promise<string | null> 
   return parts.join(":");
 }
 
+const gzipAsync = promisify(gzip);
+const gunzipAsync = promisify(gunzip);
+
+/** Disk katmanının klasörü; testlerde kapalı (RESPONSE_CACHE_DIR verilmedikçe) */
+function diskDir(): string | null {
+  if (process.env.RESPONSE_CACHE_DIR) return process.env.RESPONSE_CACHE_DIR;
+  if (process.env.NODE_ENV === "test") return null;
+  return path.join(process.cwd(), ".cache", "responses");
+}
+
+function diskFile(projectId: string, key: string): string | null {
+  const dir = diskDir();
+  if (!dir || !/^[\w-]+$/.test(projectId)) return null;
+  return path.join(dir, projectId, `${createHash("sha1").update(key).digest("hex")}.json.gz`);
+}
+
+/** Diskteki sonuç; yoksa, bozuksa ya da sürümü / anahtarı farklıysa undefined. Okunan dosyanın tarihi yenilenir (temizlik buna bakar) */
+async function readDisk(projectId: string, key: string, version: string): Promise<{ value: unknown } | undefined> {
+  const file = diskFile(projectId, key);
+  if (!file) return undefined;
+  try {
+    const saved = JSON.parse((await gunzipAsync(await fs.readFile(file))).toString("utf8")) as { version: string; key: string; value: unknown };
+    if (saved.version !== version || saved.key !== key) return undefined;
+    const now = new Date();
+    fs.utimes(file, now, now).catch(() => {});
+    return { value: saved.value };
+  } catch {
+    return undefined;
+  }
+}
+
+/** Sonucu diske yazar (önce geçici dosya, sonra yeniden adlandırma: yarım dosya okunmaz). Hata sessizce yutulur: disk yalnız hızlandırır */
+async function writeDisk(projectId: string, key: string, version: string, value: unknown): Promise<void> {
+  const file = diskFile(projectId, key);
+  if (!file) return;
+  try {
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    const tmp = `${file}.${process.pid}.tmp`;
+    await fs.writeFile(tmp, await gzipAsync(JSON.stringify({ version, key, value })));
+    await fs.rename(tmp, file);
+  } catch {
+    // disk dolu / izin yok: bellek katmanı yeter
+  }
+}
+
+/** Disk katmanında `maxAgeDays` gündür okunmamış ve yazılmamış dosyaları siler; silinen dosya sayısını döndürür */
+export async function pruneResponseDisk(maxAgeDays = 14, now = Date.now()): Promise<number> {
+  const dir = diskDir();
+  if (!dir) return 0;
+  let removed = 0;
+  let projects: string[];
+  try {
+    projects = await fs.readdir(dir);
+  } catch {
+    return 0;
+  }
+  for (const project of projects) {
+    let files: string[];
+    try {
+      files = await fs.readdir(path.join(dir, project));
+    } catch {
+      continue;
+    }
+    for (const f of files) {
+      const full = path.join(dir, project, f);
+      if (now - (await mtime(full)) > maxAgeDays * 86_400_000) {
+        await fs.rm(full, { force: true });
+        removed++;
+      }
+    }
+  }
+  return removed;
+}
+
 /**
  * Projenin bir hesabını önbellekten döndürür; sürüm değiştiyse ya da yoksa hesaplar. `key` aynı projede farklı
  * hesapları ayırır (ör. "results", "dsg?plants=…"). Proje yoksa compute yine çağrılır (404 cevabı ona aittir).
+ * `persist`: sonuç diske de yazılır ve bellekte yoksa diskten okunur; yalnız JSON'a birebir çevrilebilen değerler için
+ * (Map, Date, sınıf örneği içeren değerlerde kullanılmaz).
  */
-export async function cachedForProject<T>(projectId: string, key: string, compute: () => Promise<T>): Promise<T> {
+export async function cachedForProject<T>(projectId: string, key: string, compute: () => Promise<T>, opts: { persist?: boolean } = {}): Promise<T> {
   const version = await projectVersion(projectId);
   if (version === null) return compute();
   const k = `${projectId}|${key}`;
@@ -129,14 +218,21 @@ export async function cachedForProject<T>(projectId: string, key: string, comput
   const flightKey = `${k}|${version}`;
   const running = inflight.get(flightKey);
   if (running) return running as Promise<T>;
-  const p = compute()
-    .then((value) => {
-      store.delete(k);
-      store.set(k, { version, value });
-      if (store.size > MAX_ENTRIES) store.delete(store.keys().next().value!);
-      return value;
-    })
-    .finally(() => inflight.delete(flightKey));
+  const remember = (value: T) => {
+    store.delete(k);
+    store.set(k, { version, value });
+    if (store.size > MAX_ENTRIES) store.delete(store.keys().next().value!);
+    return value;
+  };
+  const p = (async () => {
+    if (opts.persist) {
+      const saved = await readDisk(projectId, key, version);
+      if (saved) return remember(saved.value as T);
+    }
+    const value = remember(await compute());
+    if (opts.persist) await writeDisk(projectId, key, version, value);
+    return value;
+  })().finally(() => inflight.delete(flightKey));
   inflight.set(flightKey, p);
   return p;
 }
@@ -163,12 +259,17 @@ export function withProjectCache(handler: RouteHandler): RouteHandler {
     const url = new URL(request.url);
     const key = `${url.pathname.split("/").filter(Boolean).pop()}${url.search}`;
     try {
-      const body = await cachedForProject(ctx.params.id, key, async () => {
-        const res = await handler(request, ctx);
-        const json = await res.json();
-        if (res.status !== 200) throw new UncachedResponse(res.status, json);
-        return json;
-      });
+      const body = await cachedForProject(
+        ctx.params.id,
+        key,
+        async () => {
+          const res = await handler(request, ctx);
+          const json = await res.json();
+          if (res.status !== 200) throw new UncachedResponse(res.status, json);
+          return json;
+        },
+        { persist: true }
+      );
       return Response.json(body);
     } catch (e) {
       if (e instanceof UncachedResponse) return Response.json(e.body, { status: e.status });

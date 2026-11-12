@@ -9,11 +9,12 @@ Tarihli; önermeden ya da "düzeltildi" demeden önce kodda kontrol edin.
   aynı; Mac'te 30 → 17 sn, sunucuda tahminen ~1,5 dk) ve `tr-energy-warm` işi ağır proje hesaplarını saatlik ve yüklemeden sonra
   önceden yapıyor; ziyaretçi soğuk hesabı yalnız iş kurulmadıysa ya da ısıtma bitmeden gelirse görür. Kalan seçenekler: pencere ara
   toplamları, çok çekirdek, diskte önbellek.
-- **Önbellek ısıtma sürerken bütün sayfalar yavaşlar** (12.11'de ölçüldü): yüklemeden sonra `tr-energy-warm` ~16 dk çalışır
-  ve ağır proje hesapları web sürecini meşgul eder; o sırada hafif bir istek (şirket profili) 26–78 sn bekledi, ısıtma bitince
-  aynı tür istek 0,2–0,8 sn. Saatlik turlar önbellek sıcakken ~2 sn sürer, sorun yalnız yükleme / yeniden başlatma sonrasında.
-  Demo öncesinde yükleme yapılmamalı ya da ısıtmanın bitmesi beklenmeli. Kalıcı çözüm: ağır hesapları ayrı süreçte yapmak ya da
-  sonuçları diske yazmak.
+- **Önbellek ısıtma sürerken bütün sayfalar yavaşlıyordu** (12.11'de ölçüldü ve aynı gün çözüldü; sunucuda doğrulanana kadar
+  açık): yüklemeden sonra `tr-energy-warm` ~16 dk çalışıp web sürecini meşgul ediyor, hafif bir istek 26–78 sn bekliyordu.
+  Çözüm: ısıtma kendi yardımcı uygulamasını açar (`127.0.0.1:3111`), sonuçlar `.cache/responses` altına yazılır, web süreci
+  diskten okur. Mac'te üretim derlemesiyle: ısıtma sırasında ana sürece 103 hafif isteğin en uzunu 0,003 sn; büyük projenin
+  geçmişle sınaması diskten 0,02 sn. Kalan: ziyaretçi ısıtılmamış bir hesabı (santral / parametre seçimi, ya da ısıtma o projeye
+  gelmeden) açarsa hesap yine web sürecinde yapılır ve o sırada diğer istekler bekler.
 - **Resmî dengesizlik fiyatı EPİAŞ'ın bugünkü değerinden küçük farklı** (27.10'da ölçüldü; bilerek eşitlenmedi): veritabanındaki
   `imbalancePosPrice` / `imbalanceNegPrice` Eylül 2025 – Ağustos 2026'da (12 ay) neredeyse her saatte EPİAŞ'ın tutar ÷ miktar
   yanıtından farklı; 2024 – Ağustos 2025 ve Eylül 2026 birebir aynı. Fark: Eylül–Aralık 2025 ≈ 0,01 TL/MWh (yuvarlama

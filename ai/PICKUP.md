@@ -5,6 +5,24 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 12.11.2026 · Claude · Isıtma ziyaretçiyi bekletmesin: disk önbelleği ve yardımcı süreç (`claude/isitma-bekletmesin`)
+
+- **Sorun (sunucuda ölçüldü):** yüklemeden sonra ısıtma ~16 dk web sürecini meşgul ediyor; o sırada şirket profili gibi hafif bir
+  istek 26–78 sn bekledi (ısıtma bitince 0,2–0,8 sn). Kullanıcı çözülmesini istedi.
+- **Yapılan:** `lib/services/response-cache.ts` iki katmanlı: bellek + disk (`.cache/responses/<proje>/<anahtar özeti>.json.gz`;
+  yalnız `withProjectCache` rotaları, `persist`). Üretimde kod sürümü `.next/BUILD_ID` (eskiden 0): yeni yüklemeden sonra eski
+  kodun diskteki sonucu kullanılmaz. `scripts/warm-cache.mts` kendi yardımcı uygulamasını açar (`next start`, 127.0.0.1:3111,
+  düşük öncelik), istekleri ona gönderir, bitince kapatır ve 14 gündür kullanılmayan dosyaları siler. `WARM_BASE` verilirse
+  yardımcı açılmaz. systemd birimi değişmedi.
+- **Ölçüm (Mac, üretim derlemesi, boş disk önbelleği):** ısıtma 104 sn (26 yeniden hesap, 0 hata); o sırada ana sürece her saniye
+  bir hafif istek (103 istek): en uzun 0,003 sn. Sonra ana süreçte en büyük projenin geçmişle sınaması diskten 0,02 sn, sonuçlar
+  0,009 sn. Önbellek doluyken ısıtma turu 1,2 sn. Disk 3,7 MB (15 proje).
+- **Kontrol:** 1.070 test (6 yeni: disk katmanı), tsc, lint, `check:reports` 0 hata; tam duman turu (üretim derlemesine karşı) 60/60, 0 hatalı, 1 uyarılı.
+- **Sınırlar:** ısıtılmamış bir hesabı ziyaretçi açarsa hesap yine web sürecinde yapılır. Yardımcı süreç ısıtma sırasında bellek
+  kullanır (sunucu 6 GB, 3 çekirdek; ölçülmedi). Her yükleme disk önbelleğini geçersiz kılar (derleme kimliği değişir).
+- **Sıradaki:** onayla commit, `main` ve yükleme; yüklemeden hemen sonra sunucuda hafif bir sayfanın süresine ve
+  `tr-energy-warm.log`'a bakmak.
+
 ## 12.11.2026 · Claude · Şirket profilinde netleşmiş dengesizlik (`claude/sirket-netlesme`; yüklendi, 63e9711)
 
 - Kullanıcı gösterilen bilgilerin doğruluğunun yüksek olmasını istedi; santral toplamı şirket maliyetini olduğundan yüksek
@@ -233,16 +251,3 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 - **Sıradaki:** `main`'e birleştirme ve sunucuya yükleme kullanıcı onayıyla. Açık kalanlar (incelemede O6/O7): sonuçlarda
   telefonda ana sayının geç gelmesi ve kesilen sekme şeridi, Bugün'ün kendini yenilememesi, Portföy özetinde hatanın
   "veri yok" görünmesi, planlamadaki kırmızı–yeşil skala, iki grafik paleti.
-
-## 04.11.2026 · Claude · Codex tarafı kaldırıldı (`claude/codex-kaldir`)
-
-- Kullanıcı Codex'le geliştirmeyi bıraktı. Silinen: `AGENTS.md`, `ai/skills/selection.md` (Codex skill rehberi), bu
-  dosyadaki "üzerinde çalışılıyor" tablosu. `ai/execution/parallel-work.md` → `working-rules.md` (Codex'siz dal,
-  veri, sunucu kuralları). CLAUDE.md, README, `ai/README.md`, `checks.md` Codex'siz.
-- Codex dalları (`codex/tanitim-videosu`, `codex/tahmin-bantlari-ruzgar`; ikisi de `main`'de) ve
-  `~/.codex/worktrees/tahmin-main-yukleme` çalışma ağacı kaldırıldı; uzak `codex/tahmin-bantlari-ruzgar` silindi.
-- Video dalının commit edilmemiş işi: `tr-energy-tur-paylasim.mp4` → `Raporlar/Tanitim/`, `video-screens.mts` ve
-  Codex'in 26–30.10 PICKUP kayıtları → `Raporlar/Tanitim/codex-arsiv/` (git dışı). Yayın öncesi iddia denetimi hâlâ
-  gerekli. Ayrıca `git stash` içinde. O daldaki bilinen sorun notu (resmî dengesizlik fiyatı farkı) `known-issues.md`'ye
-  taşındı.
-- Kökteki `index.html` başka bir projenin (kişisel portfolyo) dosyası; dokunulmadı.
