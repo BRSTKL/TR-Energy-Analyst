@@ -154,6 +154,7 @@ const checks: Check[] = [
   { url: "/sector", label: "Sektör karnesi" },
   { url: "/compare", label: "Karşılaştırma" },
   { url: "/santraller", label: "Santral rehberi" },
+  { url: "/sirketler", label: "Şirketler" },
   { url: "/ariza", label: "Arıza izleme" },
   { url: "/yekdem", label: "YEKDEM çıkışları" },
   { url: "/yeni-santraller", label: "Yeni santral radarı" },
@@ -172,6 +173,12 @@ try {
   if (pl.items?.[0]) checks.push({ url: `/santraller/${pl.items[0].id}`, label: "Santral kartı" });
 } catch {
   // santral dizini yoksa atlanır
+}
+try {
+  const co = await getJson<{ items?: Array<{ slug: string }> }>("/api/companies?limit=1");
+  if (co.items?.[0]) checks.push({ url: `/sirketler/${co.items[0].slug}`, label: "Şirket profili" });
+} catch {
+  // sektör karnesi yoksa atlanır
 }
 const PROJECT_PAGES = ["results", "plants", "backtest", "validation", "losses", "forecast", "candidates", "dsg", "insights", "planning", "import"];
 for (const p of chosen) for (const pg of PROJECT_PAGES) checks.push({ url: `/projects/${p.id}/${pg}`, label: `${p.name.slice(0, 24)} · ${pg}` });

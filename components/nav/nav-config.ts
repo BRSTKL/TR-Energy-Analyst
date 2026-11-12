@@ -8,6 +8,7 @@
 import {
   Award,
   BookOpen,
+  Building2,
   CalendarClock,
   CloudDownload,
   FileBarChart,
@@ -30,6 +31,7 @@ export type NavId =
   | "daily"
   | "projects"
   | "plants"
+  | "companies"
   | "epias"
   | "market"
   | "outages"
@@ -112,6 +114,13 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/santraller",
         icon: Factory,
         hint: "Herhangi bir santralin kurulu gücü, konumu, YEKDEM durumu ve gerçekleşen satış fiyatı",
+      },
+      {
+        id: "companies",
+        label: "Şirketler",
+        href: "/sirketler",
+        icon: Building2,
+        hint: "Sahip şirkete göre santraller, kurulu güç, üretim ve sapmanın maliyeti",
       },
       {
         id: "epias",
@@ -199,6 +208,7 @@ export function activeNavId(pathname: string): NavId | null {
   if (is(p, "/market/gunluk")) return "daily";
   if (is(p, "/market")) return "market";
   if (is(p, "/santraller")) return "plants";
+  if (is(p, "/sirketler")) return "companies";
   if (is(p, "/ariza")) return "outages";
   if (is(p, "/yekdem")) return "yekdem";
   if (is(p, "/yeni-santraller")) return "radar";

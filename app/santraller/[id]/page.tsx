@@ -17,6 +17,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { companySlug } from "@/lib/analysis/company-profile";
 import type { PlantCard } from "@/lib/services/plant-card";
 
 /**
@@ -108,7 +109,14 @@ export default function PlantCardPage() {
         <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">{card.name}</h1>
         <p className="text-sm text-slate-600">
           {TECH[card.type]}
-          {card.hydroKind ? ` · ${HYDRO[card.hydroKind]}` : ""} · {card.owner ?? "sahip şirket bilinmiyor"}
+          {card.hydroKind ? ` · ${HYDRO[card.hydroKind]}` : ""} ·{" "}
+          {card.owner ? (
+            <Link href={`/sirketler/${companySlug(card.owner)}`} className="text-indigo-700 hover:underline">
+              {card.owner}
+            </Link>
+          ) : (
+            "sahip şirket bilinmiyor"
+          )}
         </p>
       </div>
 

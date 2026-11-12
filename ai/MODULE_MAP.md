@@ -4,9 +4,9 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-566 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+572 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
-## Sayfalar (app/**/page.tsx) (29)
+## Sayfalar (app/**/page.tsx) (31)
 
 - `/projects/[id]/backtest` (`app/(dashboard)/projects/[id]/backtest/page.tsx`) — Aşama 14: yön tahminiyle plan ayarı (projenin fiyat profiliyle, KÜPST dahil)
 - `/projects/[id]/candidates` (`app/(dashboard)/projects/[id]/candidates/page.tsx`) — YEKDEM çıkışı rozeti: bu yıl çıkan ya da süresi bu yıl / yakında dolan
@@ -35,10 +35,12 @@
 - `/santraller` (`app/santraller/page.tsx`) — Santral rehberi: havuzdaki santralleri ad ya da sahip şirkete göre arar; her satır santral kartına gider (/santraller/<kimlik>).
 - `/sector/aggregators/[id]` (`app/sector/aggregators/[id]/page.tsx`) — Toplayıcı ayrıntısı (PLAN 9.2): kıyas tablosundaki bir satırın içi.
 - `/sector` (`app/sector/page.tsx`) — "2025" ya da "2026 (Ocak–Ağustos)"
+- `/sirketler/[slug]` (`app/sirketler/[slug]/page.tsx`) — Şirket profili: bir sahip şirketin santralleri, kurulu gücü, üretimi ve sapmanın maliyeti (seçilen yılın sektör karnesi).
+- `/sirketler` (`app/sirketler/page.tsx`) — Şirketler: sektör karnesindeki santraller sahip şirkete göre; her satır şirket profiline gider (/sirketler/<ad>).
 - `/yekdem` (`app/yekdem/page.tsx`) — YEKDEM çıkış takvimi: hangi yıl kaç santral ve kaç MW serbest piyasaya geçiyor.
 - `/yeni-santraller` (`app/yeni-santraller/page.tsx`) — Yeni santral radarı: veri havuzunda ilk üretimi görülen rüzgâr, güneş ve hidro santralleri.
 
-## API (app/api/**/route.ts) (76)
+## API (app/api/**/route.ts) (78)
 
 - `GET, PUT, DELETE /api/account/epias` — GET /api/account/epias: hesap e-postası ve kayıtlı EPİAŞ hesabının özeti (şifre dönmez).
 - `POST /api/account/epias/test` — POST /api/account/epias/test: kayıtlı (yoksa .env) EPİAŞ hesabıyla yeni bilet alarak bağlantıyı dener.
@@ -46,6 +48,8 @@
 - `POST /api/auth/logout` — POST /api/auth/logout: oturum çerezini siler.
 - `POST /api/auth/setup` — POST /api/auth/setup {email, password}: ilk hesabı açar ve oturum başlatır.
 - `GET /api/auth/status` — GET /api/auth/status: hesap var mı (yoksa giriş sayfası ilk kurulum formunu gösterir).
+- `GET /api/companies/[slug]` — GET /api/companies/<şirket adının yalın hâli>?year= : Şirket profili (lib/services/company-profile.ts)
+- `GET /api/companies` — GET /api/companies?q=&year=&limit=: Şirket listesi: sektör karnesindeki santraller sahip şirkete göre, kurulu güce göre azalan (en çok 500 sonuç).
 - `GET /api/compare/change` — GET /api/compare/change?ids=proje1,proje2: Aynı santrallerin iki döneminde MWh başına dengesizlik maliyeti farkının ayrıştırması (tahmin hatası, fiyat makası, katsayı kuralı, hacim ve profil, etkileşim).
 - `GET /api/compare` — GET /api/compare?ids=proje1,proje2,...
 - `GET /api/epias/aggregators` — GET /api/epias/aggregators?q=gain → EPİAŞ'ta "(TOPLAYICI)" olarak kayıtlı katılımcılar içinde arama.
@@ -127,7 +131,7 @@
 - `app/not-found.tsx` — Türkçe 404 (hata ayıklama testi 16.10.2026: Next'in İngilizce varsayılan sayfası çıkıyordu)
 - `app/projects/loading.tsx`
 
-## lib/analysis (52)
+## lib/analysis (53)
 
 - `lib/analysis/aggregator-benchmark.ts` — Toplayıcılar arası kıyas (PLAN 8.7): EPİAŞ'taki her toplayıcının portföyündeki lisanslı santraller için aynı yöntem: saatlik sapma (UEVM − ilk KGÜP), EPİAŞ resmi dengesizlik fiyatı.
 - `lib/analysis/aggregator-detail.ts` — Toplayıcı ayrıntısı (PLAN 9.2): Kıyas tablosundaki bir toplayıcının içi: santraller (tek başına maliyet, sektör medyanına göre), aylık netleşme ve sahiplerin (üreticilerin) portföye katkısı.
@@ -135,6 +139,7 @@
 - `lib/analysis/candidate-access.ts` — Aday santralin ulaşılabilirliği (PLAN 4.5): Aday taraması "hangi santral portföyü en iyi dengeler?" sorusunu yanıtlar; bu modül "o santrale ulaşılabilir mi?" sorusunu.
 - `lib/analysis/candidate-screening.ts` — Aday santral taraması (PLAN 4.2): Toplayıcı ya da dengeden sorumlu grup, portföyüne hangi santrali eklerse en çok kazanır?
 - `lib/analysis/capture-rate.ts` — Capture rate (PLAN 19.1): Santral ürettiği saatlerde piyasanın ortalamasına göre ne fiyat alıyor?
+- `lib/analysis/company-profile.ts` — Şirket profili: santralleri sahip şirkete göre toplar (SAF, I/O yok): Şirket = sektör karnesindeki sahip şirket adı.
 - `lib/analysis/contract-pricing.ts` — Toplayıcı sözleşme fiyatı (PLAN 16.1): Aday santrale teklif edilecek dengesizlik hizmet bedeli (TL/MWh) üç çizgiden çıkar: taban = adil prim: (Shapley payı + KÜPST) / üretim.
 - `lib/analysis/cost-change.ts` — "Maliyet neden değişti?" ayrıştırması: Aynı santrallerin iki dönemi (ör. 2025 ve 2026'nın aynı ayları) arasındaki MWh başına dengesizlik maliyeti farkını dört kaleme böler.
 - `lib/analysis/daily-market-accuracy.ts` — Günlük panonun ölçülmüş doğruluğu (Aşama 24): Panodaki net yük ve akşam rampası, gerçek zamanlı ölçümlerle ve KGÜP planıyla hesaplanır (lib/analysis/daily-market.ts).
@@ -341,7 +346,7 @@
 - `lib/sector/period.ts` — Sektör analizlerinin dönemi: içinde bulunulan yılın sektör karnesinin dönem sonu (scripts/sector-collect.mts; piyasa verisi olan son gün).
 - `lib/sector/plant-technology.ts` — Sektör taramasında santral teknolojisi (PLAN Bekleyen işler: EPDK ↔ karne, adım 2b): Eskiden tür yalnız addan tahmin ediliyordu (`guessTechnologyFromName`); adında tür eki olmayan santraller ("OYMAPINAR", "BORÇKA", "HASAN UĞURLU") ve tanın…
 
-## lib/services (62)
+## lib/services (63)
 
 - `lib/services/aggregator-data.ts` — Toplayıcı kıyası ve ayrıntısı için veri okuma (PLAN 8.7, 9.2): Santral saatleri veri havuzundan (ilk KGÜP ve UEVM), türü ve sahibi sektör karnesi dosyalarından ya da havuz tanımından, fiyatlar veritabanındaki EPİAŞ resmi dengesizlik fiyatl…
 - `lib/services/aggregator-membership.ts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" ekiyle kayıtlı tüm katılımcıların santral listesi çekilir ve .cache/epias/ aggregator-membership.json'a yazılır.
@@ -349,6 +354,7 @@
 - `lib/services/ancillary-prices.ts` — Frekans kontrolü (yan hizmet) kapasite fiyatları ve sistem ihtiyacı: EPİAŞ Şeffaflık Platformu primer (PFK) ve sekonder (SFK) frekans kontrolü için saatlik kapasite fiyatını (TL/MW, saat başına) ve tedarik edilen kapasite miktarını (MW) ya…
 - `lib/services/auth-users.ts` — Uygulama hesabı: ilk kurulum, giriş denemesi ve kilit.
 - `lib/services/candidates.ts` — Aday santral taraması için veri (PLAN 4.2): Projenin portföyü (tek dengede) ile aynı yılın sektör karnesindeki santrallerin saatlik serileri karşılaştırılır.
+- `lib/services/company-profile.ts` — Şirket profili (/sirketler): sektör karnesindeki santraller sahip şirkete göre (diskten): Kaynak: seçilen yılın sektör karnesi (`.cache/epias/sector-<yıl>.json`: sahip şirket, üretim, dengesizlik, KÜPST, sapma).
 - `lib/services/cost-change.ts` — "Maliyet neden değişti?" için projeleri yükler ve eşler: İki proje (ör. aynı santrallerin 2025 ve 2026 projeleri) saatlik veriyle yüklenir, santraller EPİAŞ kimliğiyle (yoksa adla) eşlenir ve decomposeCostChange'e verilir.
 - `lib/services/daily-market.ts` — Günlük piyasa panosu: veri toplama (hesap lib/analysis/daily-market.ts'te): Günün doğrulanmış fiyatları (MarketData: EPİAŞ ya da dosya) ve önceki 28 günün PTF'si veri tabanından, sistem geneli seriler (tüketim, gerçek zamanlı üretim, KGÜP,…
 - `lib/services/direction-forecast.ts` — Sistem yönü tahmini: veri okuma ve walk-forward olasılıklar (Aşama 14).
