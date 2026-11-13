@@ -15,7 +15,7 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.28";
+const VERSION = "1.29";
 const VERSION_DATE = "13 Kasım 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
@@ -1235,6 +1235,11 @@ Rüzgâr: beklenen = santralin güç eğrisi (100 m hız 0,5 m/s × 8 yön hücr
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.29",
+                  "13 Kasım 2026",
+                  "YEKDEM 2027 kararı (/yekdem): YEKDEM'e katılım her yıl yeniden başvuruyla (2027 için son gün 30.11.2026). Karar verebilecek santraller (2026'da YEKDEM'de ve süresi 2027'ye uzanan; süresi sürerken çıkmış) için YEKDEM birim fiyatı ile 2026'da piyasada yakalanan fiyat (üretim ağırlıklı PTF) karşılaştırılır; dengesizlik iki seçenekte de santralde olduğu için hesaba girmez. YEKDEM fiyatı: 2021'e kadar devreye girenlerde 5346 I sayılı Cetvel (hidro ve rüzgâr 7,3, güneş 13,3 ABD doları cent/kWh, son ayın kuruyla), sonrakilerde EPİAŞ'ın Kasım 2026 TL tarifesi; yerli katkı hariç. Tarife türü ve süre YEKDEM listelerinde ilk görülme yılından (±1 yıl). YEKA santralleri sözleşme fiyatıyla ödendiği için dışarıda. Sonuç (Ocak–Eylül 2026): 403 santralin 402'sinde YEKDEM fiyatı yüksek, gönüllü çıkış beklenmiyor; süresi kesin sürerken çıkmış 3 santralin dönmesi beklenir. Diğer hesaplar değişmedi.",
+                ],
                 [
                   "1.28",
                   "13 Kasım 2026",

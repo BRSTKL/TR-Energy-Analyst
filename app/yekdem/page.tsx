@@ -17,6 +17,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { calendarSlot, type CalendarYear } from "@/lib/analysis/yekdem-calendar";
 import type { YekdemCalendarData } from "@/lib/services/yekdem-calendar";
+import { YekdemDecisionCard } from "@/components/yekdem-decision-card";
 
 /**
  * YEKDEM çıkış takvimi: hangi yıl kaç santral ve kaç MW serbest piyasaya geçiyor. Veri /api/yekdem'den (kural
@@ -118,6 +119,8 @@ export default function YekdemCalendarPage() {
           />
         )}
       </div>
+
+      <YekdemDecisionCard />
 
       <Card>
         <CardHeader>

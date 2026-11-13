@@ -5,6 +5,20 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 13.11.2026 · Claude · YEKDEM 2027 karar listesi (`claude/mevzuat-kasim-2026`; commit'lenmedi)
+
+- **Neden:** piyasa araştırmasından öneri 1; 2027 YEKDEM başvuru/sonlandırma son günü 30.11.2026.
+- **Yapılan:** `lib/analysis/yekdem-decision.ts` (kim karar verebilir, tarife: 2021'e kadar Cetvel $73/$133 MWh, sonrası
+  Kasım 2026 TL tarifesi, 2022 belirsiz; YEKA hariç), `lib/services/yekdem-decision.ts` (karne saatlik üretimi × DB PTF,
+  kur macro serisinin son ayı), `/api/yekdem/decision`, `components/yekdem-decision-card.tsx` /yekdem sayfasında. Yöntem 1.29.
+- **Sonuç (Mac verisi, Oca–Eyl 2026, kur 48,53):** 403 santralin 402'sinde YEKDEM yüksek (yakalanan fiyat ortası rüzgâr
+  1.971, güneş 1.336, hidro 1.608 TL/MWh; eşik dolar tarifeli rüzgâr/hidro 3.543, TL tarifeli 2.925). Gönüllü çıkış 0;
+  kesin dönüş adayı 3 (Doğu, Gana, Çamlık HES), belirsiz 22 (süresi 2026'da dolmuş olabilir). Toplayıcı hedefi YEKDEM'den
+  yalnız süresi dolanlar.
+- **Kontrol:** 1.084 test (5 yeni), tsc, lint, `check:reports` 0 hata, `--only yekdem,methodology` geçti; kart masaüstü ve
+  telefonda ekran görüntüsüyle bakıldı.
+- **Sınırlar:** işletmeye giriş tarihi yok (±1 yıl); yerli katkı hariç; sunucu verisi Mac'ten yeni olabilir.
+
 ## 13.11.2026 · Claude · Kasım 2026 mevzuatı: DSG sınırı, V, KÜPST (`claude/mevzuat-kasim-2026`; commit'lenmedi)
 
 - **Neden:** kullanıcının Codex'e yaptırdığı piyasa araştırması (`kaynaklar/piyasa-arastirmasi-2026-11.md`, A–D bölümleri,
@@ -243,22 +257,3 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 - **Kontrol:** 1.018 test, tsc, `--only gunluk,teklif` duman testi temiz.
 - **Sıradaki:** SMF yayın gecikmesini sunucuda saatlik okuyarak ölçmek (istenirse).
 
-## 04.11.2026 · Claude · PTF motorunda kapılı otomatik sürüm seçimi (`claude/ptf-sampiyon`, yüklendi, 1928750)
-
-- Kullanıcı "kendini geliştiren model" istedi; güvenli sürüm olarak şampiyon defteri planlandı ve onaylandı (eşik %3, hidro aday).
-- **Yapılan:** `lib/ptf/champion.ts` (saf karar: günlük ortalama hata karnesi, `reviewChampion` çekirdeği + `minGain`),
-  `champion-store.ts` (defter), `model-ids.ts` (istemciye güvenli kimlikler), `lib/services/ptf-champion.ts` (kayıt + gerçekleşen PTF
-  okur, karar verir, defteri yalnız kayıt yazıldıktan sonra yazar), `ptf-engine.ts` (sürüm başına kurulum: her sürüm kendi aralığını
-  ve seviye düzeltmesini üretir; ana kayıt şampiyondan, temel sürüm her zaman gölgede), `scripts/ptf/forecast-daily.mts` (karar +
-  bildirim), ekranda "Canlı sürüm" satırı, `scripts/ptf/champion-sim.mts` (geçmiş simülasyon).
-- **Doğrulama:** temel sürümün çıktısı yeniden düzenlemeden önce ve sonra iki hedef günde (20 ve 26.10.2026) birebir aynı (log, gölge,
-  üyeler, seviye, aralık, ekran serileri); her sürüm şampiyon yapılınca kendi aralığıyla yazıyor; bilinmeyen sürüm temele düşüp not
-  düşüyor. 1.010+ test, tsc, lint, `--only teklif,Bugün` duman testi temiz.
-- **Sızıntı denetimi:** sızıntı yok. Bulunup düzeltilenler: her gün kayan pencereyle yeniden sınama yanlış terfi şansını artırır
-  (artık haftada en çok bir kez, `REVIEW_EVERY_DAYS`); geçmiş gün denemesi bugünkü şampiyonu kullanıyordu (artık gelecek hedef dışında
-  karar yok, motor defterin geçmişinden seçer); defter ile kayıttaki `modelId` ayrışabilirdi (sürüm kurulamayıp temele düşülürse defter
-  yazılmaz). Belgelenenler: temele dönüş bilerek kolay; eşik ve hidro adayı sınama sonuçlarına bakılarak seçildi (iyimser).
-- **Beklenti (ölçüm):** geçmiş simülasyonda politika yalnız ≈%0,5–1,0 hata düşürüyor (hidro %1,1, rüzgâr ortalaması %0,8 daha iyi
-  adaylar); %5 eşikte rüzgârda hiç terfi olmazdı. Sunucuda canlı kayıt 31.10'dan beri; ilk karar en erken 28.11.2026.
-- **Sıradaki:** onayla `main`'e birleştirme ve sunucuya yükleme (yeni zamanlayıcı yok; defter ilk kararda kendiliğinden oluşur). Sonra
-  Kasım sonunda ilk kararı ve `champion.json`'ı sunucuda kontrol et.
