@@ -18,6 +18,11 @@
  *     katsayı n yenilenebilirde 0,05, aylık arıza ≥ 30 ise 0,08; depolamalı 0,10; dengeleme birimi toplulukları 0,05
  *     (EPDK 11/12/2025 tarihli ve 14029 sayılı kurul kararı, RG 29.12.2025, 33122; metin 03.10.2026'da Resmî Gazete'den
  *     okunup doğrulandı). 13025 sayılı kararı yürürlükten kaldırır.
+ *   - 01.11.2026'dan itibaren (yayımı izleyen fatura dönemi): EPDK 24/09/2026 tarihli ve 14907 sayılı karar (RG 19/10/2026,
+ *     33405; metin 13.11.2026'da Resmî Gazete PDF'inden okundu) 14029'u kaldırır. Üretici oranları aynı: rüzgâr 0,15, güneş
+ *     0,08, depolamalı ve diğer 0,05, iletimden bağlı lisanssız 0,20, dağıtımdan bağlı lisanssız 0,25, müstakil depolama 0,20;
+ *     n yenilenebilirde 0,05 (UEVÇB bazında aylık girilen arıza ≥ 30 ise 0,08), topluluk 0,05, depolamalı 0,10. Yeni olan
+ *     tüketim birimleri (n 0,01; tolerans 0,75 / 0,30) 1/1/2027'den başlar ve bu uygulamanın kapsamı dışındadır.
  *   - Formül (14029 md. 1, 13025 ile aynı): KÜPSM = UDÜPS − m × BUDÜP, UDÜPS = |UEVM − BUDÜP|, BUDÜP = KUDÜP + (YAL − YAT)
  *     + SRDM + SFHM; KUDÜP gün içi piyasası kapandıktan sonra güncellenen KGÜP. Tolerans, plan miktarına oranlanır
  *     (varsayım doğrulandı). Yük alma/atma talimatı ve yan hizmet terimleri açık veride santral bazında yok: sıfır alınır.
@@ -47,6 +52,8 @@ export const KUPST_REGIMES: KupstRegime[] = [
   { from: "0000-01-01", label: "Rüzgâr %21, güneş %12, diğer %5 (2025 öncesi)", tolerance: { RES: 0.21, GES: 0.12, other: 0.05 }, priceCoef: 0.03, communityCoef: 0.03 },
   { from: "2025-01-01", label: "Rüzgâr %17, güneş %10, diğer %5 (EPDK 13025)", tolerance: { RES: 0.17, GES: 0.1, other: 0.05 }, priceCoef: 0.03, communityCoef: 0.03 },
   { from: "2026-01-01", label: "Rüzgâr %15, güneş %8, diğer %5; katsayı 0,05 (EPDK 14029)", tolerance: { RES: 0.15, GES: 0.08, other: 0.05 }, priceCoef: 0.05, communityCoef: 0.05 },
+  // 14907 üreticiler için 14029'un oranlarını aynen korur; ayrı dönem, rapordaki dayanak doğru yazılsın diye.
+  { from: "2026-11-01", label: "Rüzgâr %15, güneş %8, diğer %5; katsayı 0,05 (EPDK 14907)", tolerance: { RES: 0.15, GES: 0.08, other: 0.05 }, priceCoef: 0.05, communityCoef: 0.05 },
 ];
 
 const STARTS = KUPST_REGIMES.map((r) => Date.parse(`${r.from}T00:00:00Z`));

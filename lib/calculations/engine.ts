@@ -32,10 +32,33 @@ export function calculateImbalance(actualMwh: number, forecastMwh: number): numb
 export const IMBALANCE_FLOOR_V = 150;
 export const IMBALANCE_NEGATIVE_B = 100;
 
+/**
+ * V değerinin dönemleri (TL/MWh). EPDK 24/09/2026 tarihli ve 14911 sayılı kurul kararı (RG 19/10/2026, 33405): V, yayımı
+ * izleyen fatura döneminden (1/11/2026) itibaren 100 TL/MWh. Metin 13.11.2026'da Resmî Gazete PDF'inden okundu. B değişmedi.
+ * Tarihler Türkiye duvar saatidir (uygulamanın zaman damgası kuralı: UTC alanlarında saklanır).
+ */
+export const IMBALANCE_FLOOR_V_REGIMES: { from: string; v: number; source: string }[] = [
+  { from: "0000-01-01", v: IMBALANCE_FLOOR_V, source: "DUY md. 110 (RG 29/12/2025), başlangıç değeri" },
+  { from: "2026-11-01", v: 100, source: "EPDK 14911 (RG 19/10/2026)" },
+];
+const V_STARTS = IMBALANCE_FLOOR_V_REGIMES.map((r) => Date.parse(`${r.from}T00:00:00Z`));
+
+/** En güncel V: ileriye dönük hesaplar için (ImbalancePricingProfile.floorV) */
+export const LATEST_FLOOR_V = IMBALANCE_FLOOR_V_REGIMES[IMBALANCE_FLOOR_V_REGIMES.length - 1].v;
+
+/** Saatin tarihindeki V (TL/MWh); tarih verilmezse başlangıç değeri */
+export function imbalanceFloorV(timestamp?: Date | string | number): number {
+  if (timestamp === undefined) return IMBALANCE_FLOOR_V;
+  const t = new Date(timestamp).getTime();
+  let v = IMBALANCE_FLOOR_V_REGIMES[0].v;
+  for (let i = 0; i < V_STARTS.length; i++) if (t >= V_STARTS[i]) v = IMBALANCE_FLOOR_V_REGIMES[i].v;
+  return v;
+}
+
 /** Pozitif dengesizlik fiyatının tabanı (katsayıdan önce): 2026 kurallarında MIN(PTF, SMF) < V ise −B */
-const positiveBase = (low: number, floors: boolean | undefined) => (floors && low < IMBALANCE_FLOOR_V ? -IMBALANCE_NEGATIVE_B : low);
+const positiveBase = (low: number, floors: boolean | undefined, v = IMBALANCE_FLOOR_V) => (floors && low < v ? -IMBALANCE_NEGATIVE_B : low);
 /** Negatif dengesizlik fiyatının tabanı: 2026 kurallarında en az V */
-const negativeBase = (high: number, floors: boolean | undefined) => (floors ? Math.max(IMBALANCE_FLOOR_V, high) : high);
+const negativeBase = (high: number, floors: boolean | undefined, v = IMBALANCE_FLOOR_V) => (floors ? Math.max(v, high) : high);
 
 const positiveCoef = (dir: SystemDirection, p: ImbalancePricingProfile) => (dir === "SURPLUS" ? p.positiveSurplusCoef : p.positiveOtherCoef);
 const negativeCoef = (dir: SystemDirection, p: ImbalancePricingProfile) => (dir === "DEFICIT" ? p.negativeDeficitCoef : p.negativeOtherCoef);
@@ -93,7 +116,7 @@ export const pricedMarket = (m: PricedMarket): PricedMarket => ({
  * uygulanır.
  */
 export function imbalancePrices(market: PricedMarket, effectiveProfile: ImbalancePricingProfile): { positive: number; negative: number } {
-  const { low, high } = imbalanceBases(market, effectiveProfile.floors);
+  const { low, high } = imbalanceBases(market, effectiveProfile.floors, effectiveProfile.floorV);
   return { positive: low * positiveCoef(market.systemDirection, effectiveProfile), negative: high * negativeCoef(market.systemDirection, effectiveProfile) };
 }
 
@@ -102,16 +125,17 @@ export function imbalancePrices(market: PricedMarket, effectiveProfile: Imbalanc
  * saatin kendi tarihindeki katsayıya bölünerek bulunur; yoksa MIN / MAX(PTF, SMF). `floors`: 2026 taban ve negatif fiyat
  * kuralları, kendi tarihinde bu kuralları içermeyen tabana uygulanır.
  */
-export function imbalanceBases(market: PricedMarket, floors: boolean | undefined): { low: number; high: number } {
+export function imbalanceBases(market: PricedMarket, floors: boolean | undefined, floorV?: number): { low: number; high: number } {
   const { ptf, smf, systemDirection: dir } = market;
   const own = regulatoryRegimeAt(market.timestamp).coefficients;
   const officialPos = market.imbalancePosPrice ?? null;
   const officialNeg = market.imbalanceNegPrice ?? null;
   const low = officialPos !== null ? officialPos / positiveCoef(dir, own) : Math.min(ptf, smf);
   const high = officialNeg !== null ? officialNeg / negativeCoef(dir, own) : Math.max(ptf, smf);
+  const v = floorV ?? imbalanceFloorV(market.timestamp);
   return {
-    low: officialPos !== null && own.floors ? low : positiveBase(low, floors),
-    high: officialNeg !== null && own.floors ? high : negativeBase(high, floors),
+    low: officialPos !== null && own.floors ? low : positiveBase(low, floors, v),
+    high: officialNeg !== null && own.floors ? high : negativeBase(high, floors, v),
   };
 }
 

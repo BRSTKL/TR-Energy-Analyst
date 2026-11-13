@@ -26,6 +26,11 @@ export interface ImbalancePricingProfile {
    * REGULATORY profilde saatin tarihine göre seçilir; CUSTOM profilde tanımsızsa uygulanmaz.
    */
   floors?: boolean;
+  /**
+   * V (TL/MWh) sabitlenir: ileriye dönük hesaplar (bütçe, "en güncel kurallar" senaryosu) geçmiş saatlere bugünkü V'yi
+   * uygular. Tanımsızsa V saatin kendi tarihinden seçilir (imbalanceFloorV).
+   */
+  floorV?: number;
 }
 
 /** Geriye dönük uyumluluk takma adı */

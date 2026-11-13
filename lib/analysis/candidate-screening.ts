@@ -1,7 +1,9 @@
 /**
  * TR-Energy Analyst - Aday santral taraması (PLAN 4.2)
  *
- * Toplayıcı ya da dengeden sorumlu grup, portföyüne hangi santrali eklerse en çok kazanır? Portföy tek dengede saat
+ * Toplayıcı ya da dengeden sorumlu grup, portföyüne hangi santrali eklerse en çok kazanır? (Hesap toplayıcı portföyünü,
+ * yani tek piyasa katılımcısını varsayar: farklı şirketlerden oluşan bir DSG'de md. 111/5 sınırı kazancı düşürür,
+ * bkz. dsg-rule.ts.) Portföy tek dengede saat
  * saat netleşir; bir aday eklendiğinde kazanç, o saatlerde portföyün ve adayın ayrı ayrı ödeyeceği dengesizlik
  * maliyeti ile birlikte ödedikleri arasındaki farktır:
  *   kazanç = Σ_saat [ c(portföy) + c(aday) − c(portföy + aday) ]

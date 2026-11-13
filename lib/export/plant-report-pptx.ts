@@ -23,6 +23,7 @@
  * SENARYO ayrımı her slaytta etiketlenir. Koordinatlar LAYOUT_WIDE (13,33 × 7,5 inç).
  */
 
+import { dsgRatioAt } from "@/lib/calculations/dsg-rule";
 import { yearAblative, yearLocative } from "@/lib/format";
 export { yearLocative };
 import pptxgen from "pptxgenjs";
@@ -147,7 +148,7 @@ function kupstRegimeText(r: PlantReportData): string {
   const parts: string[] = [];
   if (y0 < 2025) parts.push("2025 öncesi: rüzgâr %21, güneş %12, katsayı 0,03.");
   if (y0 <= 2025 && y1 >= 2025) parts.push("2025: rüzgâr %17, güneş %10, diğer %5, katsayı 0,03 (EPDK 13025).");
-  if (y1 >= 2026) parts.push("2026'dan itibaren: rüzgâr %15, güneş %8, diğer %5, katsayı 0,05 (EPDK 14029, RG 29.12.2025).");
+  if (y1 >= 2026) parts.push("2026'dan itibaren: rüzgâr %15, güneş %8, diğer %5, katsayı 0,05 (EPDK 14029, RG 29.12.2025; 1.11.2026'dan itibaren aynı oranlarla EPDK 14907).");
   return parts.join(" ");
 }
 /** Adil prim slaytı var mı: yalnız toplayıcı sahipleri ya da tek şirketin santralleri için (şirketler arası paylaşım yok) */
@@ -734,7 +735,7 @@ export async function exportPlantReportPptx(
     }
     points.push({
       kind: "estimate",
-      text: `Dengesizlik tutarına ek olarak tolerans dışı sapmalar için tahmini ${formatTlShort(r.kupst.totalTl)} KÜPST ödeniyor; ${agg ? "toplayıcı portföyünde topluluk birimi bazında hesaplanır (EPDK 14029 md. 4)" : `santral bazında hesaplandığı için ${unit.loc} netleşmez`}.`,
+      text: `Dengesizlik tutarına ek olarak tolerans dışı sapmalar için tahmini ${formatTlShort(r.kupst.totalTl)} KÜPST ödeniyor; ${agg ? "toplayıcı portföyünde topluluk birimi bazında hesaplanır (EPDK 14029 / 14907 md. 4)" : `santral bazında hesaplandığı için ${unit.loc} netleşmez`}.`,
     });
     if (netted && !agg) {
       points.push({
@@ -817,7 +818,7 @@ export async function exportPlantReportPptx(
                 r.settlement.sameCompanyNettingTl
               )} zaten netleşiyor. `
             : "") +
-        (agg ? "KÜPST topluluk (portföy) birimi bazında, kurulu güce ağırlıklı toleransla hesaplanır (EPDK 14029 md. 4); 2026 projeksiyonu" : "KÜPST santral bazında hesaplanır, netleşmez; 2026 projeksiyonu") + " 2026 tolerans oranları ve katsayısıyla (rüzgâr %15, güneş %8, katsayı 0,05) yapıldı. 2026 adımları veri yılının fiyatları ve sistem yönleri tekrar ederse geçerlidir. " +
+        (agg ? "KÜPST topluluk (portföy) birimi bazında, kurulu güce ağırlıklı toleransla hesaplanır (EPDK 14029 / 14907 md. 4); 2026 projeksiyonu" : "KÜPST santral bazında hesaplanır, netleşmez; 2026 projeksiyonu") + " 2026 tolerans oranları ve katsayısıyla (rüzgâr %15, güneş %8, katsayı 0,05) yapıldı. 2026 adımları veri yılının fiyatları ve sistem yönleri tekrar ederse geçerlidir. " +
         (iv.realized
           ? "Gün içi düzeltmeler adımı kesin hesaptır: ilk plan ile son plan (gün içi piyasası kapandıktan sonra) aynı fiyatlarla. " +
             (iv.realized.tradeCostTl !== 0
@@ -2197,6 +2198,11 @@ export async function exportPlantReportPptx(
             }. `
           : "İlk planla hesaplandı (son plan yok): şirketler gün içinde düzeltme yapıyorsa fayda daha küçüktür. ";
       const verify = "Grup üyeliği EPİAŞ'ta yayımlanmıyor: şirketler zaten bir grupta ise bu fayda alınıyordur, görüşmeden önce doğrulayın.";
+      // DUY md. 111/5: grupta her şirketin saatlik sapmasının yalnız piyasa hacmine oranlı kısmı netleşir (hesap bu sınırla)
+      const ratio = d.monthlyBenefit.length ? dsgRatioAt(`${d.monthlyBenefit[d.monthlyBenefit.length - 1].month}-15T00:00:00Z`) : Infinity;
+      const limitText = Number.isFinite(ratio)
+        ? `Grupta her şirketin saatlik sapmasının yalnız üretim ya da satışının %${nf(ratio * 100, 0)}'i kadarı netleşir (DUY md. 111), kalanı kendi fiyatıyla ödenir; hesap bu sınırla yapıldı. `
+        : "";
       if (ja) {
         items.push({
           title: `Kalan ${nf(d.companyCount)} bağımsız şirketi toplayıcı portföyüne almak`,
@@ -2206,7 +2212,8 @@ export async function exportPlantReportPptx(
           unverified: true,
           body:
             `${listOf(ja.memberPlantNames, 3, ", ")} zaten ${ja.aggregator} portföyünde. Bağımsız şirketler de girse portföy daha çok saatte kendi içinde dengelenir; ` +
-            `portföyün diğer üyeleriyle netleşme hesapta yok (alt sınır). Yalnız kendi aralarında grup kurmak ${formatTlShort(d.benefitTl)}. ` +
+            `portföyün diğer üyeleriyle netleşme hesapta yok (alt sınır). Yalnız kendi aralarında grup kurmak ${formatTlShort(d.benefitTl)}` +
+              (Number.isFinite(ratio) ? ` (grupta sapmanın yalnız %${nf(ratio * 100, 0)}'i netleşir; toplayıcı tek katılımcı olduğu için orada bu sınır yok). ` : ". ") +
             "Önce sorun: bu santraller neden portföy dışında (ortaklık, finansman, mevcut sözleşme)? " +
             basisText +
             verify,
@@ -2222,6 +2229,7 @@ export async function exportPlantReportPptx(
           body:
             `${d.offsettingHourSharePct >= 99.5 ? "Neredeyse her saatte" : `Saatlerin %${nf(d.offsettingHourSharePct, 0)} kadarında`} bir şirket fazla, bir diğeri eksik üretiyor; grup bu saatlerde kendi içinde dengelenir. ` +
             monthly +
+            limitText +
             (d.excludedPlantNames.length && r.settlement.inOtherAggregator
               ? `${otherAggregatorText(r.settlement.inOtherAggregator)}: dengesizlikleri orada netleştiği için gruba alınmadı. `
               : "") +
@@ -2597,7 +2605,7 @@ export async function exportPlantReportPptx(
         "KÜPST (tahmini)",
         `Saatlik |gerçekleşen − KÜP| sapmanın tolerans payını aşan kısmı × max(PTF, SMF) × katsayı; KÜP gün içi piyasası kapandıktan sonraki son KGÜP'tür (yoksa ilk plan; son plan saatlerin ${pctIn(r.finalPlan.coveragePct)} var${
           r.finalPlan.kupstFirstPlanSharePct >= 0.5 ? `, KÜPST'ün ${pctOf(r.finalPlan.kupstFirstPlanSharePct)} ilk plana göre${kupstUpperBound(r) ? ", üst sınır" : ""}` : ""
-        }); ${agg ? "toplayıcı portföyünde topluluk birimi bazında (toplam UEVM ile toplam KÜP karşılaştırılır; tolerans kaynak türlerinin kurulu gücüne göre ağırlıklı; katsayı topluluk için 2025'te 0,03, 2026'da 0,05; EPDK 14029 / 13025 md. 4)" : "santral bazında"}, YEKDEM santralleri dahil ${unit.dat} ait. Tolerans plana oranlandı. ${kupstRegimeText(r)} Arıza sayısına bağlı katsayı artışı kapsam dışı (alt sınır).`,
+        }); ${agg ? "toplayıcı portföyünde topluluk birimi bazında (toplam UEVM ile toplam KÜP karşılaştırılır; tolerans kaynak türlerinin kurulu gücüne göre ağırlıklı; katsayı topluluk için 2025'te 0,03, 2026'da 0,05; EPDK 14907 / 14029 / 13025 md. 4)" : "santral bazında"}, YEKDEM santralleri dahil ${unit.dat} ait. Tolerans plana oranlandı. ${kupstRegimeText(r)} Arıza sayısına bağlı katsayı artışı kapsam dışı (alt sınır).`,
       ],
       ...(options.costChange
         ? [

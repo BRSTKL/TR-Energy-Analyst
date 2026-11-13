@@ -183,7 +183,7 @@ export default function ValidationPage() {
               <p>
                 <b>Nasıl hesaplandı.</b> Saatlik UEVM ve KGÜP (EPİAŞ), uzlaştırma birimi bazında netleştirildi. Pozisyon olarak son KGÜP (gün içi
                 piyasası kapandıktan sonraki plan) kullanıldı; son planı olmayan saatte ilk KGÜP. Dengesizlik fiyatları EPİAŞ&apos;ın resmi pozitif ve
-                negatif dengesizlik fiyatlarıdır (saatlerin {pctIn(data.officialPriceSharePct)} resmi fiyat var). KÜPST: EPDK 14029 / 13025
+                negatif dengesizlik fiyatlarıdır (saatlerin {pctIn(data.officialPriceSharePct)} resmi fiyat var). KÜPST: EPDK 14907 / 14029 / 13025
                 kararlarına göre{units.some((u) => u.aggregator) ? ", toplayıcıda topluluk bazında" : ", santral bazında"}.
               </p>
               <p>

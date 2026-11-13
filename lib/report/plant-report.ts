@@ -13,7 +13,8 @@
  */
 
 import { isRecordedCapacity } from "@/lib/epias-plant/installed-capacity";
-import { processHourlyRecord } from "@/lib/calculations/engine";
+import { LATEST_FLOOR_V, processHourlyRecord, pricedMarket } from "@/lib/calculations/engine";
+import { dsgHourCost, type DsgMemberHour } from "@/lib/calculations/dsg-rule";
 import { aggregateMonthly } from "@/lib/calculations/aggregate";
 import { HourlyResult, ImbalancePricingProfile, REGULATORY_IMBALANCE_REGIMES } from "@/lib/calculations/types";
 import { finalPlanCoverage, findDataGaps, findLateStarts, isNotProducing, type FinalPlanCoverage, type LateStart, type PlantDataGap } from "@/lib/analysis/data-completeness";
@@ -677,7 +678,7 @@ export function buildPlantReport(
   const settle = (profile: ImbalancePricingProfile) => settleByCompany(withData, profile);
   /** Verilen santralleri şirketlerine göre netleştirip fiyatlar */
   const settleSubset = (subset: Plant[], profile: ImbalancePricingProfile) => sumCost(settleByCompany(subset, profile));
-  const profile2026: ImbalancePricingProfile = { mode: "CUSTOM", ...COEF_2026 };
+  const profile2026: ImbalancePricingProfile = { mode: "CUSTOM", ...COEF_2026, floorV: LATEST_FLOOR_V };
 
   const companyHours = settle(data.profile);
   const companyCost = sumCost(companyHours);
@@ -739,10 +740,26 @@ export function buildPlantReport(
    * Gruplar (şirketler ya da sahipler) tek dengede netleşseydi: grupların kendi dengelerindeki toplam maliyet ile hepsinin
    * birlikte netleşmiş maliyeti ve farklı grupların ters yönde saptığı saatlerin oranı
    */
-  const crossGroup = (groupPlants: Plant[][]) => {
+  const crossGroup = (groupPlants: Plant[][], { participantLimit }: { participantLimit: boolean }) => {
     const groupHours = groupPlants.map((g) => settleGroup(g.map((p) => p.hourly), data.profile));
     // Yalnızca verilen grupların santralleri birlikte netleşir (alt grup hesabında diğer santraller karışmasın)
-    const nettedHours = settleGroup(groupPlants.flat().map((p) => p.hourly), data.profile);
+    const unlimitedHours = settleGroup(groupPlants.flat().map((p) => p.hourly), data.profile);
+    // Gruplar ayrı piyasa katılımcısıysa (DSG'de farklı şirketler) md. 111/5 sınırı: her şirketin saatlik dengesizliğinin
+    // yalnız piyasa hacmine oranlı kısmı grupta netleşir, kalanı kendi fiyatıyla (dsg-rule.ts). Toplayıcı portföyü tek
+    // katılımcıdır: sınırsız
+    let nettedHours = unlimitedHours;
+    if (participantLimit) {
+      const byHour = new Map<number, DsgMemberHour[]>();
+      for (const hours of groupHours)
+        for (const h of hours) {
+          const t = new Date(h.timestamp).getTime();
+          byHour.set(t, [...(byHour.get(t) ?? []), { forecastMwh: h.forecastMwh, actualMwh: h.actualMwh }]);
+        }
+      nettedHours = unlimitedHours.map((h) => ({
+        ...h,
+        imbalanceCost: dsgHourCost(byHour.get(new Date(h.timestamp).getTime()) ?? [], pricedMarket(h), data.profile),
+      }));
+    }
     const standalone = groupHours.reduce((sum, hours) => sum + sumCost(hours), 0);
     const netted = sumCost(nettedHours);
     // Aylık fayda oranı: faydanın her ay tekrarlanıp tekrarlanmadığı (tek yıllık verinin istikrar kanıtı)
@@ -799,8 +816,8 @@ export function buildPlantReport(
     const basis = dsgPlanBasis(dsgGroups.flat());
     const onBasis = (p: Plant): Plant => (basis === "final" ? toFinalPlan(p) : p);
     const groups = dsgGroups.map((g) => g.map(onBasis));
-    const x = crossGroup(groups);
-    const first = basis === "final" ? crossGroup(dsgGroups).benefit : x.benefit;
+    const x = crossGroup(groups, { participantLimit: true });
+    const first = basis === "final" ? crossGroup(dsgGroups, { participantLimit: true }).benefit : x.benefit;
 
     // Bağımsızlar, projenin santrallerini zaten barındıran toplayıcıya girseydi (en çok santral barındıran toplayıcı)
     let joinAggregator: NonNullable<PlantReportData["dsg"]>["joinAggregator"] = null;
@@ -846,7 +863,7 @@ export function buildPlantReport(
       const key = ownerId !== null ? `org:${ownerId}` : `plant:${p.plantId}`;
       owners.set(key, [...(owners.get(key) ?? []), p]);
     }
-    const x = crossGroup(Array.from(owners.values()));
+    const x = crossGroup(Array.from(owners.values()), { participantLimit: false });
     aggregator = {
       name: data.aggregator.name,
       ownerCount: owners.size,
@@ -945,7 +962,11 @@ export function buildPlantReport(
         // Üyenin kendi santralleri kendi aralarında netleşmiş seri
         hourly: settleByCompany(m.plants.map((p) => ({ ...p, organizationId: 0 })), data.profile),
       }));
-      const shapley = analyzeDsgScenario(inputs, inputs.map((i) => i.plantId), data.profile).allocation?.find((a) => a.id === "shapley");
+      // Farklı şirketler ayrı piyasa katılımcısıdır: DSG netleşme sınırı (md. 111/5) uygulanır. Sahipler (toplayıcı) ya da
+      // tek şirketin santralleri tek katılımcıdır: sınırsız
+      const shapley = analyzeDsgScenario(inputs, inputs.map((i) => i.plantId), data.profile, { participantLimit: basis === "companies" }).allocation?.find(
+        (a) => a.id === "shapley"
+      );
       if (shapley) {
         // Toplayıcıda KÜPST topluluk bazındadır (md. 4): üyelere, tek başına KÜPST'leriyle orantılı paylaştırılır (toplam korunur)
         const sumK = plants.reduce((a, r) => a + r.kupstTl, 0);
@@ -1027,7 +1048,7 @@ export function buildPlantReport(
   // Risk primi: en güncel kurallarla (2026 katsayıları + en güncel KÜPST oranları), piyasaya açık portföy varsayımı
   let riskPremium: PlantReportData["riskPremium"] = null;
   if (monthly.length >= 6) {
-    const latestProfile: ImbalancePricingProfile = { mode: "CUSTOM", ...COEF_2026 };
+    const latestProfile: ImbalancePricingProfile = { mode: "CUSTOM", ...COEF_2026, floorV: LATEST_FLOOR_V };
     const kupstMonthly = (ps: Plant[], asCommunity = false) => {
       const m = new Map<string, number>();
       if (asCommunity) {

@@ -47,7 +47,7 @@ export interface BudgetScenario {
   key: string;
   label: string;
   /** Katsayı kuralı (her saate aynen) */
-  rule: Pick<ImbalancePricingProfile, "positiveSurplusCoef" | "positiveOtherCoef" | "negativeDeficitCoef" | "negativeOtherCoef" | "floors">;
+  rule: Pick<ImbalancePricingProfile, "positiveSurplusCoef" | "positiveOtherCoef" | "negativeDeficitCoef" | "negativeOtherCoef" | "floors" | "floorV">;
   /** Hedef ortalama makas (|SMF − PTF|, reel TL/MWh); null: geçmiş yılların makası olduğu gibi */
   targetSpreadReal: number | null;
   /** Portföy büyümesi (0,1 = %10) */

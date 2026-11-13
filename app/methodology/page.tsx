@@ -15,8 +15,8 @@ export const metadata: Metadata = {
  * Mevzuat satırlarındaki durum etiketi kaynağın ne kadar doğrulandığını söyler; teyit edilmemiş madde numarası yazılmaz.
  */
 
-const VERSION = "1.27";
-const VERSION_DATE = "18 Ekim 2026";
+const VERSION = "1.28";
+const VERSION_DATE = "13 Kasım 2026";
 
 const SECTIONS: Array<{ id: string; title: string }> = [
   { id: "ozet", title: "Özet" },
@@ -241,14 +241,15 @@ MWh başına risk = Σ risk / Σ gerçekleşen üretim`}
               <b>2026 fiyat kuralları</b> (md. 110, 29.12.2025 değişikliği, yürürlük 1.1.2026). Formüle üç kural eklendi:
             </p>
             <F>
-              {`Negatif fiyat = max(V, PTF, SMF_N) × (1 + k)           V = 150 TL/MWh
+              {`Negatif fiyat = max(V, PTF, SMF_N) × (1 + k)           V = 150 TL/MWh (1.11.2026'dan itibaren 100)
                  (PTF ya da SMF azami fiyat limitindeyse: AFL × 1,05 × (1 + k))
 Pozitif fiyat  = −B × (1 − l)   eğer min(PTF, SMF_P) < V,   B = 100 TL/MWh
                = min(PTF, SMF_P) × (1 − l)   diğer hallerde
 SMF_N / SMF_P  = saatin içindeki 15 dakikalık SMF'lerin en yükseği / en düşüğü`}
             </F>
             <p>
-              Düşük fiyatlı saatlerde fazla üretim para kazanmaz, öder; eksik üretim en az 150 TL/MWh&apos;dan kapatılır. 15 dakikalık SMF
+              Düşük fiyatlı saatlerde fazla üretim para kazanmaz, öder; eksik üretim en az V&apos;den (150, Kasım 2026&apos;dan itibaren 100
+              TL/MWh; EPDK 14911, RG 19.10.2026) kapatılır. 15 dakikalık SMF
               saatlik veriden görülemediği için uygulama <b>EPİAŞ&apos;ın resmi dengesizlik fiyatını</b> kullanır: Şeffaflık
               Platformu&apos;nun sistem dengesizlik tutarı (TL) ve miktarı (MWh) servislerinden, saat başına tutar ÷ miktar. Resmi fiyat
               saatin kendi katsayısına bölünerek &quot;taban&quot;a çevrilir; mevzuat profili saatin kendi tarihinde resmi fiyatı birebir verir,
@@ -272,7 +273,7 @@ KÜPST (saat) = KÜPSM × max(PTF, SMF) × n                n: fiyat katsayısı
               ]}
             />
             <p>
-              KÜP, gün içi piyasası kapandıktan sonraki son KGÜP&apos;tür. Resmî formül (EPDK 14029 md. 1): KÜPSM = |UEVM − BUDÜP| − m × BUDÜP;
+              KÜP, gün içi piyasası kapandıktan sonraki son KGÜP&apos;tür. Resmî formül (EPDK 14029 ve 14907 md. 1): KÜPSM = |UEVM − BUDÜP| − m × BUDÜP;
               BUDÜP = KUDÜP + (yük alma − yük atma talimatı) + sekonder ve sınırlı frekans terimleri; talimat ve yan hizmet terimleri
               açık veride santral bazında olmadığından sıfır alınır. Toleransın plana (BUDÜP) oranlandığı formül metninden doğrulandı.
               <b>Kapsam:</b> bir şirketin santralleri için KÜPST santral (uzlaştırma birimi) bazında hesaplanır ve şirket içinde
@@ -318,7 +319,11 @@ Netleşme değeri       = Σ_i risk(sapma_i) − Σ_saat risk(Σ_i sapma_i)`}
               ilk planla 44,0 M, son planla 35,6 M). Projenin bazı santralleri zaten bir toplayıcının portföyündeyse asıl seçenek, bağımsız
               şirketleri o portföye almaktır: bağımsızlar + portföydeki proje santralleri birlikte netleşir; portföyün diğer üyeleri hesapta
               olmadığı için alt sınırdır (Polat: ≥ 53,0 M). Dengeden sorumlu grup üyeliği EPİAŞ&apos;ta yayımlanmadığı için kalem
-              &quot;olası kaldıraç&quot;tır ve görüşmeden önce doğrulanmalıdır DSG sayfası aynı kuralla çalışır: şirket projelerinde son plan, başka bir toplayıcıdaki santraller işaretli ve varsayılan seçim dışında (toplayıcı projesinde sayfa raporun toplayıcı bloğuyla aynı tabanda, ilk planla) (denetim dsg-basis, dsg-join, dsg-text). <Tag kind="scenario" />
+              &quot;olası kaldıraç&quot;tır ve görüşmeden önce doğrulanmalıdır. Farklı şirketler bir grupta birleşince her şirketin saatlik
+              sapmasının tamamı netleşmez (DUY md. 111/3–5): piyasa hacmi PH = max(üretim, satış) olmak üzere yalnız PH × oran kadarı
+              grupta netleşir, kalanı şirketin kendi dengesizlik fiyatıyla ödenir. Oran 2025&apos;te %10, 1.1.2026&apos;dan itibaren %5 (EPDK
+              13869, RG 18.10.2025). Satış miktarı açık veride olmadığı için plan (KGÜP) satış kabul edilir. Toplayıcı portföyü tek piyasa
+              katılımcısı olduğundan orada sınır yoktur. DSG sayfası aynı kuralla çalışır: şirket projelerinde son plan, başka bir toplayıcıdaki santraller işaretli ve varsayılan seçim dışında (toplayıcı projesinde sayfa raporun toplayıcı bloğuyla aynı tabanda, ilk planla) (denetim dsg-basis, dsg-join, dsg-text). <Tag kind="scenario" />
             </p>
           </Section>
 
@@ -1144,7 +1149,7 @@ Rüzgâr: beklenen = santralin güç eğrisi (100 m hız 0,5 m/s × 8 yön hücr
                   <span key="s2" className={STATUS_STYLE.verified}>doğrulandı (yönetmelik metni)</span>,
                 ],
                 [
-                  "2026 fiyat kuralları: taban V = 150 TL, negatif fiyat B = 100 TL, azami fiyatta AFL × 1,05, 15 dakikalık SMF (SMF_N / SMF_P)",
+                  "2026 fiyat kuralları: taban V = 150 TL (1.11.2026'dan itibaren 100 TL, EPDK 14911, RG 19.10.2026), negatif fiyat B = 100 TL, azami fiyatta AFL × 1,05, 15 dakikalık SMF (SMF_N / SMF_P)",
                   "Dengeleme ve Uzlaştırma Yönetmeliği md. 110/1–2 (RG 29.12.2025, 33122, değişiklik md. 17; yürürlük 1.1.2026)",
                   <span key="s2b" className={STATUS_STYLE.verified}>doğrulandı (yönetmelik metni ve EPİAŞ resmi tutarlarıyla)</span>,
                 ],
@@ -1165,7 +1170,7 @@ Rüzgâr: beklenen = santralin güç eğrisi (100 m hız 0,5 m/s × 8 yön hücr
                 ],
                 [
                   "KÜPST formülü; kaynak bazlı katsayı yetkisi",
-                  "Dengeleme ve Uzlaştırma Yönetmeliği md. 110 (3)–(6); formül ve toplayıcıda topluluk bazı: EPDK 13025 ve 14029 md. 1 ve 4",
+                  "Dengeleme ve Uzlaştırma Yönetmeliği md. 110 (3)–(6); formül ve toplayıcıda topluluk bazı: EPDK 13025, 14029 ve 14907 md. 1 ve 4",
                   <span key="s4a" className={STATUS_STYLE.verified}>doğrulandı (yönetmelik metni)</span>,
                 ],
                 [
@@ -1182,6 +1187,28 @@ Rüzgâr: beklenen = santralin güç eğrisi (100 m hız 0,5 m/s × 8 yön hücr
                     </a>
                   </span>,
                   <span key="s5" className={STATUS_STYLE.verified}>doğrulandı (karar metni)</span>,
+                ],
+                [
+                  "KÜPST 1.11.2026'dan itibaren: üretici oranları aynı; tüketim birimleri 1.1.2027'den. V = 100 TL/MWh (1.11.2026'dan itibaren)",
+                  <span key="5b">
+                    EPDK, 24/09/2026 tarihli ve 14907 (KÜPST; 14029&apos;u kaldırır) ve 14911 (V) sayılı Kurul Kararları (RG 19.10.2026, 33405;
+                    yürürlük yayımı izleyen fatura dönemi),{" "}
+                    <a className="text-indigo-700 underline" href="https://www.resmigazete.gov.tr/eskiler/2026/10/20261019-9.pdf" target="_blank" rel="noreferrer">
+                      resmigazete.gov.tr
+                    </a>
+                  </span>,
+                  <span key="s5b" className={STATUS_STYLE.verified}>doğrulandı (karar metni)</span>,
+                ],
+                [
+                  "Dengeden sorumlu grupta netleşme sınırı: DO = |BEDM| / PH, PH = max(NAM, NSM); oran 2025 %10, 2026 %5",
+                  <span key="5c">
+                    Dengeleme ve Uzlaştırma Yönetmeliği md. 111/3–5 (RG 17.12.2024, 32755; yürürlük 1.1.2025),{" "}
+                    <a className="text-indigo-700 underline" href="https://www.resmigazete.gov.tr/eskiler/2024/12/20241217-22.htm" target="_blank" rel="noreferrer">
+                      resmigazete.gov.tr
+                    </a>
+                    ; EPDK 16/10/2025 tarihli ve 13869 sayılı Kurul Kararı (RG 18.10.2025, 33051; yürürlük 1.1.2026)
+                  </span>,
+                  <span key="s5c" className={STATUS_STYLE.verified}>doğrulandı (yönetmelik ve karar metni)</span>,
                 ],
                 [
                   "YEKDEM katılımcısı üretimini serbest piyasada satar; dengesizliği kendisine aittir",
@@ -1208,6 +1235,11 @@ Rüzgâr: beklenen = santralin güç eğrisi (100 m hız 0,5 m/s × 8 yön hücr
             <Table
               head={["Sürüm", "Tarih", "Değişiklik"]}
               rows={[
+                [
+                  "1.28",
+                  "13 Kasım 2026",
+                  "Mevzuat güncellemesi (Resmî Gazete metinlerinden doğrulandı). (1) Dengeden sorumlu grupta netleşme sınırı (DUY md. 111/3–5): farklı şirketler bir grupta birleşince her şirketin saatlik sapmasının yalnız piyasa hacminin (üretim ya da satıştan büyük olanı) %10'u (2025) / %5'i (2026, EPDK 13869) kadarı grupta netleşir, kalanı kendi fiyatıyla ödenir. Önceden sınırsız netleşme varsayılıyordu ve şirketler arası grup faydası olduğundan yüksek çıkıyordu. Rapordaki grup senaryosu, adil pay ve DSG sayfası (şirket projelerinde) bu sınırla hesaplanır; toplayıcı portföyü tek katılımcı olduğundan değişmedi. Etkisi (2026, son plan): Polat 40,1 → 11,6 M TL, Bilgin 40,2 → 15,7 M TL, Doğuş 0,73 → 0,17 M TL; toplayıcıya katılma faydası ve toplayıcı projeleri değişmedi. (2) V değeri 1.11.2026'dan itibaren 100 TL/MWh (EPDK 14911); yalnız resmi fiyatı henüz yayımlanmamış saatlerde ve projeksiyonda etkili. (3) KÜPST'te 1.11.2026'dan itibaren EPDK 14907 dayanak; üretici oranları 14029 ile aynı, hesap değişmedi. Toplam dengesizlik maliyetleri değişmedi.",
+                ],
                 [
                   "1.27",
                   "18 Ekim 2026",

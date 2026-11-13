@@ -13,7 +13,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { prisma } from "@/lib/prisma";
-import { processHourlyRecord } from "@/lib/calculations/engine";
+import { LATEST_FLOOR_V, processHourlyRecord } from "@/lib/calculations/engine";
 import { DEFAULT_IMBALANCE_PROFILE, REGULATORY_IMBALANCE_REGIMES, type HourlyResult, type MarketPriceRecord, type SystemDirection } from "@/lib/calculations/types";
 import { KUPST_REGIMES, kupstCommunityHours, kupstForHour } from "@/lib/calculations/kupst";
 import { AGGREGATOR_ORG_ID } from "@/lib/projects/aggregator";
@@ -169,11 +169,12 @@ export const BUDGET_SPREADS: Record<BudgetSpread, string> = {
   wide: "Makas %20 daha açılır",
 };
 export const BUDGET_RULES: Record<BudgetRule, { label: string; rule: BudgetScenario["rule"] }> = {
-  r2026: { label: "2026 kuralı (aynı yönde %6, ters yönde %3)", rule: REGULATORY_IMBALANCE_REGIMES[REGULATORY_IMBALANCE_REGIMES.length - 1].coefficients },
+  // Bütçe ileriye dönüktür: V bugünkü değeriyle (EPDK 14911: 100 TL/MWh)
+  r2026: { label: "2026 kuralı (aynı yönde %6, ters yönde %3)", rule: { ...REGULATORY_IMBALANCE_REGIMES[REGULATORY_IMBALANCE_REGIMES.length - 1].coefficients, floorV: LATEST_FLOOR_V } },
   r2025: { label: "2025 kuralı (düz %3)", rule: REGULATORY_IMBALANCE_REGIMES[0].coefficients },
   strict: {
     label: "Sertleşme (aynı yönde %9, ters yönde %3)",
-    rule: { positiveSurplusCoef: 0.91, positiveOtherCoef: 0.97, negativeDeficitCoef: 1.09, negativeOtherCoef: 1.03, floors: true },
+    rule: { positiveSurplusCoef: 0.91, positiveOtherCoef: 0.97, negativeDeficitCoef: 1.09, negativeOtherCoef: 1.03, floors: true, floorV: LATEST_FLOOR_V },
   },
 };
 export const BUDGET_LEVELS: Record<BudgetLevel, string> = {

@@ -5,6 +5,26 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 13.11.2026 · Claude · Kasım 2026 mevzuatı: DSG sınırı, V, KÜPST (`claude/mevzuat-kasim-2026`; commit'lenmedi)
+
+- **Neden:** kullanıcının Codex'e yaptırdığı piyasa araştırması (`kaynaklar/piyasa-arastirmasi-2026-11.md`, A–D bölümleri,
+  ~150 kaynak; E–F eksik) üç kural farkı gösterdi. Üçü de Resmî Gazete / mevzuat.gov.tr'den okunup doğrulandı.
+- **Yapılan:** `lib/calculations/dsg-rule.ts` (md. 111/5: oran dönemleri, sapmayı grup / aşan diye ayırma, saatlik grup
+  maliyeti); `dsg-scenarios.ts` `participantLimit` (varsayılan açık; toplayıcı projesinde kapalı); rapor `crossGroup` ve
+  adil pay (şirketler arası sınırlı, toplayıcı sınırsız); rapor slaytı ve sonuç kartı sınırı yazar. `engine.ts` V dönemleri
+  (`imbalanceFloorV`). `kupst.ts` 14907 dönemi. Yöntem 1.28.
+- **Ölçüm (Mac, rapor verisi):** DSG faydası Polat 40,1 → 11,6 M TL, Bilgin 40,2 → 15,7 M, Doğuş 0,73 → 0,17 M. Toplam
+  maliyetler, toplayıcı projeleri ve "toplayıcıya katılma" değişmedi.
+- **İleriye dönük hesaplar** (bütçe, risk primi, "2026 kuralları" senaryosu) V'yi bugünkü değerle kullanır
+  (`ImbalancePricingProfile.floorV`, `LATEST_FLOOR_V`); geçmiş saatler kendi tarihindeki V'yle. Ekran ve rapor metinlerinde
+  KÜPST dayanağına 14907 eklendi; yöntem sayfası kaynak tablosuna 14907/14911 ve md. 111/13869 satırları.
+- **Kontrol:** 1.079 test (7 yeni), tsc, lint, `check:reports` 0 hata; tam duman turu 60/60 (2 yavaşlık uyarısı, soğuk
+  sunucu), sonraki metin değişiklikleri için `--only methodology,results,validation,dsg,budget` 21/21. Mevzuat denetçisi:
+  hata yok; şüphelerinden V-projeksiyonu ve 14907 metinleri düzeltildi.
+- **Açık:** sonuç sayfasındaki eski netleşme tablosu (`portfolio-netting.ts`, santral çiftleri) sınırsız; kart bunu "üst
+  sınır" diye yazar. Aday taraması toplayıcı varsayar (sınırsız). 2027 oranı 1 Aralık'a kadar EPDK'dan beklenir.
+- **Sıradaki:** sunucuya yükleme (kullanıcı isteyince); E–F araştırması gelince ürün fikirleri.
+
 ## 12.11.2026 · Claude · Şirket dizini ısıtmada (`claude/sirket-dizini-isitma`; yüklendi, 968f7e2)
 
 - **Sorun:** yüklemeden sonraki ilk şirket listesi sunucuda 11 sn sürdü; dizin ısıtılmıyordu ve yalnız bellekte tutuluyordu.
@@ -242,15 +262,3 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
   adaylar); %5 eşikte rüzgârda hiç terfi olmazdı. Sunucuda canlı kayıt 31.10'dan beri; ilk karar en erken 28.11.2026.
 - **Sıradaki:** onayla `main`'e birleştirme ve sunucuya yükleme (yeni zamanlayıcı yok; defter ilk kararda kendiliğinden oluşur). Sonra
   Kasım sonunda ilk kararı ve `champion.json`'ı sunucuda kontrol et.
-
-## 04.11.2026 · Claude · Teklif öncesi sayfası sadeleştirildi (`claude/teklif-sade`)
-
-- Kullanıcı "çok yazı ve uyarı var" dedi; önizleme gösterildi, onaylandı. 722 → 385 kelime, 3.206 → 2.250 px. Hesap, veri ve
-  iş kuralı değişmedi; yalnız sunum.
-- **Yeni sıra:** üst kart (ana sayı, en pahalı / en ucuz saat, riskli saat, sapma, tek satır "Veri durumu") → 24 saatlik fiyat
-  grafiği (limite yakın saatler gölgeli) → teklif masası → kapalı bölümler (`components/market/fold.tsx`: güven, girdiler, saatlik
-  tablo, fiyat limiti, bağlam, daha fazla ayrıntı). Önceki altı uyarı kutusu tek veri durumu satırında; üretim kaydı yoksa
-  masada boş sütun yerine tek satır not.
-- **Düzeltilen tutarsızlık:** üst kart "limite yakın 3 saat", masa "riskli 12/24" diyordu; ikisi de `buildBidRows` tanımını kullanır.
-- **Kontrol:** 988 test, tsc, lint, `--only teklif` duman testi (masaüstü + 375 px) temiz. Yerelde yarın fiyatı açıklanmamış
-  ("kayıt önde") görünüm görülemedi; sunucuda sabah bakılmalı.

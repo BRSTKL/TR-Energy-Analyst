@@ -89,7 +89,10 @@ describe("Santral raporu verisi", () => {
       { name: "B", type: "HES", hourly: [b], org: 2 },
     ]));
     expect(two.totals.imbalanceCostTl).toBeCloseTo(1452, 6);
-    expect(two.dsg!.benefitTl).toBeCloseTo(1452, 6);
+    // Farklı şirketler: 2025'te md. 111/5 sınırı %10. A: +2, PH 12 → grupta +1,2; B: −2, PH 10 → grupta −1. Grupta +0,2
+    // netleşir, A'nın +0,8 ve B'nin −1 fazlası ayrı fiyatlanır. Grup saati ilk santralin piyasasıyla fiyatlanır (PTF 2000,
+    // SMF 1800): pozitif 1 MWh × (2000 − 1746) + negatif 1 MWh × (2060 − 2000) = 314 → fayda 1452 − 314
+    expect(two.dsg!.benefitTl).toBeCloseTo(1452 - 314, 6);
     expect(two.dsg!.offsettingHourSharePct).toBe(100);
   });
 

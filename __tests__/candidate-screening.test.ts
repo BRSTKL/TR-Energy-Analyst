@@ -76,7 +76,8 @@ describe("Aday santral taraması", () => {
     const ref = analyzeDsgScenario(
       [...members.map((m) => ({ plantId: m.key, plantName: m.name, plantType: "RES", hourly: m.hourly })), { plantId: "c5", plantName: "c5", plantType: "RES", hourly: candHourly }],
       ["A", "B", "c5"],
-      P
+      P,
+      { participantLimit: false } // aday taraması toplayıcı portföyü varsayar: tek katılımcı, sınırsız netleşme
     ).allocation!.find((a) => a.id === "shapley")!.shares.find((s) => s.plantId === "c5")!;
     expect(fair.allocatedCostTl).toBeCloseTo(ref.allocatedCost, 6);
     const mwh = r.candidates[0].actualMwh;

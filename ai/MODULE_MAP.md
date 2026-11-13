@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-573 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+574 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
 ## Sayfalar (app/**/page.tsx) (31)
 
@@ -195,9 +195,10 @@
 - `lib/auth/server.ts` — Route handler ve sunucu bileşenleri için oturum yardımcıları (Node).
 - `lib/auth/session.ts` — Oturum çerezi: `base64url(JSON {u: kullanıcı id, e: bitiş ms}).base64url(HMAC-SHA256)`, anahtar `AUTH_SECRET`.
 
-## lib/calculations (5)
+## lib/calculations (6)
 
 - `lib/calculations/aggregate.ts` — Aylık ve Yıllık Agregasyon Motoru: SAF (pure) fonksiyonlar: - Dışsal yan etkisi yoktur.
+- `lib/calculations/dsg-rule.ts` — Dengeden sorumlu grupta (DSG) netleşme sınırı (DUY md. 111/3–5): 1/1/2025'ten beri grup üyesi her piyasa katılımcısının saatlik bireysel dengesizliğinin tamamı grupta netleşmez:
 - `lib/calculations/engine.ts` — Pure Calculation Engine: Tüm fonksiyonlar SAF (pure) olarak tasarlanmıştır: - Dışsal yan etkisi yoktur (No side-effects, no I/O, no DB).
 - `lib/calculations/index.ts`
 - `lib/calculations/kupst.ts` — KÜPST (Kesinleşmiş Günlük Üretim Programından Sapma Tutarı): Lisanslı üretici, dengesizlik tutarından ayrı olarak, saatlik plan sapmasının tolerans payını aşan kısmı için sapma bedeli öder (DUY md. 110; tolerans ve katsayılar EPDK kurul ka…

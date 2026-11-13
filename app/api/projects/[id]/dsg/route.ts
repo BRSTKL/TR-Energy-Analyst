@@ -83,7 +83,8 @@ async function handleGET(request: Request, { params }: { params: { id: string } 
       ? requested.split(",").filter((id) => withData.some((m) => m.plantId === id))
       : withData.filter((m) => !inAggregatorMember(m)).map((m) => m.plantId);
 
-    const result = analyzeDsgScenario(withData, selectedIds, data.profile);
+    // Toplayıcı portföyü tek piyasa katılımcısıdır: sahipler arasında DSG netleşme sınırı (md. 111/5) yoktur
+    const result = analyzeDsgScenario(withData, selectedIds, data.profile, { participantLimit: !data.aggregator });
 
     return NextResponse.json({
       success: true,

@@ -18,6 +18,13 @@ yeniden üretin. Ayrıntılı geçmiş `PLAN.md` (süren aşamalar, son kayıtla
 - **Netleşme şirket düzeyinde** (25.09): aynı şirketin santralleri zaten netleşir; DSG faydası yalnız şirketler arası.
   Santral santral toplam gerçeği abartır.
 - **DSG senaryosu son planla** (14.10): ilk plan gün içi kazancını iki kez sayar.
+- **DSG'de netleşme sınırı var** (13.11): DUY md. 111/3–5. Farklı şirketler bir grupta birleşince her şirketin saatlik
+  sapmasının yalnız PH × oran kadarı netleşir (PH = max(üretim, satış); oran 2025 %10, 2026 %5, EPDK 13869; her yıl
+  1 Aralık'a kadar yeni karar). Aynı şirket ve toplayıcı portföyü tek katılımcı: sınırsız. Sınırsız varsayım grup
+  faydasını 2,5–3,5 kat abartıyordu (Polat 40,1 → 11,6 M TL). Kod `lib/calculations/dsg-rule.ts`.
+- **Mevzuat dönemleri saat saat** (13.11): V 1.11.2026'dan 100 TL/MWh (EPDK 14911); KÜPST dayanağı 1.11.2026'dan
+  14907 (oranlar 14029 ile aynı). Kararlar Resmî Gazete taranmış PDF'inden okunur; ikincil kaynak (Codex araştırması,
+  hukuk sitesi) yalnız ipucu.
 - **Gün içi stratejide en az 2 saat gecikme** (27.09): 1 saatlik gecikme GİP kapanışı yüzünden uygulanamaz; eski "%18"
   ≈ %4'e indi.
 

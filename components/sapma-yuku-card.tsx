@@ -120,7 +120,7 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh, plantScoped = false
               {agg
                 ? `Santraller ${agg.name} portföyünde tek dengede uzlaştırılır: farklı sahiplerin santralleri her saat birbirini dengeler.`
                 : "Dengesizlik şirket bazında uzlaştırılır: aynı şirketin santralleri her saat birbirini dengeler."}{" "}
-              {agg ? "KÜPST, toplayıcı portföyünde topluluk (portföy) birimi bazında hesaplanır (EPDK 14029 md. 4): santraller arası sapmalar netleşir." : "KÜPST santral bazındadır, netleşmez."} Rakamlar PowerPoint raporuyla aynıdır.
+              {agg ? "KÜPST, toplayıcı portföyünde topluluk (portföy) birimi bazında hesaplanır (EPDK 14029 / 14907 md. 4): santraller arası sapmalar netleşir." : "KÜPST santral bazındadır, netleşmez."} Rakamlar PowerPoint raporuyla aynıdır.
               {agg?.scope && <span className="mt-1 block font-medium text-slate-700">{agg.scope}.</span>}
               {sapma.yekdem && (
                 <span className="mt-1 block text-slate-700">
@@ -287,7 +287,7 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh, plantScoped = false
         <p className="flex items-start gap-1.5 text-2xs text-slate-500">
           <Info className="mt-0.5 h-3 w-3 shrink-0" />
           KÜPST tahminidir: tolerans plana oranlandı (2025: rüzgâr %17, güneş %10, diğer %5, katsayı 0,03, EPDK 13025; 2026&apos;dan
-          itibaren rüzgâr %15, güneş %8, katsayı 0,05, EPDK 14029). Kısıntı talimatları santral bazında yayımlanmadığından ayrılamadı. Aşağıdaki santral grafikleri ve tablo santral bazındadır; portföy
+          itibaren rüzgâr %15, güneş %8, katsayı 0,05, EPDK 14029; Kasım 2026&apos;dan itibaren aynı oranlarla 14907). Kısıntı talimatları santral bazında yayımlanmadığından ayrılamadı. Aşağıdaki santral grafikleri ve tablo santral bazındadır; portföy
           toplamları {agg ? "portföy" : "şirket"} bazındadır.
         </p>
       </CardContent>

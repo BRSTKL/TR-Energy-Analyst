@@ -82,7 +82,9 @@ export function NettingCard({
           birbirini dengelerdi. Bağımsız maliyet, santrallerin tek başına dengesizlik maliyetlerinin
           toplamı; netleşmiş maliyet, grubun saatlik toplam dengesizliğinin aynı fiyatlarla maliyetidir.
           Grup düzeyinde aynı fiyat formülü varsayılır; maliyetin üyeler arasında paylaşımı DSG
-          sözleşmesine bağlıdır.
+          sözleşmesine bağlıdır. Bu tablo üst sınırdır: farklı şirketler bir grupta birleşince her şirketin saatlik
+          sapmasının yalnız satış ya da üretiminden büyük olanın %5&apos;i kadarı (2025&apos;te %10) grupta netleşir, kalanı kendi fiyatıyla ödenir (DUY md.
+          111). Şirketler arası ek fayda rakamı ve DSG Senaryoları sayfası bu sınırla hesaplanır.
           {projectId && (
             <>
               {" "}

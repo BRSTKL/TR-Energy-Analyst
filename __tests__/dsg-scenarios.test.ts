@@ -20,6 +20,9 @@ const plant = (id: string, type: string, hourly: HourlyResult[]): NettingPlantIn
   hourly,
 });
 
+// Netleşme motorunun kendisi: üyeler tek katılımcının parçası (sınırsız). md. 111/5 sınırı dsg-rule.test.ts'te
+const UNLIMITED = { participantLimit: false };
+
 describe("DSG senaryo analizi", () => {
   // A ve B aynı saatte tam zıt yönde 10 MWh sapıyor; C başka bir saatte 20 MWh sapıyor
   const A = plant("A", "RES", [hour(0, 50, 60), hour(1, 50, 50)]);
@@ -28,7 +31,7 @@ describe("DSG senaryo analizi", () => {
   const all = [A, B, C];
 
   it("Netleşmiş maliyeti mevcut netleştirme motoruyla aynı hesaplar", () => {
-    const r = analyzeDsgScenario(all, ["A", "B", "C"], DEFAULT_IMBALANCE_PROFILE);
+    const r = analyzeDsgScenario(all, ["A", "B", "C"], DEFAULT_IMBALANCE_PROFILE, UNLIMITED);
     const ref = analyzeGroupNetting(all, { key: "p", label: "p", kind: "portfolio" }, DEFAULT_IMBALANCE_PROFILE);
     expect(r.selection!.nettedCost).toBeCloseTo(ref.nettedCost, 6);
     expect(r.selection!.standaloneCost).toBeCloseTo(ref.standaloneCost, 6);
@@ -38,14 +41,14 @@ describe("DSG senaryo analizi", () => {
   });
 
   it("Her yöntem netleşen maliyetin tamamını paylaştırır", () => {
-    const r = analyzeDsgScenario(all, ["A", "B", "C"], DEFAULT_IMBALANCE_PROFILE);
+    const r = analyzeDsgScenario(all, ["A", "B", "C"], DEFAULT_IMBALANCE_PROFILE, UNLIMITED);
     for (const m of r.allocation!) {
       expect(m.shares.reduce((s, x) => s + x.allocatedCost, 0)).toBeCloseTo(1200, 6);
     }
   });
 
   it("Shapley faydayı yaratanlara verir; maliyet orantılı paylaştırmada A+B ayrılmak ister", () => {
-    const r = analyzeDsgScenario(all, ["A", "B", "C"], DEFAULT_IMBALANCE_PROFILE);
+    const r = analyzeDsgScenario(all, ["A", "B", "C"], DEFAULT_IMBALANCE_PROFILE, UNLIMITED);
     const shapley = r.allocation!.find((m) => m.id === "shapley")!;
     const share = (id: string) => shapley.shares.find((s) => s.plantId === id)!.allocatedCost;
     // A ve B birbirini tamamen götürür, C'ye katkıları yok: Shapley'de A ve B 0 öder, C kendi maliyetini
@@ -61,7 +64,7 @@ describe("DSG senaryo analizi", () => {
   });
 
   it("Marjinal değer: gruptaki santralin ayrılınca kaybettirdiği, dışarıdakinin eklenince kattığı fayda", () => {
-    const r = analyzeDsgScenario(all, ["A", "C"], DEFAULT_IMBALANCE_PROFILE);
+    const r = analyzeDsgScenario(all, ["A", "C"], DEFAULT_IMBALANCE_PROFILE, UNLIMITED);
     // A+C'de netleşme yok (fayda 0); B eklenirse A ile 1200 ₺ fayda doğar
     expect(r.selection!.benefitTl).toBeCloseTo(0, 6);
     const b = r.marginal.find((m) => m.plantId === "B")!;
@@ -71,7 +74,7 @@ describe("DSG senaryo analizi", () => {
   });
 
   it("Alt grupları faydaya göre sıralar; tek santral seçiminde grup sonucu üretmez", () => {
-    const r = analyzeDsgScenario(all, ["A"], DEFAULT_IMBALANCE_PROFILE);
+    const r = analyzeDsgScenario(all, ["A"], DEFAULT_IMBALANCE_PROFILE, UNLIMITED);
     expect(r.selection).toBeNull();
     expect(r.allocation).toBeNull();
     expect(r.subsetsExhaustive).toBe(true);
@@ -85,7 +88,7 @@ describe("DSG senaryo analizi", () => {
   it("Aylık faydayı ve zıt yönlü saat payını hesaplar", () => {
     const X = plant("X", "RES", [hour(0, 50, 60, 1), hour(0, 50, 60, 2)]);
     const Y = plant("Y", "RES", [hour(0, 50, 40, 1), hour(0, 50, 60, 2)]);
-    const r = analyzeDsgScenario([X, Y], ["X", "Y"], DEFAULT_IMBALANCE_PROFILE);
+    const r = analyzeDsgScenario([X, Y], ["X", "Y"], DEFAULT_IMBALANCE_PROFILE, UNLIMITED);
     expect(r.monthly.map((m) => m.month)).toEqual(["2025-01", "2025-02"]);
     expect(r.monthly[0].benefitRatio).toBeCloseTo(1, 6); // Ocak: tam netleşme
     expect(r.monthly[1].benefitRatio).toBeCloseTo(0, 6); // Şubat: aynı yönde
@@ -100,7 +103,7 @@ describe("32'den fazla üye (toplayıcı portföyü)", () => {
   );
 
   it("üyeler karışmaz: 32. üye 0. üyeyle aynı sayılmaz", () => {
-    const r = analyzeDsgScenario(members, members.map((m) => m.plantId), DEFAULT_IMBALANCE_PROFILE);
+    const r = analyzeDsgScenario(members, members.map((m) => m.plantId), DEFAULT_IMBALANCE_PROFILE, UNLIMITED);
     // Hiçbir saatte iki üye birlikte sapmıyor: grup maliyeti tek başına toplamına eşit
     const expected = Array.from({ length: 40 }, (_, i) => (i + 1) * 60).reduce((a, b) => a + b, 0);
     expect(r.selection!.standaloneCost).toBeCloseTo(expected, 6);

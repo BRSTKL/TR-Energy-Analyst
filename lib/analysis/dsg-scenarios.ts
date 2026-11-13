@@ -16,6 +16,7 @@
  */
 
 import { processHourlyRecord, pricedMarket } from "@/lib/calculations/engine";
+import { dsgHourCost } from "@/lib/calculations/dsg-rule";
 import { HourlyResult, ImbalancePricingProfile } from "@/lib/calculations/types";
 import type { NettingPlantInput } from "@/lib/analysis/portfolio-netting";
 
@@ -134,26 +135,39 @@ export function analyzeDsgScenario(
   plantsIn: NettingPlantInput[],
   selectedIds: string[],
   profile: ImbalancePricingProfile,
-  { topN = 10 }: { topN?: number } = {}
+  {
+    topN = 10,
+    participantLimit = true,
+  }: {
+    topN?: number;
+    /**
+     * Üyeler ayrı piyasa katılımcısıysa (farklı şirketler bir DSG'de) md. 111/5 netleşme sınırı uygulanır (dsg-rule.ts).
+     * Üyeler tek katılımcının parçasıysa (toplayıcı portföyündeki sahipler) false: sınırsız netleşir.
+     */
+    participantLimit?: boolean;
+  } = {}
 ): DsgScenarioResult {
   const plants = plantsIn.filter((p) => p.hourly.length > 0);
   const n = plants.length;
   const data = align(plants);
 
-  // k. saatte verilen santrallerin netleşmiş maliyeti (o saatte verisi olmayan santral atlanır)
+  // k. saatte verilen üyelerin netleşmiş maliyeti (o saatte verisi olmayan üye atlanır)
   const hourCost = (members: number[], k: number) => {
     let f = 0;
     let a = 0;
     let any = false;
+    const present: { forecastMwh: number; actualMwh: number }[] = [];
     for (const i of members) {
       const fi = data.forecast[i][k];
       if (Number.isNaN(fi)) continue;
       f += fi;
       a += data.actual[i][k];
       any = true;
+      present.push({ forecastMwh: fi, actualMwh: data.actual[i][k] });
     }
     if (!any) return 0;
     const s = data.samples[k];
+    if (participantLimit) return dsgHourCost(present, pricedMarket(s), profile);
     return processHourlyRecord(
       { timestamp: s.timestamp, forecastMwh: f, actualMwh: a },
       pricedMarket(s),
