@@ -5,7 +5,7 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
-## 13.11.2026 · Claude · YEKDEM 2027 karar listesi (`claude/mevzuat-kasim-2026`; commit'lenmedi)
+## 13.11.2026 · Claude · YEKDEM 2027 karar listesi (`claude/mevzuat-kasim-2026`; yüklendi, 50faff0)
 
 - **Neden:** piyasa araştırmasından öneri 1; 2027 YEKDEM başvuru/sonlandırma son günü 30.11.2026.
 - **Yapılan:** `lib/analysis/yekdem-decision.ts` (kim karar verebilir, tarife: 2021'e kadar Cetvel $73/$133 MWh, sonrası
@@ -17,9 +17,12 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
   yalnız süresi dolanlar.
 - **Kontrol:** 1.084 test (5 yeni), tsc, lint, `check:reports` 0 hata, `--only yekdem,methodology` geçti; kart masaüstü ve
   telefonda ekran görüntüsüyle bakıldı.
-- **Sınırlar:** işletmeye giriş tarihi yok (±1 yıl); yerli katkı hariç; sunucu verisi Mac'ten yeni olabilir.
+- **Sınırlar:** işletmeye giriş tarihi yok (±1 yıl); yerli katkı hariç.
+- **Yüklendi (13.11):** `968f7e2 → 50faff0` (iki commit birlikte). Sayfa denetimi 200; sunucuda `/api/yekdem/decision`
+  Mac'le birebir (karne Oca–Eyl 2026, kur 48,53; 403 santral, 402 YEKDEM yüksek, 0 çıkış, 3 dönüş, 22 belirsiz).
+- **Sıradaki:** 2027 DSG oranı (EPDK, 1 Aralık'a kadar); YEKDEM / DSG bulgusuyla LinkedIn yazısı (önce iddia denetçisi).
 
-## 13.11.2026 · Claude · Kasım 2026 mevzuatı: DSG sınırı, V, KÜPST (`claude/mevzuat-kasim-2026`; commit'lenmedi)
+## 13.11.2026 · Claude · Kasım 2026 mevzuatı: DSG sınırı, V, KÜPST (`claude/mevzuat-kasim-2026`; yüklendi, b438ad5)
 
 - **Neden:** kullanıcının Codex'e yaptırdığı piyasa araştırması (`kaynaklar/piyasa-arastirmasi-2026-11.md`, A–D bölümleri,
   ~150 kaynak; E–F eksik) üç kural farkı gösterdi. Üçü de Resmî Gazete / mevzuat.gov.tr'den okunup doğrulandı.
