@@ -5,6 +5,20 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 15.11.2026 · Claude · Geçmişle sınama ve rapor hesabı hızı (`claude/rapor-hizi`; yüklenmedi)
+
+- **Yapılan (çıktı birebir aynı, 3 projede sonuç ve geçmişle sınama JSON'u `cmp` ile):** `priceHours` geçmiş saat araması
+  santral başına sayı anahtarlı sözlük (metin anahtar yok); `PricedHour.t` (saat başı ms, `hourTime`) yön stratejilerinde
+  `new Date` yerine; kalıcılık kazanç önbelleği saatin kendi dizisinde (`gainMemo`, WeakMap + metin anahtarlı arama
+  yok); `persistenceTradeGain` saat başına fonksiyon üretmiyor; `lib/calculations/time-keys.ts` (`timeOf`, `utcMonthKey`)
+  rapor hesabında 15 yerde `toISOString().slice` / `new Date().getTime()` yerine.
+- **Ölçüm (Mac, Inavitas, önbelleksiz):** geçmişle sınama 8,2 → 5,7 sn, sonuç 2,8 → 2,4 sn; küçük projelerde sınama
+  2,1 → 1,0 ve 2,0 → 1,2 sn. Profilde toplam 17,6 → 12,3 sn, bellek temizliği 2,1 → 1,2 sn.
+- **Bırakılan:** yön modeli (`weightedRidge`) ve katsayı arama (`bestMultiplier`) zaten sıkı döngü; toplama sırası değişmeden
+  kısaltılamaz. Not: tsx profilinde `__name` / `toTemporalInstant` tsx'in `keepNames` eki; üretimde yok.
+- **Kontrol:** 1.084 test, tsc, lint, `check:reports` 0 hata, tam duman 60/60.
+- **Sıradaki:** main'e birleştirip yükleme (kullanıcı isterse); npm `allowScripts`.
+
 ## 15.11.2026 · Claude · Hesap hızı ve sunucu Node 24 (`claude/hesap-hizi`; yüklendi, d8a36c5)
 
 - **Sorun:** yüklemeden sonra sayfalar çok yavaş; kullanıcı ısıtmadan başka yol istedi. Ölçüm: sunucu boştayken bile DSG 55 sn,

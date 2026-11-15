@@ -13,6 +13,7 @@
 
 import { processHourlyRecord, pricedMarket } from "@/lib/calculations/engine";
 import { HourlyResult, ImbalancePricingProfile } from "@/lib/calculations/types";
+import { timeOf } from "@/lib/calculations/time-keys";
 import { DEFAULT_INTRADAY_REALISM, persistenceTradeGain, realisticHourGain } from "@/lib/analysis/intraday-arbitrage";
 
 /** Profil altında yeniden fiyatlanmış bir saat */
@@ -25,7 +26,15 @@ export interface PricedHour {
   negativePrice: number;
   /** Aynı santralin `lagHours` saat önceki kaydı (ay sınırını aşsa da; yoksa undefined) */
   prev: (lagHours: number) => HourlyResult | undefined;
+  /** Saat başı (ms); elle kurulan kayıtlarda yoksa timestamp'ten bulunur (hourTime) */
+  t?: number;
+  /** persistenceGainsFor'un saat içi önbelleği (anahtar sırası → kazançlar) */
+  gainMemo?: (number[] | undefined)[];
 }
+
+/** Saat başı (ms): saat başına `new Date` üretmemek için priceHours'ta bir kez bulunur */
+export const hourTime = (h: PricedHour): number => h.t ?? new Date(h.source.timestamp).getTime();
+
 
 /** Eğitilmiş kural: test saatindeki simüle maliyeti verir */
 export type FittedRule = {
@@ -99,15 +108,23 @@ export function priceHours(hourly: HourlyResult[], profile: ImbalancePricingProf
   const hit = perProfile?.get(profileKey);
   if (hit) return hit;
   // Santral + zaman anahtarı: birden fazla santral aynı listede olsa da geçmiş saat doğru santralden gelir. Yalnız gecikmeli
-  // stratejiler sorar: ilk sorulduğunda kurulur
-  const key = (plantId: string | undefined, t: number) => `${plantId ?? ""}|${t}`;
-  let byKey: Map<string, HourlyResult> | null = null;
-  const lookup = (k: string) => {
-    byKey ??= new Map(hourly.map((h) => [key(h.plantId, new Date(h.timestamp).getTime()), h]));
-    return byKey.get(k);
+  // stratejiler sorar: ilk sorulduğunda kurulur. Santral başına sayı anahtarlı sözlük (metin anahtar üretmek isteğin
+  // ≈ %10'uydu); aynı anahtar iki kez varsa sonuncusu kalır (önceki davranış)
+  let byPlant: Map<string, Map<number, HourlyResult>> | null = null;
+  const lookup = (plantId: string | undefined, t: number) => {
+    if (!byPlant) {
+      byPlant = new Map();
+      for (const h of hourly) {
+        const id = h.plantId ?? "";
+        let m = byPlant.get(id);
+        if (!m) byPlant.set(id, (m = new Map()));
+        m.set(timeOf(h.timestamp), h);
+      }
+    }
+    return byPlant.get(plantId ?? "")?.get(t);
   };
-  const out = hourly.map((h) => {
-    const t = new Date(h.timestamp).getTime();
+  const out = hourly.map((h): PricedHour => {
+    const t = timeOf(h.timestamp);
     // Aynı gecikme her oran ve eğitim penceresi için tekrar soruluyordu (metin anahtarlı arama, isteğin ≈ üçte biri)
     // Saat başına yalnız sorulursa kurulur (çoğu strateji sormaz; 375 bin saatte her saate bir sözlük açmak pahalıydı)
     let prevByLag: Map<number, HourlyResult | undefined> | null = null;
@@ -125,9 +142,11 @@ export function priceHours(hourly: HourlyResult[], profile: ImbalancePricingProf
       negativePrice: r.negativePrice,
       prev: (lagHours: number) => {
         prevByLag ??= new Map();
-        if (!prevByLag.has(lagHours)) prevByLag.set(lagHours, lookup(key(h.plantId, t - lagHours * 3_600_000)));
+        if (!prevByLag.has(lagHours)) prevByLag.set(lagHours, lookup(h.plantId, t - lagHours * 3_600_000));
         return prevByLag.get(lagHours);
       },
+      t,
+      gainMemo: undefined,
     };
   });
   if (!perProfile) pricedCache.set(hourly, (perProfile = new Map()));
@@ -281,12 +300,14 @@ const ALPHA_GRID = [0, 0.25, 0.5, 0.75, 1];
 export const MIN_FEASIBLE_LAG_HOURS = 2;
 
 type IntradayRealism = typeof DEFAULT_INTRADAY_REALISM;
-const persistenceMemo = new WeakMap<PricedHour, Map<string, number[]>>();
+/** Kazanç anahtarı → saat içi önbellekteki sıra (anahtar az: gecikme × profil × gerçekçilik ayarı) */
+const gainSlots = new Map<string, number>();
 
 /**
  * Saatin kalıcılık kazançlarını (TL, α ızgarasının her değeri için) veren işlev. Saat başına bir kez hesaplanır: 4 aylık
  * eğitim pencereleri üst üste bindiği için aynı saat her test ayında yeniden soruluyordu. Anahtar gecikme, ızgara, profil
- * ve gerçekçilik ayarlarını içerir; değerler persistenceTradeGain ile aynıdır.
+ * ve gerçekçilik ayarlarını içerir; değerler persistenceTradeGain ile aynıdır. Önbellek saatin kendi dizisindedir
+ * (anahtar sırasıyla): saat başına sözlük araması isteğin ≈ %10'uydu.
  */
 export function persistenceGainsFor(
   lagHours: number,
@@ -295,17 +316,16 @@ export function persistenceGainsFor(
   realism: IntradayRealism
 ): (h: PricedHour) => number[] {
   const key = `${lagHours}|${alphas.join(",")}|${JSON.stringify(profile)}|${JSON.stringify(realism)}`;
+  let slot = gainSlots.get(key);
+  if (slot === undefined) gainSlots.set(key, (slot = gainSlots.size));
+  const i = slot;
   return (h) => {
-    let byKey = persistenceMemo.get(h);
-    if (!byKey) {
-      byKey = new Map();
-      persistenceMemo.set(h, byKey);
-    }
-    let gains = byKey.get(key);
+    const memo = (h.gainMemo ??= []);
+    let gains = memo[i];
     if (!gains) {
       const prev = h.prev(lagHours);
       gains = alphas.map((a) => persistenceTradeGain(h.source, prev, a, profile, realism).gainTl);
-      byKey.set(key, gains);
+      memo[i] = gains;
     }
     return gains;
   };

@@ -24,7 +24,7 @@
  * SAF fonksiyonlar: I/O yok.
  */
 
-import { costWithMultiplier, MIN_FEASIBLE_LAG_HOURS, persistenceGainsFor, type PricedHour, type Strategy } from "@/lib/analysis/backtest";
+import { costWithMultiplier, hourTime, MIN_FEASIBLE_LAG_HOURS, persistenceGainsFor, type PricedHour, type Strategy } from "@/lib/analysis/backtest";
 import { capTradeMwh, DEFAULT_INTRADAY_REALISM } from "@/lib/analysis/intraday-arbitrage";
 import { kupstForPlan, kupstRegimeAt } from "@/lib/calculations/kupst";
 import type { HourlyResult } from "@/lib/calculations/types";
@@ -85,8 +85,7 @@ export function directionHourCost(
     const delta = capTradeMwh((1 - k) * h.source.forecastMwh, h.source.gipVolumeMwh, capPercent);
     k = 1 - delta / h.source.forecastMwh;
   }
-  const t = new Date(h.source.timestamp).getTime();
-  return costWithMultiplier(h, k) + kupstDelta(t, k) + (infoTime === "H-2" ? tradeCost(h, k) : 0);
+  return costWithMultiplier(h, k) + kupstDelta(hourTime(h), k) + (infoTime === "H-2" ? tradeCost(h, k) : 0);
 }
 
 const fmt = (v: number) => v.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -124,7 +123,7 @@ export function directionBiasStrategy(
         ? "Ertesi günün her saati için sistemin açık verme olasılığı tahmin edilir (yalnız D-2 sonuna kadarki veriyle). Açık bekleniyorsa KGÜP aşağı, fazla bekleniyorsa yukarı çarpılır; eşik ve çarpanlar önceki aylardan, KÜPST dahil maliyetle öğrenilir. Ölçümdür, işlem önerisi değildir."
         : "Her saat için sistem yönü 2 saat önceki bilgiyle tahmin edilir ve plan GİP'te ayarlanır (işlem maliyeti GİP ağırlıklı ortalama fiyatıyla, saatlik GİP hacminin en fazla %10 payı). Eşik ve çarpanlar önceki aylardan, KÜPST dahil maliyetle öğrenilir. Ölçümdür, işlem önerisi değildir.",
     fit: (train) => {
-      const pOf = (h: PricedHour) => probabilities.get(new Date(h.source.timestamp).getTime());
+      const pOf = (h: PricedHour) => probabilities.get(hourTime(h));
       const rows: PricedHour[] = [];
       const ps: number[] = [];
       for (const h of train) {
@@ -213,7 +212,7 @@ export function directionPersistenceStrategy(
       "işlemin yön tahminine göre pahalı tarafı kapatıp kapatmadığına göre ayrı öğrenilir (açık bekleniyorsa eksik, fazla " +
       "bekleniyorsa fazla pahalıdır). Eşik ve paylar önceki aylardan. KÜPST, kalıcılık kuralındaki gibi dahil değil.",
     fit: (train, profile) => {
-      const pOf = (h: PricedHour) => probabilities.get(new Date(h.source.timestamp).getTime());
+      const pOf = (h: PricedHour) => probabilities.get(hourTime(h));
       const lastError = (h: PricedHour) => {
         const prev = h.prev(lagHours);
         return prev ? prev.actualMwh - prev.forecastMwh : 0;

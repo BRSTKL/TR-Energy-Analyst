@@ -825,10 +825,9 @@ export function persistenceTradeGain(
   // Dengesizlik fiyatları plana bağlı değildir: bir kez bulunur (motoru her çağrıda çalıştırmak backtest'i yavaşlatıyordu).
   // Gelir(f) = f·PTF + tutar(gerçekleşen − f) olduğundan gelir farkı + s·(fiyat − PTF) = tutar farkı + s·fiyat
   const { positive, negative } = hourImbalancePrices(h, profile);
-  const amount = (d: number) => calculateImbalanceAmount(d, positive, negative);
   const imbalance = h.actualMwh - h.forecastMwh;
   return {
-    gainTl: amount(imbalance - s) - amount(imbalance) + s * price,
+    gainTl: calculateImbalanceAmount(imbalance - s, positive, negative) - calculateImbalanceAmount(imbalance, positive, negative) + s * price,
     tradeMwh: s,
   };
 }

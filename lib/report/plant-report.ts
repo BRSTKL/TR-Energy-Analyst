@@ -12,6 +12,7 @@
  * Sahibi bilinmeyen santral kendi başına bir şirket sayılır.
  */
 
+import { timeOf, utcMonthKey } from "@/lib/calculations/time-keys";
 import { isRecordedCapacity } from "@/lib/epias-plant/installed-capacity";
 import { LATEST_FLOOR_V, processHourlyRecord, pricedMarket } from "@/lib/calculations/engine";
 import { dsgHourCost, type DsgMemberHour } from "@/lib/calculations/dsg-rule";
@@ -82,7 +83,7 @@ export interface RiskPremium {
 function riskPremiumOf(imbalanceHours: HourlyResult[], kupstByMonth: Map<string, number>): RiskPremium {
   const byMonth = new Map<string, { mwh: number; cost: number }>();
   for (const h of imbalanceHours) {
-    const m = new Date(h.timestamp).toISOString().slice(0, 7);
+    const m = utcMonthKey(h.timestamp);
     const b = byMonth.get(m) ?? { mwh: 0, cost: 0 };
     b.mwh += h.actualMwh;
     b.cost += h.imbalanceCost;
@@ -501,7 +502,7 @@ function settleGroup(plants: HourlyResult[][], profile: ImbalancePricingProfile)
   const buckets = new Map<number, { sample: HourlyResult; forecastMwh: number; actualMwh: number }>();
   for (const hourly of plants) {
     for (const h of hourly) {
-      const t = new Date(h.timestamp).getTime();
+      const t = timeOf(h.timestamp);
       const b = buckets.get(t) ?? { sample: h, forecastMwh: 0, actualMwh: 0 };
       b.forecastMwh += h.forecastMwh;
       b.actualMwh += h.actualMwh;
@@ -658,7 +659,7 @@ export function buildPlantReport(
   let end = -Infinity;
   const hourSet = new Set<number>();
   for (const h of all) {
-    const t = new Date(h.timestamp).getTime();
+    const t = timeOf(h.timestamp);
     hourSet.add(t);
     if (t < start) start = t;
     if (t > end) end = t;
@@ -752,12 +753,12 @@ export function buildPlantReport(
       const byHour = new Map<number, DsgMemberHour[]>();
       for (const hours of groupHours)
         for (const h of hours) {
-          const t = new Date(h.timestamp).getTime();
+          const t = timeOf(h.timestamp);
           byHour.set(t, [...(byHour.get(t) ?? []), { forecastMwh: h.forecastMwh, actualMwh: h.actualMwh }]);
         }
       nettedHours = unlimitedHours.map((h) => ({
         ...h,
-        imbalanceCost: dsgHourCost(byHour.get(new Date(h.timestamp).getTime()) ?? [], pricedMarket(h), data.profile),
+        imbalanceCost: dsgHourCost(byHour.get(timeOf(h.timestamp)) ?? [], pricedMarket(h), data.profile),
       }));
     }
     const standalone = groupHours.reduce((sum, hours) => sum + sumCost(hours), 0);
@@ -765,7 +766,7 @@ export function buildPlantReport(
     // Aylık fayda oranı: faydanın her ay tekrarlanıp tekrarlanmadığı (tek yıllık verinin istikrar kanıtı)
     const byMonth = new Map<string, { standalone: number; netted: number }>();
     const add = (h: HourlyResult, key: "standalone" | "netted") => {
-      const m = new Date(h.timestamp).toISOString().slice(0, 7);
+      const m = utcMonthKey(h.timestamp);
       const b = byMonth.get(m) ?? { standalone: 0, netted: 0 };
       b[key] += h.imbalanceCost;
       byMonth.set(m, b);
@@ -778,7 +779,7 @@ export function buildPlantReport(
     const deltas = groupPlants.map((g) => {
       const m = new Map<number, number>();
       for (const p of g) for (const h of p.hourly) {
-        const t = new Date(h.timestamp).getTime();
+        const t = timeOf(h.timestamp);
         m.set(t, (m.get(t) ?? 0) + h.actualMwh - h.forecastMwh);
       }
       return m;
@@ -888,7 +889,7 @@ export function buildPlantReport(
   let ptfWeighted = 0;
   let mwhAll = 0;
   for (const h of all) {
-    ptfByHour.set(new Date(h.timestamp).getTime(), h.ptf);
+    ptfByHour.set(timeOf(h.timestamp), h.ptf);
     ptfWeighted += h.actualMwh * h.ptf;
     mwhAll += h.actualMwh;
   }
@@ -1053,14 +1054,14 @@ export function buildPlantReport(
       const m = new Map<string, number>();
       if (asCommunity) {
         for (const [t, v] of Array.from(kupstCommunityHours(communityOf(ps), latestKupst).entries())) {
-          const key = new Date(t).toISOString().slice(0, 7);
+          const key = utcMonthKey(t);
           m.set(key, (m.get(key) ?? 0) + v);
         }
         return m;
       }
       for (const p of ps)
         for (const h of p.hourly) {
-          const key = new Date(h.timestamp).toISOString().slice(0, 7);
+          const key = utcMonthKey(h.timestamp);
           m.set(key, (m.get(key) ?? 0) + kupstForHour(h, p.plantType, latestKupst));
         }
       return m;
@@ -1132,7 +1133,7 @@ export function buildPlantReport(
       findLateStarts(
         data.plants
           .filter((p) => !isNotProducing(p.hourly))
-          .map((p) => ({ plantName: p.plantName, timestamps: p.hourly.map((h) => new Date(h.timestamp).getTime()) }))
+          .map((p) => ({ plantName: p.plantName, timestamps: p.hourly.map((h) => timeOf(h.timestamp)) }))
       ).map((l) => l.plantName)
     );
     for (const g of groups) {
@@ -1219,7 +1220,7 @@ export function buildPlantReport(
         absFinal += Math.abs(d2);
         pf += Math.abs(d1);
         pl += Math.abs(d2);
-        const t = new Date(h.timestamp).getTime();
+        const t = timeOf(h.timestamp);
         const b = u.get(t) ?? { first: 0, final: 0, h };
         b.first += d1;
         b.final += d2;
@@ -1278,7 +1279,7 @@ export function buildPlantReport(
       const o = owners.get(key) ?? owners.set(key, { name: ownerId !== null ? p.ownerName ?? `Şirket ${ownerId}` : p.plantName, plants: 0, mwh: 0, d: new Map() }).get(key)!;
       o.plants++;
       for (const h of p.hourly) {
-        const t = new Date(h.timestamp).getTime();
+        const t = timeOf(h.timestamp);
         const d = h.actualMwh - h.forecastMwh;
         if (!samples.has(t)) samples.set(t, h);
         total.set(t, (total.get(t) ?? 0) + d);
@@ -1332,7 +1333,7 @@ export function buildPlantReport(
   // yönetici özetinde "veri eksik" diye çıkıyordu
   const stamps = data.plants
     .filter((p) => !notProducing.includes(p.plantName))
-    .map((p) => ({ plantName: p.plantName, timestamps: p.hourly.map((h) => new Date(h.timestamp).getTime()) }));
+    .map((p) => ({ plantName: p.plantName, timestamps: p.hourly.map((h) => timeOf(h.timestamp)) }));
   const lateStarts = findLateStarts(stamps);
 
   // Tahmin iyileştirme fırsatı: santralin her saatteki sapması aynı oranda (s = medyan / MWh başına risk) küçültülür.
@@ -1360,7 +1361,7 @@ export function buildPlantReport(
           const u = units.get(key) ?? units.set(key, new Map()).get(key)!;
           for (const h of p.hourly) {
             const d = h.actualMwh - h.forecastMwh;
-            const t = new Date(h.timestamp).getTime();
+            const t = timeOf(h.timestamp);
             const b = u.get(t) ?? { now: 0, improved: 0, h };
             b.now += d;
             b.improved += d * sc;
