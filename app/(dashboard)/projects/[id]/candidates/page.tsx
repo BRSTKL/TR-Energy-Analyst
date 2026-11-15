@@ -289,7 +289,10 @@ export default function CandidatesPage() {
                 </CardTitle>
                 <CardDescription>
                   Netleşme kazancı = portföyün ve adayın ayrı ayrı ödeyeceği dengesizlik − birlikte ödedikleri. Kazanç, adayın sapması
-                  portföyünkünü dengelediği saatlerden gelir.
+                  portföyünkünü dengelediği saatlerden gelir.{" "}
+                  {data?.planBasis === "final"
+                    ? "Son planla (gün içi düzeltmelerinden sonra kalan sapma): ilk planla hesaplanan kazanç şirketlerin zaten yaptığı gün içi düzeltmeyle üst üste binerdi ve ilk 20 adayda %22–40 yüksek çıkıyordu."
+                    : "İlk planla (son plan yok): şirketler gün içinde düzeltme yapıyorsa gerçek kazanç daha küçüktür."}
                   {perMwh && minGwh !== null
                     ? ` MWh başına sıralamada üretimi ${nf(minGwh, 1)} GWh'tan (portföyün %5'i) az olan santraller sona alınır.`
                     : " Toplam kazanç büyük santralleri öne çıkarır; santral büyüklüğünden bağımsız karşılaştırma için MWh başına sıralamayı seçin."}{" "}

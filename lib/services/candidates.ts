@@ -15,7 +15,8 @@ import { classifyCandidate, groupCounts, type CandidateAccessKind } from "@/lib/
 import { loadAggregatorMembership } from "@/lib/services/aggregator-membership";
 import { loadOwnerEntries } from "@/lib/services/epias-plants";
 import { screenCandidates, type CandidateSort, type ScreeningCandidate, type ScreeningMember, type ScreeningResult } from "@/lib/analysis/candidate-screening";
-import { settleByCompany } from "@/lib/report/plant-report";
+import { dsgPlanBasis, settleByCompany, toFinalPlan } from "@/lib/report/plant-report";
+import { readPoolYearCached } from "@/lib/pool/pool-store";
 import { decodeHourly } from "@/lib/sector/hourly-store";
 import { sectorPeriodLabel, SECTOR_TECHS, type SectorTech } from "@/lib/sector/benchmark";
 import { listSectorHourlyIds, loadSectorBenchmark, loadSectorHourly } from "@/lib/services/sector";
@@ -42,6 +43,8 @@ export interface ProjectCandidates {
   sectorLabel: string;
   /** Portföy üyelerinin türü */
   basis: "owners" | "plants" | "companies";
+  /** Netleşmenin planı: "final" son plan (gün içi sonrası), "first" ilk plan (son plan yoksa) */
+  planBasis: "first" | "final";
   types: SectorTech[];
   yekdem: YekdemFilter;
   access: AccessFilter;
@@ -163,11 +166,16 @@ export async function projectCandidates(
     sortBy = "total",
     yekdem = "all",
     access = "all",
-  }: { types?: SectorTech[]; top?: number; sortBy?: CandidateSort; yekdem?: YekdemFilter; access?: AccessFilter } = {}
+    planBasis,
+  }: { types?: SectorTech[]; top?: number; sortBy?: CandidateSort; yekdem?: YekdemFilter; access?: AccessFilter; planBasis?: "first" | "final" } = {}
 ): Promise<ProjectCandidates | { error: string }> {
   const data = await loadProjectHourly(projectId);
   if (!data) return { error: "Proje bulunamadı." };
-  const withData = data.plants.filter((p) => p.hourly.length > 0);
+  const withDataFirst = data.plants.filter((p) => p.hourly.length > 0);
+  // Plan: son plan (gün içi düzeltmelerinden sonra kalan sapma) saatlerin en az %90'ında varsa; ilk planla hesaplanan
+  // netleşme kazancı şirketlerin zaten yaptığı gün içi düzeltmeyle üst üste biner (DSG ile aynı kural, dsgPlanBasis)
+  const basisUsed: "first" | "final" = planBasis ?? dsgPlanBasis(withDataFirst);
+  const withData = basisUsed === "final" ? withDataFirst.map(toFinalPlan) : withDataFirst;
   if (withData.length === 0) return { error: "Projede piyasa fiyatı eşleşmiş saatlik veri yok." };
   const year = new Date(withData[0].hourly[0].timestamp).getUTCFullYear();
   const collect = `node --env-file=.env node_modules/.bin/tsx scripts/sector-collect.mts ${year}`;
@@ -232,6 +240,18 @@ export async function projectCandidates(
       withoutHourly++;
       continue;
     }
+    let rows = decodeHourly(series);
+    if (basisUsed === "final") {
+      // Adayın son planı havuzdan (sektör serisi yalnız ilk planı tutar); son planı olmayan saatte ilk plan kalır
+      const doc = await readPoolYearCached(p.epiasPlantId, year);
+      if (doc) {
+        const y0 = Date.UTC(year, 0, 1);
+        rows = rows.map((r) => {
+          const f = doc.kgupFinal[(r.timestamp.getTime() - y0) / 3_600_000];
+          return f === null || f === undefined ? r : { ...r, forecastMwh: f };
+        });
+      }
+    }
     candidates.push({
       key: `epias:${p.epiasPlantId}`,
       epiasPlantId: p.epiasPlantId,
@@ -242,7 +262,7 @@ export async function projectCandidates(
       hydroKind: p.hydroKind ?? null,
       access: accessOf.get(p.epiasPlantId) ?? null,
       yekdemExit: exitOf.get(p.epiasPlantId) ?? null,
-      rows: decodeHourly(series),
+      rows,
     });
   }
 
@@ -253,6 +273,7 @@ export async function projectCandidates(
     year,
     sectorLabel: sectorPeriodLabel(bench),
     basis: m.basis,
+    planBasis: basisUsed,
     types,
     yekdem,
     access,

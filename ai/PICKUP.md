@@ -5,6 +5,15 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 15.11.2026 · Claude · Hesap doğruluğu denetimi 9: Adaylar (`claude/hesap-dogrulugu`; yüklenmedi)
+
+- **Bulgu:** aday netleşme kazancı ilk planla hesaplanıyordu (DSG son plana geçmişti). Son planla ilk 20 adayın kazancı %22–40
+  düşük (Pure 1.631 → 976 M, Inavitas 1.252 → 976, Polat 878 → 639, Gain 368 → 276); sıra korelasyonu 0,95–0,96, ilk 20'nin
+  3–6'sı değişiyor. Lisanssız toplamlar (K3_, gerçek gün öncesi tahmin değil) sayfada ve raporda varsayılan süzgeçte zaten yok.
+- **Yapılan:** `projectCandidates` `planBasis` (varsayılan `dsgPlanBasis`: son plan ≥ %90 ise son plan); adayın son planı
+  havuzdan (`kgupFinal`), yoksa saatte ilk plan. Sonuçta `planBasis`; sayfada açıklama.
+- **Kontrol:** 1.087 test, tsc, lint, `check:reports` 0 hata, `--only candidates` 6/6.
+
 ## 15.11.2026 · Claude · Hesap doğruluğu denetimi 8: DSG (`claude/hesap-dogrulugu`; yüklenmedi)
 
 - **Bulgular:** DSG sayfası faydası raporla birebir aynı (Doğuş 168.597 TL); %5 sınırı hesapta ama sayfanın varsayımlarında
