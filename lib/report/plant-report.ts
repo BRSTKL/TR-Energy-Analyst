@@ -12,6 +12,7 @@
  * Sahibi bilinmeyen santral kendi başına bir şirket sayılır.
  */
 
+import { likelyExistingDsg, type DsgLeader } from "@/lib/analysis/dsg-leaders";
 import { timeOf, utcMonthKey } from "@/lib/calculations/time-keys";
 import { isRecordedCapacity } from "@/lib/epias-plant/installed-capacity";
 import { LATEST_FLOOR_V, processHourlyRecord, pricedMarket } from "@/lib/calculations/engine";
@@ -117,6 +118,8 @@ export interface ReportCompany {
 
 /** Rapor dışından gelen bağlam (EPİAŞ şirket dizini); saf hesaplama ağ bağlantısı gerektirmesin diye ayrı verilir */
 export interface ReportContext {
+  /** DSG temsilci şirketleri (EPİAŞ dsg-organization-list); yoksa DSG kaleminde "zaten grupta" uyarısı yapılmaz */
+  dsgLeaders?: DsgLeader[] | null;
   /** Güneş kaybı: sektör önbelleğinin açıkça belirtilen ortak dönemi. */
   productionLoss?: { year: number; lastMonth: number; plants: number; eligible: number; actualMwh: number; plannedMwh: number; unplannedMwh: number; valueTl: number; lossPct: number; sectorPct: number } | null;
   /** Şirketin EPİAŞ'ta kayıtlı ama projede olmayan santralleri: organizationId → santral adları */
@@ -273,6 +276,11 @@ export interface PlantReportData {
     basis: "final" | "first";
     /** Aynı grup faydası ilk plana göre (bağlam; basis "first" ise benefitTl ile aynı) */
     firstPlanBenefitTl: number;
+    /**
+     * Adı bir DSG temsilcisiyle aynı başlayan şirketler (EPİAŞ temsilci listesi; üyelik yayımlanmaz): büyük olasılıkla zaten
+     * o grupta, fayda alınıyor olabilir (lib/analysis/dsg-leaders.ts). Liste yoksa ya da eşleşme yoksa boş.
+     */
+    existingDsg?: Array<{ leader: string; companies: string[] }>;
     /**
      * Projenin bazı santralleri zaten bir toplayıcının portföyündeyse: bağımsız şirketler de o portföye girseydi (projedeki
      * portföy santralleriyle birlikte netleşme; portföyün diğer üyeleri hesapta yok, bu yüzden alt sınır). Bağımsız
@@ -851,6 +859,12 @@ export function buildPlantReport(
       monthlyBenefit: x.monthly,
       basis,
       firstPlanBenefitTl: first,
+      existingDsg: context.dsgLeaders
+        ? likelyExistingDsg(
+            Array.from(new Set(dsgGroups.map((g) => g[0].organizationName).filter((n): n is string => !!n))),
+            context.dsgLeaders
+          )
+        : [],
       joinAggregator,
     };
   }

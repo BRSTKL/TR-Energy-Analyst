@@ -4,6 +4,8 @@ import { analyzeDsgScenario } from "@/lib/analysis/dsg-scenarios";
 import { loadProjectHourly } from "@/lib/services/project-hourly";
 import { loadAggregatorMembership } from "@/lib/services/aggregator-membership";
 import { dsgPlanBasis, settleByCompany, toFinalPlan } from "@/lib/report/plant-report";
+import { likelyExistingDsg } from "@/lib/analysis/dsg-leaders";
+import { loadDsgLeaders } from "@/lib/services/dsg-leaders";
 
 export const dynamic = "force-dynamic";
 
@@ -86,9 +88,20 @@ async function handleGET(request: Request, { params }: { params: { id: string } 
     // Toplayıcı portföyü tek piyasa katılımcısıdır: sahipler arasında DSG netleşme sınırı (md. 111/5) yoktur
     const result = analyzeDsgScenario(withData, selectedIds, data.profile, { participantLimit: !data.aggregator });
 
+    // Projedeki şirketlerden biri bir DSG temsilcisiyle aynı adla başlıyorsa büyük olasılıkla zaten o grupta (uyarı)
+    const dsgLeaders = data.aggregator ? null : await loadDsgLeaders();
+    const existingDsg = dsgLeaders
+      ? likelyExistingDsg(
+          Array.from(groups.values()).filter((g) => g.isCompany).map((g) => g.name),
+          dsgLeaders.leaders
+        )
+      : [];
+
     return NextResponse.json({
       success: true,
       project: data.project,
+      existingDsg,
+      dsgLeadersAsOf: dsgLeaders?.asOf ?? null,
       unit: "company",
       basis,
       aggregatorListAsOf: membership?.asOf ?? null,

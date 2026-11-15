@@ -37,6 +37,9 @@ interface DsgResponse extends DsgScenarioResult {
   basis: "final" | "first";
   /** EPİAŞ toplayıcı listesinin tarihi (şirket projelerinde; yoksa null) */
   aggregatorListAsOf: string | null;
+  /** Adı bir DSG temsilcisiyle aynı başlayan proje şirketleri (EPİAŞ temsilci listesi; üyelik yayımlanmaz) */
+  existingDsg?: Array<{ leader: string; companies: string[] }>;
+  dsgLeadersAsOf?: string | null;
 }
 
 const MONTHS_TR = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
@@ -144,6 +147,18 @@ export default function DsgScenarioPage() {
                     : "Hesap ilk planla (gün öncesi KGÜP). Şirketler gün içinde düzeltme yapıyorsa gerçek fayda daha küçüktür."}{" "}
                   Grup üyeliği EPİAŞ&apos;ta yayımlanmaz: şirketler zaten bir gruptaysa bu fayda alınıyordur.
                 </p>
+                {(data.existingDsg?.length ?? 0) > 0 && (
+                  <p className="mt-2 flex items-start gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>
+                      <strong>Büyük olasılıkla zaten bir DSG var:</strong>{" "}
+                      {data.existingDsg!.map((e) => `${e.leader} bir DSG'nin temsilcisi; ${e.companies.join(", ")} aynı adla başlıyor`).join(". ")}.
+                      Bu şirketler o gruptaysa aşağıdaki fayda yeni değildir, zaten alınıyordur. EPİAŞ yalnız temsilci şirketleri
+                      yayımlar{data.dsgLeadersAsOf ? ` (liste ${new Date(data.dsgLeadersAsOf).toLocaleDateString("tr-TR")})` : ""}; ad eşleşmesi kanıt değildir, şirkete
+                      sorulmalıdır.
+                    </span>
+                  </p>
+                )}
                 {data.plants.some((p) => (p.inAggregator?.length ?? 0) > 0) && (
                   <p className="mt-2 flex items-start gap-1 text-xs text-amber-800">
                     <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -452,7 +467,10 @@ export default function DsgScenarioPage() {
             <Card className="border-slate-200 bg-slate-50/60 shadow-none">
               <CardContent className="space-y-1.5 p-4 text-xs leading-relaxed text-slate-600">
                 <p>
-                  <strong>Varsayımlar.</strong> Grup düzeyinde aynı dengesizlik fiyat formülü ve katsayıları uygulanır.
+                  <strong>Varsayımlar.</strong> Grup düzeyinde aynı dengesizlik fiyat formülü ve katsayıları uygulanır. Grup içi
+                  netleşme her üyenin her saatteki üretim ya da planının en çok %5&apos;iyle sınırlıdır (2025&apos;te %10; DUY md. 111, EPDK
+                  13869); aşan kısım üyenin kendi dengesizliği gibi fiyatlanır. 2027 oranını EPDK her yıl 1 Aralık&apos;a kadar açıklar.
+                  Toplayıcı tek katılımcı sayıldığından bu sınır toplayıcı portföyüne uygulanmaz.
                   Her üyenin maliyeti şirket bazında uzlaştırılmış dengesizliktir. DSG kurma ve üyelik şartları
                   modellenmez; KÜPST santral bazında olduğundan DSG ile değişmez.
                 </p>

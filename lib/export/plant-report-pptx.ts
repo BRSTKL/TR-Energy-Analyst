@@ -2180,8 +2180,9 @@ export async function exportPlantReportPptx(
       effort: "Düşük–orta · tahmin sağlayıcı",
     });
     if (r.dsg) {
-      // Projedeki şirketler (ör. bir grubun şirketleri) birlikte. EPİAŞ grup üyeliğini yayımlamadığı için
-      // (dsg-organization-list kapalı) zaten tek grupta olup olmadıkları bilinmez: kalem "olası" kaldıraçtır ve doğrulanmalı.
+      // Projedeki şirketler (ör. bir grubun şirketleri) birlikte. EPİAŞ grup üyeliğini yayımlamaz (dsg-organization-list
+      // yalnız temsilci şirketleri verir): zaten tek grupta olup olmadıkları bilinmez, kalem "olası" kaldıraçtır ve doğrulanmalı.
+      // Şirket adı bir temsilciyle aynı başlıyorsa (existingDsg) büyük olasılıkla zaten gruptadır: metin bunu söyler.
       // Hesap son planla (gün içi sonrası): ilk planla gün içi kazancıyla üst üste binerdi (dsg-basis).
       // Portföyün bir kısmı zaten bir toplayıcıdaysa asıl seçenek bağımsızları o portföye almaktır (joinAggregator):
       // şirketin kullandığı bir yapı, fayda daha büyük; önce neden dışarıda oldukları sorulmalı
@@ -2197,7 +2198,9 @@ export async function exportPlantReportPptx(
               sameTlShort(d.firstPlanBenefitTl, d.benefitTl) ? "" : ` (ilk planla ${formatTlShort(d.firstPlanBenefitTl)}, ama o rakam gün içi kazancıyla üst üste biner)`
             }. `
           : "İlk planla hesaplandı (son plan yok): şirketler gün içinde düzeltme yapıyorsa fayda daha küçüktür. ";
-      const verify = "Grup üyeliği EPİAŞ'ta yayımlanmıyor: şirketler zaten bir grupta ise bu fayda alınıyordur, görüşmeden önce doğrulayın.";
+      const verify = d.existingDsg?.length
+        ? `${d.existingDsg.map((e) => e.leader).join(", ")} EPİAŞ'ta bir dengeden sorumlu grubun temsilcisi ve ${d.existingDsg.flatMap((e) => e.companies).join(", ")} aynı adla başlıyor: büyük olasılıkla zaten o gruptalar ve bu fayda alınıyor; görüşmeden önce doğrulayın.`
+        : "Grup üyeliği EPİAŞ'ta yayımlanmıyor: şirketler zaten bir grupta ise bu fayda alınıyordur, görüşmeden önce doğrulayın.";
       // DUY md. 111/5: grupta her şirketin saatlik sapmasının yalnız piyasa hacmine oranlı kısmı netleşir (hesap bu sınırla)
       const ratio = d.monthlyBenefit.length ? dsgRatioAt(`${d.monthlyBenefit[d.monthlyBenefit.length - 1].month}-15T00:00:00Z`) : Infinity;
       const limitText = Number.isFinite(ratio)

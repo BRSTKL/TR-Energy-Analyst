@@ -1,3 +1,4 @@
+import { loadDsgLeaders } from "@/lib/services/dsg-leaders";
 import { loadSectorCurtailment } from "@/lib/services/sector-curtailment";
 /**
  * TR-Energy Analyst - Dengesizlik Karnesi için EPİAŞ bağlamı ve ön kontrol
@@ -49,6 +50,7 @@ export async function buildReportContext(plants: ReportPlantMeta[], year: number
   };
   const context: ReportContext = { missingCompanyPlants: new Map(), companyPlantTotals: new Map() };
   context.sector = await loadSectorContext(year);
+  context.dsgLeaders = (await loadDsgLeaders())?.leaders ?? null;
   const losses = loadSectorCurtailment();
   const sectorLoss = losses?.years.find(y => y.year === year)?.groups.all;
   if (losses && sectorLoss) {

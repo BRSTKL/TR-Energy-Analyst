@@ -4,11 +4,11 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-580 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+582 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
 ## Sayfalar (app/**/page.tsx) (31)
 
-- `/projects/[id]/backtest` (`app/(dashboard)/projects/[id]/backtest/page.tsx`) — Aşama 14: yön tahminiyle plan ayarı (projenin fiyat profiliyle, KÜPST dahil)
+- `/projects/[id]/backtest` (`app/(dashboard)/projects/[id]/backtest/page.tsx`) — Şirketin kendi gün içi düzeltmesinin test aylarındaki kazancı (ilk plan − son plan − GİP işlem maliyeti); son plan yoksa null
 - `/projects/[id]/candidates` (`app/(dashboard)/projects/[id]/candidates/page.tsx`) — YEKDEM çıkışı rozeti: bu yıl çıkan ya da süresi bu yıl / yakında dolan
 - `/projects/[id]/dsg` (`app/(dashboard)/projects/[id]/dsg/page.tsx`) — Üye bir şirketse santralleri (üye = piyasa katılımcısı)
 - `/projects/[id]/forecast` (`app/(dashboard)/projects/[id]/forecast/page.tsx`) — Piyasa sayfasıyla aynı: yarın vurgulu mavi, öbür gün gri
@@ -132,7 +132,7 @@
 - `app/not-found.tsx` — Türkçe 404 (hata ayıklama testi 16.10.2026: Next'in İngilizce varsayılan sayfası çıkıyordu)
 - `app/projects/loading.tsx`
 
-## lib/analysis (55)
+## lib/analysis (56)
 
 - `lib/analysis/aggregator-benchmark.ts` — Toplayıcılar arası kıyas (PLAN 8.7): EPİAŞ'taki her toplayıcının portföyündeki lisanslı santraller için aynı yöntem: saatlik sapma (UEVM − ilk KGÜP), EPİAŞ resmi dengesizlik fiyatı.
 - `lib/analysis/aggregator-detail.ts` — Toplayıcı ayrıntısı (PLAN 9.2): Kıyas tablosundaki bir toplayıcının içi: santraller (tek başına maliyet, sektör medyanına göre), aylık netleşme ve sahiplerin (üreticilerin) portföye katkısı.
@@ -151,6 +151,7 @@
 - `lib/analysis/direction-features.ts` — Sistem yönü ve makas tahmini: özellik seti (Aşama 14.1): Her saat için yalnız KARAR ANINDA bilinebilecek bilgilerden bir özellik satırı kurulur.
 - `lib/analysis/direction-model.ts` — Sistem yönü ve makas tahmini: model ve rakipler (Aşama 14.2): - Yön: L2 düzenlemeli lojistik regresyon (Newton / IRLS, sabit iterasyon; rastgelelik yok).
 - `lib/analysis/direction-strategy.ts` — Yön tahminiyle plan ayarı: karar testi (Aşama 14.4): Mantık (DUY md. 110 fiyatları): sistem açıkken (SMF > PTF) eksik üretim SMF·(1+k) ile pahalıya, fazla üretim PTF·(1−l) ile az kayıpla uzlaşır; sistem fazlayken tersi.
+- `lib/analysis/dsg-leaders.ts` — Dengeden sorumlu grup (DSG) temsilcileriyle ad eşleşmesi (SAF; 15.11.2026 denetimi): EPİAŞ DSG üyelerini yayımlamaz; yalnız grubun mali sorumluluğunu üstlenen temsilci şirketlerin listesini yayımlar (`/markets/imbalance/data/dsg-organizati…
 - `lib/analysis/dsg-scenarios.ts` — DSG Senaryo Analizi: Kullanıcının seçtiği santral grubu için: - netleşmiş maliyet ve fayda, aylık istikrar - marjinal değer: gruptaki her santral ayrılırsa / grup dışındaki her santral eklenirse fayda nasıl değişir - en faydalı alt gruplar…
 - `lib/analysis/dsi-dam.ts` — DSİ baraj doluluğu görünümü (havuz: lib/pool/dsi-dam-codec.ts; SAF, I/O yok): Amaca göre ülke ortalaması doluluk, bir hafta ve bir yıl önceye göre değişim, mevsim karşılaştırması (aynı gün, yıllar) ve dört büyük ilin içme suyu doluluğu.
 - `lib/analysis/forecast-accuracy.ts` — Fiyattan Bağımsız Tahmin Doğruluğu Analizi: Yalnızca gün öncesi tahmin (KGÜP) ve gerçekleşen üretimi (MWh) kullanır; piyasa fiyatı gerektirmez.
@@ -351,7 +352,7 @@
 - `lib/sector/period.ts` — Sektör analizlerinin dönemi: içinde bulunulan yılın sektör karnesinin dönem sonu (scripts/sector-collect.mts; piyasa verisi olan son gün).
 - `lib/sector/plant-technology.ts` — Sektör taramasında santral teknolojisi (PLAN Bekleyen işler: EPDK ↔ karne, adım 2b): Eskiden tür yalnız addan tahmin ediliyordu (`guessTechnologyFromName`); adında tür eki olmayan santraller ("OYMAPINAR", "BORÇKA", "HASAN UĞURLU") ve tanın…
 
-## lib/services (64)
+## lib/services (65)
 
 - `lib/services/aggregator-data.ts` — Toplayıcı kıyası ve ayrıntısı için veri okuma (PLAN 8.7, 9.2): Santral saatleri veri havuzundan (ilk KGÜP ve UEVM), türü ve sahibi sektör karnesi dosyalarından ya da havuz tanımından, fiyatlar veritabanındaki EPİAŞ resmi dengesizlik fiyatl…
 - `lib/services/aggregator-membership.ts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" ekiyle kayıtlı tüm katılımcıların santral listesi çekilir ve .cache/epias/ aggregator-membership.json'a yazılır.
@@ -363,6 +364,7 @@
 - `lib/services/cost-change.ts` — "Maliyet neden değişti?" için projeleri yükler ve eşler: İki proje (ör. aynı santrallerin 2025 ve 2026 projeleri) saatlik veriyle yüklenir, santraller EPİAŞ kimliğiyle (yoksa adla) eşlenir ve decomposeCostChange'e verilir.
 - `lib/services/daily-market.ts` — Günlük piyasa panosu: veri toplama (hesap lib/analysis/daily-market.ts'te): Günün doğrulanmış fiyatları (MarketData: EPİAŞ ya da dosya) ve önceki 28 günün PTF'si veri tabanından, sistem geneli seriler (tüketim, gerçek zamanlı üretim, KGÜP,…
 - `lib/services/direction-forecast.ts` — Sistem yönü tahmini: veri okuma ve walk-forward olasılıklar (Aşama 14).
+- `lib/services/dsg-leaders.ts` — DSG temsilci şirketleri (EPİAŞ `dsg-organization-list`), `.cache/epias/dsg-leaders.json` önbelleğiyle.
 - `lib/services/dsi-dam.ts` — DSİ baraj doluluğu çekimi (yagisbarajdoluluk.dsi.gov.tr; havuz biçimi lib/pool/dsi-dam-codec.ts)
 - `lib/services/entsoe.ts` — ENTSO-E çekimi: komşu ülke fiyatları ve sınır akışları (havuz biçimi lib/pool/entsoe-codec.ts)
 - `lib/services/epias-account.ts` — Kayıtlı EPİAŞ hesabı ("Hesabım" sayfası).
@@ -470,7 +472,7 @@
 - `lib/weather/open-meteo.ts` — Open-Meteo Previous Runs istemcisi (PLAN 15.2): Ücretsiz API: yalnız ticari olmayan kullanım, CC-BY 4.0 atıf ("Weather data by Open-Meteo.com"); sınır günde 10.000, saatte 5.000, dakikada 600 çağrı (10'dan fazla değişken ya da 2 haftadan u…
 - `lib/weather/reanalysis-wind.ts` — Gerçekleşen rüzgâr (rüzgâr kayıp tespiti; lib/forecast/wind-loss.ts): Kaynak: Open-Meteo Historical Weather API (archive-api.open-meteo.com), 100 m rüzgâr hızı ve yönü, iki model: - `era5`: ECMWF ERA5 yeniden analizi, 0,25° (≈ 25 km), ≈ 5 …
 - `lib/weather/satellite.ts` — Uydu ışınımı (gerçekleşen; PLAN 15.5 kısıntı tespiti): Kaynak: Open-Meteo Satellite Radiation API, EUMETSAT CM SAF SARAH3 (`eumetsat_sarah3`; 1983'ten, ≈ 2 gün gecikme; Türkiye kapsamda, 30 dk'dan saatliğe).
-- `lib/weather/snow.ts` — Santral konumunda kar derinliği (güneş kayıp üretiminde "kar olası" ayrımı; 20.10.2026): Kaynak: Open-Meteo Historical Weather API (archive-api.open-meteo.com), ERA5 saatlik `snow_depth` (yerdeki kar, m; 0,25° ızgara).
+- `lib/weather/snow.ts` — Santral konumunda kar derinliği (güneş kayıp üretiminde "kar olası" ayrımı; 20.10.2026): Kaynak: Open-Meteo Historical Weather API (archive-api.open-meteo.com), ERA5-Land saatlik `snow_depth` (yerdeki kar, m; 0,1° ızgara).
 - `lib/weather/weather-codec.ts` — Hava verisi havuzu: santral-yıl belgesinin biçimi (PLAN 15.2): Kaynak Open-Meteo Previous Runs API (ECMWF IFS 0,25°; çoğu modelde arşiv 2024-03-06'dan).
 - `lib/weather/weather-store.ts` — Hava verisi havuzu: dosya okuma/yazma (PLAN 15.2): `data/pool/weather/<epiasPlantId>/<yıl>.json.gz` (git dışı; EPİAŞ havuzunun yanında, aynı yazma deseni: önce geçici dosya, sonra yeniden adlandırma).
 - `lib/weather/wind-forecast-archive.ts` — Geçmiş rüzgâr TAHMİNLERİ (rüzgâr üretim tahmini geriye dönük testi; kullanıcı 18.10.2026): Kaynak: Open-Meteo Previous Runs API, ECMWF IFS 0,25° (`ecmwf_ifs025`; canlı tahmin sayfasıyla aynı model), 100 m rüzgâr hızı ve yönü, iki sürüm: `d…

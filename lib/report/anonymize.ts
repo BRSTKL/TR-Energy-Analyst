@@ -43,6 +43,8 @@ export function anonymizeReport(
   // Üreticiler (lisans sahipleri)
   const owners = Array.from(new Set(r.plants.map((p) => p.organizationName).filter((n): n is string => !!n)));
   owners.forEach((o, i) => add(o, `Üretici ${pad(i + 1)}`));
+  // DSG temsilcisi (adı üreticilerle aynı başlar, grubun kimliğini verir)
+  for (const e of r.dsg?.existingDsg ?? []) add(e.leader, "grubun temsilci şirketi");
   // Toplayıcı ve kıyastaki diğer toplayıcılar
   if (r.aggregator) {
     add(r.aggregator.name, "Toplayıcı X");

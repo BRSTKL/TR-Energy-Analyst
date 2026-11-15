@@ -5,6 +5,17 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 15.11.2026 · Claude · Hesap doğruluğu denetimi 8: DSG (`claude/hesap-dogrulugu`; yüklenmedi)
+
+- **Bulgular:** DSG sayfası faydası raporla birebir aynı (Doğuş 168.597 TL); %5 sınırı hesapta ama sayfanın varsayımlarında
+  yazmıyordu. EPİAŞ `dsg-organization-list` artık açık: üyeleri değil 29 temsilci şirketi veriyor. Aralarında "BİLGİN GRUBU
+  TOPTAN ELEKTRİK SATIŞI A.Ş." var: Bilgin projesinin şirketleri büyük olasılıkla zaten o grupta, 15,7 M TL'lik DSG faydası
+  yeni değil. Diğer 14 projede eşleşme yok.
+- **Yapılan:** `lib/analysis/dsg-leaders.ts` (`likelyExistingDsg`, ilk ayırt edici kelime; 3 test), `lib/services/dsg-leaders.ts`
+  (`.cache/epias/dsg-leaders.json`, 30 günde bir yenilenir). DSG sayfası ve raporun DSG kalemi uyarı yazar; anonim raporda
+  temsilci adı takma ada çevrilir. DSG varsayımlarına %5 sınırı ve 2027 oranının 1 Aralık'ta açıklanacağı eklendi.
+- **Kontrol:** 1.087 test, tsc, lint, `check:reports` 0 hata, `--only dsg,results` 13/13.
+
 ## 15.11.2026 · Claude · Hesap doğruluğu denetimi 6–7: Santraller, Geçmişle sınama (`claude/hesap-dogrulugu`; yüklenmedi)
 
 - **Santraller (değişiklik yok):** tür 363/363 EPİAŞ yakıt kırılımıyla uyumlu; kurulu güç 316/379 resmî kayıt, 63 tahmin
