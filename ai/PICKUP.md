@@ -14,6 +14,7 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
     doğrulandı). Formül, resmî fiyatlı aylarda maliyeti %2,5–6,3 düşük buluyor (15 proje). Projeler resmî fiyatlı aylarda
     olduğu için şu an etkisi yok.
   - Ana sayı ilk plana göre (bilinçli). Faturaya yakın tutar (son plan + GİP işlem) bunun %80–95'i.
+  - "Dönem eksik" diye yazdığım (11 proje Ağustos sonunda) yanlış bulguydu: dönemi kullanıcı seçmiş.
   - Günlük eşitleme resmî fiyatı yalnız son 3 gün için soruyordu; resmî fiyat ~6 hafta sonra geliyor.
 - **Yapılan:**
   - Veri kalitesi bandı: 2026 kuralı döneminde resmî fiyatsız saat varsa uyarı (`formulaPrice`, `FormulaPriceNotice`).
@@ -21,14 +22,14 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
   - `market-sync --recent`: 6 saatte bir, kapanmış aylarda eksik resmî fiyatı yeniden sorar.
   - Sonuçlar: "Faturaya yakın tahmin" kartta (`invoiceEstimate`; son plan kapsamı ≥ %90). API saatlik kayda GİP
     alanlarını taşıyor; diğer çıktılar 3 projede birebir aynı.
-  - `scripts/project-period-extend.mts`: dönemi resmî fiyatı ve havuz verisi tam olan son aya uzatır (varsayılan deneme,
-    `--write`).
-- **Mac verisinde uygulandı (sunucuda değil):** 12 proje Ağustos → Eylül sonu. Eylül'de Maslaktepe RES 80,2 MWh üretti
-  (YEKDEM 68,4 MW) → `installed-capacity-backfill --write`: EPDK işletmedeki 80,2 MW. INAVITAS-LÜY-GÜNEŞ tahmini 8,1 → 8,2.
-- **Kontrol:** 1.084 test, tsc, lint, `check:reports` 0 hata (uzatılmış dönemle), `--only results,insights,planning`
+- **Geri alınan:** proje dönemlerini kendiliğinden uzatan betik (Mac'te 12 projeye denendi). Kullanıcı: dönemleri bilerek
+  seçti ("Ağustos sonu" eksik değil, tercih). Betik silindi, Mac verisi geri alındı. Dönem kullanıcının seçimidir; uygulama
+  dönemi kendiliğinden değiştirmez.
+- **Kontrol:** 1.084 test, tsc, lint, `check:reports` 0 hata, `--only results,insights,planning`
   19/19. Uyarı bandı geçici boş resmî fiyatla ekranda denendi, veri geri yüklendi.
 - **Sıradaki:**
-  - Yükleme (kullanıcı onayıyla), sunucuda: `project-period-extend.mts --write`, `installed-capacity-backfill.mts --write`, `check:reports`.
+  - Yükleme (kullanıcı onayıyla).
+  - Ayrı fikir (kullanıcı isterse): Sonuçlar sayfasında dönem içinde tarih aralığı seçici.
   - Denetimde sıradaki sayfa.
 
 ## 15.11.2026 · Claude · Geçmişle sınama ve rapor hesabı hızı (`claude/rapor-hizi`; yüklendi, d98c033)
