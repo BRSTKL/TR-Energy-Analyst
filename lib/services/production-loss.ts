@@ -14,6 +14,7 @@ import type { SolarSite } from "@/lib/solar-engine/models/production-model";
 import { prisma } from "@/lib/prisma";
 import { readPoolPlantInfo, readPoolYear } from "@/lib/pool/pool-store";
 import { readSatelliteYear } from "@/lib/weather/weather-store";
+import { readSnowYear, snowHours } from "@/lib/weather/snow";
 import type { WeatherDay } from "@/lib/services/weather-preview";
 
 const HOUR = 3_600_000;
@@ -29,7 +30,7 @@ export interface PlantLoss {
   steadyFrom: string | null;
   months: MonthlyLoss[];
   /** Devreye alma dışındaki son 12 ay */
-  last12: { from: string; to: string; actualMwh: number; plannedLossMwh: number; unplannedLossMwh: number; lossPct: number; plannedValueTl: number; unplannedValueTl: number } | null;
+  last12: { from: string; to: string; actualMwh: number; plannedLossMwh: number; unplannedLossMwh: number; lossPct: number; plannedValueTl: number; unplannedValueTl: number; /** Plansız kaybın yerde kar olan saatlere düşen kısmı (kar verisi yoksa null) */ snowLossMwh: number | null } | null;
 }
 
 interface Cached {
@@ -76,7 +77,11 @@ async function compute(epiasPlantId: number): Promise<Cached | null> {
   const inputs = data.hours;
   if (!inputs.some((h) => h.satGhi !== null)) return null;
   const r = detectLostHours(inputs, data.site, { commissioning: true });
-  const months = monthlyLoss(inputs, r);
+  // Kar (scripts/snow-sync.mts): plansız kaybın kar olan saatlere düşen kısmı ayrıca (sektör kaybıyla aynı kural)
+  const years: number[] = [];
+  for (let y = 2024; y <= now.getUTCFullYear(); y++) years.push(y);
+  const snow = snowHours(await Promise.all(years.map((y) => readSnowYear(epiasPlantId, y))));
+  const months = monthlyLoss(inputs, r, { snow });
   const steady = months.filter((m) => !m.commissioning && m.actualMwh > 0);
   const tail = steady.slice(-12);
   const sum = (f: (m: MonthlyLoss) => number) => tail.reduce((a, m) => a + f(m), 0);
@@ -108,6 +113,7 @@ async function compute(epiasPlantId: number): Promise<Cached | null> {
             lossPct: actual + planned + unplanned > 0 ? ((planned + unplanned) / (actual + planned + unplanned)) * 100 : 0,
             plannedValueTl: sum((m) => m.plannedValueTl),
             unplannedValueTl: sum((m) => m.unplannedValueTl),
+            snowLossMwh: snow.size ? sum((m) => m.snowLossMwh ?? 0) : null,
           }
         : null,
     },

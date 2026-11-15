@@ -1,8 +1,9 @@
 /**
  * TR-Energy Analyst - Santral konumunda kar derinliği (güneş kayıp üretiminde "kar olası" ayrımı; 20.10.2026)
  *
- * Kaynak: Open-Meteo Historical Weather API (archive-api.open-meteo.com), ERA5 saatlik `snow_depth` (yerdeki kar, m; 0,25°
- * ızgara). Rüzgârda kullanılan kaynakla aynı (lib/weather/reanalysis-wind.ts). Gecikme ≈ 5–6 gün.
+ * Kaynak: Open-Meteo Historical Weather API (archive-api.open-meteo.com), ERA5-Land saatlik `snow_depth` (yerdeki kar, m; 0,1°
+ * ızgara). Gecikme ≈ 5–6 gün. 15.11.2026'ya kadar `models=era5` isteniyordu: Open-Meteo ERA5'te kar derinliği vermez, bütün
+ * değerler boş geldi ve kar ayrımı hiç çalışmadı. Bütün yılı boş gelen cevap artık hata sayılır (`assertSnowData`).
  * Uydu yöntemi (lib/forecast/curtailment.ts) güneş varken üretmeyen saati kayıp sayar; panel karla örtülüyse de öyle. Yerde en
  * az SNOW_DEPTH_MIN kar olan saatlerdeki plansız kayıp "kar olası" diye ayrılır: kısıntı değil, gerçek üretim eksiği. Izgara
  * kaba (dağ ile ova aynı hücrede olabilir) ve panel yerden hızlı temizlenir: ayrım bir işarettir, ölçüm değil.
@@ -74,6 +75,12 @@ export function snowYearsFromResponse(
   return Array.from(docs.values());
 }
 
+/** Cevapta hiç değer yoksa hata (yanlış model ya da veri yok): boş dosya "kar yok" diye okunmasın */
+export function assertSnowData(res: { hourly: { snow_depth: Array<number | null> } }): void {
+  if (!res.hourly.snow_depth.some((v) => typeof v === "number" && Number.isFinite(v)))
+    throw new Error("Kar derinliği cevabında hiç değer yok (model ya da kapsam hatası).");
+}
+
 /** Kar olası saatler (duvar saati ms): yerde en az SNOW_DEPTH_MIN kar */
 export function snowHours(docs: Array<SnowYear | null>): Set<number> {
   const out = new Set<number>();
@@ -92,7 +99,7 @@ export async function fetchSnow(latitude: number, longitude: number, startDate: 
     latitude: latitude.toFixed(4),
     longitude: longitude.toFixed(4),
     hourly: "snow_depth",
-    models: "era5",
+    models: "era5_land",
     start_date: startDate,
     end_date: endDate,
     timezone: "Europe/Istanbul",

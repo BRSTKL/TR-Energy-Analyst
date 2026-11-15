@@ -5,6 +5,23 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 15.11.2026 · Claude · Hesap doğruluğu denetimi 3: Kayıp üretim (`claude/hesap-dogrulugu`; yüklenmedi)
+
+- **Bulgular:**
+  - Hesap kodu doğru (`verify-production-loss` fark 0). Viranşehir-7 Mayıs 2026 planlı kaybı gerçek kısıntı (santral tam kurulu,
+    plan düşük); devreye alma ayları kayba girmiyor.
+  - **Kar verisi hiç çalışmamış:** `snow.ts` Open-Meteo'dan `models=era5` istiyordu; ERA5'te kar derinliği yok, bütün değerler
+    boş. Sunucuda kar dosyası hiç yok (adım hiç çalışmamış), Mac'tekiler boş.
+  - Hidro "bildirimsiz uzun duruş" kuraklık değil: kurak 2025'te 19 GWh, yağışlı 2026'da 290 GWh.
+- **Yapılan:**
+  - `models=era5_land` (0,1°). Boş cevap artık hata (`assertSnowData`), boş dosya güncel sayılmaz.
+  - Mac'te `snow-sync` + `sector-curtailment`: plansız kaybın %12–13'ü karlı saatlerde (2025 27,4 GWh, 2026 35,8 GWh).
+    Kar hariç en düşük plansız kayıp %0,5, ortanca %2,9–3,1 (önce %1,1–1,7 / %3,6–4,1).
+  - Proje kayıp kartı da kar ayrımını kullanıyor (`production-loss.ts` `snowLossMwh`). Kartta yöntem hatası notu.
+  - Sektör kartına kuraklık karşılaştırması.
+- **Kontrol:** 1.084 test, tsc, lint, `check:reports` 0 hata, `--only losses,sector` 10/10; kart ekranda denendi.
+- **Yüklemede sunucuda:** `snow-sync.mts`, sonra `sector-curtailment.mts` (Open-Meteo; ~1 dk + birkaç dk).
+
 ## 15.11.2026 · Claude · Hesap doğruluğu denetimi 2: Üretim tahmini (`claude/hesap-dogrulugu`; yüklenmedi)
 
 - **Bulgular (sunucu verisi, yalnız okuma):**

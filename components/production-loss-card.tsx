@@ -69,6 +69,9 @@ export function ProductionLossCard({
             {nf(s.plannedLossMwh + s.unplannedLossMwh)} MWh (planlı {nf(s.plannedLossMwh)}, plansız {nf(s.unplannedLossMwh)}). PTF ile karşılığı{" "}
             <b>{tl(s.plannedValueTl + s.unplannedValueTl)}</b>; bunun {tl(s.unplannedValueTl)}&apos;si plansız kayıp (planlı kısıntı çoğunlukla sıfır fiyatlı
             saatte olduğundan parasal karşılığı küçük).
+            {s.snowLossMwh !== null && s.snowLossMwh > 0 && (
+              <> Plansız kaybın {nf(s.snowLossMwh)} MWh&apos;i yerde kar olan saatlerde (panel karla kaplı olabilir; arıza değil).</>
+            )}
           </p>
         ) : (
           <p className="text-sm text-slate-500">Devreye alma sonrası tam ay yok.</p>
@@ -170,7 +173,8 @@ export function ProductionLossCard({
         <p className="text-xs leading-relaxed text-slate-500">
           Panel kurulumu verim tahmininde {loss.mount === "takip" ? "tek eksen takip" : loss.mount.replace("sabit-", "sabit ") + "°"} (üretimle en iyi uyan).
           {loss.steadyFrom && loss.steadyFrom > "2024-03-09" ? ` ${loss.steadyFrom} öncesi devreye alma: kayıp sayılmadı.` : ""} Normal verim, güneşli saatlerde
-          üretim ÷ uydu ışınımı oranının üst %10&apos;u (ay ve komşu aylar). Plansız kayıp kar örtüsünü (uydu güneşi görür, panel karla kaplı) ve model hatasını da içerebilir (inverter sınırı, panel kurulumu, konum);
+          üretim ÷ uydu ışınımı oranının üst %10&apos;u (ay ve komşu aylar). Yöntemin kendi hatası küçüktür: 58 lisanslı güneş santralinde kar hariç en düşük plansız kayıp %0,5, ortanca %3; bir puandan küçük farklar
+          anlamlı değildir. Plansız kayıp kar örtüsünü (uydu güneşi görür, panel karla kaplı) ve model hatasını da içerebilir (inverter sınırı, panel kurulumu, konum);
           parasal karşılık kayıp MWh × PTF (YEKDEM ya da ikili anlaşma fiyatı değil). Uydu: EUMETSAT SARAH3 (Open-Meteo.com), ≈ 2 gün gecikmeli.
         </p>
       </CardContent>

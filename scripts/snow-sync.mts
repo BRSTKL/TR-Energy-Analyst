@@ -10,7 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { isUnlicensedName } from "@/lib/analysis/candidate-access";
 import { readPoolPlantInfo } from "@/lib/pool/pool-store";
-import { fetchSnow, readSnowYear, snowYearsFromResponse, writeSnowYear } from "@/lib/weather/snow";
+import { assertSnowData, fetchSnow, readSnowYear, snowYearsFromResponse, writeSnowYear } from "@/lib/weather/snow";
 
 const CACHE = path.join(process.cwd(), ".cache", "epias");
 const ids = new Set<number>();
@@ -32,11 +32,14 @@ for (const id of ids) {
     continue;
   }
   const last = await readSnowYear(id, Number(end.slice(0, 4)));
-  if (fresh(last?.fetchedAt) && last?.latitude === loc.latitude && last?.longitude === loc.longitude) {
+  // Boş belge (15.11.2026 öncesi yanlış modelle yazılmış) güncel sayılmaz
+  const hasData = !!last?.depth.some((v) => v !== null);
+  if (hasData && fresh(last?.fetchedAt) && last?.latitude === loc.latitude && last?.longitude === loc.longitude) {
     skipped++;
     continue;
   }
   const res = await fetchSnow(loc.latitude, loc.longitude, "2025-01-01", end);
+  assertSnowData(res);
   for (const doc of snowYearsFromResponse(id, loc.latitude, loc.longitude, res, new Date().toISOString())) await writeSnowYear(doc);
   done++;
 }

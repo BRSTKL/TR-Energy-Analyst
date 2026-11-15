@@ -889,7 +889,7 @@ Rüzgâr: beklenen = santralin güç eğrisi (100 m hız 0,5 m/s × 8 yön hücr
               Sınırlar: kurulu güç kayıttan (YEKDEM, EPDK lisansı) ya da en yüksek üretimden alt sınır (129 rüzgâr santralinin 35&apos;inde alt sınır; kayıp eşiği buna
               bağlı); kapasite artışı eğriyi dönem içinde değiştirebilir; talimatla kısma ilk KGÜP&apos;te görünmüyorsa plansız sayılır. Gecikme: IFS ≈ 1
               gün, ERA5 ≈ 5–6 gün; plansız kayıp ERA5 kadar gecikir. Kaynaklar: Open-Meteo.com (CC BY 4.0); ERA5: Copernicus Climate Change Service;
-              SARAH3: EUMETSAT CM SAF. Güneşte plansız kayıp kar örtüsünü de içerebilir: santral konumunda ERA5 kar derinliği (Open-Meteo, 0,25°)
+              SARAH3: EUMETSAT CM SAF. Güneşte plansız kayıp kar örtüsünü de içerebilir: santral konumunda ERA5-Land kar derinliği (Open-Meteo, 0,1°)
               en az 1 cm olan saatlerdeki plansız kayıp &quot;kar olası&quot; diye ayrılır ve sistem yönündeki kısıntı düzeltmesine girmez (karla
               örtülü panel kısılmış değildir; <code>scripts/snow-sync.mts</code>, aylık eşitlemede; ızgara kaba, bir işarettir). Hidroda nehir tipi
               santrallerin ani düşüş kuralı (±72 saatin ortancası) haftalarca süren duruşları göremez; bunlar ayrıca &quot;bildirimsiz uzun

@@ -25,6 +25,8 @@ yeniden üretin. Ayrıntılı geçmiş `PLAN.md` (süren aşamalar, son kayıtla
 - **2026 yedek dengesizlik formülü** (15.11): EPİAŞ 2026'da fiyatı 15 dakikalık SMF'den hesaplar ve bu SMF'yi açık veride
   yayımlamaz (API belgesi taranarak doğrulandı). Formül resmî fiyatı tutturamaz: Ocak–Eylül 2026'da maliyeti %2,5–6,3 düşük
   bulur. Resmî fiyatsız saat varsa ekranda uyarı. Resmî fiyat ay kapandıktan ~6 hafta sonra gelir; `market-sync --recent` geçmiş ayları yeniden sorar.
+- **Kar derinliği ERA5-Land'den** (15.11): Open-Meteo `models=era5` kar derinliği vermez (hep boş); `era5_land` verir. Boş
+  cevap hata sayılır. Güneş plansız kaybının %12–13'ü karlı saatlerde.
 - **Tahmin karnesi için KGÜP günlük çekilir** (15.11): karne ve şampiyon seçimi her saati şirketin ilk KGÜP'üyle puanlar;
   KGÜP yalnız aylık eşitlemeyle gelince karne ve öğrenme hiç çalışmadı. `kgup-recent-sync.mts` aylık eşitlemenin saatlik
   günlük işlerinde. Tahmin sayfası başında dürüst kıyas: model şirket planından pahalı (güneş %26, rüzgâr belirgin).

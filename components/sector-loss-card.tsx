@@ -343,7 +343,8 @@ function HydroLossBody({ data, tabs }: { data: SectorHydroLoss; tabs: React.Reac
               <b>Nehir tipi, bildirimsiz uzun duruş</b> (20.10.2026): ilk KGÜP en az 1 MW iken üretim planın %5&apos;inin altında, en az 6 saat sürüyor, arıza ya da
               bakım bildirimi yok ve ani düşüş olayına girmemiş saatler; kayıp = plan − üretim. Haftalarca süren duruşları yakalar (ani düşüş kuralının göremediği
               kısım). {cur.year}&apos;da {ror.longStopPlants ?? 0} santral, çoğu Nisan–Haziran; büyük olasılıkla bölgesel iletim kısıtı nedeniyle TEİAŞ talimatı
-              (kaynak türüne göre talimat açık veride yok), bildirilmemiş uzun arıza ya da sel duruşu da olabilir. Planı tutturamayan şirket için gerçek bir sapmadır;
+              (kaynak türüne göre talimat açık veride yok), bildirilmemiş uzun arıza ya da sel duruşu da olabilir. Kuraklık değildir: plan şirketin su
+              beklentisini içerir ve duruşlar yağışlı yılda çoğalır (kurak 2025&apos;te 19 GWh, yağışlı 2026&apos;da 290 GWh; 15.11.2026 denetimi). Planı tutturamayan şirket için gerçek bir sapmadır;
               kısmi kısıntıyı yakalamaz.
             </p>
             <p>
@@ -441,7 +442,7 @@ function SectorLossBody({ data, tech, tabs }: { data: SectorCurtailment; tech: T
         {!wind &&
           (data.coverage.withSnow ? (
             <p className="text-xs text-slate-600">
-              Plansız kaybın {gwh(all.snowLossMwh ?? 0)} GWh&apos;i ({share(all.snowLossMwh ?? 0, all.unplannedLossMwh) ?? "%0"}) yerde kar olan saatlerde (ERA5 kar
+              Plansız kaybın {gwh(all.snowLossMwh ?? 0)} GWh&apos;i ({share(all.snowLossMwh ?? 0, all.unplannedLossMwh) ?? "%0"}) yerde kar olan saatlerde (ERA5-Land kar
               derinliği ≥ 1 cm; {data.coverage.withSnow} santral): panel karla örtülmüş olabilir, kısıntı ya da arıza değildir. Izgara kaba (0,25°), bir işarettir.
             </p>
           ) : (
