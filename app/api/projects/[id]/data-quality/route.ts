@@ -11,6 +11,7 @@ import {
   findZeroPlanHours,
   isNotProducing,
 } from "@/lib/analysis/data-completeness";
+import { regulatoryRegimeAt } from "@/lib/calculations/types";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +89,24 @@ async function handleGET(_request: Request, { params }: { params: { id: string }
       if (h.missing) m.missingHours++;
       monthMap.set(month, m);
     }
+    // 2026 kurallarının dönemi (15 dakikalık SMF, taban ve negatif fiyat): resmi dengesizlik fiyatı henüz yayımlanmamış
+    // takvim saatleri formülle fiyatlanır; formül bu dönemde resmi fiyatı tutturamaz (EPİAŞ 15 dakikalık SMF'yi yayımlamaz)
+    const formulaMonths = new Set<string>();
+    let formulaHours = 0;
+    {
+      const seen = new Set<number>();
+      for (const r of records) {
+        const m = r.marketData;
+        if (!m || (m.imbalancePosPrice !== null && m.imbalanceNegPrice !== null)) continue;
+        const t = r.timestamp.getTime();
+        if (seen.has(t) || !regulatoryRegimeAt(r.timestamp).coefficients.floors) continue;
+        seen.add(t);
+        formulaHours++;
+        formulaMonths.add(r.timestamp.toISOString().slice(0, 7));
+      }
+    }
+    const formulaPrice = { hours: formulaHours, months: Array.from(formulaMonths).sort() };
+
     const months = Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month));
 
     // Santral × ay üretim verisi bütünlüğü: bir santralin ayı eksikse o ay hesaplardan sessizce düşer
@@ -126,6 +145,7 @@ async function handleGET(_request: Request, { params }: { params: { id: string }
       generationGaps,
       zeroPlanHours,
       finalPlan,
+      formulaPrice,
       dateRange: {
         start: byHour.size ? new Date(firstHour) : null,
         end: byHour.size ? new Date(lastHour) : null,

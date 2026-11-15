@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-579 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+580 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
 ## Sayfalar (app/**/page.tsx) (31)
 
@@ -570,7 +570,7 @@
 - `components/wind-loss-card.tsx` — "Son 12 ay"; verisi daha kısa santralde ay sayısı ("Verisi olan 6 ay")
 - `components/yekdem-decision-card.tsx` — YEKDEM 2027 kararı: kalmak mı, çıkmak mı?
 
-## scripts (kök) (63)
+## scripts (kök) (64)
 
 - `scripts/aggregator-benchmark.mts` — Toplayıcılar arası kıyası üretir (PLAN 8.7): .cache/epias/aggregator-benchmark-<yıl>.json: npx tsx --tsconfig tsconfig.json scripts/aggregator-benchmark.mts [yıl=2026] [bitiş=karnenin dönem sonu]
 - `scripts/aggregator-collect.mts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" olarak kayıtlı tüm katılımcıların santralleri .cache/epias/aggregator-membership.json'a yazılır.
@@ -605,6 +605,7 @@
 - `scripts/pool-backfill.mts` — Bütün projelerin eksik EPİAŞ verisini tamamlar (PLAN 10.1): piyasa verisi, resmi dengesizlik fiyatları, santrallerin ilk ve son KGÜP ile UEVM serileri.
 - `scripts/pool-import.mts` — Veri havuzuna mevcut veriyi aktarır (PLAN 7.3).
 - `scripts/pool-migrate-projects.mts` — Mevcut projeleri veri havuzuna taşır (PLAN 7.7).
+- `scripts/project-period-extend.mts` — Proje dönemlerini veride bulunan son tam aya uzatır ("her zaman en güncel veri").
 - `scripts/ptf-recent-sync.mts` — Son 3 gün ve bugünün PTF'sini EPİAŞ'tan `.cache/epias/ptf-recent.json`'a yazar (lib/services/ptf-recent.ts; Aşama 22.6).
 - `scripts/realtime-history.mts` — Geçmiş aylar için EPİAŞ gerçek zamanlı üretimi (GZÜ): canlı eğitim penceresinin geriye dönük testi için (scripts/analysis/forecast-backtest-gzu.mts; PLAN 21.4).
 - `scripts/realtime-sync.mts` — Geçici üretim eşitlemesi: EPİAŞ gerçek zamanlı üretimi (GZÜ) havuza (lib/services/realtime-generation.ts, kural lib/pool/provisional.ts).

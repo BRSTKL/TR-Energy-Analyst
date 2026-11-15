@@ -20,7 +20,8 @@ import {
 import { comparePlants } from "@/lib/analysis/plant-comparison";
 import { capturePositions } from "@/lib/services/sector-capture";
 import { analyzePortfolioNetting } from "@/lib/analysis/portfolio-netting";
-import { buildPlantReport, settleByCompany } from "@/lib/report/plant-report";
+import { buildPlantReport, dsgPlanBasis, settleByCompany, toFinalPlan } from "@/lib/report/plant-report";
+import { intradayTradeCost } from "@/lib/analysis/intraday-trade";
 import { buildReportContext } from "@/lib/services/report-context";
 import { settlementIdentity } from "@/lib/projects/aggregator";
 import { loadAggregatorPortfolio } from "@/lib/services/aggregator-portfolio";
@@ -74,6 +75,11 @@ async function handleGET(_request: Request, { params }: { params: { id: string }
           systemDirection: record.marketData.systemDirection as SystemDirection,
           imbalancePosPrice: record.marketData.imbalancePosPrice,
           imbalanceNegPrice: record.marketData.imbalanceNegPrice,
+          // GİP alanları fiyatlamaya girmez; faturaya yakın tahmindeki gün içi işlem maliyeti için taşınır
+          gipPrice: record.marketData.gipPrice,
+          gipVolumeMwh: record.marketData.gipVolumeMwh,
+          gipMinPrice: record.marketData.gipMinPrice,
+          gipMaxPrice: record.marketData.gipMaxPrice,
         };
 
         const hourlyResult = processHourlyRecord(
@@ -117,6 +123,21 @@ async function handleGET(_request: Request, { params }: { params: { id: string }
       plantName: undefined,
     }));
     const portfolioMonthly = aggregateMonthly(portfolioHourly);
+
+    // Faturaya yakın tahmin: uzlaştırma son plana göre yapılır. Son plana göre dengesizlik (şirket bazında) + gün içi plan
+    // değişikliğinin GİP işlem maliyeti ((ilk − son plan) × (GİP − PTF)). Sayfanın ana sayısı ilk plana göredir (tahmin
+    // kalitesi); bu sayı faturayla kıyas içindir. Son plan saatlerin %90'ından azında varsa hesaplanmaz.
+    const invoiceEstimate = (() => {
+      if (dsgPlanBasis(plantResults) !== "final") return null;
+      const sum = (hours: HourlyResult[]) => hours.reduce((a, h) => a + h.imbalanceCost, 0);
+      const finalPlants = plantResults.map(toFinalPlan);
+      const byPlant: Record<string, number> = {};
+      plantResults.forEach((p, i) => {
+        byPlant[p.plantId] = sum(settleByCompany([finalPlants[i]], projectProfile)) + intradayTradeCost(p.hourly).costTl;
+      });
+      const tradeTl = intradayTradeCost(plantResults.flatMap((p) => p.hourly)).costTl;
+      return { portfolioTl: sum(settleByCompany(finalPlants, projectProfile)) + tradeTl, tradeTl, byPlant };
+    })();
     const portfolioYearly = aggregateYearly(portfolioMonthly);
 
     // 4. Sapma yükü özeti (Dengesizlik Karnesi ile aynı motor): KÜPST, YEKDEM varsayımları, 2026, portföy kapsamı
@@ -209,6 +230,7 @@ async function handleGET(_request: Request, { params }: { params: { id: string }
         new Date(plantInputs.find((p) => p.hourly.length)?.hourly[0].timestamp ?? Date.now()).getUTCFullYear()
       ),
       netting: analyzePortfolioNetting(plantInputs, projectProfile),
+      invoiceEstimate,
       sapma,
     });
   } catch (error) {

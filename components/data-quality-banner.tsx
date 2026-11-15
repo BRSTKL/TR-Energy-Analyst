@@ -18,6 +18,8 @@ interface DataQuality {
   zeroPlanHours?: string[];
   /** Son plan (gün içi sonrası KGÜP) kapsamı; kapsamı %90'ın altındaki santraller ("ÖZMEN-1 GES (%0)") */
   finalPlan?: { coveragePct: number; belowThreshold: boolean; lowPlants: string[] };
+  /** 2026 kuralları döneminde resmi dengesizlik fiyatı henüz olmayan takvim saatleri (formülle fiyatlandı) */
+  formulaPrice?: { hours: number; months: string[] };
 }
 
 interface DataQualityBannerProps {
@@ -58,6 +60,7 @@ export function DataQualityBanner({ projectId, refreshKey }: DataQualityBannerPr
       <GenerationGapNotice gaps={quality.generationGaps ?? []} />
       <ZeroPlanNotice items={quality.zeroPlanHours ?? []} />
       <FinalPlanNotice finalPlan={quality.finalPlan} />
+      <FormulaPriceNotice formulaPrice={quality.formulaPrice} />
     </>
   );
   if (quality.isFullyVerified) return gapNotice;
@@ -171,6 +174,34 @@ function FinalPlanNotice({ finalPlan }: { finalPlan?: DataQuality["finalPlan"] }
         <p className="text-amber-800">
           Bu saatlerde KÜPST ilk plana göre hesaplanır (gerçek değerden yüksek olabilir). EPİAŞ son planı bazı birimler için (ör. LÜY)
           yayımlamaz; diğerleri için &quot;EPİAŞ verilerini tamamla&quot; ile çekilebilir.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 2026'dan itibaren EPİAŞ dengesizlik fiyatını 15 dakikalık SMF'den hesaplar ve bu SMF'yi açık veride yayımlamaz; resmi fiyat
+ * (sistem dengesizlik tutarı ÷ miktarı) ancak uzlaştırmadan sonra (≈ 6 hafta) gelir. O zamana kadar saat formülle fiyatlanır.
+ * Ölçüm (15.11.2026, 15 proje, Ocak–Eylül 2026): formül maliyeti resmi fiyata göre %2,5–6,3 düşük buldu.
+ */
+function FormulaPriceNotice({ formulaPrice }: { formulaPrice?: { hours: number; months: string[] } }) {
+  if (!formulaPrice || formulaPrice.hours === 0) return null;
+  const monthName = (m: string) =>
+    new Date(`${m}-01T00:00:00Z`).toLocaleDateString("tr-TR", { month: "long", year: "numeric", timeZone: "UTC" });
+  const ms = formulaPrice.months;
+  const range = ms.length === 1 ? monthName(ms[0]) : `${monthName(ms[0])} – ${monthName(ms[ms.length - 1])}`;
+  return (
+    <div role="alert" className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900 shadow-sm">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+      <div className="space-y-1">
+        <p className="text-sm font-semibold">
+          {formulaPrice.hours.toLocaleString("tr-TR")} saatte ({range}) resmî dengesizlik fiyatı henüz yok: bu saatlerin maliyeti tahmini.
+        </p>
+        <p>
+          EPİAŞ 2026&apos;dan beri fiyatı 15 dakikalık SMF&apos;den hesaplıyor ve resmî fiyatı yaklaşık 6 hafta sonra yayımlıyor. O zamana kadar
+          fiyat saatlik verilerle formülden bulunur. Ocak–Eylül 2026&apos;da formül, resmî fiyata göre maliyeti %2,5–6,3 düşük buldu; bu
+          saatlerin maliyeti büyük olasılıkla biraz daha yüksektir. Resmî fiyat gelince &quot;EPİAŞ verisini güncelle&quot; ile düzelir.
         </p>
       </div>
     </div>

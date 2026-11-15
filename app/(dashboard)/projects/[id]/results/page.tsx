@@ -92,6 +92,8 @@ interface ApiResponse {
   /** PLAN 19.3: capture rate'in sektördeki yeri */
   sectorCapture?: Record<string, CapturePosition> | null;
   netting?: NettingResult;
+  /** Faturaya yakın tahmin: son plana göre dengesizlik + GİP işlem maliyeti (son plan kapsamı %90 altındaysa null) */
+  invoiceEstimate?: { portfolioTl: number; tradeTl: number; byPlant: Record<string, number> } | null;
   /** Başlık altındaki sade özet */
   summary?: { plantCount: number; capacityMw: number; companies: string[]; source: string };
   /** Şirket bazında uzlaştırma, KÜPST ve YEKDEM varsayımları (Dengesizlik Karnesi ile aynı motor) */
@@ -673,9 +675,23 @@ export default function ProjectResultsPage() {
                       : "Şirket bazında uzlaştırma"
                     : "Santral tek başına uzlaştırılsaydı"}
                 </p>
-                {data.summary?.source.includes("ilk") && (
-                  <p className="mt-1 text-2xs text-slate-500">İlk plana göre; fatura tutarı değildir.</p>
-                )}
+                {data.summary?.source.includes("ilk") && (() => {
+                  const inv = data.invoiceEstimate;
+                  const v = !inv ? null : selectedPlantId === "all" ? inv.portfolioTl : inv.byPlant[selectedPlantId];
+                  if (v === null || v === undefined || !Number.isFinite(v))
+                    return <p className="mt-1 text-2xs text-slate-500">İlk plana göre; fatura tutarı değildir.</p>;
+                  return (
+                    <div
+                      className="mt-2 rounded-md bg-slate-50 px-2 py-1.5 text-xs text-slate-600"
+                      title="Uzlaştırma (fatura) gün içi düzeltmelerden sonraki son plana göre yapılır. Bu tutar son plana göre dengesizlik ile gün içinde plan değiştirmenin GİP işlem maliyetinin toplamıdır (GİP ağırlıklı ortalama fiyatıyla). İkili anlaşmalar ve şirketin gerçek işlem fiyatları bilinmediği için yine tahmindir. Üstteki ana sayı ilk plana göredir: tahmin kalitesini ölçer."
+                    >
+                      <span className="font-semibold text-slate-800">Faturaya yakın tahmin: {tlCompact(v)}</span>
+                      <span className="block text-2xs text-slate-500">
+                        Son plana göre, GİP işlem maliyeti dahil. Üstteki sayı ilk plana göre (tahmin kalitesi).
+                      </span>
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
 

@@ -13,6 +13,9 @@
  *
  * Örneklem: rastgele (sabit tohum) saatler; en az 3'ü PTF < 150, en az 5'i sistem açığı (DEFICIT) olan sapmalı saat, en az 5'i
  * planı gün içinde değişen saat. Ayrıca bütün saatlerin toplamları ve 2025'in tamamında formül = resmi fiyat sınanır.
+ * 2026'da resmi fiyat 15 dakikalık SMF'den hesaplanır ve EPİAŞ bu SMF'yi açık veride yayımlamaz: motorun yedek formülü
+ * (resmi fiyat henüz yokken) tutmaz. Formülün resmi fiyata göre farkı ve projede resmi fiyatı olmayan saatler ayrıca yazılır
+ * (çıkış kodunu değiştirmez; uyarıdır).
  * Saat başına fark 1 TL'yi aşarsa çıkış kodu 1.
  */
 
@@ -23,6 +26,8 @@ import { prisma } from "@/lib/prisma";
 import { loadProjectHourly } from "@/lib/services/project-hourly";
 import { kupstForHour } from "@/lib/calculations/kupst";
 import { intradayTradeCost } from "@/lib/analysis/intraday-trade";
+import { imbalancePrices } from "@/lib/calculations/engine";
+import { DEFAULT_IMBALANCE_PROFILE, resolveImbalanceProfile } from "@/lib/calculations/types";
 
 const args = process.argv.slice(2);
 const hoursArg = args.indexOf("--hours");
@@ -96,6 +101,8 @@ interface Row {
 }
 const rows: Row[] = [];
 let skipped = 0;
+/** 2026 ve sonrası: resmi fiyatı henüz yayımlanmamış santral-saat (motor formülle hesaplar) */
+let noOfficial = 0;
 for (const p of data.plants) {
   const info = plantInfo.get(p.plantId);
   if (!info?.epiasPlantId) {
@@ -114,6 +121,7 @@ for (const p of data.plants) {
     const pr = prices(t, mk);
     if (!pr) {
       skipped++;
+      noOfficial++;
       continue;
     }
     const kup = raw.final ?? plan;
@@ -180,6 +188,32 @@ for (const [t, mk] of market) {
 }
 if (n2025)
   console.log(`\n2025 (${n2025.toLocaleString("tr-TR")} saat): formül ile EPİAŞ resmi fiyatı arasındaki ortalama fark pozitif ${fmt(posErr / n2025)} TL/MWh, negatif ${fmt(negErr / n2025)} TL/MWh`);
+
+// --- 2026: yedek formül ≠ resmi fiyat (uyarı) -----------------------------------------------------------------------
+// Motorun resmi fiyat yokken kullandığı formül, resmi fiyatı olan 2026 saatlerinde: aynı sapmayla maliyet ne kadar farklı çıkardı
+const regulatory = { ...DEFAULT_IMBALANCE_PROFILE, mode: "REGULATORY" as const };
+const byMonth = new Map<string, { official: number; formula: number }>();
+for (const r of rows) {
+  if (new Date(r.t).getUTCFullYear() < 2026) continue;
+  const mk = market.get(r.t)!;
+  const f = imbalancePrices(
+    { timestamp: new Date(r.t), ptf: mk.ptf, smf: mk.smf, systemDirection: mk.dir as "DEFICIT", imbalancePosPrice: null, imbalanceNegPrice: null },
+    resolveImbalanceProfile(regulatory, new Date(r.t))
+  );
+  const m = new Date(r.t).toISOString().slice(0, 7);
+  const b = byMonth.get(m) ?? { official: 0, formula: 0 };
+  b.official += r.ind.imb;
+  b.formula += imbalanceCost(r.dev, mk.ptf, { pos: f.positive, neg: f.negative });
+  byMonth.set(m, b);
+}
+if (byMonth.size) {
+  const pctDiff = (b: { official: number; formula: number }) => (b.official !== 0 ? ((b.formula / b.official - 1) * 100).toFixed(1) : "–");
+  const tot = Array.from(byMonth.values()).reduce((a, b) => ({ official: a.official + b.official, formula: a.formula + b.formula }), { official: 0, formula: 0 });
+  console.log(`\n2026 yedek formül (resmi fiyat yokken kullanılır), bu projede resmi fiyata göre maliyet farkı: %${pctDiff(tot)}`);
+  console.log("  " + Array.from(byMonth.entries()).sort().map(([m, b]) => `${m} %${pctDiff(b)}`).join(" · "));
+}
+if (noOfficial > 0)
+  console.log(`\nUYARI: ${noOfficial.toLocaleString("tr-TR")} santral-saatte resmi dengesizlik fiyatı henüz yok; motor bu saatleri yukarıdaki farkla formülle hesaplar.`);
 
 const ok = worstAll <= TOL_TL;
 console.log(`\n${ok ? "TAMAM" : "FARK VAR"}: saatlik fark sınırı ${TOL_TL} TL.`);

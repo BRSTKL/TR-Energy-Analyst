@@ -22,6 +22,12 @@ yeniden üretin. Ayrıntılı geçmiş `PLAN.md` (süren aşamalar, son kayıtla
   sapmasının yalnız PH × oran kadarı netleşir (PH = max(üretim, satış); oran 2025 %10, 2026 %5, EPDK 13869; her yıl
   1 Aralık'a kadar yeni karar). Aynı şirket ve toplayıcı portföyü tek katılımcı: sınırsız. Sınırsız varsayım grup
   faydasını 2,5–3,5 kat abartıyordu (Polat 40,1 → 11,6 M TL). Kod `lib/calculations/dsg-rule.ts`.
+- **2026 yedek dengesizlik formülü** (15.11): EPİAŞ 2026'da fiyatı 15 dakikalık SMF'den hesaplar ve bu SMF'yi açık veride
+  yayımlamaz (API belgesi taranarak doğrulandı). Formül resmî fiyatı tutturamaz: Ocak–Eylül 2026'da maliyeti %2,5–6,3 düşük
+  bulur. Kural: proje dönemi resmî fiyatı olmayan aya uzatılmaz (`project-period-extend.mts`); resmî fiyatsız saat varsa
+  ekranda uyarı. Resmî fiyat ay kapandıktan ~6 hafta sonra gelir; `market-sync --recent` geçmiş ayları yeniden sorar.
+- **Sonuçlar sayfasının ana sayısı ilk plana göre** (bilinçli: tahmin kalitesi); faturayla kıyas için yanında "faturaya
+  yakın tahmin" (son plan + GİP işlem maliyeti, %80–95'i).
 - **Saat başına nesne üretme** (15.11): sunucu işlemcisi yavaş (2,0 GHz Xeon) ve zamanın ~%28'i bellek temizliği;
   saat döngülerinde kopya / Date→metin / profil çözme önbelleklenir (`resolveImbalanceProfile`, `regulatoryRegimeAt`,
   `kupstRegimeAt` hızlı yol, `priceHours` paylaşımı). Hızlandırma çıktıyı birebir korumalı: önce/sonra JSON `cmp` ile.
