@@ -4,7 +4,8 @@
  * Sunucuda saatte bir çalışır (systemd tr-energy-epias-monthly; scripts/server/README.md; eski Mac tanımı scripts/launchd/). Hedef ay: geçen ay (Türkiye saati).
  * Her çalışmada önce küçük günlük işler: geçici üretim (12 saatte bir), piyasa fiyatları (`market-sync.mts --recent`,
  * veri dünü içerene kadar her saat; içeriyorsa bir saniyede çıkar) ve sistem geneli seriler (`system-sync.mts --recent`, her
- * Türkiye günü bir kez), arıza bildirimleri (`umm-sync.mts --recent`, içinde bulunulan ay 6 saatte bir). Piyasa sayfası ve
+ * Türkiye günü bir kez), arıza bildirimleri (`umm-sync.mts --recent`, içinde bulunulan ay 6 saatte bir), tahmin santrallerinin
+ * şirket planı (`kgup-recent-sync.mts`, santral başına günde bir; tahmin karnesi için). Piyasa sayfası ve
  * günlük pano böylece her gün dünün verisini gösterir. Ayrıca DSİ baraj doluluğu (`dsi-dam-sync.mts`) ve ENTSO-E komşu fiyatları (`entsoe-sync.mts`); ikisi de EPİAŞ'tan bağımsız. Yarının PTF tahmini bu işte değil: kendi zamanlayıcısı `tr-energy-ptf-forecast` (12:03, 12:15, 12:25; `ptf/forecast-daily.mts --auto`).
  *   1. Ay tamamlandıysa ya da başka bir çalışma sürüyorsa hiçbir şey yapmaz.
  *   2. EPİAŞ veri uç noktasına erişilemiyorsa yapmaz; ayın 5'inden sonra günde bir kez bildirim (20.10.2026'dan beri VPN
@@ -169,6 +170,28 @@ if (!dry) {
       resolve();
     });
   });
+}
+
+// Tahmin santrallerinin şirket planı (ilk / son KGÜP): tahmin karnesi ve kendi kendine öğrenme her saati şirketin planıyla
+// puanlar; KGÜP gün öncesinde yayımlanır, aylık eşitlemeyi beklerse karne haftalarca boş kalıyordu (15.11.2026). Havuzun
+// yenileme kuralıyla santral başına günde bir kez EPİAŞ'a gider; sonraki saatlik çalışmalar bir saniyede çıkar. Zaman aşımında
+// kalan santraller sonraki saatte sürer.
+if (!dry) {
+  for (const tech of ["GES", "RES"]) {
+    await new Promise<void>((resolve) => {
+      const c = spawn(process.execPath, ["--env-file=.env", "node_modules/.bin/tsx", "--tsconfig", "tsconfig.json", "scripts/kgup-recent-sync.mts", "--tech", tech], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
+      let out = "";
+      c.stdout.on("data", (b) => (out += b));
+      c.stderr.on("data", (b) => (out += b));
+      const timer = setTimeout(() => c.kill("SIGTERM"), 15 * 60_000);
+      c.on("close", (code) => {
+        clearTimeout(timer);
+        const line = out.trim().split("\n")[0] ?? "";
+        if (code !== 0 || !/çekilen 0, güncel \d+, hata 0/.test(line)) console.log(`${stamp()} şirket planı ${tech}: ${out.trim().split("\n").slice(0, 4).join(" | ") || `çıkış ${code}`}`);
+        resolve();
+      });
+    });
+  }
 }
 
 // DSİ baraj doluluğu (yagisbarajdoluluk.dsi.gov.tr; yalnız Türkiye IP'sinden açılır, yani sunucuda): havuz taze ise tek istekle çıkar.
@@ -366,6 +389,9 @@ const steps: Step[] = [
   { name: "hidro kaybı", args: ["scripts/sector-hydro-curtailment.mts"] },
   { name: "sistem yönü santral payları", args: ["scripts/system-attribution.mts"] },
   { name: "geçmişle sınama", args: ["scripts/sector-backtest.mts"] },
+  // Üretim tahmini sayfasındaki "şirket planına göre geçmiş başarı" (.cache/forecast/solar-backtest.json); 18.10.2026'dan sonra
+  // yenilenmiyordu (15.11.2026 denetimi). Karnenin son tam ayına kadar; hava ve uydu arşivi yukarıdaki adımlarda tazelenir.
+  { name: "tahmin kıyası (güneş)", args: ["scripts/analysis/forecast-backtest.mts"] },
   { name: "toplayıcı kıyası", args: ["scripts/aggregator-benchmark.mts", String(Y)] },
   { name: "GİP katılımı", args: ["scripts/gip-participation.mts", String(Y), String(M)] },
   ...(Y === 2026 ? [{ name: "bütçe sınaması", args: ["scripts/budget-backtest.mts", String(M)] }] : []),

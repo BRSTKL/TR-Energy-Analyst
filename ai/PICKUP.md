@@ -5,6 +5,26 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 15.11.2026 · Claude · Hesap doğruluğu denetimi 2: Üretim tahmini (`claude/hesap-dogrulugu`; yüklenmedi)
+
+- **Bulgular (sunucu verisi, yalnız okuma):**
+  - Günlük akış sağlam: 36/36 güneş, 122/122 rüzgâr kesimden önce yazılıyor.
+  - Model şirket planından kötü: güneş 107,2 / 85,0 TL/MWh (kayıp hariç, 55 santral, 15'inde iyi); rüzgâr geçmiş sınamada
+    224–237 / 144–151. Sayfa bunu yalnız kapalı "Ne kadar tutuyor?" bölümünde söylüyordu.
+  - Canlı karne 20.10 (güneş) / 26.10 (rüzgâr) başından beri 0 saat: karne her saati ilk KGÜP'le puanlar, KGÜP havuza yalnız
+    aylık eşitlemeyle giriyor (havuzda 18.10'da bitiyordu).
+  - Bu yüzden şampiyon seçimi (son 28 gün, ≥ 20 ortak gün) hiç çalışmamış; `champions.json` sunucuda yok.
+  - Geçmiş kıyas (`.cache/forecast/solar-backtest.json`) 18.10'dan beri yenilenmemiş.
+- **Yapılan:**
+  - `scripts/kgup-recent-sync.mts`: proje santrallerinin ilk / son KGÜP ve UEVM'si önceki ayın başından bugüne
+    (`ensurePlantCoverage`; havuz kuralıyla santral başına günde bir). Aylık eşitlemenin saatlik günlük işlerine eklendi
+    (GES ve RES, 15 dk sınır). Mac'te 36 güneş santrali 3 dk 20 sn; KGÜP artık bugüne kadar, karne 263 saat puanladı.
+  - Sayfanın başında dürüst kıyas cümlesi (güneşte geçmiş kıyas sayıları, rüzgârda nitel).
+  - Aylık eşitlemeye "tahmin kıyası (güneş)" adımı (`forecast-backtest.mts`, Mac'te 2 dk).
+- **Kontrol:** 1.084 test, tsc, lint, `check:reports` 0 hata, `--only forecast` 12/12.
+- **Yükledikten sonra izle:** ilk saatlik çalışmada "şirket planı GES / RES" satırı; ertesi gün karnede saat > 0; ~20 gün
+  sonra şampiyon kararları günlükte.
+
 ## 15.11.2026 · Claude · Hesap doğruluğu denetimi 1: Sonuçlar sayfası (`claude/hesap-dogrulugu`; yüklenmedi)
 
 - **Neden:** kullanıcı yeni özellik yerine mevcut hesapların doğruluğunu sayfa sayfa denetlememi istedi. İlk sayfa Sonuçlar.

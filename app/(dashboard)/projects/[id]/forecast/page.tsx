@@ -1,5 +1,6 @@
 "use client";
 import { forecastDaySummary, portfolioForecastHours } from "@/lib/forecast/display";
+import { countIn } from "@/lib/format";
 import type { ForecastBands } from "@/lib/solar-engine/models/calibrated-bands";
 
 import React, { useEffect, useState } from "react";
@@ -162,6 +163,24 @@ export default function ForecastPage() {
         <h1 className="text-xl font-semibold text-slate-900">Üretim tahmini{data ? ` · ${data.project.name}` : ""}</h1>
         <p className="text-sm text-slate-600">{tech === "GES" ? "Güneş" : "Rüzgâr"} santrallerinin yarın ve öbür gün saat saat beklenen üretimi.</p>
       </div>
+
+      {/* Dürüst kıyas, sayfanın başında (15.11.2026 denetimi): ayrıntı aşağıdaki "Ne kadar tutuyor?" bölümünde */}
+      {tech === "GES" && ref && ref.kgupTlPerMwh > 0 && (
+        <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+          Bu tahmin açık hava verisiyle yapılan bağımsız bir referanstır. Geçmişte ({ym(data!.reference!.period.from)} – {ym(data!.reference!.period.to)}, {ref.plants} güneş
+          santrali) dengesizlik maliyeti şirketlerin kendi planından{" "}
+          <b>
+            %{nf(Math.abs((ref.liveTlPerMwh / ref.kgupTlPerMwh - 1) * 100), 0)} {ref.liveTlPerMwh > ref.kgupTlPerMwh ? "yüksek" : "düşük"}
+          </b>{" "}
+          çıktı ({nf(ref.liveTlPerMwh)} / {nf(ref.kgupTlPerMwh)} TL/MWh; {ref.plants} santralin {countIn(ref.liveWins)} daha iyi). Şirketin planının yerine geçmez.
+        </p>
+      )}
+      {tech === "RES" && (
+        <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+          Bu tahmin açık hava verisiyle yapılan bağımsız bir referanstır. Geçmiş sınamada rüzgâr modeli şirketlerin kendi planından belirgin biçimde pahalıydı;
+          şirketin planının yerine geçmez.
+        </p>
+      )}
 
       {port && port.projects.length > 1 && (
         <label className="flex flex-wrap items-center gap-2 text-sm text-slate-600">

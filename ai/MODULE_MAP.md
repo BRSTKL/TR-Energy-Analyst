@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-579 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+580 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
 ## Sayfalar (app/**/page.tsx) (31)
 
@@ -570,7 +570,7 @@
 - `components/wind-loss-card.tsx` — "Son 12 ay"; verisi daha kısa santralde ay sayısı ("Verisi olan 6 ay")
 - `components/yekdem-decision-card.tsx` — YEKDEM 2027 kararı: kalmak mı, çıkmak mı?
 
-## scripts (kök) (63)
+## scripts (kök) (64)
 
 - `scripts/aggregator-benchmark.mts` — Toplayıcılar arası kıyası üretir (PLAN 8.7): .cache/epias/aggregator-benchmark-<yıl>.json: npx tsx --tsconfig tsconfig.json scripts/aggregator-benchmark.mts [yıl=2026] [bitiş=karnenin dönem sonu]
 - `scripts/aggregator-collect.mts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" olarak kayıtlı tüm katılımcıların santralleri .cache/epias/aggregator-membership.json'a yazılır.
@@ -595,6 +595,7 @@
 - `scripts/hydro-location-autofill.mts` — Hidro santrallerin (HES) konumunu koordinatlı kayıtlarla tamamlar (kural: lib/epias-plant/location.ts, eşleştirme: lib/epias-plant/hydro-location.ts; kullanıcı 27.10.2026: hidro konumları projeye eklensin, OSM indirmesi ve ilçe merkezi tah…
 - `scripts/imbalance-prices-sync.mts` — EPİAŞ resmi dengesizlik fiyatlarını (sistem dengesizlik tutarı / miktarı) MarketData tablosuna yazar.
 - `scripts/installed-capacity-backfill.mts` — Proje santrallerinin kurulu gücünü EPİAŞ YEKDEM kayıtlarından, yoksa EPDK lisansından (güneş, rüzgâr, hidro) doldurur ve eski tahminin (en yüksek saatlik üretim) hatasını raporlar.
+- `scripts/kgup-recent-sync.mts` — Tahmin santrallerinin şirket planını (ilk ve son KGÜP) ve UEVM'sini son günler için havuza yazar (ensurePlantCoverage).
 - `scripts/launch-app.sh` — başlatıcısı (masaüstü ikonundan çağrılır).
 - `scripts/location-autofill.mts` — Proje güneş santrallerinin konumunu OpenStreetMap adaylarıyla tamamlar (PLAN 20.2; karar: uydu korelasyonu ≥ 0,85 olan aday `OSM` kaynağıyla otomatik kabul, USER'a kullanıcı onayıyla çıkar).
 - `scripts/macro-sync.mts` — Kur ve TÜFE serisini resmî kaynaklardan yeniler → lib/macro/macro-series.json (depoya girer; okuma ağ gerektirmez).
