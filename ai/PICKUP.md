@@ -5,6 +5,19 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 15.11.2026 · Claude · Hesap doğruluğu denetimi 6–7: Santraller, Geçmişle sınama (`claude/hesap-dogrulugu`; yüklenmedi)
+
+- **Santraller (değişiklik yok):** tür 363/363 EPİAŞ yakıt kırılımıyla uyumlu; kurulu güç 316/379 resmî kayıt, 63 tahmin
+  (çoğu rüzgâr: üretim YEKDEM ve EPDK işletmedeki MWe'yi aşıyor, yakıt kırılımı yalnız rüzgâr → türbin eklemesi; EPDK dökümü
+  15.10, yenisi kullanıcıdan). Hidro konumunun %71'i ilçe merkezi ama hidro hesaplarında konum kullanılmıyor.
+- **Geçmişle sınama bulgusu:** gün içi kuralları ilk plana göre ölçülüyor; şirketin kendi gün içi düzeltmesi (ilk − son plan −
+  GİP işlem) aynı test aylarında 15 projenin 14'ünde 2 saatlik kalıcılık kuralından fazla kazandırmış (Pure 61,9 / 36,7 M;
+  Polat 30,0 / 4,2; Bilgin 15,1 / 0). Tek istisna Doğuş (15,9 / 83,3). Sayfa bunu söylemiyordu.
+- **Yapılan:** `/api/projects/[id]/backtest` `companyIntraday` (santral) ve `portfolioCompanyIntraday` (birimde netleşmiş);
+  fiyatlar sınamanın önbellekteki `priceHours`'undan (ek yük küçük). Kurallar tablosunun altında kıyas cümlesi. Diğer
+  alanlar 3 projede birebir aynı.
+- **Kontrol:** 1.084 test, tsc, lint, `check:reports` 0 hata, `--only backtest`.
+
 ## 15.11.2026 · Claude · Hesap doğruluğu denetimi 5: İçgörüler (`claude/hesap-dogrulugu`; yüklenmedi)
 
 - **Bulgular:**

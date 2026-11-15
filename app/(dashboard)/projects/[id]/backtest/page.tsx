@@ -12,16 +12,24 @@ import type { BacktestResult, StrategyBacktest } from "@/lib/analysis/backtest";
 import type { DirectionGate } from "@/lib/analysis/direction-backtest";
 import type { GipCapImpact } from "@/lib/services/gip-liquidity";
 
+/** Şirketin kendi gün içi düzeltmesinin test aylarındaki kazancı (ilk plan − son plan − GİP işlem maliyeti); son plan yoksa null */
+interface CompanyIntraday {
+  savingTl: number;
+  tradeCostTl: number;
+}
+
 interface PlantBacktest {
   plantId: string;
   plantName: string;
   plantType: string;
   result: BacktestResult;
+  companyIntraday?: CompanyIntraday | null;
 }
 
 interface Scenario {
   label: string;
   portfolio: BacktestResult | null;
+  portfolioCompanyIntraday?: CompanyIntraday | null;
   plants: PlantBacktest[];
 }
 
@@ -70,6 +78,7 @@ export default function BacktestPage() {
   const scenario = data?.scenarios[scenarioKey];
   const selectedPlant = scenario?.plants.find((p) => p.plantId === scope);
   const result = scope === "portfolio" ? scenario?.portfolio : selectedPlant?.result;
+  const companyIntraday = scope === "portfolio" ? scenario?.portfolioCompanyIntraday : selectedPlant?.companyIntraday;
   const directionResult = scope === "portfolio" ? data?.direction?.portfolio : data?.direction?.plants.find((p) => p.plantId === scope)?.result;
 
   const verdict = useMemo(() => {
@@ -221,6 +230,24 @@ export default function BacktestPage() {
                         ))}
                       </tbody>
                     </table>
+                    {companyIntraday && (() => {
+                      const pers = result.strategies.find((x) => x.id === "persistence-2h");
+                      const ahead = pers ? pers.outOfSampleSavingTl > companyIntraday.savingTl : null;
+                      return (
+                        <p className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                          <strong>Kıyas:</strong> şirketin kendi gün içi düzeltmesi (son plan ve GİP işlemleri) aynı test aylarında{" "}
+                          <strong className={tone(companyIntraday.savingTl)}>{tl(companyIntraday.savingTl)}</strong> kazandırdı (ilk plana göre maliyetten,
+                          GİP işlem maliyeti düşülerek). Yukarıdaki gün içi kuralları ilk plana uygulanır, yani &quot;hiç gün içi işlem
+                          yapılmasaydı&quot;ya göredir
+                          {pers && ahead !== null
+                            ? ahead
+                              ? `; 2 saatlik kalıcılık kuralı şirketin yaptığından fazla kazandırırdı (${tl(pers.outOfSampleSavingTl)}).`
+                              : `; 2 saatlik kalıcılık kuralı (${tl(pers.outOfSampleSavingTl)}) şirketin zaten yaptığının altında kalıyor.`
+                            : "."}{" "}
+                          Kuralın şirketin düzeltmesine eklenip eklenmeyeceği ayrıca sınanmadı.
+                        </p>
+                      );
+                    })()}
                   </CardContent>
                 </Card>
 

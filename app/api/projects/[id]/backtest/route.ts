@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { withProjectCache } from "@/lib/services/response-cache";
 import { ImbalancePricingProfile, REGULATORY_IMBALANCE_REGIMES } from "@/lib/calculations/types";
-import { BacktestResult, combineBacktests, MIN_FEASIBLE_LAG_HOURS, persistenceStrategy, runBacktest } from "@/lib/analysis/backtest";
+import { BacktestResult, combineBacktests, hourTime, MIN_FEASIBLE_LAG_HOURS, persistenceStrategy, priceHours, runBacktest, type PricedHour } from "@/lib/analysis/backtest";
 import { loadProjectHourly } from "@/lib/services/project-hourly";
-import { settleByCompanyGroups } from "@/lib/report/plant-report";
+import { dsgPlanBasis, settleByCompanyGroups } from "@/lib/report/plant-report";
+import { intradayTradeCost } from "@/lib/analysis/intraday-trade";
+import { timeOf, utcMonthKey } from "@/lib/calculations/time-keys";
 import { loadGipCapImpact } from "@/lib/services/gip-liquidity";
 import { INFO_TIMES } from "@/lib/analysis/direction-features";
 import { directionBiasStrategy, directionPersistenceStrategy, kupstDeltaFor } from "@/lib/analysis/direction-strategy";
@@ -33,16 +35,67 @@ async function handleGET(_request: Request, { params }: { params: { id: string }
       ...REGULATORY_IMBALANCE_REGIMES[REGULATORY_IMBALANCE_REGIMES.length - 1].coefficients,
     };
 
+    /**
+     * Şirketin kendi gün içi düzeltmesinin aynı test aylarındaki kazancı: ilk plana göre maliyet − son plana göre maliyet −
+     * gün içi plan değişikliğinin GİP işlem maliyeti (uzlaştırma biriminde netleşmiş). Gün içi kuralları ilk plana uygulanır;
+     * şirket zaten gün içinde düzeltiyorsa kıyas bu sayıyladır (15.11.2026 denetimi: 15 projenin 14'ünde şirketin kendi
+     * düzeltmesi 2 saatlik kalıcılık kuralından fazla kazandırmış). Son plan saatlerin %90'ından azındaysa null.
+     * Fiyatlar plana bağlı değildir: sınamanın fiyatladığı saatler (priceHours, önbellekte) yeniden kullanılır.
+     */
+    const unitKeyOf = (p: (typeof data.plants)[number]) => (p.organizationId !== null ? `org:${p.organizationId}` : `plant:${p.plantId}`);
+    const costAt = (d: number, h: PricedHour) => (d > 0 ? d * (h.source.ptf - h.positivePrice) : d < 0 ? -d * (h.negativePrice - h.source.ptf) : 0);
+    const companyIntraday = (
+      plants: typeof data.plants,
+      units: Array<{ hourly: (typeof data.plants)[number]["hourly"]; plants: typeof data.plants }>,
+      profile: ImbalancePricingProfile,
+      months: string[]
+    ) => {
+      if (!months.length || dsgPlanBasis(plants) !== "final") return null;
+      const inTest = new Set(months);
+      let saving = 0;
+      for (const u of units) {
+        // Birimin saat başı son planı (son plan yoksa ilk plan): santrallerin toplamı
+        const finalAt = new Map<number, number>();
+        for (const p of u.plants)
+          for (const h of p.hourly) {
+            const t = timeOf(h.timestamp);
+            finalAt.set(t, (finalAt.get(t) ?? 0) + (h.forecastFinalMwh ?? h.forecastMwh));
+          }
+        for (const h of priceHours(u.hourly, profile)) {
+          if (!inTest.has(h.month)) continue;
+          const t = hourTime(h);
+          saving += h.baselineCost - costAt(h.source.actualMwh - (finalAt.get(t) ?? h.source.forecastMwh), h);
+        }
+      }
+      const trade = intradayTradeCost(plants.flatMap((p) => p.hourly.filter((h) => inTest.has(utcMonthKey(h.timestamp))))).costTl;
+      return { savingTl: Number((saving - trade).toFixed(2)), tradeCostTl: Number(trade.toFixed(2)) };
+    };
+
     const run = (profile: ImbalancePricingProfile) => {
-      const plants = data.plants.map((p) => ({
-        plantId: p.plantId,
-        plantName: p.plantName,
-        plantType: p.plantType,
-        result: runBacktest(p.hourly, profile, { trainMonths: TRAIN_MONTHS }),
-      }));
-      const units = settleByCompanyGroups(data.plants, profile).map((g) => runBacktest(g.hourly, profile, { trainMonths: TRAIN_MONTHS }));
+      const plants = data.plants.map((p) => {
+        const result = runBacktest(p.hourly, profile, { trainMonths: TRAIN_MONTHS });
+        return {
+          plantId: p.plantId,
+          plantName: p.plantName,
+          plantType: p.plantType,
+          result,
+          // Santral tek başına: kendi saatleri (fiyatlanmış saatler runBacktest'ten önbellekte)
+          companyIntraday: companyIntraday([p], [{ hourly: p.hourly, plants: [p] }], profile, result.testMonths),
+        };
+      });
+      const groups = settleByCompanyGroups(data.plants, profile);
+      const units = groups.map((g) => runBacktest(g.hourly, profile, { trainMonths: TRAIN_MONTHS }));
+      const portfolio = combineBacktests(units) as BacktestResult | null;
       return {
-        portfolio: combineBacktests(units) as BacktestResult | null,
+        portfolio,
+        portfolioCompanyIntraday: portfolio
+          ? companyIntraday(
+              data.plants,
+              groups.map((g) => ({ hourly: g.hourly, plants: data.plants.filter((p) => unitKeyOf(p) === g.key) })),
+              profile,
+              portfolio.testMonths
+            )
+          : null,
         plants,
       };
     };
@@ -58,14 +111,13 @@ async function handleGET(_request: Request, { params }: { params: { id: string }
       persistenceStrategy(MIN_FEASIBLE_LAG_HOURS),
       ...(forecasts["H-2"].gate.passed ? [directionPersistenceStrategy(forecasts["H-2"].probabilities)] : []),
     ];
-    const unitKey = (p: (typeof data.plants)[number]) => (p.organizationId !== null ? `org:${p.organizationId}` : `plant:${p.plantId}`);
     const direction = {
       gates: Object.fromEntries(INFO_TIMES.map((it) => [it, forecasts[it].gate])),
       portfolio: combineBacktests(
         settleByCompanyGroups(data.plants, data.profile).map((g) =>
           runBacktest(g.hourly, data.profile, {
             trainMonths: TRAIN_MONTHS,
-            strategies: directionStrategies(data.plants.filter((p) => unitKey(p) === g.key)),
+            strategies: directionStrategies(data.plants.filter((p) => unitKeyOf(p) === g.key)),
           })
         )
       ) as BacktestResult | null,
