@@ -5,6 +5,25 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 15.11.2026 · Claude · Hesap hızı ve sunucu Node 24 (`claude/hesap-hizi`; yüklendi, d8a36c5)
+
+- **Sorun:** yüklemeden sonra sayfalar çok yavaş; kullanıcı ısıtmadan başka yol istedi. Ölçüm: sunucu boştayken bile DSG 55 sn,
+  sonuç 26 sn, geçmişle sınama 100 sn (Mac'te 2 / 3 / 11 sn). İşlemci eski (2,0 GHz Xeon, saf döngü Mac'in ~1/3,5'i), çalan
+  zaman yok; zamanın ~%28'i bellek temizliği (saat başına kopya nesneler).
+- **Yapılan (çıktı birebir aynı):** `resolveImbalanceProfile` profil+dönem başına tek nesne; `regulatoryRegimeAt` /
+  `kupstRegimeAt` / `imbalanceFloorV` hızlı yol; `priceHours` aynı dizi+profil için paylaşılır, gecikme sözlükleri tembel,
+  ay anahtarı metinsiz; `kupstForPlan` (KÜPST farkı kopyasız); kalıcılık stratejisinde saat başına tek arama.
+- **Node 24:** sunucuda geçici klasörde 20 / 22 / 24 denendi (24: %25–30 hızlı, çıktı aynı; 26 libatomic yüzünden açılmadı).
+  Kullanıcı onayıyla geçildi: zamanlayıcılar durduruldu, yedek alındı (`dev-2026-11-15_11-25-13-daily.db`), NodeSource
+  `node_20.x → node_24.x` (eski dosya `/root/nodesource.sources.node20.bak`), `npm ci`, `deploy.sh`, zamanlayıcılar açıldı (9).
+  npm 11 kurulum betiklerini çalıştırmıyor (Prisma, esbuild, unrs-resolver listede); Prisma motoru ve esbuild yine çalışıyor,
+  `prisma generate` deploy'da. 11:30 rüzgâr tahmini atlandı.
+- **Ölçüm (sunucu, Node 24 + yeni kod, önbelleksiz):** DSG ~11 sn, sonuç ~17 sn, geçmişle sınama ~53 sn.
+- **Yükleme sonrası ısıtma (15.11 11:28–11:46):** 459 sn, 76 yeniden hesap, 0 hata (önceki yüklemeler 926–1.207 sn). Inavitas
+  (ısıtma içinde, önce → sonra): sonuç 33,4 → 15,6; geçmişle sınama 103,9 → 41,0; DSG 68,7 → 9,6; içgörüler 12,2 → 6,2 sn.
+- **Kontrol:** 1.084 test, tsc, lint, `check:reports` 0 hata, tam duman 60/60.
+- **Sıradaki:** rapor hesabı (`buildPlantReport`) aynı yöntemle; npm `allowScripts` onayı (bir sonraki `npm ci` için).
+
 ## 13.11.2026 · Claude · YEKDEM 2027 karar listesi (`claude/mevzuat-kasim-2026`; yüklendi, 50faff0)
 
 - **Neden:** piyasa araştırmasından öneri 1; 2027 YEKDEM başvuru/sonlandırma son günü 30.11.2026.
@@ -243,20 +262,4 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 - **Yapılan:** `lib/pool/system-codec.ts` `yesterdayMissing` artık rüzgâra da bakar (gerçek zamanlı üretim tüketimden geç yayımlanır);
   test eklendi. 1.019 test, tsc, `check:reports` 0 hata.
 - **Sıradaki:** yüklemeden sonra bir saat içinde saatlik iş 3 Kasım'ı kendiliğinden doldurur; yoksa sunucuda `system-sync.mts --recent`.
-
-## 04.11.2026 · Claude · Günlük pano sadeleşti (`claude/pano-sade`)
-
-- Kullanıcı sekmelerin (Geçmiş gün / Bugün / Yarın / Teklif öncesi) kafa karıştırdığını söyledi; önizleme gösterildi, onaylandı.
-- **Yapılan:** gün şeridi Dün / Bugün / Yarın (+ "Başka gün"), `?sekme=gecmis|bugun|yarin` adreste tutulur; her görünümde bir durum
-  çipi ve tek cümle; Yarın görünümünde teklif masasına bağlantı. Teklif öncesinde "Bugün (geçmişle sınama)" düğmesi kalktı.
-  Fiyat limiti notu tek satıra (`PriceLimitNote compact`).
-- **Bugün grafikleri yalnız yayımlanan saatleri gösterir** (boş alan yok), yayımlandıkça dolar: SMF/sistem yönü/talimat son SMF
-  saatine, tüketim/üretim `lastCompleteRealtimeHour` ile (en yeni saat kısmi olduğundan atlanır). EPİAŞ yayımlanmamış saatlere 0
-  yazdığı için net talimat/YAL/YAT o saatlerde maskelenir (`maskAfterHour`, `lib/analysis/daily-market.ts`).
-- **Yenileme:** Bugün ve Yarın 5 dakikada bir sessizce yenilenir (sekme arka plandaysa atlanır). Tarayıcı kendi sunucumuza sorar;
-  EPİAŞ'a giden istek sunucudaki 5 dakikalık önbellekle sınırlı.
-- **Ölçülen yayın gecikmesi (04.11 22:30 TR):** PTF D-1 ~13-14, tüketim/üretim ≈1 sa (en yeni saat kısmi), SMF ve sistem yönü ≈4,5-5,5 sa
-  (22:36'da son saat 16). Resmî yayın saati bulunamadı.
-- **Kontrol:** 1.018 test, tsc, `--only gunluk,teklif` duman testi temiz.
-- **Sıradaki:** SMF yayın gecikmesini sunucuda saatlik okuyarak ölçmek (istenirse).
 
