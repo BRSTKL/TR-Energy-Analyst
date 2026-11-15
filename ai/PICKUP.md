@@ -5,7 +5,7 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
-## 15.11.2026 · Claude · Geçmişle sınama ve rapor hesabı hızı (`claude/rapor-hizi`; yüklenmedi)
+## 15.11.2026 · Claude · Geçmişle sınama ve rapor hesabı hızı (`claude/rapor-hizi`; yüklendi, d98c033)
 
 - **Yapılan (çıktı birebir aynı, 3 projede sonuç ve geçmişle sınama JSON'u `cmp` ile):** `priceHours` geçmiş saat araması
   santral başına sayı anahtarlı sözlük (metin anahtar yok); `PricedHour.t` (saat başı ms, `hourTime`) yön stratejilerinde
@@ -17,7 +17,9 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 - **Bırakılan:** yön modeli (`weightedRidge`) ve katsayı arama (`bestMultiplier`) zaten sıkı döngü; toplama sırası değişmeden
   kısaltılamaz. Not: tsx profilinde `__name` / `toTemporalInstant` tsx'in `keepNames` eki; üretimde yok.
 - **Kontrol:** 1.084 test, tsc, lint, `check:reports` 0 hata, tam duman 60/60.
-- **Sıradaki:** main'e birleştirip yükleme (kullanıcı isterse); npm `allowScripts`.
+- **Yüklendi (15.11 20:53):** `d8a36c5 → d98c033`, sayfa denetimi 200. Isıtma 364 sn, 74 yeniden hesap, 0 hata (önceki 459 sn).
+  Inavitas (ısıtma içinde, önceki → şimdi): geçmişle sınama 41,0 → 31,6; sonuç 15,6 → 13,6; içgörüler 6,2 → 4,3; DSG 9,6 → 9,9 sn.
+- **Sıradaki:** npm `allowScripts` onayı (bir sonraki `npm ci` için).
 
 ## 15.11.2026 · Claude · Hesap hızı ve sunucu Node 24 (`claude/hesap-hizi`; yüklendi, d8a36c5)
 
