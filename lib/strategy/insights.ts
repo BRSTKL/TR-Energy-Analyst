@@ -375,6 +375,14 @@ const tl = (v: number) => `${Math.abs(Math.round(v)).toLocaleString("tr-TR")} �
 /** Simülasyon sonucunu öneri kartındaki "Beklenen Etki" metnine çevirir */
 function describeImpact(impact: SimulatedImpact | null): string {
   if (!impact) return "Veriyle simüle edilemedi; etki tahmini yok.";
+  // Kusursuz öngörü tavanı: hatanın yönü o saat için önceden bilinmez; uygulanabilir kazanç geçmişle sınamadadır
+  // (15.11.2026 denetimi: Bilgin'de tavan +21 M, 2 saat önceki hatayla sınama 0)
+  if (impact.ceiling)
+    return impact.savingTl > 0
+      ? `Kusursuz öngörüyle tavan: ${tl(impact.savingTl)} (dengesizlik maliyetinin %${impact.percentOfCost.toLocaleString("tr-TR")} payı). Gerçekte yapılabilir değil; uygulanabilir kazanç için Geçmişle sınama sayfasına bakın.`
+      : "Kusursuz öngörüyle bile kazandırmazdı; önerilmez.";
+  if (impact.savingTl > 0 && impact.consistent === false)
+    return `Geçmişle sınamada ${tl(impact.savingTl)}, ama ayların yarısından azı kazançlı: tutarlı değil, önerilmez.`;
   if (impact.savingTl > 0) {
     return `Geçmiş veride ${tl(impact.savingTl)} tasarruf (dengesizlik maliyetinin %${impact.percentOfCost.toLocaleString("tr-TR")} payı).`;
   }
@@ -400,7 +408,8 @@ export function generateMitigationSuggestions(
 ): MitigationSuggestion[] {
   const suggestions: MitigationSuggestion[] = [];
   const add = (s: Omit<MitigationSuggestion, "expectedImpact" | "recommended">) => {
-    const recommended = s.impact ? s.impact.savingTl > 0 : null;
+    // Tavan (kusursuz öngörü) önerilir sayılmaz; sınamadan gelen kazanç ancak tutarlıysa
+    const recommended = !s.impact ? null : s.impact.ceiling ? (s.impact.savingTl > 0 ? null : false) : s.impact.savingTl > 0 && s.impact.consistent !== false;
     suggestions.push({
       ...s,
       priority: recommended === false ? "LOW" : s.priority,
@@ -505,6 +514,7 @@ export function generateMitigationSuggestions(
             percentOfCost: Number(bt.outOfSampleSavingPercent.toFixed(1)),
             method: `Geriye dönük test: her ay, önceki 4 ayın Σ gerçekleşen / Σ tahmin oranıyla ölçeklendi (${bt.testMonths} test ayı, ${bt.positiveMonths} ayı kazançlı).`,
             caveat: "Oran, planlama sayfasındaki yanlılık düzeltmesiyle aynı yöntemle hesaplandı.",
+            consistent: bt.positiveMonths * 2 >= bt.testMonths,
           };
         }
         return multiplierImpact(
@@ -670,7 +680,7 @@ export function comparePlantProfitability(
         : `Bu teknoloji için sektör karnesi yok; proje içinde ${total} santralin ${rankInType}. sırasında.`;
       const bias =
         item.planExcessPct !== null && Math.abs(item.planExcessPct) >= 2
-          ? ` Plan ${item.planExcessPct > 0 ? "fazlası" : "eksiği"} %${Math.abs(item.planExcessPct).toFixed(1).replace(".", ",")}: kalibrasyonla hızlı kazanç.`
+          ? ` Plan ${item.planExcessPct > 0 ? "fazlası" : "eksiği"} %${Math.abs(item.planExcessPct).toFixed(1).replace(".", ",")}: kalibrasyon denenebilir (kazancı Planlama sayfasındaki geçmişle sınamada).`
           : "";
       const action = {
         EXCELLENT: " Tahmin kalitesi yüksek; portföye alınırken sapma primi indirimli teklif edilebilir.",

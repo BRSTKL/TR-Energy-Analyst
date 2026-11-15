@@ -21,6 +21,10 @@ export interface SimulatedImpact {
   method: string;
   /** Sonucu yorumlarken bilinmesi gereken sınırlama */
   caveat: string;
+  /** Kusursuz öngörü varsayımıyla tavan (gerçekte uygulanamaz): öneri bu sayıyla "önerilir" sayılmaz */
+  ceiling?: boolean;
+  /** Geçmişle sınamada ayların en az yarısı kazançlı mı (yalnız sınamadan gelen etkide) */
+  consistent?: boolean;
 }
 
 export const totalImbalanceCost = (hourly: HourlyResult[]) => hourly.reduce((s, h) => s + h.imbalanceCost, 0);
@@ -92,12 +96,13 @@ export function intradayImpact(
 ): SimulatedImpact | null {
   const { savingTl, hoursWithGip } = simulateIntradayShare(hourly, select, INTRADAY_SHARE);
   if (hoursWithGip === 0) return null;
-  return toImpact(
+  const impact = toImpact(
     savingTl,
     hourly,
     `${scopeLabel} saatlerinde dengesizliğin %${INTRADAY_SHARE * 100} payı GİP'te kapatıldı (${hoursWithGip.toLocaleString("tr-TR")} saat; saatlik GİP hacminin en fazla %${DEFAULT_INTRADAY_REALISM.volumeCapPercent} payı, zor saatlerde fiyat kayması %${DEFAULT_INTRADAY_REALISM.stressHaircutPercent}).`,
     "Üst sınırdır: eksik üretimin gün içinde doğru öngörüldüğü varsayılır. Öngörü gecikmeli yapılırsa (GİP teslimattan 60 dk önce kapanır; 2 saat önce görülen hata ile) aynı projede kazanç bunun çok altındadır, Geriye Dönük Test sayfasına bakın. GİP hacim ve min/maks fiyat verisi olmayan saatlerde ortalama fiyat kullanılır."
   );
+  return impact && { ...impact, ceiling: true };
 }
 
 /** Seçilen saatlerde tahmini çarpanla değiştirme önerisinin etkisi */

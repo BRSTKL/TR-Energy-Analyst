@@ -5,6 +5,18 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 15.11.2026 · Claude · Hesap doğruluğu denetimi 5: İçgörüler (`claude/hesap-dogrulugu`; yüklenmedi)
+
+- **Bulgular:**
+  - En pahalı saatler bölümü betimleyici, sorun yok. Santral sıralaması zaten sektör karnesine göre.
+  - GİP önerileri kusursuz öngörüyle (aynı saatin hatası biliniyor) hesaplanıp "Geçmiş veride X tasarruf" ve yeşil "önerilir"
+    gösteriliyordu; öneriler bu tavana göre sıralanıyordu. Bilgin: tavan +21,1 M, 2 saat önceki hatayla sınama 0; Polat +22,1 / +4,2.
+  - Kalibrasyon önerisi sınamadan geliyordu ama tutarlılık (kazançlı ay) bakılmıyordu.
+- **Yapılan:** `SimulatedImpact.ceiling` / `consistent`. Tavan "önerilir" sayılmaz, metni "Kusursuz öngörüyle tavan … gerçekte
+  yapılabilir değil"; sınamada ayların yarısından azı kazançlıysa "tutarlı değil, önerilmez". Santral kartında "kalibrasyonla
+  hızlı kazanç" → "kalibrasyon denenebilir (kazancı Planlama sayfasındaki sınamada)". `insights.test.ts` yeni kurala göre.
+- **Kontrol:** 1.084 test, tsc, lint, `check:reports` 0 hata, `--only insights` 6/6.
+
 ## 15.11.2026 · Claude · Hesap doğruluğu denetimi 4: Planlama (`claude/hesap-dogrulugu`; yüklenmedi)
 
 - **Bulgular:**

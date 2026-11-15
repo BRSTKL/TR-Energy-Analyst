@@ -197,7 +197,10 @@ describe("Kural Tabanlı Strateji ve İçgörü Motoru Birim Testleri", () => {
       // GİP = PTF ve açık saatlerinde negatif fiyat MAX(PTF,SMF)×1,03 = 4635:
       // 10 saat × 10 MWh × %25 × (4635 − 4000) = 15.875 ₺
       expect(timing?.impact?.savingTl).toBeCloseTo(15875, 0);
-      expect(timing?.recommended).toBe(true);
+      // Kusursuz öngörü tavanı: "önerilir" sayılmaz, metin tavan olduğunu söyler (15.11.2026 denetimi)
+      expect(timing?.impact?.ceiling).toBe(true);
+      expect(timing?.recommended).toBeNull();
+      expect(timing?.expectedImpact).toContain("Kusursuz öngörüyle tavan");
 
       const deficit = suggestions.find((s) => s.id === "suggestion-deficit-protection");
       expect(deficit?.impact?.savingTl).toBeGreaterThan(0);
@@ -213,7 +216,7 @@ describe("Kural Tabanlı Strateji ve İçgörü Motoru Birim Testleri", () => {
 
       // Hiçbir etki metni sabit bir yüzde vaadi içermez; hepsi simülasyondan veya "tahmin yok"tan gelir
       for (const s of suggestions) {
-        expect(s.expectedImpact).toMatch(/Geçmiş veride|etki tahmini yok/);
+        expect(s.expectedImpact).toMatch(/Geçmiş veride|Geçmişle sınamada|Kusursuz öngörüyle|etki tahmini yok/);
       }
     });
 
