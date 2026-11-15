@@ -8,7 +8,7 @@
 - **Vitest** (`__tests__/`), ESLint (`next lint`), Prettier.
 - Betikler `tsx` ile (`scripts/*.mts`); Python yalnız ham dosya çıkarıcıları (`scripts/tools/*.py`).
 - Çıktı: pptxgenjs (PowerPoint), exceljs (akışlı Excel), jszip.
-- Node 20. Docker yok.
+- Node 24 (sunucuda 15.11.2026'dan beri; geliştirme Mac'inde daha yeni sürüm olabilir). Docker yok.
 
 ## Katmanlar
 

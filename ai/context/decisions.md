@@ -22,6 +22,10 @@ yeniden üretin. Ayrıntılı geçmiş `PLAN.md` (süren aşamalar, son kayıtla
   sapmasının yalnız PH × oran kadarı netleşir (PH = max(üretim, satış); oran 2025 %10, 2026 %5, EPDK 13869; her yıl
   1 Aralık'a kadar yeni karar). Aynı şirket ve toplayıcı portföyü tek katılımcı: sınırsız. Sınırsız varsayım grup
   faydasını 2,5–3,5 kat abartıyordu (Polat 40,1 → 11,6 M TL). Kod `lib/calculations/dsg-rule.ts`.
+- **Saat başına nesne üretme** (15.11): sunucu işlemcisi yavaş (2,0 GHz Xeon) ve zamanın ~%28'i bellek temizliği;
+  saat döngülerinde kopya / Date→metin / profil çözme önbelleklenir (`resolveImbalanceProfile`, `regulatoryRegimeAt`,
+  `kupstRegimeAt` hızlı yol, `priceHours` paylaşımı). Hızlandırma çıktıyı birebir korumalı: önce/sonra JSON `cmp` ile.
+  Sunucu Node 24 (20'ye göre %25–30 hızlı). Isıtmaya alternatif aranırken bulundu; ısıtma kaldı.
 - **Mevzuat dönemleri saat saat** (13.11): V 1.11.2026'dan 100 TL/MWh (EPDK 14911); KÜPST dayanağı 1.11.2026'dan
   14907 (oranlar 14029 ile aynı). Kararlar Resmî Gazete taranmış PDF'inden okunur; ikincil kaynak (Codex araştırması,
   hukuk sitesi) yalnız ipucu.

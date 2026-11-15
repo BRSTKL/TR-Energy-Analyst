@@ -80,11 +80,26 @@ const REGIME_STARTS = REGULATORY_IMBALANCE_REGIMES.map((r) => Date.parse(`${r.fr
 
 /** Verilen saat için geçerli mevzuat rejimi */
 export function regulatoryRegimeAt(timestamp: Date | string) {
-  const t = new Date(timestamp).getTime();
+  return REGULATORY_IMBALANCE_REGIMES[regimeIndexAt(timestamp)];
+}
+
+/** Son bulunan dönemin sırası: saat başına çağrıldığı için ardışık saatler aramadan döner */
+let lastRegimeIdx = 0;
+function regimeIndexAt(timestamp: Date | string | number): number {
+  const t = timestamp instanceof Date ? timestamp.getTime() : new Date(timestamp).getTime();
+  const i0 = lastRegimeIdx;
+  if (t >= REGIME_STARTS[i0] && (i0 + 1 >= REGIME_STARTS.length || t < REGIME_STARTS[i0 + 1])) return i0;
   let idx = 0;
   for (let i = 0; i < REGIME_STARTS.length; i++) if (t >= REGIME_STARTS[i]) idx = i;
-  return REGULATORY_IMBALANCE_REGIMES[idx];
+  lastRegimeIdx = idx;
+  return idx;
 }
+
+/**
+ * Profil + dönem → çözülmüş profil. Her saat için yeni nesne kuruluyordu (375 bin saatte milyonlarca kopya, sunucuda sürenin
+ * büyük kısmı bellek temizliği). Çözülmüş profil salt okunurdur; aynı profil ve dönem için aynı nesne döner.
+ */
+const resolvedCache = new WeakMap<ImbalancePricingProfile, ImbalancePricingProfile[]>();
 
 /**
  * Bir saatin fiyatlanmasında kullanılacak katsayıları döndürür.
@@ -95,7 +110,10 @@ export function resolveImbalanceProfile(
   timestamp: Date | string
 ): ImbalancePricingProfile {
   if (profile.mode !== "REGULATORY") return profile;
-  return { ...profile, ...regulatoryRegimeAt(timestamp).coefficients };
+  const idx = regimeIndexAt(timestamp);
+  let byRegime = resolvedCache.get(profile);
+  if (!byRegime) resolvedCache.set(profile, (byRegime = []));
+  return (byRegime[idx] ??= { ...profile, ...REGULATORY_IMBALANCE_REGIMES[idx].coefficients });
 }
 
 /** Veritabanı satırını (veya yokluğunu) hesaplama profiline çevirir. */

@@ -26,7 +26,7 @@
 
 import { costWithMultiplier, MIN_FEASIBLE_LAG_HOURS, persistenceGainsFor, type PricedHour, type Strategy } from "@/lib/analysis/backtest";
 import { capTradeMwh, DEFAULT_INTRADAY_REALISM } from "@/lib/analysis/intraday-arbitrage";
-import { kupstForHour } from "@/lib/calculations/kupst";
+import { kupstForPlan, kupstRegimeAt } from "@/lib/calculations/kupst";
 import type { HourlyResult } from "@/lib/calculations/types";
 import type { InfoTime } from "@/lib/analysis/direction-features";
 
@@ -37,12 +37,11 @@ const THETAS = [0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7];
 /** Bir santral saatinde plan k ile çarpılınca KÜPST farkı (TL); ilk ve son plan birlikte ölçeklenir */
 export function plantKupstDelta(h: HourlyResult, plantType: string, k: number): number {
   if (k === 1) return 0;
-  const scaled: HourlyResult = {
-    ...h,
-    forecastMwh: h.forecastMwh * k,
-    forecastFinalMwh: h.forecastFinalMwh === null || h.forecastFinalMwh === undefined ? h.forecastFinalMwh : h.forecastFinalMwh * k,
-  };
-  return kupstForHour(scaled, plantType) - kupstForHour(h, plantType);
+  // Plan k ile ölçeklenir (son plan varsa o, yoksa ilk plan): KÜP de k katına çıkar. Kayıt kopyalanmaz (saat × k × ay başına
+  // çağrılır)
+  const regime = kupstRegimeAt(h.timestamp);
+  const kup = h.forecastFinalMwh ?? h.forecastMwh;
+  return kupstForPlan(h, plantType, kup * k, regime) - kupstForPlan(h, plantType, kup, regime);
 }
 
 /** KÜPST farkı sağlayıcı: (saat başı ms, k) → TL. Santralde kendi saati, birimde santrallerin toplamı. */

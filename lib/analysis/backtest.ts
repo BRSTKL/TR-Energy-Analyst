@@ -79,19 +79,38 @@ export const MIN_TRAIN_HOURS = 500;
 
 const fmtK = (k: number) => k.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/** "YYYY-MM" (UTC alanları; toISOString().slice(0, 7) ile aynı, metin üretmeden: saat başına çağrılır) */
 function monthOf(t: Date | string): string {
-  return new Date(t).toISOString().slice(0, 7);
+  const d = new Date(t);
+  const m = d.getUTCMonth() + 1;
+  return `${d.getUTCFullYear()}-${m < 10 ? "0" : ""}${m}`;
 }
+
+/**
+ * Aynı saat dizisi aynı profille birden çok kez fiyatlanıyordu (backtest uç noktası: proje senaryosu ve yön stratejileri
+ * aynı santral serisini aynı profille çalıştırır). Fiyatlanmış saatler salt okunurdur; dizi ve profil aynıysa paylaşılır.
+ */
+const pricedCache = new WeakMap<HourlyResult[], Map<string, PricedHour[]>>();
 
 /** Saatleri verilen profil altında yeniden fiyatlar (baz maliyet ve dengesizlik fiyatları) */
 export function priceHours(hourly: HourlyResult[], profile: ImbalancePricingProfile): PricedHour[] {
-  // Santral + zaman anahtarı: birden fazla santral aynı listede olsa da geçmiş saat doğru santralden gelir
+  const profileKey = JSON.stringify(profile);
+  let perProfile = pricedCache.get(hourly);
+  const hit = perProfile?.get(profileKey);
+  if (hit) return hit;
+  // Santral + zaman anahtarı: birden fazla santral aynı listede olsa da geçmiş saat doğru santralden gelir. Yalnız gecikmeli
+  // stratejiler sorar: ilk sorulduğunda kurulur
   const key = (plantId: string | undefined, t: number) => `${plantId ?? ""}|${t}`;
-  const byKey = new Map(hourly.map((h) => [key(h.plantId, new Date(h.timestamp).getTime()), h]));
-  return hourly.map((h) => {
+  let byKey: Map<string, HourlyResult> | null = null;
+  const lookup = (k: string) => {
+    byKey ??= new Map(hourly.map((h) => [key(h.plantId, new Date(h.timestamp).getTime()), h]));
+    return byKey.get(k);
+  };
+  const out = hourly.map((h) => {
     const t = new Date(h.timestamp).getTime();
     // Aynı gecikme her oran ve eğitim penceresi için tekrar soruluyordu (metin anahtarlı arama, isteğin ≈ üçte biri)
-    const prevByLag = new Map<number, HourlyResult | undefined>();
+    // Saat başına yalnız sorulursa kurulur (çoğu strateji sormaz; 375 bin saatte her saate bir sözlük açmak pahalıydı)
+    let prevByLag: Map<number, HourlyResult | undefined> | null = null;
     const r = processHourlyRecord(
       { timestamp: h.timestamp, actualMwh: h.actualMwh, forecastMwh: h.forecastMwh },
       pricedMarket(h),
@@ -100,16 +119,20 @@ export function priceHours(hourly: HourlyResult[], profile: ImbalancePricingProf
     return {
       source: h,
       month: monthOf(h.timestamp),
-      hour: new Date(h.timestamp).getUTCHours(),
+      hour: new Date(t).getUTCHours(),
       baselineCost: r.imbalanceCost,
       positivePrice: r.positivePrice,
       negativePrice: r.negativePrice,
       prev: (lagHours: number) => {
-        if (!prevByLag.has(lagHours)) prevByLag.set(lagHours, byKey.get(key(h.plantId, t - lagHours * 3_600_000)));
+        prevByLag ??= new Map();
+        if (!prevByLag.has(lagHours)) prevByLag.set(lagHours, lookup(key(h.plantId, t - lagHours * 3_600_000)));
         return prevByLag.get(lagHours);
       },
     };
   });
+  if (!perProfile) pricedCache.set(hourly, (perProfile = new Map()));
+  perProfile.set(profileKey, out);
+  return out;
 }
 
 /**
@@ -302,19 +325,22 @@ export function persistenceStrategy(lagHours: number, capPercent = DEFAULT_INTRA
     fit: (train, profile) => {
       const realism = { ...DEFAULT_INTRADAY_REALISM, volumeCapPercent: capPercent };
       const gainsOf = persistenceGainsFor(lagHours, ALPHA_GRID, profile, realism);
-      const gain = (h: PricedHour, alpha: number) => gainsOf(h)[ALPHA_GRID.indexOf(alpha)];
-      let bestAlpha = 0;
+      // Saatin kazanç dizisi bir kez alınır (her α için ayrı arama, toplama sırası aynı)
+      const trainGains = train.map(gainsOf);
+      let bestIdx = 0;
       let bestGain = 0;
-      for (const alpha of ALPHA_GRID) {
-        if (alpha === 0) continue;
-        const g = train.reduce((sum, h) => sum + gain(h, alpha), 0);
+      for (let ai = 0; ai < ALPHA_GRID.length; ai++) {
+        if (ALPHA_GRID[ai] === 0) continue;
+        let g = 0;
+        for (let i = 0; i < trainGains.length; i++) g += trainGains[i][ai];
         if (g > bestGain) {
           bestGain = g;
-          bestAlpha = alpha;
+          bestIdx = ai;
         }
       }
+      const bestAlpha = ALPHA_GRID[bestIdx];
       return {
-        cost: (h) => h.baselineCost - gain(h, bestAlpha),
+        cost: (h) => h.baselineCost - gainsOf(h)[bestIdx],
         summary: bestAlpha === 0 ? "işlem yok" : `%${bestAlpha * 100} kapat`,
       };
     },

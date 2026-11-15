@@ -4,6 +4,9 @@ Zamanlanmış işler ve uygulama Mac'te değil sunucuda çalışır. Mac kapalı
 
 - **Sunucu:** TuemCloud Advanced VDS-T, İstanbul, Ubuntu 24.04, `root@5.180.187.237` (yalnız SSH anahtarıyla). Aylık ödeme, iade yok.
 - **Uygulama:** https://tr-energy.tail342501.ts.net (yalnız Tailscale'e bağlı cihazlar; internete kapalı). Sunucuda `next start`, 127.0.0.1:3000.
+- **Node:** 24 LTS, NodeSource deposundan (`/etc/apt/sources.list.d/nodesource.sources`, `node_24.x`). 15.11.2026'da 20'den
+  geçildi: aynı hesaplar %25–30 hızlı, çıktılar birebir aynı. Sürüm değişince paketler `npm ci` ile yeniden kurulur, uygulama
+  yeniden derlenir. Geri dönüş: depoda `node_24.x` → `node_20.x`, `apt-get install nodejs`, `npm ci`, `deploy.sh`.
 - **Dizin:** `/srv/tr-energy` (kullanıcı `tre`). Verinin asıl yeri burası; Mac'teki `data/` ve `.cache/` geliştirme kopyasıdır, kendiliğinden güncellenmez.
 - **Sırlar:** sunucudaki `.env` (izin 600): `DATABASE_URL`, `EPIAS_USERNAME`, `EPIAS_PASSWORD` (yedek; asıl hesap "Hesabım" sayfasında), `NTFY_TOPIC`, `AUTH_SECRET` (oturum çerezi imzası), `CREDENTIALS_KEY` (kayıtlı EPİAŞ şifresinin şifreleme anahtarı; kaybolursa EPİAŞ hesabı yeniden girilir). Depoda yok. `.env.build` yalnız `DATABASE_URL` içerir (derleme için).
 - **Giriş:** her sayfa oturum ister (`middleware.ts`, 7 gün). İlk açılışta `/login` hesap oluşturma formunu gösterir; tek hesap. Şifre unutulursa ya da 5 hatalı denemeyle kilitlenirse: `ssh -t root@5.180.187.237 'cd /srv/tr-energy && sudo -u tre node --env-file=.env node_modules/.bin/tsx --tsconfig tsconfig.json scripts/auth-user.mts reset <e-posta>'`.

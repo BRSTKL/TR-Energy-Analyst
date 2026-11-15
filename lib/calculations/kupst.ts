@@ -58,10 +58,16 @@ export const KUPST_REGIMES: KupstRegime[] = [
 
 const STARTS = KUPST_REGIMES.map((r) => Date.parse(`${r.from}T00:00:00Z`));
 
+/** Son bulunan dönemin sırası (kupstRegimeAt'in hızlı yolu) */
+let lastIdx = 0;
+
 export function kupstRegimeAt(timestamp: Date | string | number): KupstRegime {
-  const t = new Date(timestamp).getTime();
+  const t = timestamp instanceof Date ? timestamp.getTime() : new Date(timestamp).getTime();
+  // Saat başına çağrılır: son bulunan dönem hâlâ geçerliyse aramadan döner
+  if (t >= STARTS[lastIdx] && (lastIdx + 1 >= STARTS.length || t < STARTS[lastIdx + 1])) return KUPST_REGIMES[lastIdx];
   let idx = 0;
   for (let i = 0; i < STARTS.length; i++) if (t >= STARTS[i]) idx = i;
+  lastIdx = idx;
   return KUPST_REGIMES[idx];
 }
 
@@ -71,7 +77,11 @@ const toleranceFor = (regime: KupstRegime, plantType: string) =>
 /** Bir saatin KÜPST tutarı (TL). `regime` verilmezse saatin tarihine göre seçilir. */
 export function kupstForHour(h: HourlyResult, plantType: string, regime: KupstRegime = kupstRegimeAt(h.timestamp)): number {
   // Mevzuat: KÜP, gün içi piyasası kapandıktan sonra güncellenen (son) plandır; havuzda yoksa ilk plan (üst sınıra yakın)
-  const kup = h.forecastFinalMwh ?? h.forecastMwh;
+  return kupstForPlan(h, plantType, h.forecastFinalMwh ?? h.forecastMwh, regime);
+}
+
+/** Verilen KÜP miktarıyla saatin KÜPST tutarı (plan ölçeklenince saat kaydını kopyalamadan hesaplamak için) */
+export function kupstForPlan(h: HourlyResult, plantType: string, kup: number, regime: KupstRegime = kupstRegimeAt(h.timestamp)): number {
   const plan = Math.max(kup, 0);
   const excess = Math.max(0, Math.abs(h.actualMwh - kup) - toleranceFor(regime, plantType) * plan);
   return excess * Math.max(h.ptf, h.smf) * regime.priceCoef;

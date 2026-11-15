@@ -49,7 +49,7 @@ export const LATEST_FLOOR_V = IMBALANCE_FLOOR_V_REGIMES[IMBALANCE_FLOOR_V_REGIME
 /** Saatin tarihindeki V (TL/MWh); tarih verilmezse başlangıç değeri */
 export function imbalanceFloorV(timestamp?: Date | string | number): number {
   if (timestamp === undefined) return IMBALANCE_FLOOR_V;
-  const t = new Date(timestamp).getTime();
+  const t = timestamp instanceof Date ? timestamp.getTime() : new Date(timestamp).getTime();
   let v = IMBALANCE_FLOOR_V_REGIMES[0].v;
   for (let i = 0; i < V_STARTS.length; i++) if (t >= V_STARTS[i]) v = IMBALANCE_FLOOR_V_REGIMES[i].v;
   return v;
