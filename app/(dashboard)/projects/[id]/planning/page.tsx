@@ -158,6 +158,8 @@ interface SummaryData {
   efficiencyPercent: number;
 }
 
+const TYPE_PEER: Record<string, string> = { RES: "rüzgâr", GES: "güneş", HES: "hidro" };
+
 /** Seçici için yeterli temel bilgi (ayrıntı yalnız seçilen santral için istenir; PLAN 10.4) */
 interface PlantBasics {
   plantId: string;
@@ -166,8 +168,18 @@ interface PlantBasics {
   capacityMw: number;
 }
 
+/** Verimliliğin aynı türdeki santraller arasındaki yeri (sektör karnesi; düşük yüzdelik = daha az maliyet = iyi) */
+interface PeerPosition {
+  type: string;
+  plants: number;
+  period: string;
+  rankPct: number;
+  fromScorecard: boolean;
+}
+
 interface PlantPlanningData extends PlantBasics {
   summary: SummaryData;
+  peer?: PeerPosition | null;
   bias: ForecastBiasResult;
   uplift: PotentialUpliftResult;
   upliftBacktest: BacktestSummary | null;
@@ -192,6 +204,7 @@ interface PlanningApiResponse {
   };
   portfolio: {
     summary: SummaryData;
+    peer?: PeerPosition | null;
     bias: ForecastBiasResult;
     uplift: PotentialUpliftResult;
     upliftBacktest: BacktestSummary | null;
@@ -312,6 +325,7 @@ export default function PlanningEfficiencyPage() {
         name: "Tüm Portföy",
         type: "PORTFOLIO",
         summary: data.portfolio.summary,
+        peer: data.portfolio.peer ?? null,
         bias: data.portfolio.bias,
         uplift: data.portfolio.uplift,
         upliftBacktest: data.portfolio.upliftBacktest,
@@ -327,6 +341,7 @@ export default function PlanningEfficiencyPage() {
         name: "Tüm Portföy",
         type: "PORTFOLIO",
         summary: data.portfolio.summary,
+        peer: data.portfolio.peer ?? null,
         bias: data.portfolio.bias,
         uplift: data.portfolio.uplift,
         upliftBacktest: data.portfolio.upliftBacktest,
@@ -340,6 +355,7 @@ export default function PlanningEfficiencyPage() {
       name: plant.plantName,
       type: plant.plantType,
       summary: plant.summary,
+      peer: plant.peer ?? null,
       bias: plant.bias!,
       uplift: plant.uplift!,
       upliftBacktest: plant.upliftBacktest ?? null,
@@ -375,6 +391,9 @@ export default function PlanningEfficiencyPage() {
       : currentView.uplift.totalUpliftTl > 0
         ? "gain"
         : "loss";
+
+  // Geçmişle sınama tutarlı mı: toplam kazanç pozitif ve ayların en az yarısı kazançlı
+  const btConsistent = !!currentView?.upliftBacktest && currentView.upliftBacktest.outOfSampleSavingTl > 0 && currentView.upliftBacktest.positiveMonths * 2 >= currentView.upliftBacktest.testMonths;
 
   // "Ne Olurdu?" Bar Chart Verileri
   const whatIfChartData = useMemo(() => {
@@ -693,25 +712,39 @@ export default function PlanningEfficiencyPage() {
                 <div className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
                   %{nf(currentView.summary.efficiencyPercent, 1)}
                 </div>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-2xs font-semibold ${
-                    currentView.summary.efficiencyPercent >= 98
-                      ? "bg-emerald-100 text-emerald-800"
-                      : currentView.summary.efficiencyPercent >= 95
-                      ? "bg-amber-100 text-amber-800"
-                      : "bg-rose-100 text-rose-800"
-                  }`}
-                >
-                  {currentView.summary.efficiencyPercent >= 98
-                    ? "Mükemmele Yakın"
-                    : currentView.summary.efficiencyPercent >= 95
-                    ? "İyi Seviye"
-                    : "Optimizasyon Gerekli"}
-                </span>
+                {currentView.peer && (
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-2xs font-semibold ${
+                      currentView.peer.rankPct <= 25
+                        ? "bg-emerald-100 text-emerald-800"
+                        : currentView.peer.rankPct <= 75
+                        ? "bg-slate-100 text-slate-700"
+                        : "bg-rose-100 text-rose-800"
+                    }`}
+                  >
+                    {currentView.peer.rankPct <= 25
+                      ? "En iyi çeyrekte"
+                      : currentView.peer.rankPct <= 50
+                      ? "Ortanın üstünde"
+                      : currentView.peer.rankPct <= 75
+                      ? "Ortanın altında"
+                      : "En kötü çeyrekte"}
+                  </span>
+                )}
               </div>
               <p className="mt-1 text-xs text-slate-500">
                 Gerçekleşen gelir / tam tahmin geliri (plan kusursuz olsaydı elde edilecek gelir). %100 = sıfır dengesizlik maliyeti.
               </p>
+              {currentView.peer ? (
+                <p className="mt-1 text-2xs text-slate-500">
+                  MWh başına dengesizlikte {TYPE_PEER[currentView.peer.type] ?? currentView.peer.type} santralleri arasında yüzdelik{" "}
+                  {nf(currentView.peer.rankPct, 0)} (düşük = iyi; {currentView.peer.plants} lisanslı santral, sektör karnesi {currentView.peer.period}
+                  {currentView.peer.fromScorecard ? "" : "; bu santral karnede yok, proje dönemiyle kıyaslandı"}). Tür önemlidir: rüzgârın tahmini
+                  güneşten zordur, oran türler arasında kıyaslanmaz.
+                </p>
+              ) : (
+                <p className="mt-1 text-2xs text-slate-500">Kıyas için santral seçin: oran türler arasında kıyaslanmaz (rüzgârın tahmini güneşten zordur).</p>
+              )}
               <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-xs text-slate-600">
                 <span>Fiili Gelir:</span>
                 <span className="font-mono font-medium text-slate-900">
@@ -796,80 +829,57 @@ export default function PlanningEfficiencyPage() {
             </CardContent>
           </Card>
 
-          {/* KPI 4: "Ne Olurdu?" Potansiyel Gelir Artışı */}
-          <Card
-            className={`border-slate-200 bg-gradient-to-br ${
-              upliftOutcome === "loss" ? "from-rose-50/50" : "from-emerald-50/50"
-            } to-white shadow-sm transition-shadow hover:shadow-md`}
-          >
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle
-                className={`text-xs font-medium ${
-                  upliftOutcome === "loss" ? "text-rose-800" : "text-emerald-800"
-                }`}
+          {/* KPI 4: "Ne Olurdu?" Kalibrasyon. Büyük sayı geçmişle sınama (oran önceki aylardan öğrenilir, görmediği ayda
+              uygulanır); aynı dönemden öğrenilen sonuç üst sınırdır (15.11.2026 denetimi: 15 projede ikisi çok farklı çıktı) */}
+          {(() => {
+            const bt = currentView.upliftBacktest;
+            const shown = bt ? bt.outOfSampleSavingTl : currentView.uplift.totalUpliftTl;
+            const negative = shown < 0 || (bt ? !btConsistent : upliftOutcome === "loss");
+            return (
+              <Card
+                className={`border-slate-200 bg-gradient-to-br ${negative ? "from-rose-50/50" : "from-emerald-50/50"} to-white shadow-sm transition-shadow hover:shadow-md`}
               >
-                {upliftOutcome === "loss" ? "Kalibrasyonun Gelir Etkisi" : "Potansiyel Gelir Artışı"}
-              </CardTitle>
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
-                <Sparkles className="h-4 w-4" />
-              </span>
-            </CardHeader>
-            <CardContent>
-              <div
-                className={`text-2xl font-bold tracking-tight sm:text-3xl ${
-                  upliftOutcome === "loss" ? "text-rose-600" : "text-emerald-600"
-                }`}
-              >
-                {formatSignedTl(currentView.uplift.totalUpliftTl)}{" "}
-                <span className="text-base font-medium">₺</span>
-              </div>
-              <p className="mt-1 text-xs text-slate-600">
-                {upliftOutcome === "loss" ? (
-                  <>
-                    Toplam yanlılığı tek bir oranla düzeltmek bu dönemde geliri{" "}
-                    <strong>{formatSignedPercent(currentView.uplift.upliftPercent)}</strong> değiştirirdi;
-                    bu santral için önerilmez.
-                  </>
-                ) : (
-                  <>
-                    Sistematik yanlılık giderildiğinde beklenen net gelir değişimi (
-                    <strong>{formatSignedPercent(currentView.uplift.upliftPercent)}</strong>).
-                  </>
-                )}
-              </p>
-              <div className="mt-3 flex items-center justify-between border-t border-slate-200/60 pt-2 text-xs text-slate-600">
-                <span>{currentView.uplift.costReductionTl < 0 ? "Dengesizlik Maliyeti Artışı:" : "Dengesizlik Tasarrufu:"}</span>
-                <span
-                  className={`font-mono font-medium ${
-                    currentView.uplift.costReductionTl < 0 ? "text-rose-700" : "text-emerald-700"
-                  }`}
-                >
-                  {Math.abs(currentView.uplift.costReductionTl).toLocaleString("tr-TR")} ₺
-                </span>
-              </div>
-              {currentView.upliftBacktest && (
-                <div className="mt-2 border-t border-slate-200/60 pt-2 text-xs text-slate-600">
-                  <div className="flex items-center justify-between">
-                    <span>Geriye dönük test:</span>
-                    <span
-                      className={`font-mono font-semibold ${
-                        currentView.upliftBacktest.outOfSampleSavingTl < 0 ? "text-rose-700" : "text-emerald-700"
-                      }`}
-                    >
-                      {formatSignedTl(Math.round(currentView.upliftBacktest.outOfSampleSavingTl))} ₺
-                    </span>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className={`text-xs font-medium ${negative ? "text-rose-800" : "text-emerald-800"}`}>
+                    {bt ? "Kalibrasyon · geçmişle sınama" : "Kalibrasyon · aynı dönem (üst sınır)"}
+                  </CardTitle>
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                    <Sparkles className="h-4 w-4" />
+                  </span>
+                </CardHeader>
+                <CardContent>
+                  <div className={`text-2xl font-bold tracking-tight sm:text-3xl ${shown < 0 ? "text-rose-600" : negative ? "text-slate-700" : "text-emerald-600"}`}>
+                    {formatSignedTl(Math.round(shown))} <span className="text-base font-medium">₺</span>
                   </div>
-                  <p className="mt-0.5 text-2xs text-slate-500">
-                    Görmediği {currentView.upliftBacktest.testMonths} ayda, {currentView.upliftBacktest.positiveMonths}{" "}
-                    ayı kazançlı.{" "}
-                    <Link href={`/projects/${projectId}/backtest`} className="text-indigo-600 hover:underline">
-                      Ayrıntı
-                    </Link>
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  {bt ? (
+                    <p className="mt-1 text-xs text-slate-600">
+                      Toplam sapma oranı her ay önceki 4 aydan öğrenilip görmediği {bt.testMonths} ayda uygulansaydı; {bt.positiveMonths} ayı kazançlı.{" "}
+                      {btConsistent ? (
+                        <>Tutarlı.</>
+                      ) : (
+                        <strong className="text-rose-700">Tutarlı değil: önerilmez.</strong>
+                      )}{" "}
+                      <Link href={`/projects/${projectId}/backtest`} className="text-indigo-600 hover:underline">
+                        Ayrıntı
+                      </Link>
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs text-slate-600">
+                      Geçmişle sınamaya yetecek ay yok. Oran aynı dönemden öğrenildi: gerçekte elde edilebilecek kazancın üst sınırıdır.
+                    </p>
+                  )}
+                  {bt && (
+                    <div className="mt-3 flex items-center justify-between border-t border-slate-200/60 pt-2 text-xs text-slate-500">
+                      <span title="Oran aynı dönemin verisinden öğrenilip yine aynı döneme uygulanır: sonucu önceden bilerek yapılmış hesaptır.">
+                        Aynı dönemden öğrenilse (üst sınır):
+                      </span>
+                      <span className="font-mono">{formatSignedTl(Math.round(currentView.uplift.totalUpliftTl))} ₺</span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
         </section>
 
         {/* 2. BÖLÜM: "NE OLURDU?" (WHAT-IF) SİMÜLASYON KARTI & DİNAMİK MESAJ */}
@@ -889,7 +899,7 @@ export default function PlanningEfficiencyPage() {
                   <p className="max-w-2xl text-xs text-slate-300 sm:text-sm">
                     {upliftOutcome === "gain" ? (
                       <>
-                        Eğer santralin sistematik tahmin yanlılığı ({currentView.bias.avgBiasPercent > 0 ? "+" : ""}
+                        Üst sınır (oran aynı dönemden öğrenildi): eğer santralin sistematik tahmin yanlılığı ({currentView.bias.avgBiasPercent > 0 ? "+" : ""}
                         {nf(currentView.bias.avgBiasPercent, 2)}%) giderilmiş olsaydı, dönem geliriniz{" "}
                         <strong className="text-emerald-300">
                           {formatSignedPercent(currentView.uplift.upliftPercent)} (
@@ -900,6 +910,15 @@ export default function PlanningEfficiencyPage() {
                           {currentView.uplift.costReductionTl.toLocaleString("tr-TR")} ₺
                         </strong>{" "}
                         azalacaktı.
+                        {currentView.upliftBacktest && (
+                          <>
+                            {" "}Gerçekçi ölçü geçmişle sınamadır: görmediği {currentView.upliftBacktest.testMonths} ayda{" "}
+                            <strong className={btConsistent ? "text-emerald-300" : "text-rose-300"}>
+                              {formatSignedTl(Math.round(currentView.upliftBacktest.outOfSampleSavingTl))} ₺
+                            </strong>{" "}
+                            ({currentView.upliftBacktest.positiveMonths} ayı kazançlı{btConsistent ? "" : "; tutarlı değil"}).
+                          </>
+                        )}
                       </>
                     ) : upliftOutcome === "loss" ? (
                       <>
@@ -918,7 +937,7 @@ export default function PlanningEfficiencyPage() {
                         {currentView.name} için sistematik tek yönlü bir tahmin yanlılığı
                         tespit edilmemiştir (Nötr Dağılım). Tahmin sapmaları simetrik
                         olduğu için tek yönlü kalibrasyon yerine gün içi (GİP) pozisyon
-                        güncellemeleri ve depolama optimizasyonu ile kalan{" "}
+                        güncellemeleri ile kalan{" "}
                         <strong className="text-amber-300">
                           {currentView.summary.lossTl.toLocaleString("tr-TR")} ₺
                         </strong>{" "}

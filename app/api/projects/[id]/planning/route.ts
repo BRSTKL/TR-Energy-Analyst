@@ -26,6 +26,8 @@ import {
 } from "@/lib/analysis/planning-efficiency";
 import { evaluateIntradayArbitrage } from "@/lib/analysis/intraday-arbitrage";
 import { volumeRatioBacktestSummary } from "@/lib/analysis/backtest";
+import { loadSectorBenchmark } from "@/lib/services/sector";
+import { percentileRank, sectorPeriodLabel } from "@/lib/sector/benchmark";
 
 export const dynamic = "force-dynamic";
 
@@ -387,6 +389,28 @@ async function handleGET(
     // Portföy GİP Arbitraj Analizi
     const portfolioArbitrage = evaluateIntradayArbitrage(portfolioHourly);
 
+    // Verimliliğin aynı türdeki santrallerdeki yeri (sektör karnesi, MWh başına dengesizlik; düşük = iyi). Sabit %95 / %98
+    // eşikleri sektöre uymuyordu: 2026'da bütün rüzgâr santralleri "optimizasyon gerekli" çıkıyordu (15.11.2026 denetimi).
+    // Santral karnedeyse karnedeki sırası (aynı veri), değilse proje dönemindeki birim maliyetiyle karnenin dağılımındaki yeri.
+    const firstTs = portfolioHourly[0]?.timestamp;
+    const bench = firstTs ? await loadSectorBenchmark(new Date(firstTs).getUTCFullYear()) : null;
+    const peerOf = (epiasPlantId: number | null, type: string, unitCostTl: number) => {
+      if (!bench) return null;
+      const values = bench.plants.filter((p) => p.type === type).map((p) => p.unitImbalanceTl);
+      if (values.length < 10) return null;
+      const own = epiasPlantId !== null ? bench.plants.find((p) => p.epiasPlantId === epiasPlantId && p.type === type) : undefined;
+      return {
+        type,
+        plants: values.length,
+        period: sectorPeriodLabel(bench),
+        rankPct: Number(percentileRank(values, own ? own.unitImbalanceTl : unitCostTl).toFixed(1)),
+        fromScorecard: !!own,
+      };
+    };
+    const portfolioTypes = Array.from(new Set(project.plants.map((p) => p.type)));
+    const portfolioPeer =
+      portfolioTypes.length === 1 && portfolioTotalActual > 0 ? peerOf(null, portfolioTypes[0], portfolioLossTl / portfolioTotalActual) : null;
+
     // 3. Santral Bazlı Hesaplamalar
     const plantsData = project.plants.map((plant) => {
       if (plant.id !== detailPlantId) {
@@ -457,6 +481,7 @@ async function handleGET(
           efficiencyRatio: Number(efficiencyRatio.toFixed(4)),
           efficiencyPercent: Number((efficiencyRatio * 100).toFixed(1)),
         },
+        peer: totalActualMwh > 0 ? peerOf(plant.epiasPlantId ?? null, plant.type, lossTl / totalActualMwh) : null,
         bias,
         uplift,
         upliftBacktest: volumeRatioBacktestSummary(plantHourly, projectProfile),
@@ -485,6 +510,7 @@ async function handleGET(
           efficiencyRatio: Number(portfolioEfficiencyRatio.toFixed(4)),
           efficiencyPercent: Number((portfolioEfficiencyRatio * 100).toFixed(1)),
         },
+        peer: portfolioPeer,
         bias: portfolioBias,
         uplift: portfolioUplift,
         upliftBacktest: volumeRatioBacktestSummary(portfolioHourly, projectProfile),

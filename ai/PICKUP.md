@@ -5,6 +5,20 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 15.11.2026 · Claude · Hesap doğruluğu denetimi 4: Planlama (`claude/hesap-dogrulugu`; yüklenmedi)
+
+- **Bulgular:**
+  - "Potansiyel gelir artışı" kartının büyük sayısı oranı aynı dönemden öğreniyordu (sonucu bilerek). 15 projede görmediği
+    aylardaki sınamayla çok farklı: Doğuş +93,8 M / sınama +13,5 M (4 ayın 1'i kazançlı), Enko +0,9 / −2,3, Pure +17,7 / +31,8.
+  - Verimlilik etiketi sabit %95 / %98 eşikleriyle (ilk sürümden kalma): 2026'da bütün rüzgâr santralleri "Optimizasyon
+    gerekli", hiçbir rüzgâr / güneş "Mükemmele yakın".
+- **Yapılan:**
+  - Kartın büyük sayısı geçmişle sınama (`upliftBacktest`); kazançlı ay yarıdan azsa ya da toplam negatifse "Tutarlı değil:
+    önerilmez". Aynı dönem sonucu "üst sınır" diye küçük. "Ne olurdu?" metni de üst sınır diyor.
+  - Etiket aynı türdeki santrallere göre (`peer`: sektör karnesi, MWh başına dengesizlik yüzdeliği; santral karnedeyse
+    karnedeki değeri). Karışık portföyde etiket yok. Örnek: Aliağa RES %94,4 → rüzgârda yüzdelik 3, "En iyi çeyrekte".
+- **Kontrol:** 1.084 test, tsc, lint, `check:reports` 0 hata, `--only planning` 6/6; ekranda denendi.
+
 ## 15.11.2026 · Claude · Hesap doğruluğu denetimi 3: Kayıp üretim (`claude/hesap-dogrulugu`; yüklenmedi)
 
 - **Bulgular:**
