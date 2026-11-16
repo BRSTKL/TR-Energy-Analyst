@@ -5,6 +5,18 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 16.11.2026 · Claude · Hesap doğruluğu denetimi 1–17 yüklendi (`d98c033 → df3df7b`)
+
+- **Yükleme:** `claude/hesap-dogrulugu` main'e ileri sarıldı, push, `deploy.sh`: sayfa denetimi 200.
+- **Sunucuda tek seferlik:** `macro-sync` (TÜFE / TL-USD Ekim 2026'ya), `aggregator-benchmark 2026` (ay ay üyelik), `snow-sync`
+  (58 güneş santrali, 10.11'e kadar), `sector-curtailment` (kar ayrımıyla).
+- **Doğrulandı (sunucu API):** Akenerji 6.552 saat, eksik ay yok; piyasa "11 aydan 8 ayda" ve "Ekim 2026 TL'si"; toplayıcı kıyası
+  `membershipMonthlyTo` 09, CK 328 GWh; şirket endeksi listede. Tam duman (sunucu) 60/60, 5 yavaş API uyarısı (ısıtma sürerken).
+- **İzle:** ilk saatlik çalışmada "şirket planı GES / RES" satırı; ertesi gün karnede saat > 0; Ekim UEVM yayımlanınca aylık işte
+  "kur ve TÜFE" ve "toplayıcı üyeliği (ay ay)" adımları.
+- **Sıradaki:** denetim YEKDEM, Arıza izleme, Yeni santraller, Santral rehberi, Dönem özeti, Proje karşılaştırma. Bugünkü
+  toplayıcı listesini bütün yıla uygulayan iki yer kaldı: sector-backtest ve GİP katılımı.
+
 ## 16.11.2026 · Claude · Hesap doğruluğu denetimi 17: Şirketler (`claude/hesap-dogrulugu`; yüklenmedi)
 
 - **Doğru:** 2026'da 1.014 santralin 26'sının sahibi bilinmiyor (%3 MW), 2025'te hepsi biliniyor; kurulu gücün ~%16'sı en yüksek
