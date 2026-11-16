@@ -346,6 +346,28 @@ function InputCards({
 }
 
 /** Kartın sağ üstü: motor yakın geçmişte fiyata ne kadar yakın tahmin etti (sade özet; ayrıntı alttaki cümlede) */
+/** Canlı kayıtların karnesinden aralık kapsaması (Bugün sayfasındaki karneyle aynı kaynak: /api/ops/ptf-scorecard) */
+function LiveCoverage() {
+  const [text, setText] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/ops/ptf-scorecard")
+      .then((r) => r.json())
+      .then((d) => {
+        const all = d?.success === false ? null : (d?.all ?? d?.data?.all);
+        if (cancelled || !all || all.coveragePct === null) return;
+        setText(
+          `Canlı kayıtlarda (${all.days} gün) gerçek fiyatın aralıkta kaldığı saat payı %${nf(all.coveragePct, 0)}${all.days < 30 ? "; kanıt zayıf (30 günden az)" : ""}.`
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return text ? <>{text}</> : null;
+}
+
 function AccuracyBox({ acc }: { acc: AccuracySummary }) {
   const vs = acc.vsBaselinePct;
   return (
@@ -706,8 +728,8 @@ function OkView({
               </p>
             )}
             <p>
-              Aralık son {log.band.days} günün saatlik hatalarından kuruldu; geçmiş ölçümde gerçek
-              fiyatın yaklaşık %84&apos;ü aralık içinde kaldı.
+              Aralık son {log.band.days} günün saatlik hatalarından kuruldu (hedef: gerçek fiyat saatlerin
+              %80&apos;inde aralıkta). <LiveCoverage />
             </p>
             <p className="text-slate-600">
               {d.level?.basis

@@ -167,10 +167,13 @@ export function BidTable({
             </table>
           </div>
           {prod && prod.projects.length > 0 && prod.total.hours && (
-            <p className="text-xs text-slate-500">
-              Üretim: {prod.projects.filter((p) => p.hours).length} / {prod.projects.length} projenin
-              güneş ve rüzgâr santralleri toplandı. HES ve kayıtta olmayan santraller dışarıda (
-              {prod.projects.reduce((s, p) => s + p.uncovered, 0)} santral).
+            <p className="text-xs text-amber-800">
+              Üretim portföyün tamamı değil: tahmine giren santral {prod.total.coverage.plants} /{" "}
+              {prod.total.coverage.totalPlants}
+              {prod.total.coverage.totalMw > 0 &&
+                `, kurulu güç payı %${nf((prod.total.coverage.mw / prod.total.coverage.totalMw) * 100, 0)}`}{" "}
+              ({prod.projects.filter((p) => p.hours).length} / {prod.projects.length} proje). HES&apos;ler ve tahmini
+              kurulamayan santraller dışarıda; birden çok projedeki santral bir kez sayılır.
             </p>
           )}
         </>

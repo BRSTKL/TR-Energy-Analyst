@@ -261,6 +261,8 @@ describe("buildBrief: bağlam sinyalleri", () => {
     }).signals;
     expect(get(better, "gas").evidence).toBe("tested-better");
     expect(get(better, "neighbors").evidence).toBe("tested-worse");
+    // Tahmini kötüleştirdiği ölçülen veri fiyatı iten sinyal sayılmaz
+    expect(get(better, "neighbors").direction).toBe("info");
   });
 
   it("özet satırı kanıtı açıkça söyler", () => {
@@ -338,5 +340,13 @@ describe("buildBrief: tahmin PTF motorundan (engine)", () => {
     expect(b.signals.find((s) => s.id === "gas")).toBeDefined();
     expect(b.tallyLine).toContain("yukarıdaki motordan");
     expect(b.tallyLine).not.toContain("kurulamadı");
+  });
+  it("doğal gaz motorun girdisi: 'tahmini kuruyor'; ölçümlerin eski modelle yapıldığı söylenir", () => {
+    const b = buildBrief({ view: null, limit, ctx: ctx(), effects: effects({ gas: "noise", neighbor: "worse" }), engine: true });
+    expect(b.signals.find((s) => s.id === "gas")?.evidence).toBe("model");
+    expect(b.signals.find((s) => s.id === "neighbors")?.direction).toBe("info");
+    expect(b.tally.worse).toBe(1);
+    expect(b.tallyLine).toContain("1 kart (doğal gaz) motorun girdisi");
+    expect(b.tallyLine).toContain("eski basit modele eklenerek");
   });
 });

@@ -5,6 +5,21 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 16.11.2026 · Claude · Hesap doğruluğu denetimi 13: Teklif öncesi (`claude/hesap-dogrulugu`; yüklenmedi)
+
+- **Doğru:** motorun doğruluk iddiası (60 günlük tekrar ±386 TL/MWh) canlı karneyle (393) tutarlı; risk eşikleri Bugün'le aynı;
+  ENTSO-E 15 dakikalık fiyatlar saate ortalanıyor (Bulgaristan 16.11 ≈ 246 EUR/MWh gerçek; sürekli ihracatla uyumlu).
+- **Bulgular ve yapılan:**
+  - Gaz kartı "Ölçüldü: etkisi görünmüyor" ve özet "kartlar tahmine girmez" diyordu; motor (ptf-ens-v1) gazı girdi olarak
+    kullanıyor, ölçüm eski basit modelle. Motor modunda gaz kartı `model`; özet satırı (sayfada kısa sabit metin yerine
+    `tallyLine`) ölçümlerin eski modelle yapıldığını söyler; ölçüm paneli başlığı "(eski basit model)" ve açıklama.
+  - Modele eklenince tahmini kötüleştirdiği ölçülen sinyal (komşu fiyatı, sunucuda `worse`) "yukarı" sayılıyordu: artık oku yok
+    (`info`), sayıma girmez (`tally.worse`).
+  - Teklif masası "215 santral dışarıda" (projeler arası çift sayım; gerçek 207): Bugün'deki kapsam satırı.
+  - Sabit "%84 aralıkta" yerine canlı karneden (`LiveCoverage`, /api/ops/ptf-scorecard; 30 günden azsa "kanıt zayıf").
+- **Kontrol:** 1.096 test, tsc, lint, `check:reports` 0 hata, `--only teklif` 2/2 (ilk deneme Mac'teki 105 sn'lik bağlam API'si
+  yüzünden bir sayfada hatalı, ikincisi temiz); metinler ekranda okundu.
+
 ## 16.11.2026 · Claude · Hesap doğruluğu denetimi 12: Bugün (`claude/hesap-dogrulugu`; yüklenmedi)
 
 - **Doğru (sunucu verisiyle bağımsız):** PTF karnesi (16 gün, MAE 392,9, kapsama %85,4, basit yönteme göre %27,6 iyi) birebir;

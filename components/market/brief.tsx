@@ -366,9 +366,7 @@ export function SignalSection({
           </h2>
         )}
         <p className="mt-1 text-sm text-slate-600">
-          {bare
-            ? `${t.up + t.down + t.flat + t.info} sinyalden ${t.up} yukarı, ${t.down} aşağı, ${t.flat} nötr, ${t.info} bilgi. Kartlar tahmine girmez; bağlamdır.`
-            : brief.tallyLine}
+          {brief.tallyLine}
         </p>
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
           <span className="flex items-center gap-1 text-orange-700">

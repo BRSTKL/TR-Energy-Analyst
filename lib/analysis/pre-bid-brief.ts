@@ -244,7 +244,11 @@ function modelSignals(view: View, limit: PriceLimit | null): Signal[] {
 }
 
 /** Bağlam kartlarından gelen sinyaller; `ctx` null ise (yükleniyor) boş döner */
-function contextSignals(ctx: PreBidContext, effects: PreBidEffects | null): Signal[] {
+/**
+ * @param engine fiyat tahmini PTF motorundan (lib/ptf): motor doğal gaz fiyatını girdi olarak kullanır, o kart "tahmini kuruyor"
+ *   olur. Etki ölçümü (pre-bid-effects) eski basit modele ekleyerek yapıldı; motor için geçerli değil.
+ */
+function contextSignals(ctx: PreBidContext, effects: PreBidEffects | null, engine = false): Signal[] {
   const out: Signal[] = [];
 
   // Doğal gaz
@@ -257,7 +261,7 @@ function contextSignals(ctx: PreBidContext, effects: PreBidEffects | null): Sign
       value: `${signed(g.vsMedian28Pct, 1)}%`,
       direction: dir(g.vsMedian28Pct, BRIEF_RULES.gasPct),
       sentence: `Son GRF ${nf(g.last.tl)} TL/1000 sm³ (${dm(g.last.date)}), son 28 günün ortancasına göre ${signed(g.vsMedian28Pct, 1)}%. Gazlı santralin yakıt maliyeti yaklaşık ${nf(g.fuelCost[0])}–${nf(g.fuelCost[1])} TL/MWh.`,
-      evidence: evidenceFor(effects, "gas"),
+      evidence: engine ? "model" : evidenceFor(effects, "gas"),
       detailId: "kart-gaz",
     });
   } else
@@ -268,7 +272,7 @@ function contextSignals(ctx: PreBidContext, effects: PreBidEffects | null): Sign
         "Doğal gaz referans fiyatı",
         "Doğal gaz fiyatı alınamadı.",
         "kart-gaz",
-        evidenceFor(effects, "gas")
+        engine ? "model" : evidenceFor(effects, "gas")
       )
     );
 
@@ -517,6 +521,8 @@ export interface Brief {
     info: number;
     model: number;
     tested: number;
+    /** Modele eklenince tahmini kötüleştirdiği ölçülen (oku kaldırılır) */
+    worse: number;
     noise: number;
     untested: number;
   };
@@ -535,10 +541,12 @@ export function buildBrief(input: {
   const { view, limit, ctx, effects, engine } = input;
   const signals = [
     ...(view ? modelSignals(view, limit) : []),
-    ...(ctx ? contextSignals(ctx, effects) : []),
+    ...(ctx ? contextSignals(ctx, effects, engine) : []),
     // Motor kendi ülke güneş tahminini kullanıyor; "güneş bilinmiyor" kartı yalnız eski modelde geçerli
     ...(engine ? [] : [solarSignal(effects)]),
   ];
+  // Modele eklenince tahmini kötüleştirdiği ölçülen veri fiyatı "iten" sinyal sayılmaz: oku kaldırılır, yalnız bilgi
+  for (const s of signals) if (s.evidence === "tested-worse" && s.direction !== "info") s.direction = "info";
   const order: SignalGroup[] = ["talep", "arz", "piyasa", "dis"];
   signals.sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group));
 
@@ -550,6 +558,7 @@ export function buildBrief(input: {
     info: real.filter((s) => s.direction === "info").length,
     model: real.filter((s) => s.evidence === "model").length,
     tested: real.filter((s) => s.evidence === "tested-better").length,
+    worse: real.filter((s) => s.evidence === "tested-worse").length,
     noise: real.filter((s) => s.evidence === "tested-noise").length,
     untested: real.filter((s) => s.evidence === "untested" || s.evidence === "pending")
       .length,
@@ -564,7 +573,7 @@ export function buildBrief(input: {
     tallyLine:
       `${real.length} sinyalden ${t.up} yukarı, ${t.down} aşağı yönlü, ${t.flat} nötr, ${t.info} yalnız bilgi. ` +
       (engine && !view
-        ? `Fiyat tahmini yukarıdaki motordan gelir; bu kartlar tahmine girmez, bağlamdır (${t.noise} tanesi modele eklenince etkisi görünmedi, ${t.untested} tanesi hiç ölçülmedi).`
+        ? `Fiyat tahmini yukarıdaki motordan gelir; ${t.model ? `${t.model} kart (doğal gaz) motorun girdisi, diğerleri tahmine girmez, bağlamdır` : "bu kartlar tahmine girmez, bağlamdır"}. "Ölçüldü" etiketleri eski basit modele eklenerek yapılan ölçümdür: ${t.noise} tanesinin etkisi görünmedi, ${t.worse} tanesi tahmini kötüleştirdi (oku yok), ${t.untested} tanesi hiç ölçülmedi.`
         : `Bunlardan ${t.model} tanesi tahmini kuruyor; ${t.noise} tanesi modele eklenince etkisi görünmedi, ${t.untested} tanesi hiç ölçülmedi: yön okları bağlamdır, tahmini değiştirmez.`) +
       noModel +
       ctxNote,

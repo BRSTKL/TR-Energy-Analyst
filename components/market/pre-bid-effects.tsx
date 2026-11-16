@@ -96,9 +96,11 @@ export function PreBidEffectsPanel({
   return (
     <Card id="kart-etki" className="scroll-mt-24 shadow-sm">
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">Yeni verilerin fiyat tahminine etkisi</CardTitle>
+        <CardTitle className="text-base">Yeni verilerin fiyat tahminine etkisi (eski basit model)</CardTitle>
         <p className="text-xs text-slate-500">
-          Aynı geriye test (her gün yalnız o günden önceki verilerle), her veri modele
+          Ölçüm sayfanın eski basit modeliyle yapıldı (yük tahmini, rüzgâr tahmini, dünkü fiyat sapması); sayfadaki fiyat
+          tahmini artık PTF motorundan gelir ve doğal gaz fiyatını kendi girdisi olarak kullanır. Buradaki sonuç motor için
+          geçerli değildir. Aynı geriye test (her gün yalnız o günden önceki verilerle), her veri modele
           eklenerek tekrarlandı. Hata: saatlik ortalama mutlak sapma, TL/MWh; küçük olan
           iyidir. Fark, günlük hata farklarının ortalamasıdır; standart hatasının iki
           katından küçükse ölçülen şey şanstan ayırt edilemez.
