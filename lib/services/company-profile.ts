@@ -27,6 +27,7 @@ import { CAPACITY_SOURCE_LABEL, isRecordedCapacity } from "@/lib/epias-plant/ins
 import { prisma } from "@/lib/prisma";
 import { decodeHourly } from "@/lib/sector/hourly-store";
 import { loadAggregatorMembership } from "@/lib/services/aggregator-membership";
+import { loadMembershipHistory } from "@/lib/services/aggregator-data";
 import { resolveInstalledCapacities } from "@/lib/services/installed-capacity";
 import { persistedJson } from "@/lib/services/response-cache";
 import { availableSectorYears, loadSectorBenchmark, loadSectorHourly, loadSectorPlants } from "@/lib/services/sector";
@@ -61,6 +62,8 @@ export interface CompanyProfile {
 
 interface CompanyBase {
   period: { start: string; end: string };
+  /** Tür → karnenin MWh başına dengesizlik ortancası (şirket endeksi için) */
+  medians: Partial<Record<CompanyTech, number>>;
   plants: CompanyPlant[];
   membershipAsOf: string | null;
   errors: string[];
@@ -83,12 +86,12 @@ async function baseVersion(year: number, now: number): Promise<string> {
 async function build(year: number, years: number[], now: number): Promise<CompanyData> {
   const base = await persistedJson(
     "_companies",
-    `plants-${year}`,
+    `plants-v2-${year}`,
     await baseVersion(year, now),
     () => buildBase(year),
     (b) => b.errors.length === 0
   );
-  return { year, years, period: base.period, index: buildCompanies(base.plants), membershipAsOf: base.membershipAsOf, errors: base.errors };
+  return { year, years, period: base.period, index: buildCompanies(base.plants, base.medians ?? {}), membershipAsOf: base.membershipAsOf, errors: base.errors };
 }
 
 async function buildBase(year: number): Promise<CompanyBase> {
@@ -131,8 +134,14 @@ async function buildBase(year: number): Promise<CompanyBase> {
     yekdemStatus: yekdemOf ? yekdemOf(p) : null,
     aggregator: membership?.byPlant.get(p.epiasPlantId)?.map((a) => a.name).join(" / ") || null,
   }));
+  const medians: CompanyBase["medians"] = {};
+  for (const t of ["RES", "GES", "HES"] as const) {
+    const m = bench.byType[t]?.unitImbalanceTl.median;
+    if (m !== undefined) medians[t] = m;
+  }
   return {
     period: bench.period ?? { start: `${year}-01-01`, end: `${year}-12-31` },
+    medians,
     plants,
     membershipAsOf: membership?.asOf ?? null,
     errors: Array.from(new Set(errors)),
@@ -195,10 +204,42 @@ async function buildNetting(data: CompanyData, plants: CompanyPlant[]): Promise<
     }
     return { costTl, mwh };
   };
+  // Ay ay üyelik (varsa): santral yalnız toplayıcıda olduğu aylarda netleşme dışında
+  const history = loadMembershipHistory(data.year);
+  const monthsOf = new Map<number, { months: Set<string>; names: string[] }>();
+  if (history) {
+    const names = history.names;
+    for (const [aggId, byMonth] of Array.from(history.byAggregator.entries()))
+      for (const [mm, ids] of Object.entries(byMonth))
+        for (const id of ids) {
+          const e = monthsOf.get(id) ?? monthsOf.set(id, { months: new Set(), names: [] }).get(id)!;
+          e.months.add(mm);
+          const n = names.get(aggId) ?? `Toplayıcı ${aggId}`;
+          if (!e.names.includes(n)) e.names.push(n);
+        }
+  }
+  // Geçmişte olmayan aylar (dosya karnenin dönem sonundan önce bitiyorsa) için bugünkü liste
+  const withSnapshot = (e: { months: Set<string>; names: string[] } | undefined, snapshot: string | null, known: string[]) => {
+    const out = { months: new Set(e?.months ?? []), names: [...(e?.names ?? [])] };
+    if (snapshot) {
+      for (let m = 1; m <= 12; m++) {
+        const mm = String(m).padStart(2, "0");
+        if (!known.includes(mm)) out.months.add(mm);
+      }
+      // Bugünkü listenin adı ("A / B" birleşik) yalnız geçmişte hiç toplayıcıda görünmeyen santrale eklenir; yoksa aynı toplayıcı iki adla sayılır
+      if (!e && known.length < 12) for (const n of snapshot.split(" / ")) if (!out.names.includes(n)) out.names.push(n);
+    }
+    return out;
+  };
   const series = await Promise.all(
     plants.map(async (p) => {
       const s = await loadSectorHourly(data.year, p.id).catch(() => null);
-      return { id: p.id, aggregator: p.aggregator ?? null, rows: s ? decodeHourly(s) : null };
+      return {
+        id: p.id,
+        aggregator: p.aggregator ?? null,
+        aggregatorMonths: history ? withSnapshot(monthsOf.get(p.id), p.aggregator ?? null, history.months) : null,
+        rows: s ? decodeHourly(s) : null,
+      };
     })
   );
   return companyNetting(series, cost, data.membershipAsOf);

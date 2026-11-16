@@ -98,12 +98,14 @@ export class AggregatorDataError extends Error {
  * Yılın ay ay toplayıcı üyeliği (scripts/aggregator-membership-history.mts → aggregator-membership-<yıl>.json); yoksa null.
  * Toplayıcı kimliği → { "01": [santral], … }
  */
-export function loadMembershipHistory(year: number): { months: string[]; byAggregator: Map<number, Record<string, number[]>> } | null {
-  const h = readJson<{ months: string[]; aggregators: Array<{ id: number; byMonth: Record<string, number[]> }> }>(
+export function loadMembershipHistory(
+  year: number
+): { months: string[]; byAggregator: Map<number, Record<string, number[]>>; names: Map<number, string> } | null {
+  const h = readJson<{ months: string[]; aggregators: Array<{ id: number; name: string; byMonth: Record<string, number[]> }> }>(
     path.join(CACHE, `aggregator-membership-${year}.json`)
   );
   if (!h?.aggregators?.length) return null;
-  return { months: h.months, byAggregator: new Map(h.aggregators.map((a) => [a.id, a.byMonth])) };
+  return { months: h.months, byAggregator: new Map(h.aggregators.map((a) => [a.id, a.byMonth])), names: new Map(h.aggregators.map((a) => [a.id, a.name])) };
 }
 
 const detailMemo = new Map<string, { at: number; value: AggregatorDetailResult }>();

@@ -78,4 +78,23 @@ describe("companyNetting", () => {
     expect(r.own.plants).toBe(1);
     expect(r.own.nettedTl).toBeNull();
   });
+
+  it("ay ay üyelik: santral yalnız toplayıcıda olduğu aylarda dışarıda, diğer aylarda şirket portföyünde", () => {
+    const jan = (forecast: number, actual: number): NettingRow => ({ timestamp: new Date(Date.UTC(2026, 0, 5)), forecastMwh: forecast, actualMwh: actual });
+    const feb = (forecast: number, actual: number): NettingRow => ({ timestamp: new Date(Date.UTC(2026, 1, 5)), forecastMwh: forecast, actualMwh: actual });
+    const r = companyNetting(
+      [
+        { id: 1, aggregator: null, aggregatorMonths: { months: new Set(), names: [] }, rows: [jan(10, 14), feb(10, 14)] },
+        // Şubat'ta toplayıcıya katıldı (bugünkü listede de var): Ocak şirkette, Şubat toplayıcıda
+        { id: 2, aggregator: "T", aggregatorMonths: { months: new Set(["02"]), names: ["T"] }, rows: [jan(10, 7), feb(10, 7)] },
+      ],
+      cost,
+      "2026-10-17"
+    );
+    expect(r.monthly).toBe(true);
+    expect(r.own.plants).toBe(2);
+    expect(r.own.sumTl).toBe(400 + 400 + 300); // 1: Ocak + Şubat; 2: yalnız Ocak
+    expect(r.own.nettedTl).toBe(100 + 400); // Ocak netleşir (+4 −3), Şubat yalnız santral 1
+    expect(r.aggregated).toMatchObject({ plants: 1, sumTl: 300, aggregators: [{ name: "T", plants: 1 }] });
+  });
 });

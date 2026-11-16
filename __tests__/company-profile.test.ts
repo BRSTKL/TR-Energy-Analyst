@@ -51,6 +51,19 @@ describe("companyTotals", () => {
   });
 });
 
+describe("tür karışımı endeksi", () => {
+  it("dengesizlik ÷ Σ üretim × türünün ortancası; ortanca yoksa null", () => {
+    const ps = [
+      plant({ id: 1, owner: "A", type: "RES", actualMwh: 100, imbalanceCostTl: 15_000 }),
+      plant({ id: 2, owner: "A", type: "HES", actualMwh: 100, imbalanceCostTl: 6_000 }),
+    ];
+    // Beklenen: 100 × 175 + 100 × 90 = 26.500 TL; gerçek 21.000 → 0,79
+    expect(companyTotals("A", ps, { RES: 175, HES: 90 }).mixIndex).toBeCloseTo(21_000 / 26_500, 10);
+    expect(companyTotals("A", ps, { RES: 175 }).mixIndex).toBeNull();
+    expect(companyTotals("A", ps).mixIndex).toBeNull();
+  });
+});
+
 describe("buildCompanies", () => {
   const idx = buildCompanies([
     plant({ id: 1, owner: "ÇAL ENERJİ A.Ş.", mw: 5 }),

@@ -62,6 +62,12 @@ export interface CompanyRow {
   unitTotalTl: number | null;
   /** Üretimle ağırlıklı sapma oranı (%); üretim yoksa null */
   deviationPct: number | null;
+  /**
+   * Tür karışımından arındırılmış endeks: dengesizlik / Σ (santral üretimi × kendi türünün sektör ortancası TL/MWh). 1'in altı
+   * aynı karışımdaki ortanca santrallerden ucuz. Türler arasında doğal fark var (2026: rüzgâr 175, güneş 118, hidro 90 TL/MWh
+   * ortanca); TL/MWh tek başına rüzgâr ağırlıklı şirketi hidro ağırlıklıdan pahalı gösterir. Ortanca yoksa null.
+   */
+  mixIndex: number | null;
   byType: TechTotal[];
   /** Bu yıl YEKDEM listesinde olan santral sayısı ve kurulu gücü */
   yekdem: { plants: number; mw: number };
@@ -72,7 +78,7 @@ export const companySlug = (name: string): string => normalizePlantName(name).re
 const TECH_ORDER: CompanyTech[] = ["RES", "GES", "HES"];
 
 /** Bir şirketin santrallerinden toplam satırı */
-export function companyTotals(name: string, plants: CompanyPlant[]): CompanyRow {
+export function companyTotals(name: string, plants: CompanyPlant[], medians: Partial<Record<CompanyTech, number>> = {}): CompanyRow {
   const row: CompanyRow = {
     slug: companySlug(name),
     name,
@@ -86,12 +92,18 @@ export function companyTotals(name: string, plants: CompanyPlant[]): CompanyRow 
     unitImbalanceTl: null,
     unitTotalTl: null,
     deviationPct: null,
+    mixIndex: null,
     byType: [],
     yekdem: { plants: 0, mw: 0 },
   };
   const byType = new Map<CompanyTech, TechTotal>();
   let deviationMwh = 0;
+  let expected = 0;
+  let expectedOk = true;
   for (const p of plants) {
+    const med = medians[p.type];
+    if (med === undefined || med <= 0) expectedOk = false;
+    else expected += p.actualMwh * med;
     row.mw += p.mw;
     if (p.recorded) row.recordedMw += p.mw;
     else row.estimatedMw += p.mw;
@@ -113,6 +125,7 @@ export function companyTotals(name: string, plants: CompanyPlant[]): CompanyRow 
     row.unitImbalanceTl = row.imbalanceCostTl / row.actualMwh;
     row.unitTotalTl = (row.imbalanceCostTl + row.kupstTl) / row.actualMwh;
     row.deviationPct = (deviationMwh / row.actualMwh) * 100;
+    if (expectedOk && expected > 0) row.mixIndex = row.imbalanceCostTl / expected;
   }
   row.byType = TECH_ORDER.filter((t) => byType.has(t)).map((t) => byType.get(t)!);
   return row;
@@ -126,7 +139,8 @@ export interface CompanyIndex {
   unknown: { plants: number; mw: number };
 }
 
-export function buildCompanies(plants: CompanyPlant[]): CompanyIndex {
+/** `medians`: tür → sektör karnesinin santral bazında MWh başına dengesizlik ortancası (endeks için) */
+export function buildCompanies(plants: CompanyPlant[], medians: Partial<Record<CompanyTech, number>> = {}): CompanyIndex {
   const groups = new Map<string, { name: string; plants: CompanyPlant[] }>();
   const unknown = { plants: 0, mw: 0 };
   for (const p of plants) {
@@ -144,7 +158,7 @@ export function buildCompanies(plants: CompanyPlant[]): CompanyIndex {
   const bySlug = new Map<string, { row: CompanyRow; plants: CompanyPlant[] }>();
   for (const [slug, g] of groups) {
     const sorted = g.plants.slice().sort((a, b) => b.mw - a.mw || a.name.localeCompare(b.name, "tr"));
-    bySlug.set(slug, { row: companyTotals(g.name, sorted), plants: sorted });
+    bySlug.set(slug, { row: companyTotals(g.name, sorted, medians), plants: sorted });
   }
   const rows = Array.from(bySlug.values(), (v) => v.row).sort((a, b) => b.mw - a.mw || a.name.localeCompare(b.name, "tr"));
   return { rows, bySlug, unknown };

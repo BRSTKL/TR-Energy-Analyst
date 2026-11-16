@@ -172,9 +172,14 @@ export default function CompanyProfilePage() {
             </div>
             {n.aggregated.plants > 0 && (
               <div className="rounded-lg border bg-white p-3 text-sm text-slate-700">
-                {n.aggregated.plants} santral toplayıcı portföyünde ({n.aggregated.aggregators.map((a) => `${a.name}: ${a.plants}`).join(", ")}; tek tek{" "}
-                {mTl(n.aggregated.sumTl)}). Bunlar şirketle değil toplayıcının diğer santralleriyle dengelenir; netleşmeye katılmadı.
-                {n.membershipAsOf ? ` Üyelik listesi ${day(n.membershipAsOf)} tarihli; yıl içinde giren ya da çıkan santral o günkü durumuyla sayılır.` : ""}
+                {n.aggregated.plants} santral {n.monthly ? "dönemin bir kısmında ya da tamamında " : ""}toplayıcı portföyünde (
+                {n.aggregated.aggregators.map((a) => `${a.name}: ${a.plants}`).join(", ")}; o aylarda tek tek {mTl(n.aggregated.sumTl)}). Bu aylarda
+                şirketle değil toplayıcının diğer santralleriyle dengelenir; netleşmeye katılmadı.
+                {n.monthly
+                  ? " Üyelik ay ay sayılır: santral toplayıcıda olmadığı aylarda şirketin kendi portföyündedir."
+                  : n.membershipAsOf
+                    ? ` Üyelik listesi ${day(n.membershipAsOf)} tarihli; yıl içinde giren ya da çıkan santral o günkü durumuyla sayılır.`
+                    : ""}
               </div>
             )}
             <p className="text-xs text-slate-500">

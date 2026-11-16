@@ -5,6 +5,19 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 16.11.2026 · Claude · Hesap doğruluğu denetimi 17: Şirketler (`claude/hesap-dogrulugu`; yüklenmedi)
+
+- **Doğru:** 2026'da 1.014 santralin 26'sının sahibi bilinmiyor (%3 MW), 2025'te hepsi biliniyor; kurulu gücün ~%16'sı en yüksek
+  üretimden (~ işaretli); toplamlar santral toplamı, sıra kurulu güce göre.
+- **Bulgular ve yapılan:**
+  - Liste farklı tür karışımlı şirketleri yalnız TL/MWh ile yan yana koyuyordu (2026 ortanca: RES 175, GES 118, HES 90).
+    `CompanyRow.mixIndex` (dengesizlik ÷ Σ üretim × türünün karne ortancası; toplayıcı endeksiyle aynı mantık), listede sütun ve
+    açıklama. Örn. Borusan EnBW 145 TL/MWh ama endeks 0,86; Enerjisa Üretim 119 TL/MWh, endeks 1,03. Disk önbelleği `plants-v2-`.
+  - Şirket netleşmesi bugünkü toplayıcı listesini bütün yıla uyguluyordu (189 santral yılın bir kısmında toplayıcıda; 8 çok
+    santralli şirket). `NettingPlant.aggregatorMonths`: santral yalnız toplayıcıda olduğu aylarda dışarıda; geçmişte olmayan aylar
+    için bugünkü liste. Cengiz: kendi portföyü 226 → 184 GWh, netleşmiş 35,6 → 29,5 M TL.
+- **Kontrol:** 1.101 test, tsc, lint, `check:reports` 0 hata, `--only sirketler` 4/4; Cengiz profili API'de doğrulandı.
+
 ## 16.11.2026 · Claude · Hesap doğruluğu denetimi 16: Sektör karnesi (`claude/hesap-dogrulugu`; yüklenmedi)
 
 - **Santral karnesi doğru:** 2026 karnesi (18.10) bugünkü resmî fiyatlarla yeniden fiyatlanınca toplam %0,01, ortancalar aynı;

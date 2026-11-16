@@ -130,6 +130,9 @@ export default function CompaniesPage() {
                       <TableHead className="text-right">Kurulu güç (MW)</TableHead>
                       <TableHead className="text-right">Üretim (GWh)</TableHead>
                       <TableHead className="text-right">Dengesizlik (TL/MWh, santral bazında)</TableHead>
+                      <TableHead className="text-right" title="Şirketin dengesizliği ÷ aynı tür karışımındaki ortanca santrallerin dengesizliği; 1'in altı daha iyi">
+                        Endeks (tür karışımına göre)
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -148,6 +151,7 @@ export default function CompaniesPage() {
                         </TableCell>
                         <TableCell className="text-right tabular-nums">{nf(c.actualMwh / 1000, 1)}</TableCell>
                         <TableCell className="text-right tabular-nums">{c.unitImbalanceTl === null ? "–" : nf(c.unitImbalanceTl, 0)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{c.mixIndex == null ? "–" : nf(c.mixIndex, 2)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -172,6 +176,11 @@ export default function CompaniesPage() {
             <p>
               Bu listede dengesizlik santral santral hesaplanıp toplanır. Şirketin santralleri arasındaki netleşmeyle hesaplanan değer şirketin
               profilindedir. Risk göstergesidir, fatura değil.
+            </p>
+            <p>
+              Türler arasında doğal fark var (rüzgârın MWh başına dengesizliği hidronunkinden yüksek), bu yüzden TL/MWh farklı türde santralleri
+              olan şirketleri doğrudan kıyaslamaz. Endeks bunu düzeltir: şirketin dengesizliği ÷ her santralin üretimi × kendi türünün sektör
+              ortancası. 1 aynı karışımdaki ortanca santraller kadar, 1&apos;in altı daha iyi.
             </p>
             {res.unknown.plants > 0 && (
               <p>
