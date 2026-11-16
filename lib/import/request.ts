@@ -21,6 +21,8 @@ export interface ImportPlant {
   type: string;
   capacityMw: number;
   recordCount: number;
+  /** Santral şu an EPİAŞ veri havuzundan okunuyor (dosya yüklenirse yalnız dosyadan okunur) */
+  poolBacked: boolean;
 }
 
 export interface ImportContext {
@@ -28,6 +30,8 @@ export interface ImportContext {
   projectName: string;
   plants: ImportPlant[];
   profile: ImbalancePricingProfile;
+  /** Kullanıcının seçtiği proje dönemi ("YYYY-MM-DD"); eski projelerde null */
+  period: { start: string; end: string } | null;
   templates: Record<string, PlantImportMapping>;
   fileName: string;
   sheets: SheetGrid[];
@@ -141,6 +145,7 @@ export async function readImportRequest(request: Request, projectId: string): Pr
     type: p.type,
     capacityMw: p.capacityMw,
     recordCount: counts.get(p.id)?.count ?? 0,
+    poolBacked: p.poolBacked,
   }));
 
   const profile: ImbalancePricingProfile = toPricingProfile(project.pricingProfiles?.[0]);
@@ -150,6 +155,7 @@ export async function readImportRequest(request: Request, projectId: string): Pr
     projectName: project.name,
     plants,
     profile,
+    period: project.periodStart && project.periodEnd ? { start: project.periodStart, end: project.periodEnd } : null,
     templates: parseTemplates(project.importTemplate),
     fileName: file.name,
     sheets,
@@ -166,7 +172,37 @@ export interface MappingEvaluation {
   unusedSheets: string[];
   /** Hiçbir eşleştirmesi olmayan proje santralleri */
   unmappedPlants: string[];
+  /**
+   * EPİAŞ havuzundan okunan ve bu dosyayla üzerine yazılacak santraller. Yükleme sonrası santral yalnız dosyadan okunur:
+   * dosya dışındaki dönem ayları hesaplardan çıkar, son plan (KGÜP) ve EPİAŞ güncellemesi biter. Kaydetmeden önce onay ister.
+   */
+  poolReplacements: Array<{ plantId: string; plantName: string; droppedMonths: string[] }>;
   hasErrors: boolean;
+}
+
+/** Dönemin (bugünü geçmeden) dosya aralığı [fileStart, fileEnd] içinde tam kalmayan ayları ("YYYY-MM") */
+export function monthsOutsideFile(
+  period: { start: string; end: string },
+  fileStart: string,
+  fileEnd: string,
+  now: Date = new Date()
+): string[] {
+  const HOUR = 3_600_000;
+  const todayStart = Date.parse(new Date(now.getTime() + 3 * HOUR).toISOString().slice(0, 10) + "T00:00:00Z");
+  const pStart = Date.parse(`${period.start}T00:00:00Z`);
+  const pEnd = Math.min(Date.parse(`${period.end}T23:00:00Z`), todayStart - HOUR);
+  const fStart = Date.parse(fileStart);
+  const fEnd = Date.parse(fileEnd);
+  const out: string[] = [];
+  const first = new Date(pStart);
+  for (let i = 0; ; i++) {
+    const monthStart = Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + i, 1);
+    if (monthStart > pEnd) break;
+    const mFrom = Math.max(monthStart, pStart);
+    const mTo = Math.min(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + i + 1, 1) - HOUR, pEnd);
+    if (mFrom < fStart || mTo > fEnd) out.push(new Date(monthStart).toISOString().slice(0, 7));
+  }
+  return out;
 }
 
 export function evaluateMappings(ctx: ImportContext, mappings: PlantImportMapping[]): MappingEvaluation {
@@ -189,7 +225,15 @@ export function evaluateMappings(ctx: ImportContext, mappings: PlantImportMappin
     setIssues.some((i) => i.level === "error") ||
     results.some((r) => r.issues.some((i) => i.level === "error"));
 
-  return { results, setIssues, unusedSheets, unmappedPlants, hasErrors };
+  const poolReplacements = results
+    .filter((r) => plantById.get(r.plantId)?.poolBacked && r.rows.length > 0 && r.stats.startDate && r.stats.endDate)
+    .map((r) => ({
+      plantId: r.plantId,
+      plantName: plantById.get(r.plantId)!.name,
+      droppedMonths: ctx.period ? monthsOutsideFile(ctx.period, r.stats.startDate!, r.stats.endDate!) : [],
+    }));
+
+  return { results, setIssues, unusedSheets, unmappedPlants, poolReplacements, hasErrors };
 }
 
 /** İstemciye gönderilecek sonuç: satırların kendisi değil, özet ve ilk satırlar */

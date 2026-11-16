@@ -77,6 +77,11 @@ yeniden üretin. Ayrıntılı geçmiş `PLAN.md` (süren aşamalar, son kayıtla
 
 - **Tam 2026 sahip taraması yapılmaz** (05.10): toplayıcıya geçen santraller EPİAŞ'ta toplayıcının altında listelenir;
   tam tarama sahiplerin çoğunu sessizce siler. 2025 sahip dizini esas, yeniler yalnız boşluk doldurur.
+- **Boş gelen biten ay ertesi gün yeniden denenir; eksik ay proje dönemine göre aranır** (16.11): EPİAŞ ayın UEVM'sini
+  ay bittikten günler sonra, saat belirsiz yayımlar; yayımdan önce çekilen ay boş gelir ve 7 gün taze sayılırsa boş kalır
+  (Akenerji, Eylül 2026). Veri eksiği verinin değil kullanıcının seçtiği dönemin saatlerine göre sayılır.
+- **EPİAŞ verisinden okunan santrale dosya yüklemek onay ister** (16.11): yükleme sonrası santral yalnız dosyadan okunur
+  (dosya dışındaki aylar, son plan ve EPİAŞ güncellemesi gider).
 - **Lisanssız toplamlar (K3_, LÜM_, LÜY) kıyas dışı** (17.10): EPİAŞ ilk KGÜP'ü sonradan yeniden yazıyor.
 - **UEVM haftalarca gecikir, dünün üretimi gerçek zamanlı üretim ucundan** (27.10): `/generation/data/injection-quantity` ve UEÇM 1–26 Ekim için boş (en son 30 Eylül); gerçek zamanlı üretim, KGÜP, tüketim, talimatlar dünün 23:00'ine kadar, yük tahmini yarına kadar. Gerçek zamanlı tüketim lisanssız güneşi içerir, gerçek zamanlı üretim içermez (öğlen ≈ 3,3 GW, KGÜP güneşi ≈ 16,9 GW): net yükte güneş KGÜP planından alınır, yoksa akşam rampası 13,6 yerine 5,6 GW çıkar.
 - **Yarın görünümü fiyat tahmini yapmaz, fiyat limiti veriden çıkarılır** (27.10): yük tahmini tek başına PTF'yi benzer gün ortancasından iyi öngörmüyor (626 gün: %2,3, günlerin %49,7'si); net yük gerçekleşen rüzgâr / güneşle %12 ama yarın için bilinmiyor. PTF 13:00–14:00'te açıklanır, görünüm onu benzer günlere ve limite göre okur. Resmî limit tablosu yok: limit son 60 günde ≥ 3 saat görülen en yüksek PTF (4.500 TL/MWh, 4 Nisan 2026'dan beri; öncesi 3.400), "veriden çıkarıldı" diye yazılır.

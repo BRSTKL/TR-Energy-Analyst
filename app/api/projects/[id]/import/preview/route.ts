@@ -42,6 +42,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       setIssues: evaluation.setIssues,
       unusedSheets: evaluation.unusedSheets,
       unmappedPlants: evaluation.unmappedPlants,
+      poolReplacements: evaluation.poolReplacements,
       hasErrors: evaluation.hasErrors,
     });
   } catch (error) {

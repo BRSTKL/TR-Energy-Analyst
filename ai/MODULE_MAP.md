@@ -12,7 +12,7 @@
 - `/projects/[id]/candidates` (`app/(dashboard)/projects/[id]/candidates/page.tsx`) — YEKDEM çıkışı rozeti: bu yıl çıkan ya da süresi bu yıl / yakında dolan
 - `/projects/[id]/dsg` (`app/(dashboard)/projects/[id]/dsg/page.tsx`) — Üye bir şirketse santralleri (üye = piyasa katılımcısı)
 - `/projects/[id]/forecast` (`app/(dashboard)/projects/[id]/forecast/page.tsx`) — Piyasa sayfasıyla aynı: yarın vurgulu mavi, öbür gün gri
-- `/projects/[id]/import` (`app/(dashboard)/projects/[id]/import/page.tsx`)
+- `/projects/[id]/import` (`app/(dashboard)/projects/[id]/import/page.tsx`) — EPİAŞ verisinden okunan, bu dosyayla üzerine yazılacak santraller ve dosyanın kapsamadığı dönem ayları
 - `/projects/[id]/insights` (`app/(dashboard)/projects/[id]/insights/page.tsx`) — Uzlaştırma biriminde netleşmiş portföy saatlerinden çıkan öneriler
 - `/projects/[id]/losses` (`app/(dashboard)/projects/[id]/losses/page.tsx`) — PLAN 20.3: projenin güneş santralleri için uyduyla kayıp üretim (planlı kısıntı, plansız kayıp) ve günün saatleri.
 - `/projects/[id]/planning` (`app/(dashboard)/projects/[id]/planning/page.tsx`) — Isı haritası: haftanın günleri (kısaltma Pzt/Paz ve Cum/Cmt'yi ayırt eder) ve verimlilik bantları (eşik, renk)
@@ -389,7 +389,7 @@
 - `lib/services/pre-bid.ts` — Teklif öncesi görünüm: veri toplama (hesap lib/analysis/pre-bid.ts; ÖNİZLEME): Girdiler: veri tabanından doğrulanmış PTF (son ~150 gün), veri havuzundan yük tahmini, gerçek zamanlı rüzgâr ve KGÜP güneşi, EPİAŞ'tan rüzgâr tahmini geçmişi (/…
 - `lib/services/production-loss.ts` — Santral kayıp üretimi (PLAN 20.3; proje "Üretim tahmini" sayfası): Uydu ışınımıyla (gerçekleşen, SARAH3) santralin üretebileceği ile ürettiği arasındaki fark: lib/forecast/curtailment.ts (`detectLostHours` devreye alma süzgeciyle, `monthly…
 - `lib/services/project-data-sync.ts` — Projenin EPİAŞ verisini tamamlama (PLAN 10.1): Tek çağrıyla bir projenin ihtiyaç duyduğu bütün açık veri tamamlanır: 1.
-- `lib/services/project-hourly.ts` — Proje bir toplayıcı portföyüyse: santraller bu adla tek dengede uzlaştırılır (organizationId = AGGREGATOR_ORG_ID)
+- `lib/services/project-hourly.ts` — Kullanıcının seçtiği proje dönemi ("YYYY-MM-DD"); eski projelerde yok.
 - `lib/services/project-kpis.ts` — Proje karşılaştırması için özet göstergeler: Her proje Dengesizlik Karnesi ile aynı motordan geçer (şirket bazında uzlaştırma, KÜPST, YEKDEM varsayımları, 2026 kuralları, sektör sırası); karşılaştırma tablosundaki rakamlar rapordakilerle b…
 - `lib/services/project-records.ts` — Projeyi saatlik kayıtları ve piyasa verisiyle yükleme: İki kaynak: - Havuzdan okunan santral (poolBacked, PLAN 7.7): saatler veri havuzundan (data/pool), projenin dönemi içinde.
 - `lib/services/ptf-champion.ts` — PTF motoru: şampiyon kararının veri tarafı (kural lib/ptf/champion.ts): Hedef gün T için kayıtlı günlük kayıtları (hedefin bir öncesine kadar son 28 gün) ve gerçekleşen PTF'yi okur, karar verir.

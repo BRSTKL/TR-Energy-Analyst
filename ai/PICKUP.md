@@ -5,6 +5,26 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 16.11.2026 · Claude · Hesap doğruluğu denetimi 10–11: Doğrulama paketi, veri kalitesi ve veri yükleme (`claude/hesap-dogrulugu`; yüklenmedi)
+
+- **Doğrulama paketi:** hata yok. Polat ve Bilgin, Temmuz: net tutar bağımsız hesapla birebir; alacak / borç ayrımındaki
+  küçük fark negatif fiyatlı saatlerden (paket para akışına göre sınıflıyor, faturaya daha yakın).
+- **Bulgu 1 (gerçek hata):** Akenerji (dönem Ocak–Eylül) 8 santralin hepsinde Eylül üretimi boştu, hiçbir yerde uyarı yoktu.
+  Eylül UEVM'si 15.10 18:10'da çekilmiş, EPİAŞ 21:18'de yayımlamış; havuz biten ayı 7 gün taze sayınca 18.10 çekişi
+  atlamış, sonra kimse istememiş. Eksik ay kontrolü de veri aralığına bakıyordu, dönemin tamamında eksik ayı görmüyordu.
+- **Bulgu 2 (gizli tuzak):** EPİAŞ verisinden okunan santrale dosya yüklenince santral yalnız dosyadan okunuyor; dosya
+  dışındaki aylar, son plan ve EPİAŞ güncellemesi sessizce gidiyordu. Bugün dosyalı santral yok (379/379 havuz).
+- **Yapılan:**
+  - `needsFetch`: ay bitiminden 30 gün içinde boş çekilen ay ertesi gün yeniden denenir (`EMPTY_RETRY_DAYS`, `monthIsEmpty`).
+  - `findDataGaps(plants, share, period)`: proje dönemi verilince beklenen saatler dönemden (bugünü geçmeden). Veri kalitesi
+    API'si, rapor (`ProjectHourly.period`) ve proje göstergeleri dönemi veriyor.
+  - Veri yükleme: `poolReplacements` (önizlemede santral ve dosyanın kapsamadığı dönem ayları), kaydetmede
+    `confirmPoolReplace` onayı (409), sayfada onay kutusu.
+  - Sunucuda Akenerji'nin 8 santrali için Eylül yeniden çekildi (720 saat).
+- **Kontrol:** 1.096 test, tsc, `check:reports` 0 hata; Mac'te Akenerji veri kalitesi API'si 8 santralde "Eylül 2026 yok".
+- **Sıradaki:** yükleme (kullanıcı onayıyla); genel sayfaların denetimi (Bugün, Teklif öncesi, Günlük pano, Piyasa,
+  Sektör karnesi, Şirketler, YEKDEM, Arıza izleme, Yeni santraller, Santral rehberi, Dönem özeti, Proje karşılaştırma).
+
 ## 15.11.2026 · Claude · Hesap doğruluğu denetimi 9: Adaylar (`claude/hesap-dogrulugu`; yüklenmedi)
 
 - **Bulgu:** aday netleşme kazancı ilk planla hesaplanıyordu (DSG son plana geçmişti). Son planla ilk 20 adayın kazancı %22–40

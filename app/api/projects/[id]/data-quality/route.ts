@@ -111,7 +111,9 @@ async function handleGET(_request: Request, { params }: { params: { id: string }
 
     // Santral × ay üretim verisi bütünlüğü: bir santralin ayı eksikse o ay hesaplardan sessizce düşer
     const generationGaps = findDataGaps(
-      project.plants.map((p) => ({ plantName: p.name, timestamps: p.records.map((r) => r.timestamp.getTime()), idle: isNotProducing(p.records) }))
+      project.plants.map((p) => ({ plantName: p.name, timestamps: p.records.map((r) => r.timestamp.getTime()), idle: isNotProducing(p.records) })),
+      undefined,
+      project.periodStart && project.periodEnd ? { start: project.periodStart, end: project.periodEnd } : null
     ).map(describeGap);
 
     const zeroPlanHours = findZeroPlanHours(

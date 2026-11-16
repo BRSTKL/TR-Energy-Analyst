@@ -16,6 +16,8 @@ export const dynamic = "force-dynamic";
  * - herhangi bir eşleştirmede veya eşleştirmeler arasında hata varsa (400)
  * - verisi olan ama eşlenmeyen sayfalar varsa ve "confirmSkippedSheets" onayı yoksa (409)
  * - eşleştirilmeyen proje santralleri varsa ve "confirmSkippedPlants" onayı yoksa (409)
+ * - EPİAŞ havuzundan okunan santrale yazılacaksa ve "confirmPoolReplace" onayı yoksa (409): yükleme sonrası santral yalnız
+ *   dosyadan okunur, dosya dışındaki dönem ayları hesaplardan çıkar
  */
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   try {
@@ -60,6 +62,20 @@ export async function POST(request: Request, { params }: { params: { id: string 
           needsConfirmation: "plants",
           error: `Şu santraller için veri seçilmedi: ${evaluation.unmappedPlants.map(plantName).join(", ")}. Atlamayı onaylayın.`,
           unmappedPlants: evaluation.unmappedPlants,
+        },
+        { status: 409 }
+      );
+    }
+
+    if (evaluation.poolReplacements.length > 0 && !confirmed("confirmPoolReplace")) {
+      return NextResponse.json(
+        {
+          success: false,
+          needsConfirmation: "pool",
+          error: `Şu santraller EPİAŞ verisinden okunuyor; dosya yüklenirse yalnız dosyadan okunur: ${evaluation.poolReplacements
+            .map((p) => p.plantName)
+            .join(", ")}. Onaylayın.`,
+          poolReplacements: evaluation.poolReplacements,
         },
         { status: 409 }
       );

@@ -1485,7 +1485,7 @@ export function buildPlantReport(
     outages,
     marketProfile,
     fairShare,
-    dataGaps: findDataGaps(stamps),
+    dataGaps: findDataGaps(stamps, undefined, data.period),
     notProducing,
     lateStarts,
     forecastUpside,

@@ -38,9 +38,17 @@ const monthKey = (t: number) => new Date(t).toISOString().slice(0, 7);
  * @param plants her santralin saatlik zaman damgaları (ms; duvar saati UTC alanında); idle: henüz üretime geçmemiş
  *   santral (isNotProducing), eksik ayı aranmaz
  * @param minMonthShare bir ayın "tam" sayılması için gereken pay (varsayılan 0,9)
+ * @param period projenin kullanıcının seçtiği dönemi ("YYYY-MM-DD", gün dahil): verilirse beklenen saatler bu dönemden
+ *   (bugünü geçmeden) sayılır. Verilmezse verinin ilk ve son saati; o zaman bütün santrallerde birden eksik olan ay
+ *   (ör. Akenerji, Eylül 2026: dönem Eylül'ü kapsıyor, hiçbir santralde Eylül yok) görünmez.
  * @returns yalnızca eksiği olan santraller (eksik yoksa boş dizi)
  */
-export function findDataGaps(plants: Array<{ plantName: string; timestamps: number[]; idle?: boolean }>, minMonthShare = 0.9): PlantDataGap[] {
+export function findDataGaps(
+  plants: Array<{ plantName: string; timestamps: number[]; idle?: boolean }>,
+  minMonthShare = 0.9,
+  period?: { start: string; end: string } | null,
+  now: Date = new Date()
+): PlantDataGap[] {
   let start = Infinity;
   let end = -Infinity;
   for (const p of plants) {
@@ -50,6 +58,12 @@ export function findDataGaps(plants: Array<{ plantName: string; timestamps: numb
     }
   }
   if (!Number.isFinite(start)) return [];
+  if (period) {
+    // Duvar saati UTC alanında: bugünün (Türkiye) başlangıcından önceki son saat
+    const todayStart = Date.parse(new Date(now.getTime() + 3 * HOUR).toISOString().slice(0, 10) + "T00:00:00Z");
+    start = Math.min(start, Date.parse(`${period.start}T00:00:00Z`));
+    end = Math.max(end, Math.min(Date.parse(`${period.end}T23:00:00Z`), todayStart - HOUR));
+  }
 
   // Dönemdeki her ayın beklenen saat sayısı (ilk ve son ay veri dönemine kırpılır)
   const expected = new Map<string, number>();

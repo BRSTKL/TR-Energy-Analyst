@@ -43,6 +43,8 @@ interface PreviewResponse {
   setIssues: ImportIssue[];
   unusedSheets: string[];
   unmappedPlants: string[];
+  /** EPİAŞ verisinden okunan, bu dosyayla üzerine yazılacak santraller ve dosyanın kapsamadığı dönem ayları */
+  poolReplacements?: Array<{ plantId: string; plantName: string; droppedMonths: string[] }>;
   hasErrors: boolean;
 }
 
@@ -52,13 +54,15 @@ interface CommitResponse {
   message?: string;
   plants?: Array<{ plantName: string; written: number; replaced: number; missingMarketHours: number }>;
   missingMarketHours?: number;
-  needsConfirmation?: "sheets" | "plants";
+  needsConfirmation?: "sheets" | "plants" | "pool";
   results?: Record<string, PlantResult>;
   setIssues?: ImportIssue[];
 }
 
 const num = (v: number, digits = 1) =>
   v.toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: digits });
+const monthLabel = (m: string) =>
+  new Date(`${m}-01T00:00:00Z`).toLocaleDateString("tr-TR", { month: "long", year: "numeric", timeZone: "UTC" });
 const day = (iso: string | null) => (iso ? iso.slice(0, 10).split("-").reverse().join(".") : "–");
 
 const selectClass =
@@ -81,6 +85,7 @@ export default function ImportPage() {
   const [results, setResults] = useState<Record<string, PlantResult>>({});
   const [setIssues, setSetIssues] = useState<ImportIssue[]>([]);
   const [unusedSheets, setUnusedSheets] = useState<string[]>([]);
+  const [poolReplacements, setPoolReplacements] = useState<NonNullable<PreviewResponse["poolReplacements"]>>([]);
   const [hasErrors, setHasErrors] = useState(false);
 
   const [analyzing, setAnalyzing] = useState(false);
@@ -89,6 +94,7 @@ export default function ImportPage() {
 
   const [confirmSheets, setConfirmSheets] = useState(false);
   const [confirmPlants, setConfirmPlants] = useState(false);
+  const [confirmPool, setConfirmPool] = useState(false);
   const [saveTemplate, setSaveTemplate] = useState(true);
   const [committing, setCommitting] = useState(false);
   const [commitResult, setCommitResult] = useState<CommitResponse | null>(null);
@@ -130,9 +136,11 @@ export default function ImportPage() {
     setResults(json.results);
     setSetIssues(json.setIssues);
     setUnusedSheets(json.unusedSheets);
+    setPoolReplacements(json.poolReplacements ?? []);
     setHasErrors(json.hasErrors);
     setConfirmSheets(false);
     setConfirmPlants(false);
+    setConfirmPool(false);
   };
 
   // 1. Dosya seçildiğinde: önizleme + öneriler (hiçbir şey yazılmaz)
@@ -252,7 +260,8 @@ export default function ImportPage() {
     activeMappings.length > 0 &&
     !hasErrors &&
     (unusedSheets.length === 0 || confirmSheets) &&
-    (skippedPlants.length === 0 || confirmPlants);
+    (skippedPlants.length === 0 || confirmPlants) &&
+    (poolReplacements.length === 0 || confirmPool);
 
   const handleCommit = async () => {
     if (!file || !canCommit) return;
@@ -264,6 +273,7 @@ export default function ImportPage() {
       fd.append("mappings", JSON.stringify(activeMappings));
       fd.append("confirmSkippedSheets", confirmSheets ? "true" : "false");
       fd.append("confirmSkippedPlants", confirmPlants ? "true" : "false");
+      fd.append("confirmPoolReplace", confirmPool ? "true" : "false");
       fd.append("saveTemplate", saveTemplate ? "true" : "false");
       const res = await fetch(`/api/projects/${projectId}/import/commit`, { method: "POST", body: fd });
       const json: CommitResponse = await res.json();
@@ -617,6 +627,28 @@ export default function ImportPage() {
                   <span>
                     Şu santrallere bu dosyadan <strong>veri yazılmayacak</strong>:{" "}
                     {skippedPlants.map((p) => p.name).join(", ")}. Mevcut kayıtları değişmez. Onaylıyorum.
+                  </span>
+                </label>
+              )}
+
+              {poolReplacements.length > 0 && (
+                <label className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  <input type="checkbox" checked={confirmPool} onChange={(e) => setConfirmPool(e.target.checked)} />
+                  <span className="space-y-1">
+                    <span className="block">
+                      Şu santraller şu an <strong>EPİAŞ verisinden</strong> okunuyor. Yüklerseniz bundan sonra yalnız bu dosyadan okunur:
+                      son plan (gün içi sonrası KGÜP) olmaz, EPİAŞ güncellemesi bu santralleri atlar.
+                    </span>
+                    {poolReplacements.map((p) => (
+                      <span key={p.plantId} className="block">
+                        <strong>{p.plantName}</strong>
+                        {p.droppedMonths.length > 0
+                          ? `: dosya proje döneminin şu aylarını kapsamıyor, bu aylar hesaplardan çıkar: ${p.droppedMonths.map(monthLabel).join(", ")}`
+                          : ": dosya proje dönemini kapsıyor"}
+                        .
+                      </span>
+                    ))}
+                    <span className="block">Onaylıyorum.</span>
                   </span>
                 </label>
               )}

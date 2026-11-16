@@ -101,6 +101,18 @@ export function monthStatus(doc: PoolYear | null, series: PoolSeries, month: num
 /** Ay henüz bitmeden çekilen veri (eksik günler var) bu kadar gün sonra, biten ama kesinleşmemiş ay bu kadar gün sonra yenilenir */
 export const REFRESH_DAYS_PARTIAL = 1;
 export const REFRESH_DAYS_PROVISIONAL = 7;
+/** Ay bitiminden bu kadar gün içinde boş çekilen ay (henüz yayımlanmamış olabilir) ertesi gün yeniden denenir */
+export const EMPTY_RETRY_DAYS = 30;
+
+/** Serinin o ayında hiç değer yok mu */
+export function monthIsEmpty(doc: PoolYear, series: PoolSeries, month: number): boolean {
+  const t0 = Date.parse(doc.start);
+  const from = (Date.UTC(doc.year, month - 1, 1) - t0) / HOUR;
+  const to = (Date.UTC(doc.year, month, 1) - t0) / HOUR;
+  const arr = doc[series];
+  for (let i = from; i < to; i++) if (arr[i] !== null && arr[i] !== undefined) return false;
+  return true;
+}
 
 /**
  * Yeniden çekilmesi gereken ay mı: eksikse evet; kesinse hayır. Geçici ay: ay bitmeden çekildiyse (yeni günler
@@ -113,8 +125,13 @@ export function needsFetch(doc: PoolYear | null, series: PoolSeries, month: numb
   if (status === "final") return false;
   const at = Date.parse(doc!.fetched[series][mm(month)]);
   // Duvar saatiyle ayın bitişi (UTC alanında) → gerçek an: 3 saat önce
-  const partial = at < Date.UTC(doc!.year, month, 1) - 3 * HOUR;
-  const days = partial ? REFRESH_DAYS_PARTIAL : REFRESH_DAYS_PROVISIONAL;
+  const monthEnd = Date.UTC(doc!.year, month, 1) - 3 * HOUR;
+  const partial = at < monthEnd;
+  // Ay bittikten hemen sonra, EPİAŞ yayımlamadan çekilen ay boş gelir (15.10.2026: Eylül UEVM'si 18:10'da boş, 21:18'de
+  // yayımlandı); 7 gün taze sayılırsa o hafta yeniden istenmez ve boş kalır. Ay bitiminden EMPTY_RETRY_DAYS gün içinde boş
+  // çekilen ay ertesi gün yeniden denenir (üretmeyen santral için bu süre sonra normal kurala döner).
+  const emptySoon = !partial && at - monthEnd < EMPTY_RETRY_DAYS * 24 * HOUR && monthIsEmpty(doc!, series, month);
+  const days = partial || emptySoon ? REFRESH_DAYS_PARTIAL : REFRESH_DAYS_PROVISIONAL;
   return now.getTime() - at >= days * 24 * HOUR;
 }
 

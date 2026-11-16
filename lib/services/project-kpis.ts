@@ -87,7 +87,9 @@ export async function projectKpis(projectId: string): Promise<ProjectKpis | null
     worstPlant: worst ? { name: worst.name, type: worst.type, unitCostTl: worst.unitCostTl } : null,
     // Verisi hiç olmayan santral de görünsün diye tüm santrallerle
     dataGaps: findDataGaps(
-      data.plants.map((p) => ({ plantName: p.plantName, timestamps: p.hourly.map((h) => new Date(h.timestamp).getTime()), idle: isNotProducing(p.hourly) }))
+      data.plants.map((p) => ({ plantName: p.plantName, timestamps: p.hourly.map((h) => new Date(h.timestamp).getTime()), idle: isNotProducing(p.hourly) })),
+      undefined,
+      data.period
     ).map(describeGap),
   };
 }

@@ -33,6 +33,22 @@ describe("Veri bütünlüğü", () => {
     expect(describeGap(gaps[0])).toBe("B: Ocak 2025 eksik (240/744 saat)");
     expect(findDataGaps([])).toEqual([]);
   });
+
+  it("proje dönemi verilince bütün santrallerde birden eksik olan ay da bulunur (bugünü geçmeden)", () => {
+    // Akenerji, 16.11.2026: dönem Ocak–Eylül, hiçbir santralde Eylül yok; veri aralığına bakan kontrol bunu görmüyordu
+    const toAug = hours("2026-01-01", "2026-08-31");
+    const plants = [
+      { plantName: "A", timestamps: toAug },
+      { plantName: "B", timestamps: toAug },
+    ];
+    expect(findDataGaps(plants)).toEqual([]);
+    const now = new Date("2026-11-16T12:00:00Z");
+    const gaps = findDataGaps(plants, undefined, { start: "2026-01-01", end: "2026-09-30" }, now);
+    expect(gaps.map(describeGap)).toEqual(["A: Eylül 2026 yok", "B: Eylül 2026 yok"]);
+    // Dönem bugünden sonra bitiyorsa yalnız bugüne kadarki saatler beklenir
+    const upToNow = hours("2026-01-01", "2026-11-15");
+    expect(findDataGaps([{ plantName: "C", timestamps: upToNow }], undefined, { start: "2026-01-01", end: "2026-12-31" }, now)).toEqual([]);
+  });
 });
 
 describe("dönem içinde devreye giren santral", () => {

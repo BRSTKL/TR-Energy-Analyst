@@ -6,6 +6,8 @@ import { loadAggregatorPortfolio } from "@/lib/services/aggregator-portfolio";
 
 export interface ProjectHourly {
   project: { id: string; name: string };
+  /** Kullanıcının seçtiği proje dönemi ("YYYY-MM-DD"); eski projelerde yok. Veri eksiği bu döneme göre aranır */
+  period?: { start: string; end: string } | null;
   profile: ImbalancePricingProfile;
   /** Proje bir toplayıcı portföyüyse: santraller bu adla tek dengede uzlaştırılır (organizationId = AGGREGATOR_ORG_ID) */
   aggregator?: { name: string; portfolio?: AggregatorPortfolio | null } | null;
@@ -46,6 +48,7 @@ export async function loadProjectHourly(projectId: string): Promise<ProjectHourl
   const profile = toPricingProfile(project.pricingProfiles?.[0]);
   return {
     project: { id: project.id, name: project.name },
+    period: project.periodStart && project.periodEnd ? { start: project.periodStart, end: project.periodEnd } : null,
     profile,
     aggregator: project.aggregatorName
       ? { name: project.aggregatorName, portfolio: await loadAggregatorPortfolio(project.aggregatorPortfolio) }
