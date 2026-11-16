@@ -81,4 +81,15 @@ describe("sumPortfolio", () => {
     expect(t.hours).toEqual(flat(5));
     expect(t.mwh).toBe(120);
   });
+  it("kapsam: tahmine giren benzersiz santral ve kurulu güç payı (HES ve verisiz dışarıda)", () => {
+    const plants = [
+      { epiasPlantId: 1, type: "GES", capacityMw: 10 },
+      { epiasPlantId: 1, type: "GES", capacityMw: 10 }, // ikinci projede aynı santral
+      { epiasPlantId: 2, type: "RES", capacityMw: 30 },
+      { epiasPlantId: 3, type: "RES", capacityMw: 20 },
+      { epiasPlantId: 4, type: "HES", capacityMw: 40 },
+    ];
+    const t = sumPortfolio(plants, log("GES", [{ id: 1 }]), log("RES", [{ id: 2 }, { id: 3, status: "no-data" }]));
+    expect(t.coverage).toEqual({ plants: 2, totalPlants: 4, mw: 40, totalMw: 100 });
+  });
 });

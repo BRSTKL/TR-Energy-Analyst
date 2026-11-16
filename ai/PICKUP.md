@@ -5,6 +5,20 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 16.11.2026 · Claude · Hesap doğruluğu denetimi 12: Bugün (`claude/hesap-dogrulugu`; yüklenmedi)
+
+- **Doğru (sunucu verisiyle bağımsız):** PTF karnesi (16 gün, MAE 392,9, kapsama %85,4, basit yönteme göre %27,6 iyi) birebir;
+  dünün piyasa özeti veritabanıyla birebir; limite yakın uyarısı 48 saatte verildi, 35'i tuttu, gerçek 43 saatin 35'ini yakaladı.
+- **Bulgular ve yapılan:**
+  - Portföy üretim toplamı portföyün %62'si (158 / 365 santral; HES ≈ %38 dışarıda), kart yalnız "HES yok" diyordu:
+    `sumPortfolio` `coverage` (benzersiz santral ve kurulu güç), kartta amber satır.
+  - 14:00 öncesi ucuz saat uyarısı ortanca tahminden: 16 günde ortanca hiç 300'ün altına inmedi, gerçekte 7 saat indi. Şimdi
+    olası aralığın alt ucu (`cheapBandHours`, q10 < 300) "olasılık" ve "kanıt zayıf" diye yazılır (6 saatte uyarırdı, 2'si tuttu).
+  - Son 7 gün satırına "daha yakın / uzak" eklendi.
+- **Kontrol:** 1.095 test, tsc, lint, `check:reports` 0 hata, `--only Bugün` 2/2; kart ekranda denendi (sunucunun 17.11 kayıtları
+  Mac'e kopyalandı).
+- **Sıradaki:** Teklif öncesi / teklif masası (portföy toplamını o da kullanıyor), Günlük pano, Piyasa, Sektör karnesi…
+
 ## 16.11.2026 · Claude · Hesap doğruluğu denetimi 10–11: Doğrulama paketi, veri kalitesi ve veri yükleme (`claude/hesap-dogrulugu`; yüklenmedi)
 
 - **Doğrulama paketi:** hata yok. Polat ve Bilgin, Temmuz: net tutar bağımsız hesapla birebir; alacak / borç ayrımındaki
@@ -21,7 +35,7 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
   - Veri yükleme: `poolReplacements` (önizlemede santral ve dosyanın kapsamadığı dönem ayları), kaydetmede
     `confirmPoolReplace` onayı (409), sayfada onay kutusu.
   - Sunucuda Akenerji'nin 8 santrali için Eylül yeniden çekildi (720 saat).
-- **Kontrol:** 1.096 test, tsc, `check:reports` 0 hata; Mac'te Akenerji veri kalitesi API'si 8 santralde "Eylül 2026 yok".
+- **Kontrol:** 1.092 test, tsc, lint, `check:reports` 0 hata, tam duman 60/60; Mac'te Akenerji veri kalitesi API'si 8 santralde "Eylül 2026 yok".
 - **Sıradaki:** yükleme (kullanıcı onayıyla); genel sayfaların denetimi (Bugün, Teklif öncesi, Günlük pano, Piyasa,
   Sektör karnesi, Şirketler, YEKDEM, Arıza izleme, Yeni santraller, Santral rehberi, Dönem özeti, Proje karşılaştırma).
 

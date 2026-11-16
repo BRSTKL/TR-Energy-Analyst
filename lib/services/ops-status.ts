@@ -24,6 +24,11 @@ export interface PtfRecordSummary {
   min: { hour: number; value: number };
   /** Fiyat limitinin %90'ına ve üstüne çıkan saatler (limit bilinmiyorsa boş) */
   nearCapHours: number[];
+  /**
+   * Olası aralığın alt ucu (q10) CHEAP_PTF'nin altında kalan saatler. Ortanca tahmin ucuz saatleri yakalamıyor: 2–17.11.2026
+   * kayıtlarında ortanca hiç 300'ün altına inmedi, gerçekte 7 saat indi; alt uç 6 saatte uyardı, 2'si tuttu (kanıt zayıf).
+   */
+  cheapBandHours: number[];
   cap: number | null;
   /** Son 60 günde motorun saat başına ortalama sapması */
   recentMae: number | null;
@@ -51,6 +56,9 @@ export interface OpsStatus {
   errors: string[];
 }
 
+/** Ucuz saat sınırı (TL/MWh) */
+export const CHEAP_PTF = 300;
+
 const avg = (v: number[]) => v.reduce((s, x) => s + x, 0) / v.length;
 
 export function summarizePtfRecord(log: PtfForecastLog): PtfRecordSummary {
@@ -72,6 +80,7 @@ export function summarizePtfRecord(log: PtfForecastLog): PtfRecordSummary {
     nearCapHours: log.cap
       ? log.hours.filter((h) => h.p50 >= log.cap! * 0.9).map((h) => h.hour)
       : [],
+    cheapBandHours: log.hours.filter((h) => h.q10 !== null && h.q10 < CHEAP_PTF).map((h) => h.hour),
     cap: log.cap,
     recentMae: log.band.recentMae,
     levelAdj: lv ? lv.adj : null,

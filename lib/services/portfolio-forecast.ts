@@ -41,7 +41,7 @@ export interface ProjectProduction {
 export interface PortfolioProduction {
   date: string;
   projects: ProjectProduction[];
-  total: { hours: number[] | null; mwh: number };
+  total: { hours: number[] | null; mwh: number; coverage: PortfolioCoverage };
   /** Hangi kayıtlar vardı */
   logs: { solar: { issuedAt: string; onTime: boolean } | null; wind: { issuedAt: string; onTime: boolean } | null };
 }
@@ -49,6 +49,16 @@ export interface PortfolioProduction {
 export interface PlantRef {
   epiasPlantId: number | null;
   type: string;
+  /** Kurulu güç (MW); kapsamın güç payı için */
+  capacityMw?: number;
+}
+
+/** Portföyün ne kadarı toplama girdi (benzersiz santral; HES ve tahmini kurulamayanlar dışarıda) */
+export interface PortfolioCoverage {
+  plants: number;
+  totalPlants: number;
+  mw: number;
+  totalMw: number;
 }
 
 /** Bir kaydın verilen santraller için saat saat toplamı; kayıt ya da eşleşen santral yoksa null */
@@ -114,7 +124,7 @@ export function sumPortfolio(
   allPlants: PlantRef[],
   solarLog: ForecastLog | null,
   windLog: ForecastLog | null
-): { hours: number[] | null; mwh: number } {
+): { hours: number[] | null; mwh: number; coverage: PortfolioCoverage } {
   const uniq = (type: string) => {
     const ids = new Set(allPlants.filter((p) => p.type === type && p.epiasPlantId !== null).map((p) => p.epiasPlantId as number));
     return ids;
@@ -122,13 +132,32 @@ export function sumPortfolio(
   const g = uniq("GES");
   const r = uniq("RES");
   const hours = addHours(sumLog(solarLog, g, g.size)?.hours ?? null, sumLog(windLog, r, r.size)?.hours ?? null);
-  return { hours, mwh: hours ? hours.reduce((s, v) => s + v, 0) : 0 };
+  // Kapsam: kimliği olan santral bir kez (birden çok projede olabilir), kimliksiz her kayıt ayrı sayılır
+  const okIds = new Set<number>();
+  for (const [l, ids] of [[solarLog, g], [windLog, r]] as const)
+    for (const p of l?.plants ?? []) if (ids.has(p.epiasPlantId) && p.status === "ok" && p.hours?.length === H) okIds.add(p.epiasPlantId);
+  const seen = new Set<number>();
+  const coverage: PortfolioCoverage = { plants: 0, totalPlants: 0, mw: 0, totalMw: 0 };
+  for (const p of allPlants) {
+    if (p.epiasPlantId !== null) {
+      if (seen.has(p.epiasPlantId)) continue;
+      seen.add(p.epiasPlantId);
+    }
+    const mw = p.capacityMw ?? 0;
+    coverage.totalPlants++;
+    coverage.totalMw += mw;
+    if (p.epiasPlantId !== null && okIds.has(p.epiasPlantId)) {
+      coverage.plants++;
+      coverage.mw += mw;
+    }
+  }
+  return { hours, mwh: hours ? hours.reduce((s, v) => s + v, 0) : 0, coverage };
 }
 
 export async function loadPortfolioForecast(date: string): Promise<PortfolioProduction> {
   const [projects, solarLog, windLog] = await Promise.all([
     prisma.project.findMany({
-      select: { id: true, name: true, plants: { select: { epiasPlantId: true, type: true } } },
+      select: { id: true, name: true, plants: { select: { epiasPlantId: true, type: true, capacityMw: true } } },
       orderBy: { createdAt: "desc" },
     }),
     readForecastLog(date, "solar").catch(() => null),

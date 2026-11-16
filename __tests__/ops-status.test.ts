@@ -33,11 +33,16 @@ describe("summarizePtfRecord", () => {
     expect(s.max).toEqual({ hour: 18, value: 4478 });
     expect(s.min).toEqual({ hour: 12, value: 1931 });
     expect(s.nearCapHours).toEqual([17, 18]); // ≥ %90 × 4.500 = 4.050
+    expect(s.cheapBandHours).toEqual([]);
     expect(s.mean).toBeCloseTo((21 * 3000 + 4478 + 1931 + 4200) / 24, 5);
     expect(s.bandLo).toBe(2500);
     expect(s.bandHi).toBe(3500);
     expect(s.recentMae).toBe(383);
     expect(s.onTime).toBe(true);
+  });
+  it("alt ucu 300'ün altındaki saatler ucuz saat olasılığı", () => {
+    const s = summarizePtfRecord(ptfLog({ hours: ptfLog().hours.map((h) => ({ ...h, q10: h.hour === 12 || h.hour === 13 ? 150 : h.q10 })) }));
+    expect(s.cheapBandHours).toEqual([12, 13]);
   });
   it("aralık ve tavan yoksa null / boş", () => {
     const s = summarizePtfRecord(

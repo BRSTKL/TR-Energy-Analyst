@@ -14,6 +14,7 @@ const ptf = (over: Record<string, unknown> = {}) =>
     max: { hour: 18, value: 4488 },
     min: { hour: 12, value: 1931 },
     nearCapHours: [],
+    cheapBandHours: [],
     cap: 4500,
     recentMae: 383,
     levelAdj: null,
@@ -91,6 +92,12 @@ describe("buildAlerts", () => {
       "3 saat fiyat limitine yakın tahmin ediliyor (17:00–19:00)"
     );
     expect(a[1].text).toContain("12:00");
+  });
+  it("ortanca ucuz değilse olası aralığın alt ucu ucuz saati olasılık olarak yazar", () => {
+    const a = buildAlerts({ ...base, status: status({ ptf: ptf({ cheapBandHours: [11, 12, 13] }) }) });
+    expect(a.map((x) => x.id)).toEqual(["near-zero"]);
+    expect(a[0].text).toContain("11:00–13:00 saatlerinde fiyatın 300 TL/MWh altına inme olasılığı var");
+    expect(a[0].text).toContain("Kanıt zayıf");
   });
   it("PTF açıklandıysa limit ve ucuz saat uyarısı açıklanan fiyattan", () => {
     const hours = Array.from({ length: 24 }, (_, h) => ({

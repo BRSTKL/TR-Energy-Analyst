@@ -409,6 +409,13 @@ function PortfolioLines({ load }: { load: Load<PortfolioProduction> }) {
       <p className="text-xs text-slate-500">
         En yüksek saat {hh(peak)} ({nf(total.hours[peak], 1)} MWh). Güneş ve rüzgâr; HES yok.
       </p>
+      {total.coverage.totalPlants > 0 && (
+        <p className="text-xs text-amber-800">
+          Portföyün tamamı değil: tahmine giren santral {total.coverage.plants} / {total.coverage.totalPlants}
+          {total.coverage.totalMw > 0 && <>, kurulu güç payı %{nf((total.coverage.mw / total.coverage.totalMw) * 100, 0)}</>}. HES&apos;ler ve
+          tahmini kurulamayan santraller dışarıda.
+        </p>
+      )}
       <ul className="mt-1 space-y-0.5 text-xs text-slate-600">
         {withProd.slice(0, 4).map((p) => (
           <li key={p.projectId} className="flex justify-between gap-2">
@@ -489,7 +496,12 @@ function ScoreCard({ load }: { load: Load<PtfScorecard> }) {
       {last7 && (
         <p className="mt-2 text-xs text-slate-600">
           Son {last7.days} gün: {nf(last7.mae)} TL/MWh
-          {last7.vsRefPct !== null && <> (basit yönteme göre %{nf(last7.vsRefPct, 0)})</>}
+          {last7.vsRefPct !== null && (
+            <>
+              {" "}
+              (basit yönteme göre %{nf(Math.abs(last7.vsRefPct), 0)} {last7.vsRefPct >= 0 ? "daha yakın" : "daha uzak"})
+            </>
+          )}
           {last7.coveragePct !== null && <>, aralık kapsaması %{nf(last7.coveragePct, 0)} (hedef %80)</>}.
         </p>
       )}

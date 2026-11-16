@@ -110,6 +110,14 @@ export function buildAlerts(input: AlertInput): CockpitAlert[] {
           text: `Yarın en ucuz saat ${hh(p.min.hour)} (${Math.round(p.min.value).toLocaleString("tr-TR")} TL/MWh): sıfır fiyat riski.`,
           href: "/market/teklif",
         });
+      else if (p && p.cheapBandHours?.length)
+        // Ortanca tahmin ucuz saati nadiren gösterir; olası aralığın alt ucu gösterirse olasılık olarak yazılır
+        out.push({
+          id: "near-zero",
+          tone: "info",
+          text: `Yarın ${formatHours(p.cheapBandHours)} saatlerinde fiyatın 300 TL/MWh altına inme olasılığı var (olası aralığın alt ucu). Kanıt zayıf: tahmin ucuz saatleri çoğu zaman önceden göstermiyor.`,
+          href: "/market/teklif",
+        });
     }
   }
   for (const [i, n] of input.liveNotes.slice(0, 3).entries())
