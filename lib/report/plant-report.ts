@@ -152,6 +152,8 @@ export interface ReportContext {
     year: number;
     period: { start: string; end: string };
     membershipAsOf: string;
+    /** Ay ay üyelik uygulandıysa son üyelik ayı; eski dosyalarda yok */
+    membershipMonthlyTo?: string | null;
     aggregators: AggregatorBenchmarkRow[];
   };
 }
@@ -351,6 +353,8 @@ export interface PlantReportData {
   peers: {
     label: string;
     membershipAsOf: string;
+    /** Santraller yalnız üye oldukları aylarla mı sayıldı */
+    membershipMonthly: boolean;
     selfId: number;
     /** Benzer ölçekli toplayıcılar, karışıma göre düzeltilmiş endekse göre (en iyi önce) */
     rows: AggregatorBenchmarkRow[];
@@ -1191,6 +1195,7 @@ export function buildPlantReport(
     peers = {
       label: `${m(bench.period.start)}–${m(bench.period.end)} ${bench.year}`,
       membershipAsOf: bench.membershipAsOf,
+      membershipMonthly: !!bench.membershipMonthlyTo,
       selfId,
       rows,
       minProductionMwh: minProduction,

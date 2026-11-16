@@ -196,7 +196,7 @@ export async function exportAggregatorSummaryPptx(d: AggregatorDetailResult, aut
 
   const notes = [
     `Veri: EPİAŞ Şeffaflık Platformu (ilk KGÜP, UEVM, resmi dengesizlik fiyatları), ${f.periodLabel}. ${aggregatorScopeNote(s0)}`,
-    `Üyelik ${d.membershipAsOf} tarihli listeye göre; gün içi işlemler ve ikili anlaşmalar açık veride yok. Katkı: üretici ayrılırsa kaybedilecek fayda.`,
+    `${d.membershipMonthly ? `Üyelik ay ay (santral yalnız üye olduğu aylarla; güncel liste ${d.membershipAsOf})` : `Üyelik ${d.membershipAsOf} tarihli listeye göre`}; gün içi işlemler ve ikili anlaşmalar açık veride yok. Katkı: üretici ayrılırsa kaybedilecek fayda.`,
     author.name ? `Hazırlayan: ${[author.name, author.title, author.email, author.linkedin].filter(Boolean).join(" · ")}.` : "",
   ].filter(Boolean);
   text(notes.join(" "), { x: M, y: 6.55, w: CW, h: 0.65, fontSize: 9, color: C.sub, valign: "top" });

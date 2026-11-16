@@ -118,6 +118,39 @@ export function aggregatorIntraday(members: BenchmarkPlant[], prices: Map<number
   };
 }
 
+/**
+ * Toplayıcının ay ay üyeliği uygulanmış görünümü. EPİAŞ üyelik listesi bir ana aittir; bugünkü liste yılın her ayına uygulanırsa
+ * sonradan katılan santralin katılmadan önceki ayları (kendi ya da başka bir toplayıcının planı) bu toplayıcıya yazılır,
+ * ayrılanınki hiç yazılmaz (16.11.2026: CK Toplayıcılık Mayıs'tan beri üyesiz, 689 yerine 328 GWh; orta sıralar 3–4 basamak).
+ * `byMonth` ("01".."12" → santral kimlikleri) yoksa ya da bir ay eksikse o ay için bugünkü liste (`current`) kullanılır.
+ * Santralin saatleri yalnız üye olduğu aylarla süzülür; `plantIds` dönemde en az bir ay üye olanlardır.
+ */
+export function membershipView(
+  current: number[],
+  byMonth: Record<string, number[]> | null | undefined,
+  plants: Map<number, BenchmarkPlant>
+): { plantIds: number[]; plants: Map<number, BenchmarkPlant> } {
+  if (!byMonth) return { plantIds: current, plants };
+  const monthOf = (t: number) => new Date(t).toISOString().slice(5, 7);
+  const sets = new Map<string, Set<number>>();
+  const memberSet = (mm: string) => {
+    let s = sets.get(mm);
+    if (!s) sets.set(mm, (s = new Set(byMonth[mm] ?? current)));
+    return s;
+  };
+  const view = new Map<number, BenchmarkPlant>();
+  const ids = new Set<number>();
+  for (const [id, p] of Array.from(plants.entries())) {
+    const hours = new Map(Array.from(p.hours.entries()).filter(([t]) => memberSet(monthOf(t)).has(id)));
+    if (hours.size > 0) ids.add(id);
+    view.set(id, { ...p, hours });
+  }
+  // Verisi olmayan (analiz dışı tür, havuzda yok) üyeler de listede sayılsın: bugünkü listede ya da geçmişte bir ay üye olanlar
+  for (const id of current) ids.add(id);
+  for (const list of Object.values(byMonth)) for (const id of list) if (!plants.has(id)) ids.add(id);
+  return { plantIds: Array.from(ids), plants: view };
+}
+
 export function benchmarkAggregator(
   agg: { id: number; name: string; plantIds: number[] },
   plants: Map<number, BenchmarkPlant>,

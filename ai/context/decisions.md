@@ -80,6 +80,8 @@ yeniden üretin. Ayrıntılı geçmiş `PLAN.md` (süren aşamalar, son kayıtla
 - **Boş gelen biten ay ertesi gün yeniden denenir; eksik ay proje dönemine göre aranır** (16.11): EPİAŞ ayın UEVM'sini
   ay bittikten günler sonra, saat belirsiz yayımlar; yayımdan önce çekilen ay boş gelir ve 7 gün taze sayılırsa boş kalır
   (Akenerji, Eylül 2026). Veri eksiği verinin değil kullanıcının seçtiği dönemin saatlerine göre sayılır.
+- **Toplayıcı kıyasında üyelik ay ay** (16.11): EPİAŞ üyelik listesi bir ana aittir; bugünkü liste bütün yıla uygulanırsa
+  katılmadan önceki ve ayrıldıktan sonraki aylar yanlış toplayıcıya yazılır. Aylık iş yılın ay ay üyeliğini çeker.
 - **Yıllar arası TL kıyasında ay ay sayım da reel birimle** (16.11): yıllık ~%30 enflasyonda nominal kıyas her ayı "geniş"
   gösterir (makas 2025 → 2026: nominal 11/11, reel 8/11). Kur / TÜFE serisi veri dizininden okunur, sunucu aylık yeniler.
 - **EPİAŞ verisinden okunan santrale dosya yüklemek onay ister** (16.11): yükleme sonrası santral yalnız dosyadan okunur

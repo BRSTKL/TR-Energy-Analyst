@@ -5,6 +5,21 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 16.11.2026 · Claude · Hesap doğruluğu denetimi 16: Sektör karnesi (`claude/hesap-dogrulugu`; yüklenmedi)
+
+- **Santral karnesi doğru:** 2026 karnesi (18.10) bugünkü resmî fiyatlarla yeniden fiyatlanınca toplam %0,01, ortancalar aynı;
+  435 dışlanan santralin nedeni sayfada; ortanca eşit ağırlıklı, şirket toplamı üretim ağırlıklı (ikisi de yazıyor).
+- **Bulgu:** toplayıcı kıyası bugünkü üye listesini (17.10) Ocak'tan beri her aya uyguluyordu. 2026 ay ay üyelik EPİAŞ'tan çekildi
+  (`aggregator-membership-history.mts 2026 9`, sunucuda ve Mac'te `.cache/epias/aggregator-membership-2026.json`): Inavitas 59 → 79,
+  Zeros 123 → 154, Perfect 20 → 32; CK Mayıs'tan beri üyesiz (689 yerine 328 GWh). Sıra: Aksa 8 → 12, Erkim 14 → 18, Enerjisa
+  Müşteri 18 → 14, Perfect 24 → 21; Gain / Enko 1–2 yer değiştirir.
+- **Yapılan:** `membershipView` (santral yalnız üye olduğu aylarla; ay eksikse bugünkü liste); kıyas betiği, ayrıntı sayfası
+  (`loadMembershipHistory`), PPTX'ler ve rapor metni (`membershipMonthlyTo` / `membershipMonthly`); aylık işte kıyastan önce
+  "toplayıcı üyeliği (ay ay)" adımı; metodoloji. Mac'te kıyas yeniden üretildi, sunucu ölçümüyle birebir.
+- **Yükledikten sonra:** sunucuda `scripts/aggregator-benchmark.mts 2026` (üyelik dosyası sunucuda hazır).
+- **Açık:** Şirketler (şirket netleşmesi), sector-backtest ve GİP katılımı da bugünkü listeyi kullanıyor; sırası gelince.
+- **Kontrol:** 1.099 test, tsc, lint, `check:reports` 0 hata, `--only sector` 4/4.
+
 ## 16.11.2026 · Claude · Hesap doğruluğu denetimi 14–15: Günlük pano ve Piyasa (`claude/hesap-dogrulugu`; yüklenmedi)
 
 - **Günlük pano:** hata yok. 15.11: kıyas bandı (8 hafta sonu, %−10,37), net yük ve akşam rampası (12,9 GW, iki tanım 12,5–13,3)

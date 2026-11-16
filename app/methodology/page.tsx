@@ -655,7 +655,8 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
           <Section id="toplayici-kiyas" n={next()} title="Toplayıcılar arası kıyas">
             <p>
               EPİAŞ&apos;taki her toplayıcının santral listesindeki lisanslı rüzgâr, güneş ve hidro santralleri için aynı yöntem: saatlik sapma (UEVM − ilk KGÜP),
-              resmi dengesizlik fiyatı. Sahipler tek başına (aynı sahibin santralleri kendi dengesinde netleşir) ile toplayıcı
+              resmi dengesizlik fiyatı. Üyelik ay ay sayılır: santral yalnız toplayıcıda olduğu aylarla girer (EPİAŞ&apos;ın aylık
+              santral listesi; katılmadan önceki ya da ayrıldıktan sonraki ayları başka bir planlayıcıya aittir). Sahipler tek başına (aynı sahibin santralleri kendi dengesinde netleşir) ile toplayıcı
               portföyünde tek denge karşılaştırılır:
             </p>
             <F>

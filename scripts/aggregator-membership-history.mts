@@ -5,7 +5,7 @@
  *
  * EPİAŞ'ın organizasyon santral listesi sorgulanan dönemin başındaki durumu verir; bu yüzden her ay ayrı sorgulanır.
  * Çıktı: .cache/epias/aggregator-membership-<yıl>.json → { year, months, aggregators: [{ id, name, byMonth: { "01": [ids] } }] }.
- * VPN gerekir.
+ * Toplayıcı kıyası (scripts/aggregator-benchmark.mts) santrali yalnız üye olduğu aylarla sayar; aylık işte kıyastan önce çalışır.
  */
 import fs from "node:fs";
 import path from "node:path";

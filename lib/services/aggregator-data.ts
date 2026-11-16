@@ -12,7 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { readRange } from "@/lib/pool/pool-codec";
 import { readPoolYear } from "@/lib/pool/pool-store";
 import { loadOwnerEntries } from "@/lib/services/epias-plants";
-import type { AggregatorBenchmarkRow, BenchmarkHourPrice, BenchmarkPlant } from "@/lib/analysis/aggregator-benchmark";
+import { membershipView, type AggregatorBenchmarkRow, type BenchmarkHourPrice, type BenchmarkPlant } from "@/lib/analysis/aggregator-benchmark";
 import { aggregatorDetail, type AggregatorDetail } from "@/lib/analysis/aggregator-detail";
 
 const CACHE = path.join(process.cwd(), ".cache", "epias");
@@ -81,6 +81,8 @@ export interface AggregatorDetailResult extends AggregatorDetail {
   name: string;
   period: { start: string; end: string };
   membershipAsOf: string;
+  /** Ay ay üyelik uygulandı mı (santral yalnız üye olduğu aylarla) */
+  membershipMonthly: boolean;
   sectorMedians: Record<string, number>;
   /** Kıyas dosyasındaki bütün toplayıcılar (benzer ölçekli grup için) */
   benchmarkRows: AggregatorBenchmarkRow[];
@@ -90,6 +92,18 @@ export class AggregatorDataError extends Error {
   constructor(message: string, public status: number) {
     super(message);
   }
+}
+
+/**
+ * Yılın ay ay toplayıcı üyeliği (scripts/aggregator-membership-history.mts → aggregator-membership-<yıl>.json); yoksa null.
+ * Toplayıcı kimliği → { "01": [santral], … }
+ */
+export function loadMembershipHistory(year: number): { months: string[]; byAggregator: Map<number, Record<string, number[]>> } | null {
+  const h = readJson<{ months: string[]; aggregators: Array<{ id: number; byMonth: Record<string, number[]> }> }>(
+    path.join(CACHE, `aggregator-membership-${year}.json`)
+  );
+  if (!h?.aggregators?.length) return null;
+  return { months: h.months, byAggregator: new Map(h.aggregators.map((a) => [a.id, a.byMonth])) };
 }
 
 const detailMemo = new Map<string, { at: number; value: AggregatorDetailResult }>();
@@ -113,15 +127,21 @@ export async function loadAggregatorDetail(year: number, id: number): Promise<Ag
   const agg = membership?.aggregators.find((a) => a.id === id);
   if (!agg) throw new AggregatorDataError("Toplayıcı bulunamadı.", 404);
 
-  const [prices, plants] = await Promise.all([
+  // Kıyas betiğiyle aynı kural: ay ay üyelik (varsa); santral yalnız üye olduğu aylarla
+  const byMonth = loadMembershipHistory(year)?.byAggregator.get(id) ?? null;
+  const allIds = Array.from(new Set([...agg.plantIds, ...Object.values(byMonth ?? {}).flat()]));
+  const [prices, loaded] = await Promise.all([
     loadBenchmarkPrices(bench.period.start, bench.period.end),
-    loadBenchmarkPlants(agg.plantIds, year, bench.period.start, bench.period.end),
+    loadBenchmarkPlants(allIds, year, bench.period.start, bench.period.end),
   ]);
-  const detail = aggregatorDetail(agg, plants, prices, bench.sectorMedians);
+  const view = membershipView(agg.plantIds, byMonth, loaded);
+  const plants = view.plants;
+  const members = { ...agg, plantIds: view.plantIds };
+  const detail = aggregatorDetail(members, plants, prices, bench.sectorMedians);
   // Kapsam dışı türler (biyokütle, jeotermal…) kıyas betiğiyle aynı kuralla: özet ve sayfa "analizde / listedeki
   // rüzgâr, güneş, hidro" sayısını ve dışarıda kalanları doğru yazsın (önce alan boştu, liste sayısı tamamı görünüyordu)
-  const other = otherTechIds(agg.plantIds.filter((pid) => !plants.has(pid))).size;
-  detail.summary = { ...detail.summary, otherTechPlants: other, missingPlants: agg.plantIds.length - detail.summary.coveredPlants - other };
+  const other = otherTechIds(members.plantIds.filter((pid) => !plants.has(pid))).size;
+  detail.summary = { ...detail.summary, otherTechPlants: other, missingPlants: members.plantIds.length - detail.summary.coveredPlants - other };
   const value: AggregatorDetailResult = {
     ...detail,
     year,
@@ -129,6 +149,7 @@ export async function loadAggregatorDetail(year: number, id: number): Promise<Ag
     name: agg.name,
     period: bench.period,
     membershipAsOf: bench.membershipAsOf,
+    membershipMonthly: !!byMonth,
     sectorMedians: bench.sectorMedians,
     benchmarkRows: bench.aggregators,
   };

@@ -24,6 +24,8 @@ interface BenchmarkResponse {
   year: number;
   period: { start: string; end: string };
   membershipAsOf: string;
+  /** Ay ay üyelik uygulandıysa son üyelik ayı ("09") */
+  membershipMonthlyTo?: string | null;
   sectorMedians?: Record<string, number>;
   aggregators: AggregatorBenchmarkRow[];
 }
@@ -261,7 +263,9 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Toplayıcılar arası kıyas · {label}</CardTitle>
           <CardDescription>
-            EPİAŞ&apos;ın {data.membershipAsOf} tarihli toplayıcı listelerindeki lisanslı santraller, aynı yöntemle: saatlik sapma, resmi dengesizlik
+            {data.membershipMonthlyTo
+              ? `EPİAŞ'ın ay ay toplayıcı üyelik listelerine göre lisanslı santraller (her santral yalnız üye olduğu aylarla; güncel liste ${data.membershipAsOf}), aynı yöntemle:`
+              : `EPİAŞ'ın ${data.membershipAsOf} tarihli toplayıcı listelerindeki lisanslı santraller (bütün dönem bu listeyle), aynı yöntemle:`} saatlik sapma, resmi dengesizlik
             fiyatı, gün içi işlemler öncesi, KÜPST hariç. <b>Endeks</b> teknoloji karışımından arındırılmış ölçüdür: portföyün netleşmiş maliyeti /
             aynı karışımdaki sektör ortalaması santrallerin tek başına maliyeti (1&apos;in altı daha iyi).{" "}
             <MethodLink section="toplayici-kiyas" label="Yöntem" />

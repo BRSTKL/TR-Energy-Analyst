@@ -17,7 +17,7 @@ import type { AggregatorDetail } from "@/lib/analysis/aggregator-detail";
  * portföye katkısı ve santraller (sektör medyanına göre).
  */
 
-type Response = { success: boolean; error?: string; year: number; name: string; period: { start: string; end: string }; membershipAsOf: string } & AggregatorDetail;
+type Response = { success: boolean; error?: string; year: number; name: string; period: { start: string; end: string }; membershipAsOf: string; membershipMonthly?: boolean } & AggregatorDetail;
 
 const MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
 const nf = (v: number, d = 0) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -87,7 +87,7 @@ export default function AggregatorDetailPage() {
         </a>
         <h1 className="mt-1 text-xl font-semibold">{data.name.replace(/\s*\(TOPLAYICI\)\s*$/, "")}</h1>
         <p className="text-sm text-slate-500">
-          {period} · rüzgâr, güneş ve hidro santralleri · üyelik {data.membershipAsOf} tarihli listeye göre <MethodLink section="toplayici-kiyas" />
+          {period} · rüzgâr, güneş ve hidro santralleri · {data.membershipMonthly ? `üyelik ay ay (santral yalnız üye olduğu aylarla; güncel liste ${data.membershipAsOf})` : `üyelik ${data.membershipAsOf} tarihli listeye göre`} <MethodLink section="toplayici-kiyas" />
         </p>
       </div>
 

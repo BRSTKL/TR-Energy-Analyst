@@ -3,7 +3,8 @@
  *
  *   npx tsx --tsconfig tsconfig.json scripts/aggregator-benchmark.mts [yıl=2026] [bitiş=karnenin dönem sonu]
  *
- * Girdi: toplayıcı üyelik listesi (.cache/epias/aggregator-membership.json), veri havuzu (data/pool; ilk KGÜP ve UEVM),
+ * Girdi: toplayıcı üyelik listesi (.cache/epias/aggregator-membership.json; varsa ay ay üyelik aggregator-membership-<yıl>.json:
+ * santral yalnız üye olduğu aylarla sayılır, lib/analysis/aggregator-benchmark.ts membershipView), veri havuzu (data/pool; ilk KGÜP ve UEVM),
  * santral sahibi ve türü (sektör karnesi santral dosyaları), EPİAŞ resmi dengesizlik fiyatları (MarketData). EPİAŞ'a
  * gidilmez.
  */
@@ -11,8 +12,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { prisma } from "@/lib/prisma";
-import { benchmarkAggregator } from "@/lib/analysis/aggregator-benchmark";
-import { loadBenchmarkPlants, loadBenchmarkPrices, otherTechIds } from "@/lib/services/aggregator-data";
+import { benchmarkAggregator, membershipView } from "@/lib/analysis/aggregator-benchmark";
+import { loadBenchmarkPlants, loadBenchmarkPrices, loadMembershipHistory, otherTechIds } from "@/lib/services/aggregator-data";
 import { karnePeriodEnd } from "@/lib/sector/period";
 
 const year = Number(process.argv[2] ?? 2026);
@@ -27,8 +28,16 @@ const membership = JSON.parse(fs.readFileSync(path.join(CACHE, "aggregator-membe
 };
 
 const prices = await loadBenchmarkPrices(start, end);
-const ids = Array.from(new Set(membership.aggregators.flatMap((a) => a.plantIds)));
-const plants = await loadBenchmarkPlants(ids, year, start, end);
+const history = loadMembershipHistory(year);
+const endMonth = end.slice(5, 7);
+if (history && !history.months.includes(endMonth))
+  console.log(`Ay ay üyelik ${history.months.at(-1)}. aya kadar; sonraki aylar için bugünkü liste (${membership.asOf}) kullanılır.`);
+if (!history) console.log(`Ay ay üyelik dosyası yok (aggregator-membership-${year}.json): bütün dönem bugünkü listeyle (${membership.asOf}).`);
+const ids = Array.from(
+  new Set([...membership.aggregators.flatMap((a) => a.plantIds), ...Array.from(history?.byAggregator.values() ?? []).flatMap((m) => Object.values(m).flat())])
+);
+const loadedPlants = await loadBenchmarkPlants(ids, year, start, end);
+const plants = loadedPlants;
 // Dışarıda kalanların sebebi: analiz edilmeyen tür ya da veri yok
 const otherTech = otherTechIds(ids.filter((id) => !plants.has(id)));
 
@@ -39,14 +48,21 @@ for (const [t, v] of Object.entries(sector.byType ?? {})) medians[t] = (v as any
 
 const rows = membership.aggregators
   .map((a) => {
-    const r = benchmarkAggregator(a, plants, prices, medians);
-    const other = a.plantIds.filter((id) => otherTech.has(id)).length;
-    return { ...r, otherTechPlants: other, missingPlants: a.plantIds.length - r.coveredPlants - other };
+    const view = membershipView(a.plantIds, history?.byAggregator.get(a.id) ?? null, loadedPlants);
+    const r = benchmarkAggregator({ ...a, plantIds: view.plantIds }, view.plants, prices, medians);
+    const other = view.plantIds.filter((id) => otherTech.has(id)).length;
+    return { ...r, otherTechPlants: other, missingPlants: view.plantIds.length - r.coveredPlants - other };
   })
   .filter((r) => r.coveredPlants > 0)
   .sort((a, b) => b.productionMwh - a.productionMwh);
 
-const out = { year, period: { start, end }, membershipAsOf: membership.asOf, sectorMedians: medians, generatedAt: new Date().toISOString(), aggregators: rows };
+const out = {
+  year,
+  period: { start, end },
+  membershipAsOf: membership.asOf,
+  /** Ay ay üyelik uygulandıysa son üyelik ayı ("09"); uygulanmadıysa null */
+  membershipMonthlyTo: history?.months.at(-1) ?? null,
+  sectorMedians: medians, generatedAt: new Date().toISOString(), aggregators: rows };
 fs.writeFileSync(path.join(CACHE, `aggregator-benchmark-${year}.json`), JSON.stringify(out, null, 1));
 for (const r of rows)
   console.log(

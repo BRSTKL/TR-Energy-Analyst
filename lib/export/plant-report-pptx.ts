@@ -1422,7 +1422,7 @@ export async function exportPlantReportPptx(
         ? `Bu tabloda ${agg.name} EPİAŞ listesindeki ${self.coveredPlants} rüzgâr, güneş ve hidro santraliyle yer alır; raporun diğer slaytları projedeki ${r.plants.length} santralle hesaplandı, rakamlar bu yüzden biraz farklıdır. `
         : "") +
       `Endeks = portföyde netleşmiş dengesizlik / Σ üretim × teknolojinin sektör medyanı (rüzgâr, güneş, hidro; santral tek başına); 1'in altı daha iyi, karışımdan bağımsız. Grup: ${pe.label} üretimi ${pe.maxProductionMwh ? `${formatEnergy(pe.minProductionMwh)}–${formatEnergy(pe.maxProductionMwh)} arası` : `${formatEnergy(pe.minProductionMwh)} üstü`} toplayıcılar (diğer ${pe.othersCount} toplayıcı farklı ölçekte). ` +
-        `EPİAŞ'ın ${pe.membershipAsOf} tarihli toplayıcı listeleri (santraller dönem boyunca portföydeymiş gibi), santral bazında üretimi yayımlanan lisanslı rüzgâr, güneş ve hidro santralleri (Santral sütunu bunları sayar; biyokütle, jeotermal, doğalgaz gibi diğer türler ve lisanssız santraller hariç), resmi dengesizlik fiyatı, ilk KGÜP, KÜPST hariç.`,
+        `${pe.membershipMonthly ? `EPİAŞ'ın ay ay toplayıcı listeleri (santral yalnız üye olduğu aylarla; güncel liste ${pe.membershipAsOf})` : `EPİAŞ'ın ${pe.membershipAsOf} tarihli toplayıcı listeleri (santraller dönem boyunca portföydeymiş gibi)`}, santral bazında üretimi yayımlanan lisanslı rüzgâr, güneş ve hidro santralleri (Santral sütunu bunları sayar; biyokütle, jeotermal, doğalgaz gibi diğer türler ve lisanssız santraller hariç), resmi dengesizlik fiyatı, ilk KGÜP, KÜPST hariç.`,
       { x: M, y: Math.max(6.35, yBelow + facts.length * 0.36 + 0.02), w: CW, h: 0.6, fontSize: 9, color: C.sub, valign: "top" }
     );
   }
