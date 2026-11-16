@@ -5,7 +5,7 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
-## 16.11.2026 · Claude · Arayüz sadeleştirme (`claude/arayuz-yenileme`; yüklenmedi, push yok)
+## 16.11.2026 · Claude · Arayüz sadeleştirme (`claude/arayuz-yenileme`; main'e push ve sunucuya yüklendi, `df3df7b → ee11ac0`)
 
 - **Bugün:** tek düzen, yalnız o günle ilgili (adımlar → uyarılar → yarın için → piyasa ve dünkü tahmin). Görünüm seçici
   (Üretici / Piyasa / Toplayıcı / Yönetim) ve Portföyüm tablosu kalktı; `lib/ui/today-view.ts` ve testi silindi. Adımlar
