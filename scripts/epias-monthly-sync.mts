@@ -357,6 +357,7 @@ interface Step {
 }
 const steps: Step[] = [
   { name: "piyasa", args: ["scripts/market-sync.mts", monthStart] },
+  { name: "kur ve TÜFE (reel / USD fiyat)", args: ["scripts/macro-sync.mts"] },
   { name: "sistem geneli (sistem yönü)", args: ["scripts/system-sync.mts"] },
   { name: "arıza bildirimleri", args: ["scripts/umm-sync.mts", month] },
   { name: "YEKDEM listeleri", args: ["scripts/yekdem-exit-sync.mts"] },

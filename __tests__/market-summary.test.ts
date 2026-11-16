@@ -68,9 +68,14 @@ describe("Piyasa özeti", () => {
     // Birim görünümü verilmese de PTF'ye oran yazılır (birimden bağımsız): 167/2000 → 200/2000
     expect(lines[1]).toBe("PTF'ye oranla %8 → %10.");
     expect(lines[2]).toBe("Aynı tahmin hatası daha pahalıya uzlaşır.");
-    expect(lines[3]).toBe("Makas, karşılaştırılan 3 aydan 2 ayda geçen yılın aynı ayından geniş.");
+    expect(lines[3]).toBe("Makas, karşılaştırılan 3 aydan 2 ayda geçen yılın aynı ayından geniş (nominal TL).");
     const all = compareMarkets(prev, summarizeMarket([...month(2026, "01", 400), ...month(2026, "02", 400), ...month(2026, "03", 400)])!, "2025", "2026");
-    expect(all).toContain("Makas, karşılaştırılan 3 ayın hepsinde geçen yılın aynı ayından geniş.");
+    expect(all).toContain("Makas, karşılaştırılan 3 ayın hepsinde geçen yılın aynı ayından geniş (nominal TL).");
+    // Reel birimde (önceki yıl %50 yukarı taşınınca) Şubat ve Mart geniş değil: 2025'in 300'ü 450 olur
+    const prevReal = summarizeMarket([...month(2025, "01", 100), ...month(2025, "02", 300), ...month(2025, "03", 100)], () => 1.5)!;
+    const curAll = summarizeMarket([...month(2026, "01", 400), ...month(2026, "02", 400), ...month(2026, "03", 400)])!;
+    const withReal = compareMarkets(prev, curAll, "2025", "2026", { real: { prev: prevReal, cur: curAll, label: "Mart 2026 TL'si" } });
+    expect(withReal).toContain("Enflasyon düşülünce makas, karşılaştırılan 3 aydan 2 ayda geçen yılın aynı ayından geniş (nominal TL'de hepsinde).");
   });
 
   it("sıfır fiyatlı saat artışı 'kat' olarak yalnızca önceki dönemde sıfır saat varken yazılır", () => {

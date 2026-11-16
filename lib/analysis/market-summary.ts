@@ -267,12 +267,25 @@ export function compareMarkets(prev: MarketSummary, cur: MarketSummary, prevLabe
           ? "Aynı tahmin hatası daha ucuza uzlaşır."
           : "Enflasyon düşülünce makasın yükü belirgin değişmedi; nominal artışın çoğu genel fiyat artışı."
     );
+    // Ay ay tutarlılık: reel birim varsa enflasyon düşülmüş aylık makasla (yıllık ~%30 enflasyonda nominal kıyas her ayı "geniş"
+    // gösterir; 2025 → 2026 Ocak–Kasım nominal 11/11, reel 8/11). Yön, reel değişimin yönü; nominal sayı yanında verilir.
     const pairs = pairMonths(prev, cur).filter((p) => p.prev);
     if (pairs.length >= 2) {
-      const same = pairs.filter((p) => (s > 0 ? p.cur.spreadMean > p.prev!.spreadMean : p.cur.spreadMean < p.prev!.spreadMean)).length;
-      out.push(
-        `Makas, karşılaştırılan ${pairs.length} ${same === pairs.length ? "ayın hepsinde" : `aydan ${same} ayda`} geçen yılın aynı ayından ${s > 0 ? "geniş" : "dar"}.`
-      );
+      const wider = (realOrNominal !== 0 ? realOrNominal : s) > 0;
+      const countIn = (list: MonthPair[]) =>
+        list.filter((p) => (wider ? p.cur.spreadMean > p.prev!.spreadMean : p.cur.spreadMean < p.prev!.spreadMean)).length;
+      const ofN = (n: number, k: number) => (k === n ? "ayın hepsinde" : `aydan ${k} ayda`);
+      const realPairs = units.real ? pairMonths(units.real.prev, units.real.cur).filter((p) => p.prev) : null;
+      if (realPairs && realPairs.length === pairs.length) {
+        const r = countIn(realPairs);
+        const n = countIn(pairs);
+        out.push(
+          `Enflasyon düşülünce makas, karşılaştırılan ${pairs.length} ${ofN(pairs.length, r)} geçen yılın aynı ayından ${wider ? "geniş" : "dar"}` +
+            (n !== r ? ` (nominal TL'de ${n === pairs.length ? "hepsinde" : `${n} ayda`}).` : ".")
+        );
+      } else {
+        out.push(`Makas, karşılaştırılan ${pairs.length} ${ofN(pairs.length, countIn(pairs))} geçen yılın aynı ayından ${wider ? "geniş" : "dar"} (nominal TL).`);
+      }
     }
   }
   const p = change(prev.ptf.mean, cur.ptf.mean);

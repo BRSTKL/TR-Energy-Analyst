@@ -270,7 +270,7 @@
 ## lib/macro (2)
 
 - `lib/macro/price-units.ts` — Fiyat birimleri: nominal TL, reel TL ve USD: TL rakamlar yıllar arasında doğrudan kıyaslanamaz: 2024–2026'da birikmiş enflasyon ~%90'dır.
-- `lib/macro/series.ts` — Depodaki kur ve TÜFE serisi (lib/macro/macro-series.json; yenileme: scripts/macro-sync.mts).
+- `lib/macro/series.ts` — Kur ve TÜFE serisi.
 
 ## lib/notify.ts (1)
 
@@ -600,7 +600,7 @@
 - `scripts/kgup-recent-sync.mts` — Tahmin santrallerinin şirket planını (ilk ve son KGÜP) ve UEVM'sini son günler için havuza yazar (ensurePlantCoverage).
 - `scripts/launch-app.sh` — başlatıcısı (masaüstü ikonundan çağrılır).
 - `scripts/location-autofill.mts` — Proje güneş santrallerinin konumunu OpenStreetMap adaylarıyla tamamlar (PLAN 20.2; karar: uydu korelasyonu ≥ 0,85 olan aday `OSM` kaynağıyla otomatik kabul, USER'a kullanıcı onayıyla çıkar).
-- `scripts/macro-sync.mts` — Kur ve TÜFE serisini resmî kaynaklardan yeniler → lib/macro/macro-series.json (depoya girer; okuma ağ gerektirmez).
+- `scripts/macro-sync.mts` — Kur ve TÜFE serisini resmî kaynaklardan yeniler → <havuz>/macro/macro-series.json (uygulama çalışırken okur; lib/macro/series.ts).
 - `scripts/market-sync.mts` — Piyasa verisi (PTF, SMF, sistem yönü, GİP) ve resmî dengesizlik fiyatlarını EPİAŞ'tan MarketData'ya yazar: uygulamadaki "EPİAŞ'tan güncelle" penceresinin (`/api/epias/sync`, `syncEpiasToDatabase`) komut satırı karşılığı.
 - `scripts/outage-validation.mts` — Olası arıza bloklarının resmi arıza / bakım bildirimleriyle doğrulanması (Aşama 12.4).
 - `scripts/plant-location.mts` — Santral konumu (PLAN 15.1).

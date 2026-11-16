@@ -1,17 +1,19 @@
 /**
- * Kur ve TÜFE serisini resmî kaynaklardan yeniler → lib/macro/macro-series.json (depoya girer; okuma ağ gerektirmez).
+ * Kur ve TÜFE serisini resmî kaynaklardan yeniler → <havuz>/macro/macro-series.json (uygulama çalışırken okur; lib/macro/series.ts).
+ * `--repo`: depodaki tohum dosyayı (lib/macro/macro-series.json) da yazar. Yeni seri eskisinden kısaysa (kaynak bozuk) yazılmaz.
  *
  * - TL/USD: EPİAŞ PTF'nin TL ve USD değerlerinin oranı, aylık medyan (syncUsdTry; .cache/epias/usdtry-<yıl>.json).
  *   Önbellekte olmayan ya da devam eden ay EPİAŞ'tan çekilir (VPN gerekir).
  * - TÜFE: TCMB "Tüketici Fiyatları" tablosundaki aylık % değişimlerden zincirlenmiş endeks (2023-01 = 100).
  *   TCMB tablosu TÜİK verisini yayımlar. Endeksin tabanı önemsizdir; yalnız oranlar (deflatör) kullanılır.
  *
- * Kullanım: npx tsx --env-file=.env scripts/macro-sync.mts [--from 2024] [--no-epias]
+ * Kullanım: npx tsx --env-file=.env scripts/macro-sync.mts [--from 2024] [--no-epias] [--repo]
  */
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { loadUsdTry, syncUsdTry } from "@/lib/services/ancillary-prices";
-import type { MacroSeries } from "@/lib/macro/price-units";
+import { latestMonth, type MacroSeries } from "@/lib/macro/price-units";
+import { macroSeries, macroSeriesFile } from "@/lib/macro/series";
 
 const TCMB_CPI_URL = "https://www.tcmb.gov.tr/wps/wcm/connect/TR/TCMB+TR/Main+Menu/Istatistikler/Enflasyon+Verileri/Tuketici+Fiyatlari";
 const CPI_BASE = "2023-01";
@@ -73,7 +75,15 @@ const series: MacroSeries = {
     cpi: `TCMB Tüketici Fiyatları tablosu (TÜİK TÜFE aylık % değişim), zincirlenmiş endeks ${CPI_BASE} = 100 · ${TCMB_CPI_URL}`,
   },
 };
-const file = path.join(process.cwd(), "lib", "macro", "macro-series.json");
-await fs.writeFile(file, JSON.stringify(series, null, 2) + "\n");
+const current = macroSeries();
 const months = (r: Record<string, number>) => `${Object.keys(r).sort()[0]} … ${Object.keys(r).sort().at(-1)} (${Object.keys(r).length} ay)`;
-console.log(`TL/USD ${months(series.usdTry)} · TÜFE ${months(series.cpi)} → ${path.relative(process.cwd(), file)}`);
+if ((latestMonth(series.cpi) ?? "") < (latestMonth(current.cpi) ?? "") || (latestMonth(series.usdTry) ?? "") < (latestMonth(current.usdTry) ?? "")) {
+  console.log(`Kur / TÜFE: yeni seri eldekinden kısa (TÜFE ${months(series.cpi)}, TL/USD ${months(series.usdTry)}); yazılmadı.`);
+  process.exit(1);
+}
+const files = [macroSeriesFile(), ...(args.includes("--repo") ? [path.join(process.cwd(), "lib", "macro", "macro-series.json")] : [])];
+for (const file of files) {
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, JSON.stringify(series, null, 2) + "\n");
+}
+console.log(`Kur / TÜFE: TL/USD ${months(series.usdTry)} · TÜFE ${months(series.cpi)} → ${files.map((f) => path.relative(process.cwd(), f)).join(", ")}`);

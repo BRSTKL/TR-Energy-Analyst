@@ -5,6 +5,21 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 16.11.2026 · Claude · Hesap doğruluğu denetimi 14–15: Günlük pano ve Piyasa (`claude/hesap-dogrulugu`; yüklenmedi)
+
+- **Günlük pano:** hata yok. 15.11: kıyas bandı (8 hafta sonu, %−10,37), net yük ve akşam rampası (12,9 GW, iki tanım 12,5–13,3)
+  sunucunun ham verisinden bağımsız hesapla birebir. 2027 bayram tarihleri Diyanet'le karşılaştırılmadı.
+- **Piyasa, doğru:** yön tahmini sınaması (33 ay; D-1 isabet %63 vs rakip %61, H-2 Brier 0,174 vs 0,186) sayfada dürüst; capture
+  rate bütün saatlerin ortalamasına göre; GİP ve capture Eylül'e kadar (Ekim UEVM yok).
+- **Bulgular ve yapılan:**
+  - "Makas 11 ayın hepsinde geniş" nominaldi; reel 8/11 (Ocak, Nisan, Mayıs dar), USD 10/11. `compareMarkets` ay ay sayımı reel
+    birimle, nominal sayı parantezde.
+  - Kur / TÜFE serisi koda gömülü ve 14.10'dan beri Eylül'de kalmıştı. `lib/macro/series.ts` artık veri dizinindeki
+    `<havuz>/macro/macro-series.json`'u okur (depodaki tohumdan yeniyse); `macro-sync` oraya yazar (`--repo` tohumu da), kısa seriyi
+    yazmaz; aylık işe "kur ve TÜFE" adımı. Mac'te çalıştırıldı: Ekim TÜFE +%2,58, TL/USD 49,33; reel taban Ekim 2026.
+- **Yükledikten sonra:** sunucuda `scripts/macro-sync.mts` bir kez (TCMB sunucudan 200).
+- **Kontrol:** 1.097 test, tsc, lint, `check:reports` 0 hata, `--only Piyasa,Metodoloji` 4/4.
+
 ## 16.11.2026 · Claude · Hesap doğruluğu denetimi 13: Teklif öncesi (`claude/hesap-dogrulugu`; yüklenmedi)
 
 - **Doğru:** motorun doğruluk iddiası (60 günlük tekrar ±386 TL/MWh) canlı karneyle (393) tutarlı; risk eşikleri Bugün'le aynı;

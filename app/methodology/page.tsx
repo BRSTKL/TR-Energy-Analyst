@@ -540,7 +540,7 @@ W = Σ|net sapma| / Σ üretim                      → tahmin hatası
             />
             <p>
               Zincirlenmiş TÜFE endeksi TCMB&apos;nin yayımladığı yıllık değişimlerle en fazla 0,02 puan farkla örtüşür (testle sabit). Seri{" "}
-              <code>lib/macro/macro-series.json</code> dosyasındadır, <code>scripts/macro-sync.mts</code> ile yenilenir; okuma ağ gerektirmez.
+              veri dizinindedir (<code>macro/macro-series.json</code>; sunucuda aylık işle <code>scripts/macro-sync.mts</code> yeniler, depodaki <code>lib/macro/macro-series.json</code> yedektir); okuma ağ gerektirmez.
               Sıfır ve düşük fiyat eşikleri (1 ve 1.000 TL/MWh) her birimde nominal TL&apos;dir. TÜFE&apos;si henüz açıklanmamış ay en yakın aya
               bağlanır ve sayfada yazılır. Reel ve USD sonuçları farklı olabilir: TL dolara karşı enflasyondan az değer kaybettiğinde (reel
               değerlenme) dolar bazındaki artış reel TL&apos;deki artıştan büyük görünür. <Tag kind="exact" />
