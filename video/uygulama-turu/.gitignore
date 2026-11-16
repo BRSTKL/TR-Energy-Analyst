@@ -1,0 +1,7 @@
+# Ekran görüntüleri (gerçek veri, anonim olsa da) ve üretilen dosyalar repoya girmez
+img/
+out/
+events.json
+*.mp4
+*.srt
+poster.jpg

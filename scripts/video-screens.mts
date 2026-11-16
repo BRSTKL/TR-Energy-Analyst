@@ -68,21 +68,32 @@ function add(name: unknown, kind: Kind, fixed?: string) {
   alias.set(n, kind === "plant" ? `Santral S${String(i + 1).padStart(3, "0")}` : kind === "company" ? `Şirket ${letters(i)}` : kind === "aggregator" ? `Toplayıcı ${i + 1}` : `Örnek proje ${i + 1}`);
 }
 const TECH = new Set(["RES", "GES", "HES"]);
-// Bir API yanıtını gezer, ad taşıyan alanları toplar. "name" yalnız santral ya da toplayıcı satırında ad sayılır
+// Tür kodu, durum gibi kısa büyük harfli değerler ad sayılmaz ("RES" → "Santral S001" olmasın)
+const isCode = (x: unknown) => typeof x === "string" && /^[A-Z0-9_]{1,6}$/.test(x.trim());
+const addName = (x: unknown, kind: Kind) => { if (!isCode(x)) add(x, kind); };
+const addList = (x: unknown, kind: Kind, depth: number) => {
+  if (Array.isArray(x)) x.forEach((y) => (typeof y === "string" ? addName(y, kind) : harvest(y, depth + 1)));
+};
+// Bir API yanıtını gezer, ad taşıyan alanları toplar. "name" yalnız santral, şirket ya da toplayıcı satırında ad sayılır
 // (strateji, sekme gibi başka "name" alanları maskelenmez).
 function harvest(v: unknown, depth = 0): void {
   if (depth > 12 || v === null || typeof v !== "object") return;
   if (Array.isArray(v)) return v.forEach((x) => harvest(x, depth + 1));
   const o = v as Record<string, unknown>;
-  const isPlant = "epiasPlantId" in o || (typeof o.type === "string" && TECH.has(o.type) && "name" in o);
+  const isCompany = "slug" in o && "name" in o;   // şirket listesi ve profili
   const isAggregator = "listedPlants" in o || "portfolioCostTl" in o;
-  if (isPlant) add(o.name, "plant");
-  else if (isAggregator) add(o.name, "aggregator");
-  for (const k of ["plantName", "uevcbName"]) add(o[k], "plant");
-  for (const k of ["organizationName", "owner", "ownerName", "company", "orgName"]) add(o[k], "company");
-  add(o.aggregatorName, "aggregator");
-  for (const k of ["companies", "owners"]) if (Array.isArray(o[k])) (o[k] as unknown[]).forEach((x) => (typeof x === "string" ? add(x, "company") : harvest(x, depth + 1)));
-  if (Array.isArray(o.plantNames)) (o.plantNames as unknown[]).forEach((x) => add(x, "plant"));
+  // santral satırı: EPİAŞ kimliği, ya da tür kodu + sahip / kimlik / güç (santral rehberi, kart, şirket profili)
+  const isPlant = !isCompany && ("epiasPlantId" in o || (typeof o.type === "string" && "name" in o &&
+    (TECH.has(o.type) || "owner" in o || "organizationId" in o || "uevcbId" in o)));
+  if (isCompany) addName(o.name, "company");
+  else if (isAggregator) addName(o.name, "aggregator");
+  else if (isPlant) addName(o.name, "plant");
+  for (const k of ["plantName", "uevcbName", "powerPlantName", "facilityName", "plant"]) if (typeof o[k] === "string") addName(o[k], "plant");
+  for (const k of ["organizationName", "owner", "ownerName", "company", "orgName", "org"]) if (typeof o[k] === "string") addName(o[k], "company");
+  for (const k of ["aggregatorName", "aggregator"]) if (typeof o[k] === "string") addName(o[k], "aggregator");
+  for (const k of ["companies", "owners"]) addList(o[k], "company", depth);
+  for (const k of ["plantNames", "excludedYeka"]) addList(o[k], "plant", depth);
+  addList(o.aggregators, "aggregator", depth);
   for (const x of Object.values(o)) if (x && typeof x === "object") harvest(x, depth + 1);
 }
 
@@ -109,39 +120,59 @@ if (detail.project.description) add(detail.project.description, "project", "Örn
 add(detail.project.aggregatorName, "aggregator", "Örnek Toplayıcı");
 for (const p of projects) add(p.name, "project");
 harvest(await getJson(`/api/projects/${projectId}/results`));
-for (const path of ["/api/sector", "/api/sector/aggregators"]) harvest(await getJson(path));
+for (const path of ["/api/sector", "/api/sector/aggregators", "/api/companies?limit=500", "/api/plants?limit=500"]) harvest(await getJson(path));
 console.log(`${alias.size} ad toplandı (sayfa yüklendikçe artar).`);
 
 // --- Gezilecek sayfalar ---
 // click: diyaloğu açan düğme (yalnız görünen alan alınır); emptyTab: sayfa boş türle açılırsa basılacak sekme
 type Shot = { file: string; url: string; label: string; click?: string; emptyTab?: string };
 const P = `/projects/${projectId}`;
+// Sıra menüyü izler: Günlük iş → Portföyüm → proje sayfaları → Piyasa → Sektör → Metodoloji
 const shots: Shot[] = [
-  { file: "01-ana-sayfa", url: "/", label: "Ana sayfa" },
-  { file: "02-piyasa", url: "/market", label: "Piyasa" },
-  { file: "03-projelerim", url: "/projects", label: "Projelerim" },
-  { file: "04-epias-santral-analizi", url: "/projects/epias", label: "EPİAŞ'tan santral analizi" },
-  { file: "05-sonuc-raporu", url: `${P}/results`, label: "Sonuç Raporu" },
-  { file: "06-powerpoint-diyalogu", url: `${P}/results`, label: "PowerPoint diyaloğu", click: "PowerPoint Raporu (.pptx)" },
-  { file: "07-stratejik-icgoruler", url: `${P}/insights`, label: "Stratejik İçgörüler" },
-  { file: "08-planlama-verimlilik", url: `${P}/planning?tab=efficiency`, label: "Planlama · Verimlilik" },
-  { file: "09-planlama-gip", url: `${P}/planning?tab=arbitrage`, label: "Planlama · GİP Arbitraj" },
-  { file: "10-planlama-butce", url: `${P}/planning?tab=budget`, label: "Planlama · Bütçe" },
-  { file: "11-dsg-senaryolari", url: `${P}/dsg`, label: "DSG Senaryoları" },
-  { file: "12-aday-santraller", url: `${P}/candidates`, label: "Aday Santraller" },
-  { file: "13-geriye-donuk-test", url: `${P}/backtest`, label: "Geriye Dönük Test" },
-  { file: "14-dogrulama-paketi", url: `${P}/validation`, label: "Doğrulama paketi" },
-  { file: "15-kayip-uretim", url: `${P}/losses`, label: "Kayıp üretim" },
-  { file: "16-uretim-tahmini", url: `${P}/forecast`, label: "Üretim tahmini", emptyTab: "Rüzgâr" },
-  { file: "17-santraller", url: `${P}/plants`, label: "Santraller" },
-  { file: "18-uretim-verisi-yukle", url: `${P}/import`, label: "Üretim verisi yükle" },
-  { file: "19-sektor-karnesi", url: "/sector", label: "Sektör karnesi" },
-  { file: "21-karsilastir", url: "/compare", label: "Karşılaştır" },
-  { file: "22-metodoloji", url: "/methodology", label: "Metodoloji" },
+  { file: "01-bugun", url: "/", label: "Bugün" },
+  { file: "02-teklif-oncesi", url: "/market/teklif", label: "Teklif öncesi" },
+  { file: "03-gunluk-pano", url: "/market/gunluk", label: "Günlük pano" },
+  { file: "04-ariza-izleme", url: "/ariza", label: "Arıza izleme" },
+  { file: "05-projelerim", url: "/projects", label: "Projelerim" },
+  { file: "06-epias-santral-ekle", url: "/projects/epias", label: "EPİAŞ'tan santral ekle" },
+  { file: "07-proje-karsilastirma", url: "/compare", label: "Proje karşılaştırma" },
+  { file: "08-donem-ozeti", url: "/ozet", label: "Dönem özeti" },
+  { file: "09-sonuclar", url: `${P}/results`, label: "Sonuçlar" },
+  { file: "10-powerpoint-diyalogu", url: `${P}/results`, label: "PowerPoint diyaloğu", click: "PowerPoint" },
+  { file: "11-stratejik-icgoruler", url: `${P}/insights`, label: "Stratejik İçgörüler" },
+  { file: "12-dsg-senaryolari", url: `${P}/dsg`, label: "DSG Senaryoları" },
+  { file: "13-planlama-verimlilik", url: `${P}/planning?tab=efficiency`, label: "Planlama · Verimlilik" },
+  { file: "14-planlama-gip", url: `${P}/planning?tab=arbitrage`, label: "Planlama · GİP" },
+  { file: "15-planlama-butce", url: `${P}/planning?tab=budget`, label: "Planlama · Bütçe" },
+  { file: "16-aday-santraller", url: `${P}/candidates`, label: "Aday santraller" },
+  { file: "17-geriye-donuk-test", url: `${P}/backtest`, label: "Geriye dönük test" },
+  { file: "18-dogrulama-paketi", url: `${P}/validation`, label: "Doğrulama paketi" },
+  { file: "19-kayip-uretim", url: `${P}/losses`, label: "Kayıp üretim" },
+  { file: "20-uretim-tahmini", url: `${P}/forecast`, label: "Üretim tahmini", emptyTab: "Rüzgâr" },
+  { file: "21-santraller", url: `${P}/plants`, label: "Santraller" },
+  { file: "22-uretim-verisi-yukle", url: `${P}/import`, label: "Üretim verisi yükle" },
+  { file: "23-piyasa-ozeti", url: "/market", label: "Piyasa özeti" },
+  { file: "24-yeni-santral-radari", url: "/yeni-santraller", label: "Yeni santral radarı" },
+  { file: "25-yekdem-cikislari", url: "/yekdem", label: "YEKDEM çıkışları" },
+  { file: "26-sektor-karnesi", url: "/sector", label: "Sektör karnesi" },
+  { file: "28-sirketler", url: "/sirketler", label: "Şirketler" },
+  { file: "30-santral-rehberi", url: "/santraller", label: "Santral rehberi" },
+  { file: "32-metodoloji", url: "/methodology", label: "Metodoloji" },
 ];
 const ag = await getJson<{ rows?: Array<{ id?: number }>; aggregators?: Array<{ id?: number }> }>("/api/sector/aggregators");
 const agId = (ag?.rows ?? ag?.aggregators ?? [])[0]?.id;
-if (agId !== undefined) shots.push({ file: "20-toplayici-ayrintisi", url: `/sector/aggregators/${agId}`, label: "Toplayıcı ayrıntısı" });
+if (agId !== undefined) shots.push({ file: "27-toplayici-ayrintisi", url: `/sector/aggregators/${agId}`, label: "Toplayıcı ayrıntısı" });
+// Santral kartı ve şirket profili: seçilen projenin ilk santrali ve onun sahibi (ikisi de takma adla görünür)
+const firstPlant = detail.project.plants[0]?.name;
+const found = firstPlant ? await getJson<{ items?: Array<{ id: number; name: string; owner: string | null }> }>(`/api/plants?q=${encodeURIComponent(firstPlant)}`) : null;
+const card = found?.items?.find((x) => x.name === firstPlant) ?? found?.items?.[0];
+if (card) {
+  shots.push({ file: "31-santral-karti", url: `/santraller/${card.id}`, label: "Santral kartı" });
+  if (card.owner) {
+    const { companySlug } = await import("@/lib/analysis/company-profile");
+    shots.push({ file: "29-sirket-profili", url: `/sirketler/${encodeURIComponent(companySlug(card.owner))}`, label: "Şirket profili" });
+  }
+}
 shots.sort((a, b) => a.file.localeCompare(b.file));
 
 async function waitLoaded(page: Page): Promise<boolean> {
@@ -249,7 +280,7 @@ for (const s of shots) {
     if (warn.length) problems++;
     console.log(`${ok && !warn.length ? "✓" : "!"} ${s.label.padEnd(30)} ${((Date.now() - t0) / 1000).toFixed(1).padStart(5)} sn  ${s.file}.png${parts ? ` + ${parts} parça` : ""}${ok ? "" : "  (yükleme süresi aşıldı)"}`);
     if (warn.length) console.log(`    ! sayfada maskelenmemiş ad kalmış olabilir: ${warn.length} adet; görüntüyü kontrol edin`);
-    index.push(`${s.file}.png\t${s.label}\t${s.url.replace(projectId, "<proje>")}`);
+    index.push(`${s.file}.png\t${s.label}\t${s.url.replace(projectId, "<proje>").replace(/^\/sirketler\/.+/, "/sirketler/<sirket>")}`);
   } catch (e) {
     problems++;
     console.log(`✗ ${s.label.padEnd(30)} ${e instanceof Error ? e.message.split("\n")[0] : String(e)}`);

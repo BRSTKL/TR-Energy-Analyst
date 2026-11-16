@@ -5,6 +5,20 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 16.11.2026 · Claude · Uygulama turu videosu: kaynak ve rehber repoda (`claude/lucid-keller-16n5p7`; main'e alınmadı)
+
+- **Yapılan:** 27.10 filminin kaynağı (oturumun geçici klasöründeydi, makine yenilenince silinmişti) oturum kaydından
+  yeniden kuruldu ve `video/uygulama-turu/`'ya kondu; `video/README.md` adım adım üretim, tasarım şartnamesi ve yeni
+  oturum için hazır istem. `scripts/video-screens.mts` yeni menüye göre 32 sayfa (Bugün, Teklif öncesi, Günlük pano,
+  Arıza izleme, Dönem özeti, Yeni santral radarı, YEKDEM çıkışları, Şirketler + profil, Santral rehberi + kart eklendi);
+  ad toplama şirket (`slug`), arıza (`plant`, `org`), radar (`aggregators`) alanlarını da kapsıyor. Sahte sunucuyla 32/32,
+  bütün adlar maskelendi.
+- **Engel:** sunucu bulut ortamından erişilemez (Tailscale); Remote Control'deki Mac klasörü bulut oturumuna açılmıyor
+  (`not_available`). Görüntüler Mac'te alınacak.
+- **Yarım:** `film.js` `PAGES` hâlâ 27.10'un 22 sayfası; yeni görüntülerle 32 sayfaya yeniden yazılacak (README Adım 3).
+- **Dal:** uzak `claude/lucid-keller-16n5p7` 4.11'de yeniden kurulan main'le ortak geçmişte değil; push için üzerine
+  yazma ya da yeni dal kararı kullanıcıda.
+
 ## 16.11.2026 · Claude · Arayüz sadeleştirme (`claude/arayuz-yenileme`; main'e push ve sunucuya yüklendi, `df3df7b → ee11ac0`)
 
 - **Bugün:** tek düzen, yalnız o günle ilgili (adımlar → uyarılar → yarın için → piyasa ve dünkü tahmin). Görünüm seçici
