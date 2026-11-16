@@ -24,9 +24,7 @@ import {
 import { BarChart, LineChart, ResponsiveContainer } from "recharts";
 import { ChartBar as Bar, ChartGrid as CartesianGrid, ChartLegend as Legend, ChartLine as Line, ChartTip as Tooltip, ChartXAxis as XAxis, ChartYAxis as YAxis } from "@/components/ui/chart";
 import {
-  Activity,
   AlertCircle,
-  ArrowDownRight,
   ArrowLeft,
   ArrowUpDown,
   Download,
@@ -34,7 +32,6 @@ import {
   Layers,
   RefreshCw,
   Sun,
-  TrendingDown,
   Wind,
   Zap,
 } from "lucide-react";
@@ -100,6 +97,8 @@ interface ApiResponse {
   sapma?: SapmaSummary | null;
 }
 
+type SectionId = "ozet" | "sapma" | "santral" | "netlesme" | "tablo";
+
 /** Trend grafiğinde en fazla bu kadar santral çizgisi (fazlası okunmaz) */
 const TREND_MAX_LINES = 6;
 
@@ -111,6 +110,8 @@ export default function ProjectResultsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedPlantId, setSelectedPlantId] = useState<string>("all");
+  // Sayfa bölümleri: uzun tek akış yerine bir seferde bir konu (ana sayılar her bölümde üstte kalır)
+  const [section, setSection] = useState<SectionId>("ozet");
 
   // Pivot Tablo Sıralama State'i
   const [sortField, setSortField] = useState<string>("yearMonth");
@@ -442,13 +443,13 @@ export default function ProjectResultsPage() {
           <div>
             <div className="flex items-center gap-2">
               <Link
-                href="/"
+                href="/projects"
                 className="flex items-center gap-1 text-xs text-slate-500 transition-colors hover:text-slate-900"
               >
-                <ArrowLeft className="h-3 w-3" /> Bugün
+                <ArrowLeft className="h-3 w-3" /> Projelerim
               </Link>
               <span className="text-slate-300">/</span>
-              <span className="text-xs font-medium text-slate-700">Sonuç Raporu</span>
+              <span className="text-xs font-medium text-slate-700">Sonuçlar</span>
             </div>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
               {data.project.name}
@@ -497,32 +498,28 @@ export default function ProjectResultsPage() {
 
           <div className="flex flex-wrap items-center gap-2">
             <ReportDownloadDialog projectId={projectId} />
-            <a href={`/api/projects/${projectId}/export/excel`} download className="inline-flex items-center">
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5 border-emerald-600 text-emerald-700 hover:bg-emerald-50"
-              >
-                <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
-                Excel İndir (.xlsx)
-              </Button>
-            </a>
-            <Button
-              size="sm"
-              onClick={exportToCsv}
-              variant="outline"
-              className="gap-1.5 text-slate-600 hover:bg-slate-100"
-            >
-              <Download className="h-3.5 w-3.5" />
-              CSV
-            </Button>
-            <Button variant="outline" size="sm" onClick={fetchData} className="gap-1.5">
-              <RefreshCw className="h-3.5 w-3.5" />
-              Yenile
-            </Button>
+            {/* Tek ana eylem rapor; dışa aktarma ve veri işleri iki açılır menüde */}
+            <Menu label="Dışa aktar" align="right" className="rounded-md border border-slate-200 bg-white">
+              <div className="flex min-w-48 flex-col items-stretch gap-2 p-2 [&>*]:w-full [&>*]:justify-start">
+                <Button asChild variant="ghost" size="sm" className="gap-1.5">
+                  <a href={`/api/projects/${projectId}/export/excel`} download>
+                    <FileSpreadsheet className="h-3.5 w-3.5" />
+                    Excel (.xlsx)
+                  </a>
+                </Button>
+                <Button size="sm" onClick={exportToCsv} variant="ghost" className="gap-1.5">
+                  <Download className="h-3.5 w-3.5" />
+                  CSV
+                </Button>
+              </div>
+            </Menu>
             {/* Veri işleri (eşitleme, piyasa verisi, fiyat profili) tek açılır panelde; diğer proje sayfaları üstteki sekmelerde */}
             <Menu label="Veri ve ayarlar" align="right" className="rounded-md border border-slate-200 bg-white">
               <div className="flex min-w-64 flex-col items-stretch gap-2 p-2 [&>*]:w-full [&>*]:justify-start">
+                <Button variant="ghost" size="sm" onClick={fetchData} className="gap-1.5">
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Yenile
+                </Button>
                 <ProjectDataSyncButton projectId={projectId} onDone={fetchData} />
                 <EpiasSyncDialog projectId={projectId} onSyncSuccess={() => fetchData()} />
                 <MarketDataUploadDialog projectId={projectId} onUploadSuccess={() => fetchData()} />
@@ -544,11 +541,10 @@ export default function ProjectResultsPage() {
 
         {/* Aktif Piyasa Profili Rozeti */}
         {data.pricingProfile && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50/70 via-white to-sky-50/70 px-4 py-2.5 text-xs text-slate-700 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs text-slate-600">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
               <span className="font-semibold text-slate-900">
-                Piyasa Profili: {data.pricingProfile.name}
+                Fiyat kuralı: {data.pricingProfile.name}
               </span>
               <span className="hidden sm:inline text-slate-300">|</span>
               {data.pricingProfile.mode !== "CUSTOM" ? (
@@ -581,7 +577,7 @@ export default function ProjectResultsPage() {
                   type="button"
                   className="font-medium text-indigo-600 hover:text-indigo-800 underline underline-offset-2 text-xs"
                 >
-                  Katsayıları Değiştir
+                  Değiştir
                 </button>
               }
             />
@@ -591,68 +587,19 @@ export default function ProjectResultsPage() {
         {/* Santral Filtre Seçici */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <PlantScopePicker
-            label="Görünüm:"
+            label="Kapsam:"
             allId="all"
-            allLabel={`Tüm Portföy (${data.plants.length} Santral)`}
+            allLabel={`Tüm portföy (${data.plants.length} santral)`}
             plants={data.plants.map((p) => ({ id: p.plantId, name: p.plantName, type: p.plantType, detail: `${p.capacityMw.toLocaleString("tr-TR", { maximumFractionDigits: 1 })} MW` }))}
             value={selectedPlantId}
             onChange={setSelectedPlantId}
           />
 
-          <div className="text-xs text-slate-500">
-            Aktif Filtre:{" "}
-            <strong className="text-slate-800">
-              {selectedPlantId === "all"
-                ? "Konsolide Portföy"
-                : data.plants.find((p) => p.plantId === selectedPlantId)?.plantName}
-            </strong>
-          </div>
         </div>
 
         {/* 1. Üst KPI Kartları */}
         {currentKPI && (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {/* Toplam Üretim */}
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-xs font-medium text-slate-500">
-                  Toplam üretim
-                </CardTitle>
-                <Activity className="h-4 w-4 text-slate-400" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-slate-900">
-                  <span title={`${nf(currentKPI.totalActualMwh, 1)} MWh`}>{energy(currentKPI.totalActualMwh)}</span>
-                </div>
-                <p className="mt-1 text-xs text-slate-500">
-                  {currentKPI.name} gerçekleşen üretim hacmi
-                </p>
-              </CardContent>
-            </Card>
-
-            {/* Toplam Gelir */}
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-xs font-medium text-slate-500">
-                  {(data.sapma?.yekdem?.plantNames.length ?? 0) > 0 ? "Piyasa değeri (PTF)" : "Toplam gelir"}
-                </CardTitle>
-                <ArrowDownRight className="h-4 w-4 text-emerald-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-slate-900" title={`${nf(currentKPI.totalRevenue)} ₺`}>
-                  {tlCompact(currentKPI.totalRevenue)}
-                </div>
-                <p className="mt-1 flex items-center gap-1 text-xs font-medium text-emerald-600">
-                  Birim gelir: {nf(currentKPI.unitRevenue, 1)} TL/MWh
-                </p>
-                {(data.sapma?.yekdem?.plantNames.length ?? 0) > 0 && (
-                  <p className="mt-1 text-2xs text-slate-500">
-                    YEKDEM santrallerinin fiili geliri YEKDEM fiyatındandır; burada üretimin PTF değeri gösterilir.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
             {/* Toplam Dengesizlik Maliyeti: sayfanın ana sayısı */}
             <Card className="border-rose-200 shadow-sm ring-1 ring-rose-100">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -701,20 +648,85 @@ export default function ProjectResultsPage() {
                 <CardTitle className="text-xs font-medium text-slate-500">
                   Birim dengesizlik maliyeti
                 </CardTitle>
-                <TrendingDown className="h-4 w-4 text-amber-500" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-slate-900">
                   {nf(currentKPI.unitImbalanceCost, 1)} <span className="text-sm font-normal text-slate-500">TL/MWh</span>
                 </div>
-                <p className="mt-1 text-xs font-medium text-amber-700">
-                  Üretim ağırlıklı ortalama (∑Maliyet / ∑MWh)
+                <p className="mt-1 text-xs text-slate-500">
+                  Üretim ağırlıklı ortalama
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Toplam Gelir */}
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-xs font-medium text-slate-500">
+                  {(data.sapma?.yekdem?.plantNames.length ?? 0) > 0 ? "Piyasa değeri (PTF)" : "Toplam gelir"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-slate-900" title={`${nf(currentKPI.totalRevenue)} ₺`}>
+                  {tlCompact(currentKPI.totalRevenue)}
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  Birim gelir: {nf(currentKPI.unitRevenue, 1)} TL/MWh
+                </p>
+                {(data.sapma?.yekdem?.plantNames.length ?? 0) > 0 && (
+                  <p className="mt-1 text-2xs text-slate-500">
+                    YEKDEM santrallerinin fiili geliri YEKDEM fiyatındandır; burada üretimin PTF değeri gösterilir.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Toplam Üretim */}
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-xs font-medium text-slate-500">
+                  Toplam üretim
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-slate-900">
+                  <span title={`${nf(currentKPI.totalActualMwh, 1)} MWh`}>{energy(currentKPI.totalActualMwh)}</span>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  {currentKPI.name} gerçekleşen üretim hacmi
                 </p>
               </CardContent>
             </Card>
           </div>
         )}
 
+        {/* Bölüm seçici: proje sekmelerinden ayırt edilsin diye hap biçiminde */}
+        <div className="flex flex-wrap items-center gap-1 rounded-lg bg-slate-200/60 p-1" role="group" aria-label="Bölüm">
+          {(
+            [
+              { id: "ozet", label: "Özet", show: true },
+              { id: "sapma", label: "Sapma ve tahmin", show: true },
+              { id: "santral", label: "Santral kıyası", show: !!data.comparison },
+              { id: "netlesme", label: "Netleşme", show: !!data.netting },
+              { id: "tablo", label: "Aylık tablo", show: true },
+            ] as Array<{ id: SectionId; label: string; show: boolean }>
+          )
+            .filter((t) => t.show)
+            .map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                aria-pressed={section === t.id}
+                onClick={() => setSection(t.id)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 ${section === t.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+              >
+                {t.label}
+              </button>
+            ))}
+        </div>
+
+        {section === "ozet" && (
+          <>
         {/* Sapma yükü: şirket bazında dengesizlik + KÜPST, 2026 ve YEKDEM varsayımları */}
         {data.sapma && <SapmaYukuCard sapma={data.sapma} projectId={projectId} onRefresh={fetchData} plantScoped={selectedPlantId !== "all"} />}
 
@@ -724,7 +736,7 @@ export default function ProjectResultsPage() {
           <Card className="shadow-sm">
             <CardHeader>
               <CardTitle className="text-base font-semibold">
-                Aylık Toplam Gelir ve Dengesizlik Maliyeti
+                Aylık gelir ve dengesizlik maliyeti
               </CardTitle>
               <CardDescription>
                 Aylar bazında GÖP + dengesizlik gerçekleşen toplam geliri ile dengesizlik
@@ -778,7 +790,7 @@ export default function ProjectResultsPage() {
           <Card className="shadow-sm">
             <CardHeader>
               <CardTitle className="text-base font-semibold">
-                Aylık Birim Dengesizlik Maliyeti Trendi (TL/MWh)
+                Aylık birim dengesizlik maliyeti (TL/MWh)
               </CardTitle>
               <CardDescription>
                 {selectedPlantId === "all" && data.plants.length > TREND_MAX_LINES
@@ -840,11 +852,16 @@ export default function ProjectResultsPage() {
           </Card>
         </div>
 
+          </>
+        )}
+
+        {section === "sapma" && (
+          <>
         {/* Grafik 3: Saatlik Dengesizlik Dağılımı */}
         <Card className="shadow-sm">
           <CardHeader>
             <CardTitle className="text-base font-semibold">
-              Saatlik Dengesizlik Dağılımı (Günün Saatlerine Göre Sapma MWh)
+              Günün saatlerine göre sapma (MWh)
             </CardTitle>
             <CardDescription>
               Günün hangi saatlerinde pozitif (fazla üretim) ve negatif (eksik üretim)
@@ -893,6 +910,13 @@ export default function ProjectResultsPage() {
           </CardContent>
         </Card>
 
+        {/* Fiyattan Bağımsız Tahmin Doğruluğu */}
+        <ForecastAccuracyCard projectId={projectId} refreshKey={data} />
+          </>
+        )}
+
+        {section === "santral" && (
+          <>
         {/* Santral ve Teknoloji Karşılaştırması (Capture Price) */}
         {data.comparison && (
           <PlantComparisonCard comparison={data.comparison} yekdemPlants={data.sapma?.yekdem?.plantNames ?? []} />
@@ -903,8 +927,11 @@ export default function ProjectResultsPage() {
           <LowPriceExposureCard comparison={data.comparison} yekdemPlants={data.sapma?.yekdem?.plantNames ?? []} sectorCapture={data.sectorCapture ?? null} />
         )}
 
+          </>
+        )}
+
         {/* DSG Netleştirme Analizi */}
-        {data.netting && (
+        {section === "netlesme" && data.netting && (
           <NettingCard
             netting={data.netting}
             projectId={projectId}
@@ -914,15 +941,13 @@ export default function ProjectResultsPage() {
           />
         )}
 
-        {/* Fiyattan Bağımsız Tahmin Doğruluğu */}
-        <ForecastAccuracyCard projectId={projectId} refreshKey={data} />
-
         {/* 3. Detaylı Pivot Tablo (Ay x Santral, Sıralanabilir, CSV Export) */}
+        {section === "tablo" && (
         <Card className="shadow-sm">
           <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="text-base font-semibold">
-                Detaylı Pivot Tablo (Ay x Santral)
+                Aylık tablo (ay × santral)
               </CardTitle>
               <CardDescription>
                 Her santralin ay bazındaki üretim, GÖP geliri, dengesizlik tutarı ve birim
@@ -1081,6 +1106,7 @@ export default function ProjectResultsPage() {
             </div>
           </CardContent>
         </Card>
+        )}
       </main>
     </div>
   );

@@ -123,12 +123,9 @@ export function ForecastAccuracyCard({ projectId, refreshKey }: { projectId: str
   return (
     <Card className="shadow-sm">
       <CardHeader>
-        <CardTitle className="text-base font-semibold">Tahmin Doğruluğu (Fiyattan Bağımsız)</CardTitle>
+        <CardTitle className="text-base font-semibold">Tahmin doğruluğu</CardTitle>
         <CardDescription>
-          Yalnızca gün öncesi tahmin ve gerçekleşen üretim kullanılır; piyasa fiyatı eksik olsa da
-          sonuçlar geçerlidir. {PLAN_EXCESS_HINT} WAPE = Σ|hata| /
-          Σ gerçekleşen. Sistematik pay = |Σ hata| / Σ |hata|, yani hatanın tek yönlü kısmı.
-          Grafikleri görmek için bir santral seçin.
+          Fiyattan bağımsız: yalnız gün öncesi tahmin ve gerçekleşen üretim. Grafikler için tablodan bir santral seçin.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -142,8 +139,8 @@ export function ForecastAccuracyCard({ projectId, refreshKey }: { projectId: str
                 <TableHead className="text-right">Plan fazlası</TableHead>
                 <TableHead className="text-right">WAPE</TableHead>
                 <TableHead className="text-right">MAE (MWh/saat)</TableHead>
-                <TableHead className="text-right">Sistematik Pay</TableHead>
-                <TableHead className="text-right">Eksik Tahmin Saatleri</TableHead>
+                <TableHead className="text-right">Sistematik pay</TableHead>
+                <TableHead className="text-right">Eksik tahmin saatleri</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -160,6 +157,15 @@ export function ForecastAccuracyCard({ projectId, refreshKey }: { projectId: str
             </TableBody>
           </Table>
         </div>
+        <details className="text-xs text-slate-600">
+          <summary className="cursor-pointer text-xs font-medium text-indigo-700 hover:underline">Sütunlar ne anlama geliyor</summary>
+          <ul className="mt-2 list-disc space-y-1 pl-4">
+            <li>{PLAN_EXCESS_HINT}</li>
+            <li>WAPE = Σ|hata| / Σ gerçekleşen.</li>
+            <li>Sistematik pay = |Σ hata| / Σ |hata|, yani hatanın tek yönlü kısmı.</li>
+            <li>Piyasa fiyatı eksik olsa da sonuçlar geçerlidir.</li>
+          </ul>
+        </details>
 
         {selected && (
           <div className="space-y-4">
@@ -170,7 +176,7 @@ export function ForecastAccuracyCard({ projectId, refreshKey }: { projectId: str
             <div className="grid gap-6 lg:grid-cols-2">
               <div>
                 <h4 className="mb-2 text-xs font-semibold text-slate-700">
-                  Aylık Plan Fazlası ve WAPE (%) — {selected.plantName}
+                  Aylık plan fazlası ve WAPE (%): {selected.plantName}
                 </h4>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
@@ -190,7 +196,7 @@ export function ForecastAccuracyCard({ projectId, refreshKey }: { projectId: str
 
               <div>
                 <h4 className="mb-2 text-xs font-semibold text-slate-700">
-                  Günün saatine göre ortalama plan fazlası (MWh) — {selected.plantName}
+                  Günün saatine göre ortalama plan fazlası (MWh): {selected.plantName}
                 </h4>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
@@ -213,11 +219,9 @@ export function ForecastAccuracyCard({ projectId, refreshKey }: { projectId: str
               </div>
             </div>
 
-            <div>
-              <h4 className="mb-2 text-xs font-semibold text-slate-700">
-                En Büyük Sapmalı 10 Saat — {selected.plantName}
-              </h4>
-              <div className="overflow-x-auto">
+            <details>
+              <summary className="cursor-pointer text-xs font-medium text-indigo-700 hover:underline">En büyük sapmalı 10 saat: {selected.plantName}</summary>
+              <div className="mt-2 overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-50/80">
@@ -244,7 +248,7 @@ export function ForecastAccuracyCard({ projectId, refreshKey }: { projectId: str
                   </TableBody>
                 </Table>
               </div>
-            </div>
+            </details>
           </div>
         )}
       </CardContent>

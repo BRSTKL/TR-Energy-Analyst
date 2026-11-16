@@ -28,13 +28,19 @@ describe("menü yapılandırması", () => {
     const ids = ALL_NAV_ITEMS.map((i) => i.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
-  it("gün sırasına göre gruplar: Bugün, Günlük iş, Portföy, Analiz", () => {
+  it("yakından uzağa gruplar: Günlük iş, Portföyüm, Piyasa, Sektör", () => {
     expect(NAV_GROUPS.map((g) => g.label)).toEqual([
-      "Bugün",
       "Günlük iş",
-      "Portföy",
-      "Analiz",
+      "Portföyüm",
+      "Piyasa",
+      "Sektör",
     ]);
+  });
+  it("grup adı içindeki öğeyle aynı değil; her öğenin açıklaması var", () => {
+    for (const g of NAV_GROUPS) {
+      expect(g.items.map((i) => i.label)).not.toContain(g.label);
+      for (const i of g.items) expect(i.hint, i.id).toBeTruthy();
+    }
   });
   it("alt çubukta dört kısayol, hepsi tanımlı", () => {
     expect(MOBILE_BAR).toHaveLength(4);
@@ -49,12 +55,12 @@ describe("activeNavId", () => {
     expect(activeNavId("/market/gunluk")).toBe("daily");
     expect(activeNavId("/market")).toBe("market");
   });
-  it("proje sayfaları (üretim tahmini dahil) Portföy'e, EPİAŞ ekleme kendi öğesine", () => {
+  it("proje sayfaları (üretim tahmini ve EPİAŞ'tan ekleme dahil) Projelerim'e", () => {
     expect(activeNavId("/projects")).toBe("projects");
     expect(activeNavId("/projects/abc/results")).toBe("projects");
     expect(activeNavId("/projects/abc/planning")).toBe("projects");
     expect(activeNavId("/projects/abc/forecast")).toBe("projects");
-    expect(activeNavId("/projects/epias")).toBe("epias");
+    expect(activeNavId("/projects/epias")).toBe("projects");
   });
   it("analiz ve alt öğeler; sondaki eğik çizgi önemsiz", () => {
     expect(activeNavId("/sector/aggregators/12")).toBe("sector");

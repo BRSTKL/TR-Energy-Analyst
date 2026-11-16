@@ -1,8 +1,10 @@
 /**
  * TR-Energy Analyst - menü yapılandırması (tek kaynak): sol menü, telefon çekmecesi ve alt çubuk buradan beslenir.
  *
- * Gruplar günün sırasını izler (Bugün → Gün içi → Portföy → Analiz). `activeNavId` bir adresin hangi öğeye ait olduğunu söyler;
- * proje alt sayfaları (üretim tahmini dahil) Portföy'e bağlanır.
+ * Gruplar kullanıcının sorusuna göre, yakından uzağa: Günlük iş (bugün ne yapıyorum) → Portföyüm (benim santrallerim) →
+ * Piyasa (fiyat ve arz nereye gidiyor) → Sektör (başkaları ne yapıyor). Menüde yalnız gidilecek yerler var; eylemler
+ * (EPİAŞ'tan santral ekleme) ait olduğu sayfanın düğmesidir. `activeNavId` bir adresin hangi öğeye ait olduğunu söyler;
+ * proje alt sayfaları ve santral ekleme Projelerim'e bağlanır.
  */
 
 import {
@@ -10,7 +12,6 @@ import {
   BookOpen,
   Building2,
   CalendarClock,
-  CloudDownload,
   FileBarChart,
   FolderKanban,
   Factory,
@@ -32,7 +33,6 @@ export type NavId =
   | "projects"
   | "plants"
   | "companies"
-  | "epias"
   | "market"
   | "outages"
   | "yekdem"
@@ -62,8 +62,8 @@ export interface NavGroup {
 
 export const NAV_GROUPS: NavGroup[] = [
   {
-    id: "today",
-    label: "Bugün",
+    id: "daily-work",
+    label: "Günlük iş",
     items: [
       {
         id: "today",
@@ -72,12 +72,6 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: LayoutDashboard,
         hint: "Şimdi hangi adımdasınız, ne hazır, ne eksik",
       },
-    ],
-  },
-  {
-    id: "intraday",
-    label: "Günlük iş",
-    items: [
       {
         id: "pre-bid",
         label: "Teklif öncesi",
@@ -94,11 +88,19 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: CalendarClock,
         hint: "Piyasada ne oldu: dün, bugün ve yarının açıklanan fiyatı",
       },
+      {
+        id: "outages",
+        label: "Arıza izleme",
+        short: "Arıza",
+        href: "/ariza",
+        icon: ZapOff,
+        hint: "Şu an devre dışı olan santraller ve çıkan kapasite (EPİAŞ arıza ve bakım bildirimleri)",
+      },
     ],
   },
   {
     id: "portfolio",
-    label: "Portföy",
+    label: "Portföyüm",
     items: [
       {
         id: "projects",
@@ -106,34 +108,7 @@ export const NAV_GROUPS: NavGroup[] = [
         short: "Projeler",
         href: "/projects",
         icon: FolderKanban,
-      },
-      {
-        id: "plants",
-        label: "Santral rehberi",
-        short: "Santraller",
-        href: "/santraller",
-        icon: Factory,
-        hint: "Herhangi bir santralin kurulu gücü, konumu, YEKDEM durumu ve gerçekleşen satış fiyatı",
-      },
-      {
-        id: "companies",
-        label: "Şirketler",
-        href: "/sirketler",
-        icon: Building2,
-        hint: "Sahip şirkete göre santraller, kurulu güç, üretim ve sapmanın maliyeti",
-      },
-      {
-        id: "epias",
-        label: "EPİAŞ'tan santral ekle",
-        href: "/projects/epias",
-        icon: CloudDownload,
-      },
-      {
-        id: "summary",
-        label: "Dönem özeti",
-        href: "/ozet",
-        icon: FileBarChart,
-        hint: "Dönem özeti: piyasa, projeler ve sektördeki yeriniz",
+        hint: "Portföyleriniz: sonuç, üretim tahmini, kayıp üretim ve raporlar; yeni santral buradan eklenir",
       },
       {
         id: "compare",
@@ -143,13 +118,26 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: GitCompareArrows,
         hint: "Projelerin sapma yükü, netleşme kazancı ve sektördeki yeri yan yana",
       },
+      {
+        id: "summary",
+        label: "Dönem özeti",
+        href: "/ozet",
+        icon: FileBarChart,
+        hint: "Dönem özeti: piyasa, projeler ve sektördeki yeriniz",
+      },
     ],
   },
   {
-    id: "analysis",
-    label: "Analiz",
+    id: "market",
+    label: "Piyasa",
     items: [
-      { id: "market", label: "Piyasa özeti", href: "/market", icon: LineChart },
+      {
+        id: "market",
+        label: "Piyasa özeti",
+        href: "/market",
+        icon: LineChart,
+        hint: "Dönem boyunca fiyatlar, makas ve sistem yönü",
+      },
       {
         id: "radar",
         label: "Yeni santral radarı",
@@ -166,15 +154,34 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: CalendarRange,
         hint: "Hangi yıl kaç santral ve kaç MW YEKDEM'den çıkıp serbest piyasaya geçiyor",
       },
+    ],
+  },
+  {
+    id: "sector",
+    label: "Sektör",
+    items: [
       {
-        id: "outages",
-        label: "Arıza izleme",
-        short: "Arıza",
-        href: "/ariza",
-        icon: ZapOff,
-        hint: "Şu an devre dışı olan santraller ve çıkan kapasite (EPİAŞ arıza ve bakım bildirimleri)",
+        id: "sector",
+        label: "Sektör karnesi",
+        href: "/sector",
+        icon: Award,
+        hint: "Santrallerin ve toplayıcıların sapma maliyeti sıralaması",
       },
-      { id: "sector", label: "Sektör karnesi", href: "/sector", icon: Award },
+      {
+        id: "companies",
+        label: "Şirketler",
+        href: "/sirketler",
+        icon: Building2,
+        hint: "Sahip şirkete göre santraller, kurulu güç, üretim ve sapmanın maliyeti",
+      },
+      {
+        id: "plants",
+        label: "Santral rehberi",
+        short: "Santraller",
+        href: "/santraller",
+        icon: Factory,
+        hint: "Herhangi bir santralin kurulu gücü, konumu, YEKDEM durumu ve gerçekleşen satış fiyatı",
+      },
     ],
   },
 ];
@@ -212,7 +219,6 @@ export function activeNavId(pathname: string): NavId | null {
   if (is(p, "/ariza")) return "outages";
   if (is(p, "/yekdem")) return "yekdem";
   if (is(p, "/yeni-santraller")) return "radar";
-  if (is(p, "/projects/epias")) return "epias";
   if (is(p, "/projects")) return "projects";
   if (is(p, "/sector")) return "sector";
   if (is(p, "/compare")) return "compare";

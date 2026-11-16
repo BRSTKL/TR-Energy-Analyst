@@ -5,6 +5,25 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 16.11.2026 · Claude · Arayüz sadeleştirme (`claude/arayuz-yenileme`; yüklenmedi, push yok)
+
+- **Bugün:** tek düzen, yalnız o günle ilgili (adımlar → uyarılar → yarın için → piyasa ve dünkü tahmin). Görünüm seçici
+  (Üretici / Piyasa / Toplayıcı / Yönetim) ve Portföyüm tablosu kalktı; `lib/ui/today-view.ts` ve testi silindi. Adımlar
+  bağlı şerit, PTF ve üretim kartlarında ölçekli kıyas çubukları, uyarılar tek liste.
+- **Menü:** dört grup, yakından uzağa: Günlük iş (Bugün, Teklif öncesi, Günlük pano, Arıza izleme) → Portföyüm → Piyasa →
+  Sektör (Şirketler ve Santral rehberi burada). "EPİAŞ'tan santral ekle" menüden çıktı (Projelerim'de düğmesi var; adres
+  Projelerim'i seçili gösterir). Adresler değişmedi.
+- **Sonuçlar:** ana sayılar üstte (önce dengesizlik maliyeti), geri kalanı beş bölüm (Özet, Sapma ve tahmin, Santral kıyası,
+  Netleşme, Aylık tablo); başlıkta rapor + "Dışa aktar" + "Veri ve ayarlar". Sapma yükü, santral kıyası, düşük fiyat,
+  netleşme, tahmin doğruluğu kartlarında ve veri uyarılarında (`DataQualityBanner`: İçgörüler ve Planlama'da da) uzun
+  açıklamalar açılır bölümde; uyarı başlığı hep görünür. Hesap ve sayı değişmedi.
+- **Karar (kullanıcı):** Bugün'de rol görünümü istenmiyor; sayfalarda yazı az, uyarı kaldırılmadan.
+- **Ders:** aynı klasörde ikinci `next dev` birkaç saniye bile açılınca `.next` bozuldu (sayfa JS'i 404, projeler gelmedi);
+  çözüm sunucuyu kapatıp `.next`'i silip yeniden başlatmak oldu.
+- **Kontrol:** 1.100 test, tsc, lint, tam duman turu.
+- **Sıradaki:** kullanıcı beğenirse main'e birleştir ve push; yeşil "EPİAŞ piyasa verisi tam" kutusu hâlâ üç satır;
+  proje içi diğer sayfalar (Üretim tahmini, Kayıp üretim, Planlama) aynı sadeleştirmeyi bekliyor.
+
 ## 16.11.2026 · Claude · Hesap doğruluğu denetimi 1–17 yüklendi (`d98c033 → df3df7b`)
 
 - **Yükleme:** `claude/hesap-dogrulugu` main'e ileri sarıldı, push, `deploy.sh`: sayfa denetimi 200.

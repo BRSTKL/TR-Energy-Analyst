@@ -72,18 +72,22 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh, plantScoped = false
   // Çok santralli projede uzun ad listeleri uyarıyı okunmaz yapıyor: ilk birkaç ad ve toplam sayı
   const names = (list: string[], max = 5) =>
     list.length <= max ? list.join(", ") : `${list.slice(0, max).join(", ")} ve ${list.length - max} santral daha`;
-  const warnings: string[] = [];
-  for (const m of sapma.check.missing) warnings.push(`${m.company} şirketinin ${m.plants.length} santrali projede yok: ${names(m.plants)}.`);
+  // Uyarı hiçbir zaman gizlenmez: kısa başlık hep görünür, adlar ve açıklama "Ayrıntı"da açılır
+  const warnings: Array<{ head: string; detail: string }> = [];
+  for (const m of sapma.check.missing)
+    warnings.push({ head: `${m.company}: ${m.plants.length} santrali projede yok`, detail: `${names(m.plants)}.` });
   if (sapma.check.unknownOwner.length)
-    warnings.push(
-      agg
-        ? `Sahibi bilinmeyen ${sapma.check.unknownOwner.length} santral: ${names(sapma.check.unknownOwner)}. Uzlaştırma toplayıcı portföyünde olduğu için dengesizlik etkilenmez; yalnız sahiplere göre paylaştırmada ayrı sahip sayılır. Toplayıcıya doğrudan giren yeni santrallerin ve LÜY birimlerinin sahibini EPİAŞ yayımlamaz.`
-        : `Sahibi bilinmeyen santral: ${names(sapma.check.unknownOwner)}. Ayrı şirket sayıldı; aynı şirketin santralleriyse risk olduğundan yüksek görünür.`
-    );
+    warnings.push({
+      head: `Sahibi bilinmeyen ${sapma.check.unknownOwner.length} santral`,
+      detail: agg
+        ? `${names(sapma.check.unknownOwner)}. Uzlaştırma toplayıcı portföyünde olduğu için dengesizlik etkilenmez; yalnız sahiplere göre paylaştırmada ayrı sahip sayılır. Toplayıcıya doğrudan giren yeni santrallerin ve LÜY birimlerinin sahibini EPİAŞ yayımlamaz.`
+        : `${names(sapma.check.unknownOwner)}. Ayrı şirket sayıldı; aynı şirketin santralleriyse risk olduğundan yüksek görünür.`,
+    });
   if (sapma.check.yekdemNextUnknown.length)
-    warnings.push(
-      `YEKDEM'den çıkış yılı bilinmeyen ${sapma.check.yekdemNextUnknown.length} santral (sonraki yılın YEKDEM listesi henüz yayımlanmamış olabilir): ${names(sapma.check.yekdemNextUnknown)}.`
-    );
+    warnings.push({
+      head: `YEKDEM'den çıkış yılı bilinmeyen ${sapma.check.yekdemNextUnknown.length} santral`,
+      detail: `Sonraki yılın YEKDEM listesi henüz yayımlanmamış olabilir: ${names(sapma.check.yekdemNextUnknown)}.`,
+    });
 
   const updateEpias = async () => {
     setUpdating(true);
@@ -102,30 +106,24 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh, plantScoped = false
 
   const plantsByKupst = Object.entries(sapma.kupstByPlant).sort((a, b) => b[1] - a[1]);
 
+  const outageBlocks = sapma.outages?.plants.reduce((a, o) => a + o.events.length, 0) ?? 0;
+  const nf0 = (v: number) => Math.round(v).toLocaleString("tr-TR");
+  const typeLabel = (t: string) => (t === "RES" ? "Rüzgâr" : t === "GES" ? "Güneş" : t === "HES" ? "Hidro" : t);
+  const more = "cursor-pointer font-medium text-indigo-700 hover:underline";
+
   return (
     <Card className="border-slate-200 shadow-sm">
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <CardTitle className="flex items-center gap-2 text-base font-semibold">
-              <Scale className="h-4 w-4 text-slate-700" /> Sapma yükü ({unitLabel} uzlaştırma)
+              <Scale className="h-4 w-4 text-slate-700" /> Sapma yükü
             </CardTitle>
             <CardDescription>
+              Dengesizlik riski ve tahmini KÜPST, {unitLabel} uzlaştırmayla.
               {plantScoped && (
-                <span className="mb-1 block font-medium text-amber-800">
-                  Bu blok seçili santrali değil, tüm portföyü gösterir (uzlaştırma portföy bazında yapılır).
-                </span>
-              )}
-              Dengesizlik riski (gün içi işlemler öncesi) ve tahmini KÜPST.{" "}
-              {agg
-                ? `Santraller ${agg.name} portföyünde tek dengede uzlaştırılır: farklı sahiplerin santralleri her saat birbirini dengeler.`
-                : "Dengesizlik şirket bazında uzlaştırılır: aynı şirketin santralleri her saat birbirini dengeler."}{" "}
-              {agg ? "KÜPST, toplayıcı portföyünde topluluk (portföy) birimi bazında hesaplanır (EPDK 14029 / 14907 md. 4): santraller arası sapmalar netleşir." : "KÜPST santral bazındadır, netleşmez."} Rakamlar PowerPoint raporuyla aynıdır.
-              {agg?.scope && <span className="mt-1 block font-medium text-slate-700">{agg.scope}.</span>}
-              {sapma.yekdem && (
-                <span className="mt-1 block text-slate-700">
-                  YEKDEM&apos;deki {sapma.yekdem.plantNames.length} santral de dahildir: YEKDEM katılımcısı üretimini serbest piyasada kendisi
-                  satar, dengesizliği kendisine aittir (YEK Yönetmeliği md. 15/1, 23/1); yalnızca geliri PTF yerine YEK fiyatından oluşur.
+                <span className="mt-1 block font-medium text-amber-800">
+                  Bu blok seçili santrali değil, tüm portföyü gösterir.
                 </span>
               )}
             </CardDescription>
@@ -137,59 +135,66 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh, plantScoped = false
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {(warnings.length > 0 || updateError) && (
-          <div className="space-y-1 rounded-md border border-amber-200 bg-amber-50 p-2.5">
-            {warnings.map((w, i) => (
-              <p key={i} className="flex items-start gap-1.5 text-xs text-amber-900">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {w}
-              </p>
-            ))}
-            {updateError && <p className="text-xs text-rose-700">{updateError}</p>}
-          </div>
-        )}
-
-        {sapma.outages && sapma.outages.plants.length > 0 && (
-          <p className="flex items-start gap-1.5 text-xs text-slate-600">
-            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
-            Olası arıza/kısıntı: {sapma.outages.plants.reduce((a, o) => a + o.events.length, 0)} blok (tahmin kurulu gücün ≥%30&apos;u,
-            üretim ≤%2, ≥3 saat), santral bazında (netleşmemiş) dengesizlik riskinin %{sapma.outages.sharePct.toLocaleString("tr-TR", { maximumFractionDigits: 1 })} kadarı
-            {sapma.outages.plants.some((o) => o.events.some((e) => e.concurrent)) && "; bir kısmı birden çok santralde aynı anda"}.{" "}
-            {sapma.outages.official && sapma.outages.official.checkedBlocks > 0
-              ? `${officialOutageSentence(sapma.outages.official)} Bildirimsiz bloklar işletmeciyle teyit edilmeli.`
-              : "Tahmin hatası değil; arıza mı YAT talimatı mı teyit edilmeli."}
-          </p>
-        )}
-
+        {/* Ana sayılar: önce toplam, sonra onu oluşturan iki parça */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Tile label="Sapma yükü" value={tl(load.current)} sub="Dengesizlik riski + KÜPST" tone="text-slate-900" />
           <Tile
             label="Dengesizlik riski"
             value={tl(companyCost)}
-            sub={
-              netted
-                ? `Santral bazında ${tl(st.plantLevelCostTl)}; ${tl(st.sameCompanyNettingTl)} ${nettingPlace} netleşiyor` +
-                  (() => {
-                    const mr = monthlyRange(agg?.monthlyBenefit);
-                    return mr
-                      ? ` (her ay %${mr.min.toLocaleString("tr-TR", { maximumFractionDigits: 0 })}–${mr.max.toLocaleString("tr-TR", { maximumFractionDigits: 0 })})`
-                      : "";
-                  })()
-                : "Şirket bazında"
-            }
+            sub={netted ? `${tl(st.sameCompanyNettingTl)} ${nettingPlace} netleşti` : agg ? "Portföy bazında" : "Şirket bazında"}
             tone="text-rose-600"
             chip={<Chip kind="exact" />}
           />
-          <Tile label="KÜPST (sapma bedeli)" value={tl(sapma.kupst.totalTl)} sub="Tolerans dışı sapma × max(PTF, SMF) × katsayı (2025: 0,03; 2026: 0,05)" tone="text-rose-700" chip={<Chip kind="estimate" />} />
-          <Tile label="Sapma yükü" value={tl(load.current)} sub="Dengesizlik riski + KÜPST (tüm santraller)" tone="text-slate-900" />
+          <Tile label="KÜPST (sapma bedeli)" value={tl(sapma.kupst.totalTl)} sub="Tolerans dışı sapmanın bedeli" tone="text-rose-700" chip={<Chip kind="estimate" />} />
           {load.next2026 !== null && (
             <Tile
               label="2026 kurallarıyla"
               value={tl(load.next2026)}
-              sub={`${c26 ? `Dengesizlik +${tl(c26.deltaTl)}; ` : ""}veri yılının fiyatları ve sistem yönleri tekrar ederse`}
+              sub={c26 ? `Dengesizlik +${tl(c26.deltaTl)}` : "Aynı fiyat ve sistem yönleriyle"}
               tone="text-amber-600"
               chip={<Chip kind="scenario" />}
             />
           )}
         </div>
+
+        {(warnings.length > 0 || updateError || outageBlocks > 0) && (
+          <ul className="divide-y divide-slate-200 overflow-hidden rounded-md border border-slate-200 text-xs">
+            {warnings.map((w) => (
+              <li key={w.head} className="border-l-4 border-l-amber-500 px-2.5 py-2">
+                <details>
+                  <summary className="flex cursor-pointer list-none items-center gap-1.5 text-slate-800 [&::-webkit-details-marker]:hidden">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden="true" />
+                    <span className="min-w-0 flex-1 font-medium">{w.head}</span>
+                    <span className={more}>Ayrıntı</span>
+                  </summary>
+                  <p className="mt-1 pl-5 text-slate-600">{w.detail}</p>
+                </details>
+              </li>
+            ))}
+            {sapma.outages && outageBlocks > 0 && (
+              <li className="border-l-4 border-l-slate-300 px-2.5 py-2">
+                <details>
+                  <summary className="flex cursor-pointer list-none items-center gap-1.5 text-slate-800 [&::-webkit-details-marker]:hidden">
+                    <Info className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+                    <span className="min-w-0 flex-1 font-medium">
+                      Olası arıza / kısıntı: {outageBlocks} blok, riskin %
+                      {sapma.outages.sharePct.toLocaleString("tr-TR", { maximumFractionDigits: 1 })} kadarı
+                    </span>
+                    <span className={more}>Ayrıntı</span>
+                  </summary>
+                  <p className="mt-1 pl-5 text-slate-600">
+                    Blok: tahmin kurulu gücün ≥%30&apos;u, üretim ≤%2, en az 3 saat. Oran santral bazında (netleşmemiş) dengesizlik riskine göredir
+                    {sapma.outages.plants.some((o) => o.events.some((e) => e.concurrent)) && "; bir kısmı birden çok santralde aynı anda"}.{" "}
+                    {sapma.outages.official && sapma.outages.official.checkedBlocks > 0
+                      ? `${officialOutageSentence(sapma.outages.official)} Bildirimsiz bloklar işletmeciyle teyit edilmeli.`
+                      : "Tahmin hatası değil; arıza mı YAT talimatı mı teyit edilmeli."}
+                  </p>
+                </details>
+              </li>
+            )}
+            {updateError && <li className="border-l-4 border-l-red-500 px-2.5 py-2 text-rose-700">{updateError}</li>}
+          </ul>
+        )}
 
         {(sapma.riskPremium || sapma.sector) && (
           <div className="grid gap-3 lg:grid-cols-2">
@@ -199,9 +204,7 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh, plantScoped = false
                   <p className="text-sm font-semibold text-slate-900">Dengesizlik risk primi</p>
                   <Chip kind="assumption" />
                 </div>
-                <p className="mt-0.5 text-2xs text-slate-500">
-                  Sözleşme fiyatına eklenecek MWh başına sapma yükü · {sapma.riskPremium.rules}
-                </p>
+                <p className="mt-0.5 text-2xs text-slate-500">Sözleşme fiyatına eklenecek sapma yükü, TL/MWh</p>
                 {(() => {
                   const rp = sapma.riskPremium.portfolio;
                   const worstLabel = `${rp.worstMonth.month.slice(5, 7)}.${rp.worstMonth.month.slice(2, 4)}`;
@@ -215,14 +218,14 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh, plantScoped = false
                   ];
                   if (!sameAsWorst) tiles.push([`En kötü ay (${worstLabel})`, rp.worstMonth.tlPerMwh, "text-rose-600"]);
                   return (
-                <div className={`mt-2 grid gap-2 text-center ${tiles.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
-                  {tiles.map(([label, v, tone]) => (
-                    <div key={label as string} className="rounded-md bg-slate-50 p-2">
-                      <p className={`text-lg font-bold ${tone}`}>{Math.round(v as number).toLocaleString("tr-TR")}</p>
-                      <p className="text-2xs text-slate-500">{label} · TL/MWh</p>
+                    <div className={`mt-2 grid gap-2 text-center ${tiles.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
+                      {tiles.map(([label, v, tone]) => (
+                        <div key={label} className="rounded-md bg-slate-50 p-2">
+                          <p className={`text-lg font-bold tabular-nums ${tone}`}>{nf0(v)}</p>
+                          <p className="text-2xs text-slate-500">{label}</p>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
                   );
                 })()}
                 {sapma.marketProfile && sapma.marketProfile.baseloadPtfTl > 0 && (() => {
@@ -232,10 +235,16 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh, plantScoped = false
                   const ppa = mp.captureRatePct - premiumPct;
                   const f = (v: number) => v.toLocaleString("tr-TR", { maximumFractionDigits: 1 });
                   return (
-                    <p className="mt-2 rounded-md bg-slate-50 px-2 py-1.5 text-xs text-slate-700">
-                      <strong>PPA göstergesi: baz PTF&apos;nin ~%{f(ppa)} kadarı</strong> · yakalanan fiyat %{f(mp.captureRatePct)} (profil indirimi %
-                      {f(100 - mp.captureRatePct)}) · dengesizlik primi %{f(premiumPct)}. Fiyat riski ve marj hariç.
-                    </p>
+                    <details className="mt-2 rounded-md bg-slate-50 px-2 py-1.5 text-xs text-slate-700">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+                        <strong>PPA göstergesi: baz PTF&apos;nin ~%{f(ppa)} kadarı</strong>
+                        <span className={more}>Ayrıntı</span>
+                      </summary>
+                      <p className="mt-1 text-slate-600">
+                        Yakalanan fiyat %{f(mp.captureRatePct)} (profil indirimi %{f(100 - mp.captureRatePct)}), dengesizlik primi %{f(premiumPct)}.
+                        Fiyat riski ve marj hariç.
+                      </p>
+                    </details>
                   );
                 })()}
               </div>
@@ -246,25 +255,37 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh, plantScoped = false
                   <p className="text-sm font-semibold text-slate-900">Sektörle kıyaslama ({sapma.sector.label ?? sapma.sector.year})</p>
                   <Chip kind="exact" />
                 </div>
-                <p className="mt-0.5 text-2xs text-slate-500">MWh başına dengesizlik riski, santral tek başına; EPİAŞ&apos;taki lisanslı santraller</p>
-                <div className="mt-2 space-y-1.5">
-                  {sapma.sector.types.map((t) => {
-                    const diff = ((t.portfolioUnitTl - t.unitImbalanceTl.median) / t.unitImbalanceTl.median) * 100;
-                    return (
-                      <div key={`${t.type}:${t.kind ?? ""}`} className="flex flex-wrap items-baseline justify-between gap-2 rounded-md bg-slate-50 px-2 py-1.5 text-xs">
-                        <span className="font-semibold text-slate-800">{t.type === "RES" ? "Rüzgâr" : t.type === "GES" ? "Güneş" : t.type === "HES" ? "Hidro" : t.type}{t.kind ? ` · ${HYDRO_KIND_LABEL[t.kind]}` : ""}</span>
-                        <span className="text-slate-600">
-                          Portföyünüz <strong>{Math.round(t.portfolioUnitTl).toLocaleString("tr-TR")} ₺</strong> · sektör medyanı{" "}
-                          {Math.round(t.unitImbalanceTl.median).toLocaleString("tr-TR")} ₺ ·{" "}
-                          <span className={diff > 0 ? "font-semibold text-rose-600" : "font-semibold text-emerald-600"}>
+                <p className="mt-0.5 text-2xs text-slate-500">Dengesizlik riski, TL/MWh; santral tek başına</p>
+                <table className="mt-2 w-full text-xs">
+                  <thead>
+                    <tr className="text-2xs text-slate-500">
+                      <th className="pb-1 text-left font-medium">Tür</th>
+                      <th className="pb-1 text-right font-medium">Portföy</th>
+                      <th className="pb-1 text-right font-medium">Sektör ortancası</th>
+                      <th className="pb-1 text-right font-medium">Fark</th>
+                      <th className="pb-1 text-right font-medium">Sıra</th>
+                    </tr>
+                  </thead>
+                  <tbody className="tabular-nums">
+                    {sapma.sector.types.map((t) => {
+                      const diff = ((t.portfolioUnitTl - t.unitImbalanceTl.median) / t.unitImbalanceTl.median) * 100;
+                      return (
+                        <tr key={`${t.type}:${t.kind ?? ""}`} className="border-t border-slate-100">
+                          <td className="py-1.5 font-semibold text-slate-800">
+                            {typeLabel(t.type)}
+                            {t.kind ? ` · ${HYDRO_KIND_LABEL[t.kind]}` : ""}
+                          </td>
+                          <td className="py-1.5 text-right font-semibold text-slate-900">{nf0(t.portfolioUnitTl)}</td>
+                          <td className="py-1.5 text-right text-slate-600">{nf0(t.unitImbalanceTl.median)}</td>
+                          <td className={`py-1.5 text-right font-semibold ${diff > 0 ? "text-rose-600" : "text-emerald-600"}`}>
                             {diff > 0 ? "+" : "−"}%{Math.abs(Math.round(diff))}
-                          </span>{" "}
-                          · sektörün %{Math.round(100 - t.portfolioRankPct)} kadarından iyi
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+                          </td>
+                          <td className="py-1.5 text-right text-slate-600">%{Math.round(100 - t.portfolioRankPct)}&apos;inden iyi</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
@@ -284,12 +305,53 @@ export function SapmaYukuCard({ sapma, projectId, onRefresh, plantScoped = false
           </details>
         )}
 
-        <p className="flex items-start gap-1.5 text-2xs text-slate-500">
-          <Info className="mt-0.5 h-3 w-3 shrink-0" />
-          KÜPST tahminidir: tolerans plana oranlandı (2025: rüzgâr %17, güneş %10, diğer %5, katsayı 0,03, EPDK 13025; 2026&apos;dan
-          itibaren rüzgâr %15, güneş %8, katsayı 0,05, EPDK 14029; Kasım 2026&apos;dan itibaren aynı oranlarla 14907). Kısıntı talimatları santral bazında yayımlanmadığından ayrılamadı. Aşağıdaki santral grafikleri ve tablo santral bazındadır; portföy
-          toplamları {agg ? "portföy" : "şirket"} bazındadır.
-        </p>
+        {/* Yöntem notları silinmedi: tek yerde, isteyen açar */}
+        <details className="rounded-md border border-slate-200 p-2.5 text-xs text-slate-600">
+          <summary className="cursor-pointer font-semibold text-slate-700">Nasıl hesaplandı</summary>
+          <ul className="mt-2 list-disc space-y-1.5 pl-4">
+            <li>
+              Dengesizlik riski gün içi işlemler öncesidir.{" "}
+              {agg
+                ? `Santraller ${agg.name} portföyünde tek dengede uzlaştırılır: farklı sahiplerin santralleri her saat birbirini dengeler.`
+                : "Dengesizlik şirket bazında uzlaştırılır: aynı şirketin santralleri her saat birbirini dengeler."}
+              {netted && (
+                <>
+                  {" "}
+                  Santral bazında {tl(st.plantLevelCostTl)}; {tl(st.sameCompanyNettingTl)} {nettingPlace} netleşiyor
+                  {(() => {
+                    const mr = monthlyRange(agg?.monthlyBenefit);
+                    return mr
+                      ? ` (her ay %${mr.min.toLocaleString("tr-TR", { maximumFractionDigits: 0 })}–${mr.max.toLocaleString("tr-TR", { maximumFractionDigits: 0 })})`
+                      : "";
+                  })()}
+                  .
+                </>
+              )}
+            </li>
+            <li>
+              {agg
+                ? "KÜPST, toplayıcı portföyünde topluluk (portföy) birimi bazında hesaplanır (EPDK 14029 / 14907 md. 4): santraller arası sapmalar netleşir."
+                : "KÜPST santral bazındadır, netleşmez."}{" "}
+              Tolerans dışı sapma × max(PTF, SMF) × katsayı. Tahminidir: tolerans plana oranlandı (2025: rüzgâr %17, güneş %10, diğer %5,
+              katsayı 0,03, EPDK 13025; 2026&apos;dan itibaren rüzgâr %15, güneş %8, katsayı 0,05, EPDK 14029; Kasım 2026&apos;dan itibaren
+              aynı oranlarla 14907). Kısıntı talimatları santral bazında yayımlanmadığından ayrılamadı.
+            </li>
+            {agg?.scope && <li>{agg.scope}.</li>}
+            {sapma.yekdem && (
+              <li>
+                YEKDEM&apos;deki {sapma.yekdem.plantNames.length} santral de dahildir: YEKDEM katılımcısı üretimini serbest piyasada kendisi
+                satar, dengesizliği kendisine aittir (YEK Yönetmeliği md. 15/1, 23/1); yalnızca geliri PTF yerine YEK fiyatından oluşur.
+              </li>
+            )}
+            {load.next2026 !== null && <li>2026 kurallarıyla: veri yılının fiyatları ve sistem yönleri tekrar ederse.</li>}
+            {sapma.riskPremium && <li>Risk primi: {sapma.riskPremium.rules}.</li>}
+            {sapma.sector && <li>Sektör kıyası EPİAŞ&apos;taki lisanslı santrallerle yapılır.</li>}
+            <li>
+              Rakamlar PowerPoint raporuyla aynıdır. Santral grafikleri ve tablo santral bazındadır; portföy toplamları{" "}
+              {agg ? "portföy" : "şirket"} bazındadır.
+            </li>
+          </ul>
+        </details>
       </CardContent>
     </Card>
   );

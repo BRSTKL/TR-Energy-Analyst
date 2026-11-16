@@ -3,17 +3,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { StatusChip } from "@/components/ui/status-chip";
-import { AlertTriangle, ArrowRight, CheckCircle2, CircleDot, Info } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, CheckCircle2, Info } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Kpi, nf, SectionHead, Skeleton } from "@/components/summary-parts";
+import { nf, SectionHead, Skeleton } from "@/components/summary-parts";
 import type { DailyMarket } from "@/lib/analysis/daily-market";
 import { evidenceLabel, SCORECARD_MIN_DAYS } from "@/lib/ptf/scorecard";
 import type { PortfolioProduction } from "@/lib/services/portfolio-forecast";
@@ -30,19 +22,10 @@ import {
 import { forecastHref, LAST_PROJECT_EVENT, readLastProject } from "@/lib/ui/last-project";
 import { opsChips } from "@/lib/ui/ops-chips";
 import { useTrMinutes } from "@/lib/ui/use-tr-clock";
-import {
-  DEFAULT_ROLE,
-  ROLES,
-  SECTION_ORDER,
-  readRole,
-  writeRole,
-  type TodayRole,
-  type TodaySection,
-} from "@/lib/ui/today-view";
 
 /**
- * Bugün kokpiti (ana sayfa): günün saatlerine göre şimdi hangi adımdasınız, yarın için ne hazır, piyasa şimdi nasıl, dünün
- * sonucu ve uyarılar. Her bölüm kendi verisini ayrı yükler; alınamayan veri bölümde açıkça yazılır (sessizce atlanmaz).
+ * Bugün kokpiti (ana sayfa): yalnız o günle ilgili olanlar, tek düzende: şimdi hangi adımdasınız, uyarılar, yarın için ne
+ * hazır, piyasa şimdi nasıl, dünün sonucu ve dünkü tahmin. Proje tablosu burada değil, Projelerim'de. Her bölüm kendi verisini ayrı yükler; alınamayan veri bölümde açıkça yazılır (sessizce atlanmaz).
  * Yarının kayıtları dosyadan (/api/ops/status), piyasa EPİAŞ'tan (5 dk önbellekli), projeler /api/compare'den gelir.
  */
 
@@ -72,9 +55,6 @@ const clock = (iso: string) =>
     minute: "2-digit",
     timeZone: "Europe/Istanbul",
   });
-const tl = (v: number) =>
-  Math.abs(v) >= 1e6 ? `${nf(v / 1e6, 1)} M ₺` : `${nf(v / 1e3, 0)} bin ₺`;
-
 type Load<T> =
   { state: "loading" } | { state: "ok"; data: T } | { state: "error"; message: string };
 
@@ -120,6 +100,35 @@ function Failed({ what, message }: { what: string; message: string }) {
         {what} alınamadı: {message}
       </span>
     </p>
+  );
+}
+
+/** Ölçekli kıyas çubukları: satırlar aynı ızgarayı paylaşır, etiketler ve sayılar hizalı kalır */
+const METER_GRID =
+  "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 text-xs text-slate-600";
+
+function Meter({
+  label,
+  value,
+  pct,
+  muted,
+}: {
+  label: string;
+  value: string;
+  pct: number;
+  muted?: boolean;
+}) {
+  return (
+    <>
+      <span>{label}</span>
+      <span className="h-2 overflow-hidden rounded bg-slate-100" aria-hidden="true">
+        <span
+          className={`block h-full rounded ${muted ? "bg-slate-400" : "bg-indigo-600"}`}
+          style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
+        />
+      </span>
+      <span className="tabular-nums text-slate-800">{value}</span>
+    </>
   );
 }
 
@@ -194,39 +203,45 @@ function PhaseCard({ minutes, bidReady }: { minutes: number | null; bidReady: st
             </div>
           )}
         </div>
-        <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {/* Birbirine bağlı adımlar: biten dolu, şimdiki halkalı; çizgi biten adımdan sonrakine dolar */}
+        <ol className="grid gap-3 sm:grid-cols-4 sm:gap-0">
           {STEPS.map((st, i) => {
             const done = i < current;
             const now = i === current;
             return (
-              <li key={st.id}>
+              <li key={st.id} className="relative">
+                {i < STEPS.length - 1 && (
+                  <span
+                    aria-hidden="true"
+                    className={`absolute left-9 right-1 top-[11px] hidden h-0.5 rounded sm:block ${done ? "bg-indigo-600" : "bg-slate-200"}`}
+                  />
+                )}
                 <Link
                   href={st.href}
                   aria-current={now ? "step" : undefined}
-                  className={`block h-full rounded-md border p-3 text-sm transition-colors ${
-                    now
-                      ? "border-indigo-300 bg-indigo-50"
-                      : "border-slate-200 bg-white hover:bg-slate-50"
-                  }`}
+                  className="group flex items-center gap-3 rounded-md pr-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-indigo-500 sm:flex-col sm:items-start sm:gap-2"
                 >
-                  <span className="flex items-center gap-1.5 font-medium">
-                    {done ? (
-                      <CheckCircle2
-                        className="h-4 w-4 text-emerald-600"
-                        aria-hidden="true"
-                      />
-                    ) : (
-                      <CircleDot
-                        className={`h-4 w-4 ${now ? "text-indigo-600" : "text-slate-300"}`}
-                        aria-hidden="true"
-                      />
-                    )}
-                    <span className={now ? "text-indigo-800" : "text-slate-800"}>
-                      {st.title}
-                    </span>
+                  <span
+                    className={`relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums ${
+                      done
+                        ? "bg-indigo-600 text-white"
+                        : now
+                          ? "bg-white text-indigo-700 shadow-[0_0_0_2px_#4f46e5,0_0_0_6px_#e0e7ff]"
+                          : "bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    {done ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : i + 1}
                   </span>
-                  <span className="mt-1 block text-xs text-slate-600">
-                    {st.id === "bid" ? bidReady : st.sub}
+                  <span className="min-w-0">
+                    <span
+                      className={`block font-medium group-hover:underline ${now ? "text-indigo-800" : "text-slate-800"}`}
+                    >
+                      {st.title}
+                      {done && <span className="sr-only"> (tamamlandı)</span>}
+                    </span>
+                    <span className="block text-xs text-slate-600">
+                      {st.id === "bid" ? bidReady : st.sub}
+                    </span>
                   </span>
                 </Link>
               </li>
@@ -268,6 +283,7 @@ function PtfCard({ load, announced }: { load: Load<OpsStatus>; announced: Announ
   const actual = announced && announced.date === p.targetDate ? announced.mean : null;
   if (actual !== null) {
     const diff = p.mean - actual;
+    const top = Math.max(actual, p.mean, 1);
     return (
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-start justify-between gap-2">
@@ -277,12 +293,25 @@ function PtfCard({ load, announced }: { load: Load<OpsStatus>; announced: Announ
         <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
           {nf(actual)} <span className="text-sm font-medium text-slate-500">TL/MWh ortalama</span>
         </p>
-        <p className="mt-2 text-xs text-slate-700">
-          Sabah tahmini ({clock(p.issuedAt)} kaydı{p.onTime ? "" : ", kesimden sonra"}){" "}
-          <b className="tabular-nums">{nf(p.mean)}</b> TL/MWh: açıklanandan{" "}
-          <b className="tabular-nums">{nf(Math.abs(diff))}</b> TL/MWh{" "}
-          {Math.abs(diff) < 0.5 ? "farklı değil" : diff > 0 ? "yüksek" : "düşük"}
-          {actual > 0 && ` (%${nf((Math.abs(diff) / actual) * 100)})`}.
+        <div className={`mt-3 ${METER_GRID}`}>
+          <Meter label="Açıklanan" value={nf(actual)} pct={(actual / top) * 100} />
+          <Meter
+            label={`Sabah tahmini (${clock(p.issuedAt)}${p.onTime ? "" : ", kesimden sonra"})`}
+            value={nf(p.mean)}
+            pct={(p.mean / top) * 100}
+            muted
+          />
+        </div>
+        <p className="mt-2 text-sm font-medium text-slate-800">
+          {Math.abs(diff) < 0.5 ? (
+            "Sabah tahmini açıklanan fiyatı tuttu."
+          ) : (
+            <>
+              Tahmin <span className="tabular-nums">{nf(Math.abs(diff))}</span> TL/MWh{" "}
+              {diff > 0 ? "yüksek" : "düşük"} kaldı
+              {actual > 0 && ` (%${nf((Math.abs(diff) / actual) * 100)})`}.
+            </>
+          )}
         </p>
         <p className="mt-1 text-xs text-slate-500">Saat saat kıyas akşam karnesinde; günlük kayıt değişmez.</p>
         <Link
@@ -357,7 +386,8 @@ function ProductionCard({
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <p className="text-xs font-medium text-slate-500">Yarının üretim tahmini</p>
-      <ul className="mt-2 space-y-1.5 text-sm">
+      <PortfolioLines load={portfolio} />
+      <ul className="mt-3 space-y-1 border-t border-slate-100 pt-2 text-sm">
         {chips.map((c) => (
           <li key={c.key} className="flex items-baseline justify-between gap-2">
             <span className={`font-medium ${tone[c.tone]}`}>{c.text}</span>
@@ -373,10 +403,6 @@ function ProductionCard({
           </li>
         ))}
       </ul>
-      <PortfolioLines load={portfolio} />
-      <p className="mt-2 text-xs text-slate-500">
-        Santral bazında tahmin proje sayfasında.
-      </p>
       <Link
         href={forecastLink}
         className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-indigo-700 hover:underline"
@@ -402,29 +428,49 @@ function PortfolioLines({ load }: { load: Load<PortfolioProduction> }) {
   const peak = total.hours.reduce((b, v, h) => (v > total.hours![b] ? h : b), 0);
   const withProd = projects.filter((p) => p.hours).sort((a, b) => b.mwh - a.mwh);
   return (
-    <div className="mt-3 border-t border-slate-100 pt-2">
-      <p className="text-xl font-bold tabular-nums text-slate-900">
+    <div>
+      <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
         {nf(total.mwh)} <span className="text-sm font-medium text-slate-500">MWh portföy toplamı</span>
       </p>
       <p className="text-xs text-slate-500">
         En yüksek saat {hh(peak)} ({nf(total.hours[peak], 1)} MWh). Güneş ve rüzgâr; HES yok.
       </p>
       {total.coverage.totalPlants > 0 && (
-        <p className="text-xs text-amber-800">
-          Portföyün tamamı değil: tahmine giren santral {total.coverage.plants} / {total.coverage.totalPlants}
-          {total.coverage.totalMw > 0 && <>, kurulu güç payı %{nf((total.coverage.mw / total.coverage.totalMw) * 100, 0)}</>}. HES&apos;ler ve
-          tahmini kurulamayan santraller dışarıda.
-        </p>
+        <div className={`mt-3 ${METER_GRID}`}>
+          <Meter
+            label="Tahmine giren santral"
+            value={`${total.coverage.plants} / ${total.coverage.totalPlants}`}
+            pct={(total.coverage.plants / total.coverage.totalPlants) * 100}
+          />
+          {total.coverage.totalMw > 0 && (
+            <Meter
+              label="Kurulu güç payı"
+              value={`%${nf((total.coverage.mw / total.coverage.totalMw) * 100, 0)}`}
+              pct={(total.coverage.mw / total.coverage.totalMw) * 100}
+            />
+          )}
+        </div>
       )}
-      <ul className="mt-1 space-y-0.5 text-xs text-slate-600">
-        {withProd.slice(0, 4).map((p) => (
-          <li key={p.projectId} className="flex justify-between gap-2">
-            <span className="truncate">{p.name}</span>
-            <span className="tabular-nums">{nf(p.mwh)} MWh</span>
-          </li>
-        ))}
-        {withProd.length > 4 && <li className="text-slate-400">+{withProd.length - 4} proje daha</li>}
-      </ul>
+      <details className="mt-2 text-xs text-slate-600">
+        <summary className="cursor-pointer font-medium text-indigo-700 hover:underline">
+          Kapsam ve projeler
+        </summary>
+        {total.coverage.totalPlants > 0 && (
+          <p className="mt-1 text-amber-800">
+            Portföyün tamamı değil: HES&apos;ler ve tahmini kurulamayan santraller dışarıda.
+          </p>
+        )}
+        <ul className="mt-1 space-y-0.5">
+          {withProd.slice(0, 4).map((p) => (
+            <li key={p.projectId} className="flex justify-between gap-2">
+              <span className="truncate">{p.name}</span>
+              <span className="tabular-nums">{nf(p.mwh)} MWh</span>
+            </li>
+          ))}
+          {withProd.length > 4 && <li className="text-slate-400">+{withProd.length - 4} proje daha</li>}
+        </ul>
+        <p className="mt-1 text-slate-500">Santral bazında tahmin proje sayfasında.</p>
+      </details>
     </div>
   );
 }
@@ -569,9 +615,9 @@ function MarketCard({
 // ---------------------------------------------------------------- uyarılar
 
 const ALERT_STYLE = {
-  bad: { cls: "border-red-200 bg-red-50 text-red-900", icon: AlertTriangle },
-  warn: { cls: "border-amber-200 bg-amber-50 text-amber-900", icon: AlertTriangle },
-  info: { cls: "border-slate-200 bg-white text-slate-700", icon: Info },
+  bad: { cls: "border-l-red-500", iconCls: "text-red-600", icon: AlertTriangle },
+  warn: { cls: "border-l-amber-500", iconCls: "text-amber-600", icon: AlertTriangle },
+  info: { cls: "border-l-slate-300", iconCls: "text-slate-400", icon: Info },
 } as const;
 
 function Alerts({ alerts, pending }: { alerts: CockpitAlert[]; pending: boolean }) {
@@ -588,27 +634,28 @@ function Alerts({ alerts, pending }: { alerts: CockpitAlert[]; pending: boolean 
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Şu an uyarı yok.
         </p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           {alerts.map((a) => {
             const st = ALERT_STYLE[a.tone];
             const Icon = st.icon;
+            const row = `flex items-start gap-2 border-l-4 px-3 py-2.5 text-sm text-slate-800 ${st.cls}`;
             const body = (
-              <span className="flex items-start gap-2">
-                <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                <span>{a.text}</span>
-              </span>
+              <>
+                <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${st.iconCls}`} aria-hidden="true" />
+                <span className="min-w-0 flex-1">{a.text}</span>
+              </>
             );
             return (
               <li key={a.id}>
                 {a.href ? (
-                  <Link
-                    href={a.href}
-                    className={`block rounded-md border p-3 text-sm hover:brightness-95 ${st.cls}`}
-                  >
+                  <Link href={a.href} className={`${row} hover:bg-slate-50`}>
                     {body}
+                    <span className="flex shrink-0 items-center gap-1 font-medium text-indigo-700">
+                      Git <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    </span>
                   </Link>
                 ) : (
-                  <div className={`rounded-md border p-3 text-sm ${st.cls}`}>{body}</div>
+                  <div className={row}>{body}</div>
                 )}
               </li>
             );
@@ -616,86 +663,6 @@ function Alerts({ alerts, pending }: { alerts: CockpitAlert[]; pending: boolean 
         </ul>
       )}
     </section>
-  );
-}
-
-// ---------------------------------------------------------------- portföy
-
-function Portfolio({ rows }: { rows: Load<ProjectKpis[]> }) {
-  if (rows.state === "loading") return <Skeleton h="h-32" />;
-  if (rows.state === "error") return <Failed what="Projeler" message={rows.message} />;
-  if (rows.data.length === 0)
-    return (
-      <p className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
-        Henüz verisi olan proje yok. EPİAŞ&apos;tan bir şirketin santrallerini ekleyerek
-        başlayın.{" "}
-        <Link
-          href="/projects/epias"
-          className="font-medium text-indigo-700 hover:underline"
-        >
-          EPİAŞ&apos;tan santral ekle
-        </Link>
-      </p>
-    );
-  return (
-    <Card className="shadow-sm">
-      <CardContent className="overflow-x-auto p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Proje</TableHead>
-              <TableHead className="text-right">Sapma yükü</TableHead>
-              <TableHead>Veri</TableHead>
-              <TableHead className="text-right">Sayfalar</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.data.map((r) => (
-              <TableRow key={r.id}>
-                <TableCell>
-                  <Link
-                    href={`/projects/${r.id}/results`}
-                    className="font-medium text-slate-900 hover:text-indigo-700 hover:underline"
-                  >
-                    {r.name}
-                  </Link>
-                  <p className="text-xs text-slate-500">
-                    {r.plantCount} santral · {nf(r.capacityMw)} MW
-                  </p>
-                </TableCell>
-                <TableCell className="whitespace-nowrap text-right tabular-nums">
-                  {tl(r.load.current)}
-                </TableCell>
-                <TableCell className="text-sm">
-                  {r.dataGaps.length === 0 ? (
-                    <span className="text-emerald-700">Tam</span>
-                  ) : (
-                    <span className="text-amber-700" title={r.dataGaps.join("\n")}>
-                      {r.dataGaps.length} eksik
-                    </span>
-                  )}
-                </TableCell>
-                <TableCell className="whitespace-nowrap text-right text-sm">
-                  <Link
-                    href={`/projects/${r.id}/forecast`}
-                    className="text-indigo-700 hover:underline"
-                  >
-                    Üretim tahmini
-                  </Link>
-                  <span className="px-1.5 text-slate-300">·</span>
-                  <Link
-                    href={`/projects/${r.id}/results`}
-                    className="text-indigo-700 hover:underline"
-                  >
-                    Sonuç
-                  </Link>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
   );
 }
 
@@ -741,8 +708,6 @@ export default function TodayPage() {
       ? { date: tomorrowLive.data.date, mean: tomorrowLive.data.mean }
       : null;
   const scorecard = useLoad<PtfScorecard>("/api/ops/ptf-scorecard", (d) => d as PtfScorecard);
-  const [role, setRole] = useState<TodayRole>(DEFAULT_ROLE);
-  useEffect(() => setRole(readRole()), []);
   const [rows, setRows] = useState<Load<ProjectKpis[]>>({ state: "loading" });
   const [lastProject, setLastProject] = useState<string | null>(null);
 
@@ -818,84 +783,6 @@ export default function TodayPage() {
         })()
       : "PTF ve üretim tahmini, 12:30'a kadar";
 
-  const sections: Record<TodaySection, React.ReactNode> = {
-    tomorrow: (
-      <section className="space-y-3">
-        <SectionHead
-          title="Yarın için"
-          sub="Sunucunun sabah yazdığı değişmeyen günlük kayıtlar (PTF 12:03, güneş ve rüzgâr sabah)"
-        />
-        <div className="grid gap-4 md:grid-cols-2">
-          <PtfCard load={status} announced={announced} />
-          <ProductionCard load={status} portfolio={portfolio} minutes={minutes} forecastLink={fLink} />
-        </div>
-        <Link
-          href="/market/teklif"
-          className="inline-flex items-center gap-1 text-sm font-medium text-indigo-700 hover:underline"
-        >
-          Saat saat teklif masası <ArrowRight className="h-3.5 w-3.5" />
-        </Link>
-      </section>
-    ),
-    score: (
-      <section className="space-y-3">
-        <SectionHead
-          title="Akşam: dünün karnesi"
-          sub="Motorun dünkü kaydı gerçekleşen fiyatla karşılaştırılır"
-        />
-        <div className="grid gap-4 md:grid-cols-2">
-          <ScoreCard load={scorecard} />
-          <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm">
-            <p className="text-xs font-medium text-slate-500">Üretim tahmini karnesi</p>
-            <p className="mt-2">
-              Güneş ve rüzgâr tahmininin ileriye dönük karnesi için kayıt toplanıyor; santral
-              bazında gerçekleşen üretim iki gün gecikmeyle yayımlandığı için en erken Kasım
-              ortasında anlamlı olur. O zamana kadar yalnız geçmişe dönük sınama var.
-            </p>
-          </div>
-        </div>
-      </section>
-    ),
-    market: (
-      <section className="space-y-3">
-        <SectionHead
-          title="Piyasa"
-          sub="Bugün şu ana kadar ve dün"
-          href="/market/gunluk?sekme=bugun"
-          cta="Günlük pano"
-        />
-        <div className="grid gap-4 md:grid-cols-2">
-          <MarketCard
-            title="Bugün"
-            load={todayMarket}
-            href="/market/gunluk?sekme=bugun"
-            cta="Bugün sekmesi"
-            what="Bugünün piyasası"
-          />
-          <MarketCard
-            title="Dünün sonucu"
-            load={yesterday}
-            href="/market/gunluk?sekme=gecmis"
-            cta="Geçmiş gün"
-            what="Dünün sonucu"
-          />
-        </div>
-      </section>
-    ),
-    alerts: <Alerts alerts={alerts} pending={status.state === "loading"} />,
-    portfolio: (
-      <section className="space-y-3">
-        <SectionHead
-          title="Portföyüm"
-          sub="Proje başına hızlı geçiş"
-          href="/projects"
-          cta="Tüm projeler"
-        />
-        <Portfolio rows={rows} />
-      </section>
-    ),
-  };
-
   return (
     <div className="min-h-screen bg-slate-50/60 pb-16">
       <header className="border-b bg-white">
@@ -915,36 +802,58 @@ export default function TodayPage() {
       <main className="mx-auto max-w-7xl space-y-8 px-4 py-6 sm:px-6 lg:px-8">
         <PhaseCard minutes={minutes} bidReady={bidReady} />
 
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Görünüm">
-          <span className="text-xs font-medium text-slate-500">Görünüm</span>
-          {ROLES.map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              title={r.hint}
-              aria-pressed={role === r.id}
-              onClick={() => {
-                setRole(r.id);
-                writeRole(r.id);
-              }}
-              className={`rounded-full border px-3 py-1 text-xs font-medium ${role === r.id ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
-            >
-              {r.label}
-            </button>
-          ))}
-          <span className="text-xs text-slate-400">yalnız bölüm sırasını değiştirir</span>
-        </div>
+        {/* Tek düzen, yalnız bugünle ilgili olanlar: önce dikkat isteyenler, sonra yarının kayıtları, sonra piyasa ve dünkü tahmin */}
+        <Alerts alerts={alerts} pending={status.state === "loading"} />
 
-        {SECTION_ORDER[role].map((id) => (
-          <React.Fragment key={id}>{sections[id]}</React.Fragment>
-        ))}
+        <section className="space-y-3">
+          <SectionHead
+            title="Yarın için"
+            sub="Sunucunun sabah yazdığı değişmeyen günlük kayıtlar (PTF 12:03, güneş ve rüzgâr sabah)"
+            href="/market/teklif"
+            cta="Saat saat teklif masası"
+          />
+          <div className="grid gap-4 md:grid-cols-2">
+            <PtfCard load={status} announced={announced} />
+            <ProductionCard load={status} portfolio={portfolio} minutes={minutes} forecastLink={fLink} />
+          </div>
+        </section>
+
+        <section className="space-y-3">
+          <SectionHead
+            title="Piyasa ve dünkü tahmin"
+            sub="Bugün şu ana kadar, dünün sonucu ve dünkü PTF tahmininin ne kadar tuttuğu"
+            href="/market/gunluk?sekme=bugun"
+            cta="Günlük pano"
+          />
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <MarketCard
+              title="Bugün"
+              load={todayMarket}
+              href="/market/gunluk?sekme=bugun"
+              cta="Bugün sekmesi"
+              what="Bugünün piyasası"
+            />
+            <MarketCard
+              title="Dünün sonucu"
+              load={yesterday}
+              href="/market/gunluk?sekme=gecmis"
+              cta="Geçmiş gün"
+              what="Dünün sonucu"
+            />
+            <ScoreCard load={scorecard} />
+          </div>
+        </section>
 
         <p className="text-xs text-slate-500">
-          Dönem boyunca piyasa, projeleriniz ve sektördeki yeriniz için{" "}
+          Projeleriniz{" "}
+          <Link href="/projects" className="text-indigo-700 hover:underline">
+            Projelerim
+          </Link>
+          &apos;de; dönem boyunca piyasa ve sektördeki yeriniz{" "}
           <Link href="/ozet" className="text-indigo-700 hover:underline">
             Dönem özeti
           </Link>
-          .
+          &apos;nde.
         </p>
       </main>
     </div>

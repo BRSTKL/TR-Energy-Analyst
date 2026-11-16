@@ -83,26 +83,40 @@ export function DataQualityBanner({ projectId, refreshKey }: DataQualityBannerPr
   return (
     <>
       {gapNotice}
-      <div
-        role="alert"
-        className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900 shadow-sm"
-      >
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-        <div className="space-y-1">
-          <p className="text-sm font-semibold">
+      <Notice
+        title={
+          <>
             Finansal sonuçlar henüz güvenilir değil: doğrulanmış piyasa fiyatıyla hesaplanan saat{" "}
             {verifiedHours.toLocaleString("tr-TR")} / {totalHours.toLocaleString("tr-TR")} (
             {pct(verifiedHours, totalHours)}).
-          </p>
+          </>
+        }
+      >
           <p>{details.join(" · ")}.</p>
           <p className="text-amber-800">
             Gelir, dengesizlik maliyeti ve arbitraj rakamlarını paylaşmadan önce ilgili dönem için
             EPİAŞ Senkronize Et ile fiyatları yeniden çekin. MWh bazlı tahmin sapmaları bu durumdan
             etkilenmez.
           </p>
-        </div>
-      </div>
+        </Notice>
     </>
+  );
+}
+
+/**
+ * Veri uyarısı: başlık her zaman görünür (uyarı gizlenmez); liste ve ne yapılacağı "Ayrıntı"da açılır. Sayfanın üstünde
+ * birkaç uyarı birden olabildiği için kapalıyken tek satırdır.
+ */
+function Notice({ title, children }: { title: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <details role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+      <summary className="flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
+        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+        <span className="min-w-0 flex-1 text-sm font-semibold">{title}</span>
+        <span className="shrink-0 font-medium underline underline-offset-2">Ayrıntı</span>
+      </summary>
+      <div className="mt-2 space-y-1 pl-6">{children}</div>
+    </details>
   );
 }
 
@@ -110,13 +124,11 @@ export function DataQualityBanner({ projectId, refreshKey }: DataQualityBannerPr
 function GenerationGapNotice({ gaps }: { gaps: string[] }) {
   if (gaps.length === 0) return null;
   return (
-    <div
-      role="alert"
-      className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900 shadow-sm"
-    >
-      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-      <div className="space-y-1">
-        <p className="text-sm font-semibold">Üretim verisi eksik: bu aylar santral ve portföy rakamlarına girmedi.</p>
+    <Notice
+        title={
+          <>Üretim verisi eksik: bu aylar santral ve portföy rakamlarına girmedi.</>
+        }
+      >
         <ul className="list-disc pl-4">
           {gaps.map((g) => (
             <li key={g}>{g}</li>
@@ -126,18 +138,18 @@ function GenerationGapNotice({ gaps }: { gaps: string[] }) {
           Eksik ay santralin birim maliyetini, portföy netleşmesini ve sektör kıyasını etkiler. Veriyi EPİAŞ&apos;tan yeniden
           çekin ya da raporda bu santrali ayrıca belirtin.
         </p>
-      </div>
-    </div>
+      </Notice>
   );
 }
 
 function ZeroPlanNotice({ items }: { items: string[] }) {
   if (items.length === 0) return null;
   return (
-    <div role="alert" className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900 shadow-sm">
-      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-      <div className="space-y-1">
-        <p className="text-sm font-semibold">Bazı saatlerde ilk plan (KGÜP) sıfır, santral ise tam çalışmış.</p>
+    <Notice
+        title={
+          <>Bazı saatlerde ilk plan (KGÜP) sıfır, santral ise tam çalışmış.</>
+        }
+      >
         <ul className="list-disc pl-4">
           {items.slice(0, 8).map((g) => (
             <li key={g}>{g}</li>
@@ -148,8 +160,7 @@ function ZeroPlanNotice({ items }: { items: string[] }) {
           Plan o saatler için girilmemiş ya da ilk sürümde boş kalmış olabilir; bu saatler dengesizlik maliyetini ve sektör
           sıralamasını şişirir. Gerçek bir tahmin hatası olup olmadığını santral işletmecisiyle teyit edin.
         </p>
-      </div>
-    </div>
+      </Notice>
   );
 }
 
@@ -158,13 +169,14 @@ function FinalPlanNotice({ finalPlan }: { finalPlan?: DataQuality["finalPlan"] }
   if (!finalPlan || (!finalPlan.belowThreshold && finalPlan.lowPlants.length === 0)) return null;
 
   return (
-    <div role="alert" className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900 shadow-sm">
-      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-      <div className="space-y-1">
-        <p className="text-sm font-semibold">
+    <Notice
+        title={
+          <>
           Son plan (gün içi sonrası KGÜP) saatlerin {pctIn(finalPlan.coveragePct)} var
           {finalPlan.belowThreshold ? ": KÜPST üst sınır, gün içi düzeltmeler rapor köprüsüne girmez." : "."}
-        </p>
+        </>
+        }
+      >
         {finalPlan.lowPlants.length > 0 && (
           <p>
             Son planı eksik santraller: {finalPlan.lowPlants.slice(0, 8).join(", ")}
@@ -175,8 +187,7 @@ function FinalPlanNotice({ finalPlan }: { finalPlan?: DataQuality["finalPlan"] }
           Bu saatlerde KÜPST ilk plana göre hesaplanır (gerçek değerden yüksek olabilir). EPİAŞ son planı bazı birimler için (ör. LÜY)
           yayımlamaz; diğerleri için &quot;EPİAŞ verilerini tamamla&quot; ile çekilebilir.
         </p>
-      </div>
-    </div>
+      </Notice>
   );
 }
 
@@ -192,18 +203,18 @@ function FormulaPriceNotice({ formulaPrice }: { formulaPrice?: { hours: number; 
   const ms = formulaPrice.months;
   const range = ms.length === 1 ? monthName(ms[0]) : `${monthName(ms[0])} – ${monthName(ms[ms.length - 1])}`;
   return (
-    <div role="alert" className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900 shadow-sm">
-      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-      <div className="space-y-1">
-        <p className="text-sm font-semibold">
+    <Notice
+        title={
+          <>
           {formulaPrice.hours.toLocaleString("tr-TR")} saatte ({range}) resmî dengesizlik fiyatı henüz yok: bu saatlerin maliyeti tahmini.
-        </p>
+        </>
+        }
+      >
         <p>
           EPİAŞ 2026&apos;dan beri fiyatı 15 dakikalık SMF&apos;den hesaplıyor ve resmî fiyatı yaklaşık 6 hafta sonra yayımlıyor. O zamana kadar
           fiyat saatlik verilerle formülden bulunur. Ocak–Eylül 2026&apos;da formül, resmî fiyata göre maliyeti %2,5–6,3 düşük buldu; bu
           saatlerin maliyeti büyük olasılıkla biraz daha yüksektir. Resmî fiyat gelince &quot;EPİAŞ verisini güncelle&quot; ile düzelir.
         </p>
-      </div>
-    </div>
+      </Notice>
   );
 }

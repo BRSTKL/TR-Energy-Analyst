@@ -74,22 +74,14 @@ export function NettingCard({
   return (
     <Card className="shadow-sm">
       <CardHeader>
-        <CardTitle className="text-base font-semibold">
-          Dengeden Sorumlu Grup (DSG) Netleştirme Analizi
-        </CardTitle>
+        <CardTitle className="text-base font-semibold">Netleşme (dengeden sorumlu grup)</CardTitle>
         <CardDescription>
-          Santraller aynı dengeden sorumlu grupta olsaydı, aynı saatteki fazla ve eksik üretimler
-          birbirini dengelerdi. Bağımsız maliyet, santrallerin tek başına dengesizlik maliyetlerinin
-          toplamı; netleşmiş maliyet, grubun saatlik toplam dengesizliğinin aynı fiyatlarla maliyetidir.
-          Grup düzeyinde aynı fiyat formülü varsayılır; maliyetin üyeler arasında paylaşımı DSG
-          sözleşmesine bağlıdır. Bu tablo üst sınırdır: farklı şirketler bir grupta birleşince her şirketin saatlik
-          sapmasının yalnız satış ya da üretiminden büyük olanın %5&apos;i kadarı (2025&apos;te %10) grupta netleşir, kalanı kendi fiyatıyla ödenir (DUY md.
-          111). Şirketler arası ek fayda rakamı ve DSG Senaryoları sayfası bu sınırla hesaplanır.
+          Santraller tek grupta uzlaştırılsaydı aynı saatteki fazla ve eksik üretim birbirini dengelerdi.
           {projectId && (
             <>
               {" "}
               <Link href={`/projects/${projectId}/dsg`} className="font-medium text-indigo-600 hover:underline">
-                Grup seçimi ve paylaştırma seçenekleri için DSG Senaryoları →
+                DSG senaryoları →
               </Link>
             </>
           )}
@@ -97,7 +89,7 @@ export function NettingCard({
       </CardHeader>
       <CardContent className="space-y-5">
         {sameCompanyGroups.length > 0 && (
-          <div className="rounded-md border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-900">
+          <div className="rounded-md border border-l-4 border-slate-200 border-l-indigo-500 bg-white px-3 py-2 text-xs text-slate-700">
             {aggregatorName ? (
               <>
                 <span className="font-semibold">Tüm santraller {aggregatorName} portföyünde.</span> Toplayıcı portföyü tek
@@ -132,15 +124,15 @@ export function NettingCard({
         )}
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-lg border border-slate-200 bg-white p-3">
-            <span className="text-xs text-slate-500">Bağımsız Toplam Maliyet</span>
+            <span className="text-xs text-slate-500">Santraller tek başına</span>
             <p className="font-mono text-lg font-bold text-slate-900">{tl(portfolio.standaloneCost)}</p>
           </div>
           <div className="rounded-lg border border-slate-200 bg-white p-3">
-            <span className="text-xs text-slate-500">DSG İçinde Netleşmiş Maliyet</span>
+            <span className="text-xs text-slate-500">Grupta netleşmiş</span>
             <p className="font-mono text-lg font-bold text-slate-900">{tl(portfolio.nettedCost)}</p>
           </div>
           <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
-            <span className="text-xs text-emerald-800">Netleştirme Faydası</span>
+            <span className="text-xs text-emerald-800">Netleşme faydası</span>
             <p className="font-mono text-lg font-bold text-emerald-700">
               {tl(portfolio.benefitTl)}{" "}
               <span className="text-sm font-semibold">({pct(portfolio.benefitRatio)})</span>
@@ -153,12 +145,12 @@ export function NettingCard({
             <TableHeader>
               <TableRow className="bg-slate-50/80">
                 <TableHead>Grup</TableHead>
-                <TableHead className="text-right">Bağımsız Maliyet</TableHead>
-                <TableHead className="text-right">Netleşmiş Maliyet</TableHead>
+                <TableHead className="text-right">Tek başına</TableHead>
+                <TableHead className="text-right">Netleşmiş</TableHead>
                 <TableHead className="text-right">Fayda</TableHead>
                 <TableHead className="text-right">Fayda %</TableHead>
-                <TableHead className="text-right">Dengesizlik MWh (Brüt → Net)</TableHead>
-                <TableHead className="text-right">Ters Yönlü Saat</TableHead>
+                <TableHead className="text-right">Dengesizlik MWh (brüt → net)</TableHead>
+                <TableHead className="text-right">Ters yönlü saat</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -179,10 +171,25 @@ export function NettingCard({
             </TableBody>
           </Table>
         </div>
-        <p className="text-2xs text-slate-500">
-          Ters yönlü saat: grupta en az bir santralin fazla, en az birinin eksik ürettiği saatlerin
-          payı. Netleştirme maliyeti hiçbir saatte artırmaz; fayda tamamen bu saatlerden gelir.
-        </p>
+        <details className="text-xs text-slate-600">
+          <summary className="cursor-pointer text-xs font-medium text-indigo-700 hover:underline">Nasıl hesaplandı</summary>
+          <ul className="mt-2 list-disc space-y-1 pl-4">
+            <li>
+              Tek başına maliyet, santrallerin ayrı ayrı dengesizlik maliyetlerinin toplamıdır; netleşmiş maliyet, grubun saatlik
+              toplam dengesizliğinin aynı fiyatlarla maliyetidir. Grup düzeyinde aynı fiyat formülü varsayılır; maliyetin üyeler
+              arasında paylaşımı DSG sözleşmesine bağlıdır.
+            </li>
+            <li>
+              Bu tablo üst sınırdır: farklı şirketler bir grupta birleşince her şirketin saatlik sapmasının yalnız satış ya da
+              üretiminden büyük olanın %5&apos;i kadarı (2025&apos;te %10) grupta netleşir, kalanı kendi fiyatıyla ödenir (DUY md.
+              111). Şirketler arası ek fayda rakamı ve DSG Senaryoları sayfası bu sınırla hesaplanır.
+            </li>
+            <li>
+              Ters yönlü saat: grupta en az bir santralin fazla, en az birinin eksik ürettiği saatlerin payı. Netleştirme maliyeti
+              hiçbir saatte artırmaz; fayda tamamen bu saatlerden gelir.
+            </li>
+          </ul>
+        </details>
       </CardContent>
     </Card>
   );

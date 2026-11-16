@@ -82,17 +82,10 @@ export function PlantComparisonCard({ comparison, yekdemPlants = [] }: { compari
   return (
     <Card className="shadow-sm">
       <CardHeader>
-        <CardTitle className="text-base font-semibold">
-          Santral ve Teknoloji Karşılaştırması
-        </CardTitle>
+        <CardTitle className="text-base font-semibold">Santral ve teknoloji karşılaştırması</CardTitle>
         <CardDescription>
-          Capture price, santralin üretim ağırlıklı ortalama PTF&apos;sidir; dönemin düz ortalama
-          PTF&apos;si ({num(comparison.baseloadPtf, 2)} TL/MWh) ile oranı capture rate&apos;tir. Plan
-          fazlası + ise plan gerçekleşenden fazla (santral eksik üretti), − ise az.
-          {yekdemPlants.length > 0 &&
-            " YEKDEM etiketli santrallerin geliri YEKDEM fiyatından oluşur; bu satırlardaki gelir ve capture değerleri üretimin piyasa (PTF) değeridir, fiili gelir değildir."}{" "}
-          Tüm birim
-          değerler toplamlar üzerinden ağırlıklı hesaplanır.
+          Santraller, teknoloji grupları ve portföy aynı birim değerlerle. Dönemin düz ortalama PTF&apos;si{" "}
+          {num(comparison.baseloadPtf, 2)} TL/MWh.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -103,10 +96,10 @@ export function PlantComparisonCard({ comparison, yekdemPlants = [] }: { compari
                 <TableHead>Santral</TableHead>
                 <TableHead className="text-right">Üretim (MWh)</TableHead>
                 <TableHead className="text-right">Plan fazlası</TableHead>
-                <TableHead className="text-right">Capture Price (TL/MWh)</TableHead>
-                <TableHead className="text-right">Capture Rate</TableHead>
-                <TableHead className="text-right">Birim Gelir (TL/MWh)</TableHead>
-                <TableHead className="text-right">Birim Deng. Maliyeti (TL/MWh)</TableHead>
+                <TableHead className="text-right">Capture price (TL/MWh)</TableHead>
+                <TableHead className="text-right">Capture rate</TableHead>
+                <TableHead className="text-right">Birim gelir (TL/MWh)</TableHead>
+                <TableHead className="text-right">Birim dengesizlik maliyeti (TL/MWh)</TableHead>
                 <TableHead className="text-right">Maliyet / tam tahmin geliri</TableHead>
               </TableRow>
             </TableHeader>
@@ -118,6 +111,20 @@ export function PlantComparisonCard({ comparison, yekdemPlants = [] }: { compari
             </TableBody>
           </Table>
         </div>
+        <details className="mt-3 text-xs text-slate-600">
+          <summary className="cursor-pointer text-xs font-medium text-indigo-700 hover:underline">Sütunlar ne anlama geliyor</summary>
+          <ul className="mt-2 list-disc space-y-1 pl-4">
+            <li>Capture price, santralin üretim ağırlıklı ortalama PTF&apos;sidir; düz ortalama PTF ile oranı capture rate&apos;tir.</li>
+            <li>Plan fazlası + ise plan gerçekleşenden fazla (santral eksik üretti), − ise az.</li>
+            {yekdemPlants.length > 0 && (
+              <li>
+                YEKDEM etiketli santrallerin geliri YEKDEM fiyatından oluşur; bu satırlardaki gelir ve capture değerleri üretimin
+                piyasa (PTF) değeridir, fiili gelir değildir.
+              </li>
+            )}
+            <li>Tüm birim değerler toplamlar üzerinden ağırlıklı hesaplanır.</li>
+          </ul>
+        </details>
       </CardContent>
     </Card>
   );

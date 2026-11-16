@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-582 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+581 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
 ## Sayfalar (app/**/page.tsx) (31)
 
@@ -28,7 +28,7 @@
 - `/market/teklif` (`app/market/teklif/page.tsx`)
 - `/methodology` (`app/methodology/page.tsx`) — Metodoloji: uygulamadaki ve rapordaki her rakamın nereden geldiği.
 - `/ozet` (`app/ozet/page.tsx`) — Dönem özeti (eski ana sayfa; 29.10.2026'dan beri ana sayfa Bugün kokpiti).
-- `/` (`app/page.tsx`) — Bugün kokpiti (ana sayfa): günün saatlerine göre şimdi hangi adımdasınız, yarın için ne hazır, piyasa şimdi nasıl, dünün sonucu ve uyarılar.
+- `/` (`app/page.tsx`) — Bugün kokpiti (ana sayfa): yalnız o günle ilgili olanlar, tek düzende: şimdi hangi adımdasınız, uyarılar, yarın için ne hazır, piyasa şimdi nasıl, dünün sonucu ve dünkü tahmin.
 - `/projects/epias` (`app/projects/epias/page.tsx`) — Bir santralin EPİAŞ çekim durumu
 - `/projects` (`app/projects/page.tsx`) — Kartın gösterge bloğu: bir trader'ın ilk bakacağı dört bilgi (Dengesizlik Karnesi ile aynı motordan, /api/compare).
 - `/santraller/[id]` (`app/santraller/[id]/page.tsx`) — Santral kartı: kayıtlı bilgiler (kurulu güç, konum, YEKDEM) ve seçilen yılın gerçekleşen satış fiyatı.
@@ -452,13 +452,12 @@
 - `lib/strategy/index.ts`
 - `lib/strategy/insights.ts` — Kural Tabanlı (Rule-Based) Strateji ve İçgörü Motoru: SAF ve deterministik fonksiyonlar: 1.
 
-## lib/ui (6)
+## lib/ui (5)
 
 - `lib/ui/cockpit-alerts.ts` — Bugün kokpitinin uyarı listesi (saf, I/O yok): Girdiler: yarının kayıt durumu (ops-status), canlı piyasa notları ve projelerin veri boşlukları.
 - `lib/ui/day-phase.ts` — günün fazı (saf, I/O yok): üst şerit ve Bugün kokpiti: Enerji ticareti gününün saatleri sabit: yarının tahmini kesimden sonra (12:05), GÖP teklif kapanışı 12:30, fiyat 14:00'te açıklanır.
 - `lib/ui/last-project.ts` — son açılan proje (yalnız kolaylık: menüdeki "Üretim tahmini" bağlantısı onun tahminine gider)
 - `lib/ui/ops-chips.ts` — üst şeritteki kayıt rozetleri (saf, I/O yok): yarının PTF, güneş ve rüzgâr kayıtları: Kayıt yazılmışsa yeşil (kesimden sonra yazıldıysa sarı); yazılmamışsa beklenen saate kadar nötr "bekleniyor", saat geçtiyse kırmızı "yok".
-- `lib/ui/today-view.ts` — Bugün kokpiti "Görünüm" seçici (yalnız bölüm sırası; veri ya da yetki değişmez): Aynı uygulama farklı işler için: üretici teklif hazırlar, piyasa analisti fiyata bakar, toplayıcı portföyü izler, yönetim sonuca.
 - `lib/ui/use-tr-clock.ts` — Türkiye saati (gün başından dakika); sunucuda ve ilk çizimde null (taşma uyuşmazlığı olmasın), sonra `everyMs`'de bir güncellenir
 
 ## lib/utils.ts (1)
