@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-585 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+586 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
 ## Sayfalar (app/**/page.tsx) (31)
 
@@ -642,7 +642,7 @@
 - `scripts/wind-sync.mts` — Gerçekleşen rüzgâr (rüzgâr kayıp tespiti; lib/weather/reanalysis-wind.ts): konumu olan proje rüzgâr santralleri için ERA5 (0,25°) ve ECMWF IFS (9 km) saatlik 100 m hız / yön, 2025-01-01'den dünkü güne.
 - `scripts/yekdem-exit-sync.mts` — YEKDEM çıkış taraması için EPİAŞ YEKDEM listelerini yeniler (VPN gerekir): - kimlikli santral listesi 2014 → bu yıl (+ yıl sonundaysa gelecek yıl): .cache/epias/yekdem-<yıl>.json - katılımcı listesi (ad, şirket, kurulu güç): .cache/epias/y…
 
-## scripts/analysis (16)
+## scripts/analysis (17)
 
 - `scripts/analysis/change-detection-scan.mts` — Değişim algılama taraması (Aşama 22.7): proje güneş santrallerinde bağlanan uyarılar (kapasite değişimi, son / süren uzun arıza; lib/services/plant-change-warnings.ts) ve bağlanmayan konum tutarsızlığı.
 - `scripts/analysis/curtailment-scan.mts` — Uydu ışınımıyla kısıntı / arıza taraması (PLAN 15.5, 20.1): konumlu güneş santralleri, yıl başına kayıp saat, kayıp üretim ve TL karşılığı (kayıp × PTF; planlı = şirketin ilk KGÜP'ü ≈ 0; plansız = arıza / talimat).
@@ -657,6 +657,7 @@
 - `scripts/analysis/res-forecast-price-evidence.mts` — Kanıt: EPİAŞ'ın sistem geneli rüzgâr tahmini (/renewables/data/res-generation-and-forecast, 15 dakikalık üretim ve tahmin) fiyat okumasına ne katıyor?
 - `scripts/analysis/snapshot-report.mts` — Anlık görüntü raporu: hangi serinin saat kaçta yayımlandığı, sürümler arası değişim, hangi çekimin rüzgâr tahmini gerçekleşene daha yakın (lib/analysis/snapshot-report.ts; veri `snapshots/`, scripts/snapshot-capture.mts).
 - `scripts/analysis/solar-candidates-backtest.mts` — Güneş motoru aday sürümlerinin geriye dönük testi (Aşama 22): canlı temel (sürüm 3 kalıcılıksız) ile adaylar aynı koşulda.
+- `scripts/analysis/solar-wn3-backtest.mts` — Güneş: WeatherNext 3 ışınımıyla aynı canlı model (sürüm 3 kalıcılıksız, lib/solar-engine/models/production-model-v2.ts) ECMWF d2 girdisine karşı (17.11.2026).
 - `scripts/analysis/wind-candidates-backtest.mts` — Rüzgâr motoru aday sürümlerinin geriye dönük testi (Aşama 23.3–23.8; güneşteki scripts/analysis/solar-candidates-backtest.mts'in rüzgâr karşılığı).
 - `scripts/analysis/wind-forecast-backtest.mts` — Rüzgâr üretim tahmini geriye dönük testi (kullanıcı 18.10.2026; güneşteki scripts/analysis/forecast-backtest.mts'in rüzgâr karşılığı).
 - `scripts/analysis/wind-live-backtest.mts` — Güncel sunucu kopyasında 120 günlük, günlük kayan RES temel sınaması.

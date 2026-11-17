@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { assembleDay, convertRow, emptyCellYear, putDay, WN3_VARS, type Wn3Row, type Wn3Var } from "@/lib/weather/weathernext-store";
+import { assembleDay, convertRow, emptyCellYear, putDay, wn3UsableFor, WN3_VARS, type Wn3Row, type Wn3Var } from "@/lib/weather/weathernext-store";
+import { decisionCutoff, WEATHER_RUN_RULES } from "@/lib/forecast/info-time";
 
 const H = 3_600_000;
 const vals = (ws: number) => Object.fromEntries(WN3_VARS.map((k) => [k, k === "ws100" ? ws : 0])) as Record<Wn3Var, number | null>;
@@ -42,5 +43,16 @@ describe("WeatherNext deposu", () => {
     expect(doc.runs["2026-01-02"]).toBe(new Date(run00).toISOString());
     expect(doc.vars.ws100.length).toBe(8760);
     expect(H).toBe(3_600_000);
+  });
+});
+
+describe("WeatherNext bilgi zamanı (damga)", () => {
+  it("günün son saati ertesi günün 00:00 damgasını kullanamaz (ertesi günün çalışması kesimden sonra)", () => {
+    const delay = WEATHER_RUN_RULES.weathernext3.publishDelayMs;
+    const hour23 = Date.parse("2026-11-18T23:00:00Z"); // duvar saati
+    const sameDay = { run: Date.parse("2026-11-17T00:00:00Z"), values: vals(1) };
+    const nextDay = { run: Date.parse("2026-11-18T00:00:00Z"), values: vals(2) };
+    expect(wn3UsableFor(sameDay, hour23, delay, decisionCutoff)).not.toBeNull();
+    expect(wn3UsableFor(nextDay, hour23, delay, decisionCutoff)).toBeNull();
   });
 });

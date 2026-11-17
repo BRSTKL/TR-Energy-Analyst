@@ -164,3 +164,11 @@ export async function wn3Stamps(latitude: number, longitude: number, from: numbe
   }
   return out;
 }
+
+/**
+ * Üretim saati t'nin kesiminde (cutoffOf(t)) damga s elde mi: damganın çalışması + yayım gecikmesi ≤ kesim. Günün son
+ * saati ertesi günün 00:00 damgasına uzanır; o damga ertesi günün çalışmasındandır ve t'nin kesiminde elde DEĞİLDİR.
+ */
+export function wn3UsableFor(stamp: Wn3Stamp | undefined, t: number, publishDelayMs: number, cutoffOf: (wall: number) => number): Wn3Stamp | null {
+  return stamp && stamp.run + publishDelayMs + TR <= cutoffOf(t) ? stamp : null;
+}

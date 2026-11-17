@@ -14,7 +14,7 @@ import { readWindForecastYear, readWindNwpYear, readWindYear } from "@/lib/weath
 import { hubWind, WIND_NWP_MODELS, type WindNwpYear } from "@/lib/weather/wind-nwp-archive";
 import { readPoolPlantInfo } from "@/lib/pool/pool-store";
 import { nearestCell } from "@/lib/weather/weathernext";
-import { wn3Stamps } from "@/lib/weather/weathernext-store";
+import { wn3Stamps, wn3UsableFor } from "@/lib/weather/weathernext-store";
 import { decisionCutoff, WEATHER_RUN_RULES } from "@/lib/forecast/info-time";
 import type { WindEnsembleHour } from "../models/ensemble";
 
@@ -75,8 +75,12 @@ export async function loadWindPlantData(epiasPlantId: number, from: number, to: 
       wn3 = await wn3Stamps(c.latitude, c.longitude, from, to + HOUR, WEATHER_RUN_RULES.weathernext3.publishDelayMs, decisionCutoff);
     }
   }
+  // Üretim saati [t, t+1): damga t ve t+1 ortalaması; t+1 (günün son saatinde ertesi günün 00:00'ı) t'nin kesiminde elde
+  // değilse yalnız damga t (wn3UsableFor)
+  const WN3_DELAY = WEATHER_RUN_RULES.weathernext3.publishDelayMs;
   const wn3Wind = (t: number) => {
-    const a = wn3?.get(t)?.values, b = wn3?.get(t + HOUR)?.values;
+    const a = wn3UsableFor(wn3?.get(t), t, WN3_DELAY, decisionCutoff)?.values;
+    const b = wn3UsableFor(wn3?.get(t + HOUR), t, WN3_DELAY, decisionCutoff)?.values ?? a;
     return a && b ? hourMeanWind(a.ws100, b.ws100, a.dir100, b.dir100) : { ws: null, dir: null };
   };
   const num = (v: number | undefined) => (v === undefined || Number.isNaN(v) ? null : v);
