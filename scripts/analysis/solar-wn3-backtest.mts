@@ -59,7 +59,10 @@ for (const id of ids) {
   const info = await readPoolPlantInfo(id);
   if (!info?.location) continue;
   const data = await loadSolarHours(id, Date.UTC(2026, 3, 1), end);
-  if (!data) continue;
+  if (!data) {
+    console.log(`  #${id}: güneş verisi yok (konum ya da hava arşivi)`);
+    continue;
+  }
   const c = nearestCell(info.location.latitude, info.location.longitude);
   const wn = await wn3Stamps(c.latitude, c.longitude, Date.UTC(2026, 3, 1), end + HOUR, DELAY, decisionCutoff);
   // Aynı saat WN3 girdisiyle: ışınım t+1, bulut/sıcaklık t; kesimde elde olmayan damga kullanılmaz
@@ -97,7 +100,8 @@ for (const id of ids) {
     try {
       base = fitSolarModelV2(train, data.site, { exclude: clean.exclude, noLag: true });
       wn3m = fitSolarModelV2(trainWn, data.site, { exclude: clean.exclude, noLag: true });
-    } catch {
+    } catch (e) {
+      console.log(`  ${data.name} ${y}-${m}: model kurulamadı (${(e as Error).message}); ECMWF eğitimi ${train.length} saat, WN3 eğitimi ${trainWn.length} saat`);
       continue; // eğitim verisi yetersiz (WN3 arşivi eksik ay)
     }
     for (const h of data.hours) {
