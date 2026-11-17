@@ -6,10 +6,11 @@
  *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/weathernext-sync.mts [başlangıç=YYYY-MM-DD] [bitiş=YYYY-MM-DD] [--max-gb 900] [--dry] [--force]
  *
  * Varsayılan: son 3 gün ile yarın arası. Her bölüm (UTC günü) için o günün 00 ve 18 UTC çalışmaları, 21–50. öncü saatler
- * (Türkiye günü D için 00 UTC'nin 21–44, 18 UTC'nin 27–50. saatleri). Her değişken AYRI sorguyla: BigQuery tahmini taramayı
- * kümelemeyi hesaba katmadan seçilen sütun sayısıyla büyütür (≈ 110 GB / sütun / gün; 13 sütun 1,4 TB) ve hem
- * `maximumBytesBilled` hem Sandbox kotası bu tahmine bakar (17.11.2026: 4 GB tavanlı sorgu reddedildi). Gerçek tüketim
- * küçüktür; gruplar (GROUPS) bu yüzden küçük tutulur ve tüketim sorgudan SONRA denetlenir: tek sorgu `PER_QUERY_MAX`'ı ya da toplam `--max-gb`'yi aşarsa durur.
+ * (Türkiye günü D için 00 UTC'nin 21–44, 18 UTC'nin 27–50. saatleri). BigQuery tahmini taramayı kümelemeyi hesaba katmadan
+ * seçilen sütun sayısıyla büyütür (≈ 110 GB / sütun / gün; 13 sütun 1,4 TB) ve `maximumBytesBilled` bu tahmine bakar
+ * (17.11.2026: 4 GB tavanlı sorgu reddedildi); bu yüzden değişkenler küçük gruplarla (GROUPS) sorgulanır ve gerçek tüketim
+ * sorgudan SONRA denetlenir: tek sorgu `PER_QUERY_MAX`'ı ya da toplam `--max-gb`'yi aşarsa durur. Ölçüm 17.11.2026: temel
+ * grup ≈ 2,1 GB / hedef gün (2026, günde 24 çalışma).
  * Dolu günler atlanır (`--force` yeniden yazar).
  * `--dry` yalnız tahmini taramayı yazar (kota harcamaz). Yayımlanmamış çalışmanın günü yazılmaz (sonraki çalışmada dolar).
  * Lisans ve atıf: lib/weather/weathernext.ts.
