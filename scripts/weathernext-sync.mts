@@ -10,7 +10,7 @@
  * seçilen sütun sayısıyla büyütür (≈ 110 GB / sütun / gün; 13 sütun 1,4 TB) ve `maximumBytesBilled` bu tahmine bakar
  * (17.11.2026: 4 GB tavanlı sorgu reddedildi); bu yüzden değişkenler küçük gruplarla (GROUPS) sorgulanır ve gerçek tüketim
  * sorgudan SONRA denetlenir: tek sorgu `PER_QUERY_MAX`'ı ya da toplam `--max-gb`'yi aşarsa durur. Ölçüm 17.11.2026: temel
- * grup ≈ 2,1 GB / hedef gün (2026, günde 24 çalışma).
+ * grup 1,7–3,1 GB / hedef gün (2026, günde 24 çalışma).
  * Dolu günler atlanır (`--force` yeniden yazar).
  * `--dry` yalnız tahmini taramayı yazar (kota harcamaz). Yayımlanmamış çalışmanın günü yazılmaz (sonraki çalışmada dolar).
  * Lisans ve atıf: lib/weather/weathernext.ts.
@@ -31,7 +31,7 @@ const force = args.includes("--force");
 const maxGb = Number(args[args.indexOf("--max-gb") + 1]) || 900;
 const DELAY = WEATHER_RUN_RULES.weathernext3.publishDelayMs;
 /** Tek değişken sorgusunun gerçek tüketimi bundan büyükse kümeleme çalışmıyor demektir: dur */
-const PER_QUERY_MAX = 3e9;
+const PER_QUERY_MAX = 6e9;
 /**
  * Sorgu grupları: her sorgu konum ve zaman sütunlarını yeniden okur (≈ 0,5 GB / gün), tek sütunlu sorgular pahalı
  * (17.11.2026: 10 sorgu 6 GB / gün; tek sorguda 10 sütun 1,4 GB). Temel grup arşivde de çekilir; ek grup (`--full`,
