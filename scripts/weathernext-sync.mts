@@ -5,9 +5,12 @@
  *
  *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/weathernext-sync.mts [başlangıç=YYYY-MM-DD] [bitiş=YYYY-MM-DD] [--max-gb 900] [--dry] [--force]
  *
- * Varsayılan: son 3 gün ile yarın arası. Her bölüm (UTC günü) için tek sorgu: o günün 00 ve 18 UTC çalışmaları, 21–50.
- * öncü saatler (Türkiye günü D için 00 UTC'nin 21–44, 18 UTC'nin 27–50. saatleri). Sorgu başına kota tavanı 4 GB
- * (BigQuery aşacak sorguyu çalıştırmaz); toplam `--max-gb` aşılınca durur. Dolu günler atlanır (`--force` yeniden yazar).
+ * Varsayılan: son 3 gün ile yarın arası. Her bölüm (UTC günü) için o günün 00 ve 18 UTC çalışmaları, 21–50. öncü saatler
+ * (Türkiye günü D için 00 UTC'nin 21–44, 18 UTC'nin 27–50. saatleri). Her değişken AYRI sorguyla: BigQuery tahmini taramayı
+ * kümelemeyi hesaba katmadan seçilen sütun sayısıyla büyütür (≈ 110 GB / sütun / gün; 13 sütun 1,4 TB) ve hem
+ * `maximumBytesBilled` hem Sandbox kotası bu tahmine bakar (17.11.2026: 4 GB tavanlı sorgu reddedildi). Gerçek tüketim
+ * küçüktür; sorgudan SONRA denetlenir: tek sorgu `PER_QUERY_MAX`'ı ya da toplam `--max-gb`'yi aşarsa durur.
+ * Dolu günler atlanır (`--force` yeniden yazar).
  * `--dry` yalnız tahmini taramayı yazar (kota harcamaz). Yayımlanmamış çalışmanın günü yazılmaz (sonraki çalışmada dolar).
  * Lisans ve atıf: lib/weather/weathernext.ts.
  */
@@ -26,7 +29,20 @@ const dry = args.includes("--dry");
 const force = args.includes("--force");
 const maxGb = Number(args[args.indexOf("--max-gb") + 1]) || 900;
 const DELAY = WEATHER_RUN_RULES.weathernext3.publishDelayMs;
-const PER_QUERY_MAX = 4e9;
+/** Tek değişken sorgusunun gerçek tüketimi bundan büyükse kümeleme çalışmıyor demektir: dur */
+const PER_QUERY_MAX = 2e9;
+const COLUMNS: Record<string, string> = {
+  u: "u_component_of_wind_100m_mean",
+  v: "v_component_of_wind_100m_mean",
+  ws: "wind_speed_100m_mean",
+  p10: "wind_speed_100m_p10",
+  p90: "wind_speed_100m_p90",
+  ws10: "wind_speed_10m_mean",
+  t2m: "temperature_2m_mean",
+  ghi: "surface_solar_radiation_downwards_1hr_mean",
+  direct: "total_sky_direct_solar_radiation_at_surface_1hr_mean",
+  cloud: "total_cloud_cover_mean",
+};
 
 // Hücreler: havuz santralleri + 0,5° ağ
 const cells = new Map<string, { latitude: number; longitude: number }>();
@@ -42,42 +58,53 @@ for (let lat = Math.ceil(TURKEY_BOX.south * 2) / 2; lat <= TURKEY_BOX.north; lat
 console.log(`hücre ${cells.size} (santral ${plantCells}, ağ ${cells.size - plantCells}); hedef günler ${from} – ${to}`);
 
 const keys = [...cells.keys()];
-const sqlFor = (partition: string) => `
+const sqlFor = (partition: string, column: string) => `
 SELECT FORMAT('%.1f_%.1f', ROUND(ST_Y(t.geography), 1), ROUND(ST_X(t.geography), 1)) AS cell, UNIX_SECONDS(t.init_time) AS run, f.hours AS lead,
-  f.u_component_of_wind_100m_mean AS u, f.v_component_of_wind_100m_mean AS v, f.wind_speed_100m_mean AS ws,
-  f.wind_speed_100m_p10 AS p10, f.wind_speed_100m_p90 AS p90, f.wind_speed_10m_mean AS ws10, f.temperature_2m_mean AS t2m,
-  f.surface_solar_radiation_downwards_1hr_mean AS ghi, f.total_sky_direct_solar_radiation_at_surface_1hr_mean AS direct,
-  f.total_cloud_cover_mean AS cloud
+  f.${column} AS x
 FROM \`${WEATHERNEXT_TABLE}\` AS t, t.forecast AS f
 WHERE t.init_time IN (TIMESTAMP('${partition} 00:00:00 UTC'), TIMESTAMP('${partition} 18:00:00 UTC'))
   AND ST_INTERSECTS(t.geography, ST_GEOGFROMTEXT('${turkeyBoxWkt()}'))
   AND f.hours BETWEEN 21 AND 50
-  AND FORMAT('%.1f_%.1f', ROUND(ST_Y(t.geography), 1), ROUND(ST_X(t.geography), 1)) IN UNNEST(@cells)`;
+  AND FORMAT('%.1f_%.1f', ROUND(ST_Y(t.geography), 1), ROUND(ST_X(t.geography), 1)) IN UNNEST([${keys.map((k) => `'${k}'`).join(",")}])`;
 
 let billed = 0;
 const partitions = new Map<string, Wn3Row[]>();
 async function partition(p: string): Promise<Wn3Row[]> {
   const hit = partitions.get(p);
   if (hit) return hit;
-  // Sorgu parametresi yerine dizi sabit olarak gömülür (REST parametre biçimi uzun; değerler yalnız hücre anahtarı)
-  const sql = sqlFor(p).replace("@cells", `[${keys.map((k) => `'${k}'`).join(",")}]`);
+  const raw = new Map<string, Record<string, number | null> & { cell: string; run: number; lead: number }>();
+  let partBilled = 0;
+  for (const [name, column] of Object.entries(COLUMNS)) {
+    const sql = sqlFor(p, column);
+    if (dry) {
+      const r = await weathernextQuery(sql, { dryRun: true });
+      console.log(`  ${p} ${name}: tahmini tarama ${(r.bytesBilled / 1e9).toFixed(0)} GB (üst sınır)`);
+      continue;
+    }
+    const r = await weathernextQuery(sql);
+    billed += r.bytesBilled;
+    partBilled += r.bytesBilled;
+    if (r.bytesBilled > PER_QUERY_MAX) throw new Error(`${p} ${name}: tek sorgu ${(r.bytesBilled / 1e9).toFixed(1)} GB tüketti (sınır ${PER_QUERY_MAX / 1e9} GB); kümeleme beklenen gibi çalışmıyor, duruldu`);
+    const [ci, ri, li, xi] = ["cell", "run", "lead", "x"].map((n) => r.fields.indexOf(n));
+    for (const x of r.rows) {
+      const key = `${x[ci]}|${x[ri]}|${x[li]}`;
+      const row = raw.get(key) ?? { cell: x[ci]!, run: Number(x[ri]) * 1000, lead: Number(x[li]) };
+      row[name] = x[xi] === null ? null : Number(x[xi]);
+      raw.set(key, row);
+    }
+  }
   if (dry) {
-    const r = await weathernextQuery(sql, { dryRun: true });
-    console.log(`  ${p}: tahmini tarama ${(r.bytesBilled / 1e9).toFixed(2)} GB (üst sınır; kümeleme gerçek tüketimi düşürür)`);
     partitions.set(p, []);
     return [];
   }
-  const r = await weathernextQuery(sql, { maxBytesBilled: PER_QUERY_MAX });
-  billed += r.bytesBilled;
-  const col = (n: string) => r.fields.indexOf(n);
-  const num = (v: string | null) => (v === null ? null : Number(v));
-  const rows: Wn3Row[] = r.rows.map((x) => ({
-    cell: x[col("cell")]!,
-    run: Number(x[col("run")]) * 1000,
-    lead: Number(x[col("lead")]),
-    values: convertRow({ u: num(x[col("u")]), v: num(x[col("v")]), ws: num(x[col("ws")]), p10: num(x[col("p10")]), p90: num(x[col("p90")]), ws10: num(x[col("ws10")]), t2m: num(x[col("t2m")]), ghi: num(x[col("ghi")]), direct: num(x[col("direct")]), cloud: num(x[col("cloud")]) }),
+  const g = (r: Record<string, number | null>, n: string) => (r[n] === undefined ? null : r[n]);
+  const rows: Wn3Row[] = [...raw.values()].map((r) => ({
+    cell: r.cell,
+    run: r.run,
+    lead: r.lead,
+    values: convertRow({ u: g(r, "u"), v: g(r, "v"), ws: g(r, "ws"), p10: g(r, "p10"), p90: g(r, "p90"), ws10: g(r, "ws10"), t2m: g(r, "t2m"), ghi: g(r, "ghi"), direct: g(r, "direct"), cloud: g(r, "cloud") }),
   }));
-  console.log(`  bölüm ${p}: ${rows.length} satır, ${(r.bytesBilled / 1e9).toFixed(2)} GB (toplam ${(billed / 1e9).toFixed(1)} GB)`);
+  console.log(`  bölüm ${p}: ${rows.length} satır, ${(partBilled / 1e9).toFixed(2)} GB (toplam ${(billed / 1e9).toFixed(1)} GB)`);
   partitions.set(p, rows);
   return rows;
 }
