@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-581 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+583 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
 ## Sayfalar (app/**/page.tsx) (31)
 
@@ -464,7 +464,7 @@
 
 - `lib/utils.ts`
 
-## lib/weather (10)
+## lib/weather (11)
 
 - `lib/weather/live-forecast.ts` — Canlı hava tahmini (ileriye dönük üretim tahmini sayfası; kullanıcı kararı 16.10.2026): Open-Meteo Forecast API, aynı model (ECMWF IFS 0,25°, `WEATHER_MODEL`) ve geçmiş arşivle aynı değişkenler; değer isteğin yapıldığı andaki EN YENİ çalış…
 - `lib/weather/nwp-models.ts` — Ek hava modelleri: geçmiş tahmin arşivi (Aşama 22.3): Kaynak Open-Meteo Previous Runs API, yalnız `_previous_day2` (2 gün önceki tahmin; bilgi anı kuralı weather-codec.ts ile aynı: geçerlilik saati H için 48 saat önceki, H'yi çalışma aralı…
@@ -474,10 +474,11 @@
 - `lib/weather/snow.ts` — Santral konumunda kar derinliği (güneş kayıp üretiminde "kar olası" ayrımı; 20.10.2026): Kaynak: Open-Meteo Historical Weather API (archive-api.open-meteo.com), ERA5-Land saatlik `snow_depth` (yerdeki kar, m; 0,1° ızgara).
 - `lib/weather/weather-codec.ts` — Hava verisi havuzu: santral-yıl belgesinin biçimi (PLAN 15.2): Kaynak Open-Meteo Previous Runs API (ECMWF IFS 0,25°; çoğu modelde arşiv 2024-03-06'dan).
 - `lib/weather/weather-store.ts` — Hava verisi havuzu: dosya okuma/yazma (PLAN 15.2): `data/pool/weather/<epiasPlantId>/<yıl>.json.gz` (git dışı; EPİAŞ havuzunun yanında, aynı yazma deseni: önce geçici dosya, sonra yeniden adlandırma).
+- `lib/weather/weathernext.ts` — Google DeepMind WeatherNext 3 istemcisi (BigQuery; 17.11.2026): Veri: `tr-energy-weather.weathernext_3.weathernext_3_0_0_0p1deg` (Analytics Hub bağlı veri kümesi; 0,1° ızgara, 64 üyeli ensemble'ın `_mean`, `_p10` … `_p90` istatistikleri).
 - `lib/weather/wind-forecast-archive.ts` — Geçmiş rüzgâr TAHMİNLERİ (rüzgâr üretim tahmini geriye dönük testi; kullanıcı 18.10.2026): Kaynak: Open-Meteo Previous Runs API, ECMWF IFS 0,25° (`ecmwf_ifs025`; canlı tahmin sayfasıyla aynı model), 100 m rüzgâr hızı ve yönü, iki sürüm: `d…
 - `lib/weather/wind-nwp-archive.ts` — Rüzgârda ek hava modelleri: geçmiş tahmin arşivi (Aşama 23.4): Kaynak Open-Meteo Previous Runs API, yalnız `_previous_day2` (bilgi anı kuralı güneşteki ek modellerle aynı: lib/weather/nwp-models.ts, lib/forecast/info-time.ts `WEATHER_RUN_R…
 
-## lib/wind-engine (20)
+## lib/wind-engine (21)
 
 - `lib/wind-engine/daily-support.ts` — Günlük RES akışının sınırlı süreli veri yenilemesi ve hava çalışma izi.
 - `lib/wind-engine/data/live-nwp.ts` — Canlı ICON-EU/GFS rüzgârı; yalnız rüzgâr günlük gölge kaydı ister.
@@ -485,6 +486,7 @@
 - `lib/wind-engine/forecast.ts` — Aşama 23.2: canlı rüzgâr açık referansı.
 - `lib/wind-engine/index.ts` — Rüzgâr tahmin motoru: dışarıya açılan giriş.
 - `lib/wind-engine/learning/candidate-shadows.ts` — Ana tahmini değiştirmeyen düzeltme/kısıntı gölgeleri.
+- `lib/wind-engine/learning/ensemble-correction.ts` — Rüzgârda "ağırlıklı birleşim + öğrenen düzeltme" gölge sürümü (17.11.2026; hedef ilk KGÜP'e yaklaşmak)
 - `lib/wind-engine/learning/live-backtest.ts` — Canlı RES eğitim penceresi ve adil sınama kümesi; saf, I/O yok.
 - `lib/wind-engine/learning/oos.ts` — Rüzgâr belirsizlik/rampa eğitimi: her ay yalnız önceki dört ayla örneklem dışı tahmin.
 - `lib/wind-engine/learning/select-forecast.ts` — Karneyle seçilen sürümü canlıya taşır; temel sürüm karşılaştırma için gölgede kalır.

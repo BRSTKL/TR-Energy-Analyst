@@ -67,3 +67,6 @@ scripts/tmp/
 
 # graphify yerel önbelleği (makineye özel mutlak yollar; yeniden üretilir)
 /graphify-out/
+
+# WeatherNext servis hesabı anahtarı (sunucuda; git dışı)
+.secrets/

@@ -171,3 +171,11 @@ yeniden üretin. Ayrıntılı geçmiş `PLAN.md` (süren aşamalar, son kayıtla
 
 - Hedef ilk KGÜP'ü yenmek değil, yaklaşmak (kullanıcı). Tanı: hata seviye, zamanlama ya da kısıntıdan değil; gerçekleşen rüzgârla bile güç eğrisi %38 WAPE (KGÜP %31). Tek nokta hava rüzgârı + eğri yöntemi KGÜP'ü yenemez.
 - Sınama (`--set combo`, Tem 2025 – Eyl 2026, 121 santral, TL/MWh): canlı temel 120 gün 254, genişleyen pencere 243, birleşim 229, birleşim + düzeltme 209, ilk KGÜP 158. Yeni gölge `wind-ensemble-weighted-corr-v1`; canlıya yalnız karneyle. Sızıntı denetimi geçti; canlıda son günler GZÜ ile eğitilir (sınamada yok), karne sınamadan kötüyse ilk bakılacak yer.
+
+## WeatherNext 3 hava kaynağı (17.11.2026)
+
+- Erişim: Google Cloud projesi `tr-energy-weather`, BigQuery bağlı veri kümesi `weathernext_3` (Sandbox, ayda 1 TB ücretsiz sorgu). Sunucu servis hesabı `tr-energy-server`; anahtar sunucuda `.secrets/weathernext-sa.json` (git dışı).
+- Maliyet: tarih SABİT yazılmalı (alt sorguyla tarih 281 TB tahmini tarama). Tek nokta 10 MB; Türkiye kutusu × 10 değişken × bir gün 1,4 GB (o günün bütün çalışmaları dahil).
+- Yayım: 6 saatlik çalışmalar init + 8 sa 10 dk (+60 dk pay); kesimde en yeni çalışma D-1 00 UTC. Ara saatlik çalışmalar kullanılmaz. Izgara hücre merkezleri 0,1° katları (veriyle doğrulandı).
+- Uyarı: WN3 31.08.2026'da çıktı; 2024 – Ağustos 2026 arşivi sonradan üretilmiş (üretim modelinin eğitim kesimi 30.06.2026 olabilir → örneklem içi). Sınamada karar yalnız 01.09.2026 sonrası canlı yayımlanmış dönemle verilir; öncesi eğitim için kullanılabilir, başarı iddiası için değil.
+- Lisans: canlı veri deneysel koşullar (iç kullanım ve geri çıkarılamayan türev serbest, ham veri dağıtımı yasak, atıf zorunlu); 1 saatten eski veri CC BY 4.0.

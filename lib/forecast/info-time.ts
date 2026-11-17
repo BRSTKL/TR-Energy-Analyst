@@ -38,12 +38,17 @@ export const PTF_KNOWN_PREV_DAY_MINUTES = 14 * 60;
 
 export type WeatherLeadDays = 0 | 1 | 2;
 /** Hava modeli (Open-Meteo `models=` adı) */
-export type WeatherSource = "ecmwf_ifs025" | "icon_eu" | "gfs_global";
+export type WeatherSource = "ecmwf_ifs025" | "icon_eu" | "gfs_global" | "weathernext3";
 /** Model başına çalışma aralığı ve kötümser yayım gecikmesi */
 export const WEATHER_RUN_RULES: Record<WeatherSource, { intervalHours: number; publishDelayMs: number }> = {
   ecmwf_ifs025: { intervalHours: 6, publishDelayMs: ECMWF_PUBLISH_DELAY_MS },
   icon_eu: { intervalHours: 3, publishDelayMs: 6 * HOUR },
   gfs_global: { intervalHours: 6, publishDelayMs: 9 * HOUR },
+  // WeatherNext 3 (lib/weather/weathernext.ts): 00/06/12/18 UTC çalışmaları BigQuery'de init + 8 sa 10 dk (belge:
+  // developers.google.com/weathernext/guides/dissemination, olağan sapma ±15 dk, "±60 dk ya da daha fazla" olabilir) → +60 dk
+  // pay. Ara saatlik çalışmalar (init + 7 sa 25 dk, 48 sa ufuk) kesime anlamlı katkı vermez ve 2024–25'te seyrek: kullanılmaz.
+  // Kesimde (D-1 09:30 UTC) en yeni çalışma D-1 00 UTC (09:10'da elde). Doğrulama 17.11.2026 (veri-kaynagi-arastirmaci).
+  weathernext3: { intervalHours: 6, publishDelayMs: 9 * HOUR + 10 * 60_000 },
 };
 export type FeatureSource = "weather" | "production" | "calendar" | "market";
 
