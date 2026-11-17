@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-583 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+585 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
 ## Sayfalar (app/**/page.tsx) (31)
 
@@ -464,7 +464,7 @@
 
 - `lib/utils.ts`
 
-## lib/weather (11)
+## lib/weather (12)
 
 - `lib/weather/live-forecast.ts` — Canlı hava tahmini (ileriye dönük üretim tahmini sayfası; kullanıcı kararı 16.10.2026): Open-Meteo Forecast API, aynı model (ECMWF IFS 0,25°, `WEATHER_MODEL`) ve geçmiş arşivle aynı değişkenler; değer isteğin yapıldığı andaki EN YENİ çalış…
 - `lib/weather/nwp-models.ts` — Ek hava modelleri: geçmiş tahmin arşivi (Aşama 22.3): Kaynak Open-Meteo Previous Runs API, yalnız `_previous_day2` (2 gün önceki tahmin; bilgi anı kuralı weather-codec.ts ile aynı: geçerlilik saati H için 48 saat önceki, H'yi çalışma aralı…
@@ -474,6 +474,7 @@
 - `lib/weather/snow.ts` — Santral konumunda kar derinliği (güneş kayıp üretiminde "kar olası" ayrımı; 20.10.2026): Kaynak: Open-Meteo Historical Weather API (archive-api.open-meteo.com), ERA5-Land saatlik `snow_depth` (yerdeki kar, m; 0,1° ızgara).
 - `lib/weather/weather-codec.ts` — Hava verisi havuzu: santral-yıl belgesinin biçimi (PLAN 15.2): Kaynak Open-Meteo Previous Runs API (ECMWF IFS 0,25°; çoğu modelde arşiv 2024-03-06'dan).
 - `lib/weather/weather-store.ts` — Hava verisi havuzu: dosya okuma/yazma (PLAN 15.2): `data/pool/weather/<epiasPlantId>/<yıl>.json.gz` (git dışı; EPİAŞ havuzunun yanında, aynı yazma deseni: önce geçici dosya, sonra yeniden adlandırma).
+- `lib/weather/weathernext-store.ts` — WeatherNext 3 hücre deposu (havuz: data/pool/weather/wn3/<yıl>/<enlem>_<boylam>.json.gz): Bir dosya = bir 0,1° ızgara hücresi × bir yıl.
 - `lib/weather/weathernext.ts` — Google DeepMind WeatherNext 3 istemcisi (BigQuery; 17.11.2026): Veri: `tr-energy-weather.weathernext_3.weathernext_3_0_0_0p1deg` (Analytics Hub bağlı veri kümesi; 0,1° ızgara, 64 üyeli ensemble'ın `_mean`, `_p10` … `_p90` istatistikleri).
 - `lib/weather/wind-forecast-archive.ts` — Geçmiş rüzgâr TAHMİNLERİ (rüzgâr üretim tahmini geriye dönük testi; kullanıcı 18.10.2026): Kaynak: Open-Meteo Previous Runs API, ECMWF IFS 0,25° (`ecmwf_ifs025`; canlı tahmin sayfasıyla aynı model), 100 m rüzgâr hızı ve yönü, iki sürüm: `d…
 - `lib/weather/wind-nwp-archive.ts` — Rüzgârda ek hava modelleri: geçmiş tahmin arşivi (Aşama 23.4): Kaynak Open-Meteo Previous Runs API, yalnız `_previous_day2` (bilgi anı kuralı güneşteki ek modellerle aynı: lib/weather/nwp-models.ts, lib/forecast/info-time.ts `WEATHER_RUN_R…
@@ -573,7 +574,7 @@
 - `components/wind-loss-card.tsx` — "Son 12 ay"; verisi daha kısa santralde ay sayısı ("Verisi olan 6 ay")
 - `components/yekdem-decision-card.tsx` — YEKDEM 2027 kararı: kalmak mı, çıkmak mı?
 
-## scripts (kök) (64)
+## scripts (kök) (65)
 
 - `scripts/aggregator-benchmark.mts` — Toplayıcılar arası kıyası üretir (PLAN 8.7): .cache/epias/aggregator-benchmark-<yıl>.json: npx tsx --tsconfig tsconfig.json scripts/aggregator-benchmark.mts [yıl=2026] [bitiş=karnenin dönem sonu]
 - `scripts/aggregator-collect.mts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" olarak kayıtlı tüm katılımcıların santralleri .cache/epias/aggregator-membership.json'a yazılır.
@@ -632,6 +633,7 @@
 - `scripts/warm-cache.mts` — Proje sayfalarının ağır hesaplarını önceden yapar (önbellek ısıtma).
 - `scripts/weather-models-sync.mts` — Ek hava modelleri arşivi (Aşama 22.3): konumlu güneş santralleri için ICON-EU ve GFS'in 2 gün önceki tahmini (lib/weather/nwp-models.ts).
 - `scripts/weather-sync.mts` — Hava verisi havuzu (PLAN 15.2): konumu olan santraller için Open-Meteo Previous Runs (ECMWF IFS 0,25°) saatlik verisi.
+- `scripts/weathernext-sync.mts` — WeatherNext 3 → havuz (data/pool/weather/wn3; lib/weather/weathernext-store.ts).
 - `scripts/wind-forecast-daily.mts` — Günlük RES akışı; varsayılan kuru çalışma.
 - `scripts/wind-forecast-sync.mts` — Geçmiş rüzgâr tahminleri (rüzgâr üretim tahmini geriye dönük testi; lib/weather/wind-forecast-archive.ts): konumu olan proje rüzgâr santralleri için ECMWF IFS 0,25° 100 m hız / yön, `d1` ve `d2` sürümleri, 2025-01-01'den dünkü güne.
 - `scripts/wind-location-osm.mts` — Konumu olmayan proje rüzgâr santralleri için OpenStreetMap türbin kümelerinden konum (kullanıcı, 17.10.2026; GEM Wind Power Tracker'da olmayan, yalnız yaklaşık konumlu ya da EPDK ile uyuşmayan santraller).
