@@ -24,12 +24,14 @@ import {
   Target,
   UserRound,
   type LucideIcon,
+  Wind,
 } from "lucide-react";
 
 export type NavId =
   | "today"
   | "pre-bid"
   | "daily"
+  | "country-production"
   | "projects"
   | "plants"
   | "companies"
@@ -87,6 +89,14 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/market/gunluk",
         icon: CalendarClock,
         hint: "Piyasada ne oldu: dün, bugün ve yarının açıklanan fiyatı",
+      },
+      {
+        id: "country-production",
+        label: "Türkiye üretim tahmini",
+        short: "Üretim",
+        href: "/market/uretim",
+        icon: Wind,
+        hint: "Türkiye geneli rüzgâr ve güneş: EPİAŞ tahmini, şirket planları, gerçekleşen ve yük tahmini",
       },
       {
         id: "outages",
@@ -213,6 +223,7 @@ export function activeNavId(pathname: string): NavId | null {
   if (p === "/") return "today";
   if (is(p, "/market/teklif")) return "pre-bid";
   if (is(p, "/market/gunluk")) return "daily";
+  if (is(p, "/market/uretim")) return "country-production";
   if (is(p, "/market")) return "market";
   if (is(p, "/santraller")) return "plants";
   if (is(p, "/sirketler")) return "companies";

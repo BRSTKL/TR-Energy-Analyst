@@ -53,6 +53,7 @@ describe("activeNavId", () => {
     expect(activeNavId("/")).toBe("today");
     expect(activeNavId("/market/teklif")).toBe("pre-bid");
     expect(activeNavId("/market/gunluk")).toBe("daily");
+    expect(activeNavId("/market/uretim")).toBe("country-production");
     expect(activeNavId("/market")).toBe("market");
   });
   it("proje sayfaları (üretim tahmini ve EPİAŞ'tan ekleme dahil) Projelerim'e", () => {

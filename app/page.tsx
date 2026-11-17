@@ -407,7 +407,7 @@ function ProductionCard({
         href={forecastLink}
         className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-indigo-700 hover:underline"
       >
-        Üretim tahmini <ArrowRight className="h-3.5 w-3.5" />
+        Türkiye geneli rüzgâr ve güneş <ArrowRight className="h-3.5 w-3.5" />
       </Link>
     </div>
   );
@@ -814,7 +814,7 @@ export default function TodayPage() {
           />
           <div className="grid gap-4 md:grid-cols-2">
             <PtfCard load={status} announced={announced} />
-            <ProductionCard load={status} portfolio={portfolio} minutes={minutes} forecastLink={fLink} />
+            <ProductionCard load={status} portfolio={portfolio} minutes={minutes} forecastLink="/market/uretim" />
           </div>
         </section>
 

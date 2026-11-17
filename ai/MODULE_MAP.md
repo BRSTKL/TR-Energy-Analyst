@@ -4,9 +4,9 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-588 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+592 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
-## Sayfalar (app/**/page.tsx) (31)
+## Sayfalar (app/**/page.tsx) (32)
 
 - `/projects/[id]/backtest` (`app/(dashboard)/projects/[id]/backtest/page.tsx`) — Şirketin kendi gün içi düzeltmesinin test aylarındaki kazancı (ilk plan − son plan − GİP işlem maliyeti); son plan yoksa null
 - `/projects/[id]/candidates` (`app/(dashboard)/projects/[id]/candidates/page.tsx`) — YEKDEM çıkışı rozeti: bu yıl çıkan ya da süresi bu yıl / yakında dolan
@@ -26,6 +26,7 @@
 - `/market/gunluk` (`app/market/gunluk/page.tsx`) — Günlük pano: piyasada bir günde ne oldu / ne oluyor (gözlem).
 - `/market` (`app/market/page.tsx`) — Türkçe yüzde: "+%45"
 - `/market/teklif` (`app/market/teklif/page.tsx`)
+- `/market/uretim` (`app/market/uretim/page.tsx`) — Türkiye üretim tahmini: bütün sistemin rüzgâr ve güneş üretimi (tahmin, şirket planları, gerçekleşen) ve yük tahmini (18.11.2026).
 - `/methodology` (`app/methodology/page.tsx`) — Metodoloji: uygulamadaki ve rapordaki her rakamın nereden geldiği.
 - `/ozet` (`app/ozet/page.tsx`) — Dönem özeti (eski ana sayfa; 29.10.2026'dan beri ana sayfa Bugün kokpiti).
 - `/` (`app/page.tsx`) — Bugün kokpiti (ana sayfa): yalnız o günle ilgili olanlar, tek düzende: şimdi hangi adımdasınız, uyarılar, yarın için ne hazır, piyasa şimdi nasıl, dünün sonucu ve dünkü tahmin.
@@ -40,7 +41,7 @@
 - `/yekdem` (`app/yekdem/page.tsx`) — YEKDEM çıkış takvimi: hangi yıl kaç santral ve kaç MW serbest piyasaya geçiyor.
 - `/yeni-santraller` (`app/yeni-santraller/page.tsx`) — Yeni santral radarı: veri havuzunda ilk üretimi görülen rüzgâr, güneş ve hidro santralleri.
 
-## API (app/api/**/route.ts) (79)
+## API (app/api/**/route.ts) (80)
 
 - `GET, PUT, DELETE /api/account/epias` — GET /api/account/epias: hesap e-postası ve kayıtlı EPİAŞ hesabının özeti (şifre dönmez).
 - `POST /api/account/epias/test` — POST /api/account/epias/test: kayıtlı (yoksa .env) EPİAŞ hesabıyla yeni bilet alarak bağlantıyı dener.
@@ -71,6 +72,7 @@
 - `GET /api/market/pre-bid-context` — GET /api/market/pre-bid-context?date=YYYY-AA-GG (ÖNİZLEME): Teklif öncesi görünümün bağlam verileri: doğal gaz GRF, arz–talep eğrisi, teklif miktarları, gün içi işlem özeti (lib/services/pre-bid-context.ts).
 - `GET /api/market/pre-bid-effects` — GET /api/market/pre-bid-effects (ÖNİZLEME): Yeni bulunan verilerin (doğal gaz GRF, gerçekleşen güneş) teklif öncesi fiyat modeline etkisi: aynı yürüyen geriye test, mevcut modelle günlük eşleştirilmiş hata farkı (lib/analysis/pre-bid-effec…
 - `GET /api/market/pre-bid` — GET /api/market/pre-bid?date=YYYY-AA-GG (ÖNİZLEME): Teklif öncesi görünüm: hedef gün için saatlik PTF beklentisi ve ± aralık (lib/analysis/pre-bid.ts).
+- `GET /api/market/production` — GET /api/market/production?day=today|tomorrow|YYYY-AA-GG: Türkiye geneli rüzgâr ve güneş üretim tahmini, KGÜP, gerçekleşen ve yük tahmini (lib/services/country-production.ts).
 - `GET /api/market/ptf-forecast` — GET /api/market/ptf-forecast?date=YYYY-AA-GG[&refresh=1]: PTF motorunun hedef gün tahmini, girdilerin durumu ve günlük kayıt (lib/services/ptf-forecast-page.ts).
 - `GET /api/market` — "2026 (Ocak–Ağustos)", tam yıl için "2025"; ay ortasında biten dönem "2026 (Ocak – 19 Ekim)" ya da "1–19 Ekim 2026"; ay başında başlamayan ya da yıl aşan dönemde tarih aralığı
 - `GET /api/new-plants` — GET /api/new-plants : Yeni santral radarı (lib/services/new-plants.ts)
@@ -352,7 +354,7 @@
 - `lib/sector/period.ts` — Sektör analizlerinin dönemi: içinde bulunulan yılın sektör karnesinin dönem sonu (scripts/sector-collect.mts; piyasa verisi olan son gün).
 - `lib/sector/plant-technology.ts` — Sektör taramasında santral teknolojisi (PLAN Bekleyen işler: EPDK ↔ karne, adım 2b): Eskiden tür yalnız addan tahmin ediliyordu (`guessTechnologyFromName`); adında tür eki olmayan santraller ("OYMAPINAR", "BORÇKA", "HASAN UĞURLU") ve tanın…
 
-## lib/services (65)
+## lib/services (66)
 
 - `lib/services/aggregator-data.ts` — Toplayıcı kıyası ve ayrıntısı için veri okuma (PLAN 8.7, 9.2): Santral saatleri veri havuzundan (ilk KGÜP ve UEVM), türü ve sahibi sektör karnesi dosyalarından ya da havuz tanımından, fiyatlar veritabanındaki EPİAŞ resmi dengesizlik fiyatl…
 - `lib/services/aggregator-membership.ts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" ekiyle kayıtlı tüm katılımcıların santral listesi çekilir ve .cache/epias/ aggregator-membership.json'a yazılır.
@@ -362,6 +364,7 @@
 - `lib/services/candidates.ts` — Aday santral taraması için veri (PLAN 4.2): Projenin portföyü (tek dengede) ile aynı yılın sektör karnesindeki santrallerin saatlik serileri karşılaştırılır.
 - `lib/services/company-profile.ts` — Şirket profili (/sirketler): sektör karnesindeki santraller sahip şirkete göre (diskten): Kaynak: seçilen yılın sektör karnesi (`.cache/epias/sector-<yıl>.json`: sahip şirket, üretim, dengesizlik, KÜPST, sapma).
 - `lib/services/cost-change.ts` — "Maliyet neden değişti?" için projeleri yükler ve eşler: İki proje (ör. aynı santrallerin 2025 ve 2026 projeleri) saatlik veriyle yüklenir, santraller EPİAŞ kimliğiyle (yoksa adla) eşlenir ve decomposeCostChange'e verilir.
+- `lib/services/country-production.ts` — Türkiye üretim tahmini (rüzgâr ve güneş, bütün sistem; 18.11.2026): Bir gün için EPİAŞ'tan istek anında (5 dakika bellekte; hesap başına dakikada 80 istek sınırı): - rüzgâr: EPİAŞ'ın Türkiye rüzgâr tahmini ve gerçekleşeni (`/renewables/dat…
 - `lib/services/daily-market.ts` — Günlük piyasa panosu: veri toplama (hesap lib/analysis/daily-market.ts'te): Günün doğrulanmış fiyatları (MarketData: EPİAŞ ya da dosya) ve önceki 28 günün PTF'si veri tabanından, sistem geneli seriler (tüketim, gerçek zamanlı üretim, KGÜP,…
 - `lib/services/direction-forecast.ts` — Sistem yönü tahmini: veri okuma ve walk-forward olasılıklar (Aşama 14).
 - `lib/services/dsg-leaders.ts` — DSG temsilci şirketleri (EPİAŞ `dsg-organization-list`), `.cache/epias/dsg-leaders.json` önbelleğiyle.
@@ -420,9 +423,10 @@
 - `lib/services/yekdem-decision.ts` — YEKDEM 2027 karar listesi (/yekdem): kural lib/analysis/yekdem-decision.ts: Santral rehberi × YEKDEM geçmişi (yekdem-exit, önbellekten) × karnenin saatlik üretimi (en yeni karne yılı) × veritabanındaki PTF.
 - `lib/services/yekdem-exit.ts` — YEKDEM çıkışları için veri: iki EPİAŞ YEKDEM listesini santrallere bağlar: - Kimlikli liste (renewables/data/licensed-powerplant-list): .cache/epias/yekdem-<yıl>.json, 2014'ten bugüne (listYekdemPlantIds).
 
-## lib/solar-engine (23)
+## lib/solar-engine (24)
 
 - `lib/solar-engine/data/production-data.ts` — Üretim tahmini için saatlik veri (PLAN 15.4): Bir santralin havuzdaki üretimi ve KGÜP'leri (data/pool), hava verisi havuzundaki 2 gün önceki ECMWF tahmini (ya da `weatherLead` ile 1 / 0 gün önceki: yalnız sızıntı üst sınırı; saat bu sürüml…
+- `lib/solar-engine/data/wn3-hours.ts` — Güneş saatini WeatherNext 3 girdisiyle kurar (sınama ve canlı gölge aynı kural; 18.11.2026)
 - `lib/solar-engine/forecast.ts` — İleriye dönük güneş üretim tahmini (Üretim tahmini sayfası; kullanıcı kararı 16.10.2026): Projenin konumu olan güneş santralleri için yarın ve öbür gün saatlik beklenen üretim.
 - `lib/solar-engine/index.ts` — Güneş tahmin motoru: dışarıya açılan giriş (sayfalar, API'ler, betikler buradan ya da alt: modüllerden içe aktarır).
 - `lib/solar-engine/learning/champions.ts` — Kendi kendine öğrenen motorun verisi (kural lib/solar-engine/learning/self-learning.ts): - Şampiyon kayıt defteri: data/pool/forecast-log/solar/champions.json (santral → canlı sürüm, geçmişiyle).
