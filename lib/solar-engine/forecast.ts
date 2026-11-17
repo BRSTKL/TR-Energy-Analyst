@@ -28,8 +28,11 @@ import { fitCorrection, recentErrorFor } from "./models/correction";
 import { monthsBefore, oosSeries } from "./learning/oos-series";
 import { TRAIN_ZERO_PRICE_MAX } from "./models/production-model";
 import { NWP_MODELS, type NwpYear } from "@/lib/weather/nwp-models";
-import { assertAvailable, productionFeature, type WeatherSource } from "@/lib/forecast/info-time";
+import { assertAvailable, decisionCutoff, productionFeature, WEATHER_RUN_RULES, type WeatherSource } from "@/lib/forecast/info-time";
 import { readNwpYear } from "@/lib/weather/weather-store";
+import { nearestCell } from "@/lib/weather/weathernext";
+import { wn3Stamps } from "@/lib/weather/weathernext-store";
+import { toWn3SolarHour } from "./data/wn3-hours";
 import { projectWeatherPlants } from "../services/weather-preview";
 import { readChangeWarnings } from "../services/plant-change-warnings";
 
@@ -264,6 +267,68 @@ export async function forecastSolarPlant(
         maxMwh: model.trainMaxMwh,
         ...(win.provisional ? { provisionalHours: data.provisionalHours ?? 0, provisionalThrough: new Date(end - DAY).toISOString().slice(0, 10) } : {}),
       },
+      weatherFetchedAt: w.fetchedAt,
+      location: { latitude: loc.latitude, longitude: loc.longitude, locationSource: loc.locationSource },
+    };
+  } catch (e) {
+    return { status: "error", message: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * Temel sürüm WeatherNext 3 girdisiyle (registry.ts `SOLAR_WN3_MODEL`; 18.11.2026): `forecastSolarPlant` ile aynı eğitim
+ * penceresi ve temizlik, eğitim ve tahminde hava WN3 (data/wn3-hours.ts: yalnız kesimde elde olan çalışma). Bulut model
+ * girdisi değil: WN3'te yoksa canlı ECMWF'inki kalır. WN3 verisi havuzda (scripts/weathernext-sync.mts) yoksa no-data.
+ */
+export async function forecastSolarPlantWn3(
+  epiasPlantId: number,
+  from: number,
+  count: number,
+  opts: { now?: number; fresh?: boolean } = {}
+): Promise<SolarPlantForecast & { runInit?: string | null }> {
+  const now = opts.now ?? Date.now();
+  try {
+    const info = await readPoolPlantInfo(epiasPlantId);
+    const loc = info?.location;
+    if (!loc) throw new Error("Havuzda konum yok");
+    const win = await trainingWindow(epiasPlantId, now, 4);
+    if (win === null) return { status: "no-data", message: "Havuzda üretim verisi yok" };
+    const { start, end } = win;
+    const data = await loadSolarHours(epiasPlantId, start, end, { provisional: win.provisional });
+    if (!data) throw new Error("Eğitim verisi okunamadı");
+    const c = nearestCell(loc.latitude, loc.longitude);
+    const stamps = await wn3Stamps(c.latitude, c.longitude, start - 3 * DAY, from + count * HOUR + HOUR, WEATHER_RUN_RULES.weathernext3.publishDelayMs, decisionCutoff);
+    const clean = trainingLossFilter(
+      data.hours.map((h) => ({ t: h.t, uevm: h.uevm, kgupFirst: h.kgupFirst, satGhi: h.satGhi ?? null, satDirect: h.satDirect ?? null, satDiffuse: h.satDiffuse ?? null })),
+      data.site,
+      end,
+      SATELLITE_DELAY_DAYS
+    );
+    const train = data.hours.map((h) => toWn3SolarHour(h, stamps)).filter((h): h is SolarHourV2 => h !== null);
+    let model;
+    try {
+      model = fitSolarModelV2(train, data.site, { exclude: clean.exclude, noLag: true });
+    } catch {
+      return { status: "no-data", message: `WeatherNext eğitimi için yeterli saat yok (${train.length} saat)` };
+    }
+    const w = await cachedLiveWeather(loc.latitude, loc.longitude, opts.fresh);
+    let missing = 0;
+    const hours = liveWeatherHours(w.res, from, from + count * HOUR).map((wh) => {
+      const x = toWn3SolarHour({ ...wh, uevm: null, kgupFirst: null, kgupFinal: null, ptf: null, lag48: null, ghiLag48: null, directLag48: null, diffuseLag48: null, live: true }, stamps);
+      if (!x) {
+        missing++;
+        return null;
+      }
+      const v = model.predict(x);
+      return v === null ? null : Math.round(v * 1000) / 1000;
+    });
+    if (missing) return { status: "no-data", message: `Hedef saatlerin ${missing}'inde WeatherNext verisi yok (henüz yayımlanmamış olabilir)` };
+    const run = stamps.get(from)?.run;
+    return {
+      status: "ok",
+      hours,
+      runInit: run === undefined ? null : new Date(run).toISOString(),
+      train: { from: new Date(start).toISOString().slice(0, 10), to: new Date(end - DAY).toISOString().slice(0, 10), hours: model.trainHours, mount: model.mount, maxMwh: model.trainMaxMwh },
       weatherFetchedAt: w.fetchedAt,
       location: { latitude: loc.latitude, longitude: loc.longitude, locationSource: loc.locationSource },
     };

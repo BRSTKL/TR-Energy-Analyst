@@ -1,0 +1,12 @@
+[Unit]
+Description=WeatherNext 3 cekimi ve gunes golge surumu ek kaydi
+OnFailure=tr-energy-failed@%n.service
+[Service]
+Type=oneshot
+User=tre
+WorkingDirectory=/srv/tr-energy
+# D-1 00 UTC calismasi ~11:10 TR'de yayimlanir; once WN3 cekilir (dolu gunler atlanir, gunluk kota tavani 12 GB), sonra ek kayit
+ExecStart=/usr/bin/flock -n -E 0 /srv/tr-energy/.cache/wn3.lock /bin/bash -c 'node --env-file=.env node_modules/.bin/tsx --tsconfig tsconfig.json scripts/weathernext-sync.mts --max-gb 12 && node --env-file=.env node_modules/.bin/tsx --tsconfig tsconfig.json scripts/solar-wn3-shadow.mts --write'
+TimeoutStartSec=40min
+StandardOutput=append:/var/log/tr-energy/tr-energy-wn3-shadow.log
+StandardError=append:/var/log/tr-energy/tr-energy-wn3-shadow.log

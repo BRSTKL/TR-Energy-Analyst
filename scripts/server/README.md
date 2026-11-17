@@ -19,6 +19,7 @@ Zamanlanmış işler ve uygulama Mac'te değil sunucuda çalışır. Mac kapalı
 | `tr-energy-wind-forecast` | 10:00, 11:30 (Europe/Istanbul) | `scripts/wind-forecast-daily.mts --write`; kurulum sonrası etkin |
 | `tr-energy-epias-monthly` | saatte bir | `scripts/epias-monthly-sync.mts` (günlük küçük işler: piyasa fiyatları, sistem geneli seriler `system-sync.mts --recent`, arıza bildirimleri `umm-sync.mts --recent`: içinde bulunulan ay 6 saatte bir; DSİ baraj doluluğu `dsi-dam-sync.mts`: yagisbarajdoluluk.dsi.gov.tr yalnız Türkiye IP'sinden açılır, havuz `data/pool/dsi/`; ENTSO-E komşu fiyat ve akış `entsoe-sync.mts`: `ENTSOE_TOKEN` .env'de, havuz `data/pool/entsoe/`; PTF tahmini artık kendi işinde: aşağıda `tr-energy-ptf-forecast`) |
 | `tr-energy-ptf-forecast` | 12:03, 12:15, 12:25 (Europe/Istanbul) | `scripts/ptf/forecast-daily.mts --auto` (önce şampiyon sürüm kararı: `lib/ptf/champion.ts`, haftada en çok bir kez; defter `forecast-log/ptf/champion.json`, kayıt yazıldıktan sonra güncellenir): EPİAŞ yarının yük tahminini yayımladıysa yarının saatlik PTF tahminini hesaplar, `data/pool/forecast-log/ptf/` altına değişmeyen kayıt yazar, telefona özet bildirim gönderir (ntfy) ve sayfanın önbelleğine (`.cache/ptf/preview/`) koyar. Yük tahmini yoksa 12:05 kesimine kadar yoklar; sonra çıkar, 12:15 ve 12:25 dener (kesimden sonra yazılan kayıt skora girmez). 12:30'dan sonra yazmaz; 12:25'te de yazılamazsa nedenini telefona bildirir. Ortak `daily-forecast.lock` kullanmaz (kesim bekletilmesin). Kurulum aşağıda. |
+| `tr-energy-wn3-shadow` | 11:20, 12:05 (Europe/Istanbul) | WeatherNext 3: `scripts/weathernext-sync.mts --max-gb 12` (havuz `data/pool/weather/wn3`; BigQuery, servis hesabı anahtarı `.secrets/weathernext-sa.json`) ve `scripts/solar-wn3-shadow.mts --write`: güneş temel sürümünün WN3 girdili gölgesi ek kayıt olarak (`forecast-log/solar-addendum/`; karne ölçer, şimdilik terfi etmez). D-1 00 UTC çalışması ≈ 11:10 TR'de yayımlanır. Kurulum aşağıda. |
 | `tr-energy-snapshot` | 08:02–13:02 saatlik, 12:25, 13:30, 14:02 | `scripts/snapshot-capture.mts` (27.10.2026'dan beri kurulu, aşağıya bakın) |
 | `tr-energy-db-backup` | 03:00 | `scripts/backup-db.mts daily` (`prisma/backups/`, son 5) |
 | `tr-energy-forecast-check` | 12:15 | yarının güneş/rüzgâr tahmini yazılmadıysa bildirim (yeni dosyalar kurulunca) |
@@ -92,3 +93,13 @@ cp scripts/server/systemd/tr-energy-ptf-forecast.{service,timer} /etc/systemd/sy
 ```
 
 Deneme: `systemctl start tr-energy-ptf-forecast` (12:30'dan sonra "GÖP kapanışı geçti" der, kayıt yazmaz). Günlük: `/var/log/tr-energy/tr-energy-ptf-forecast.log`. Telefon bildirimi için `.env`'de `NTFY_TOPIC` tanımlı olmalı (diğer işlerle aynı kanal). 12:30 özeti (`tr-energy-daily-summary`) artık PTF kaydını da yazar.
+
+## WeatherNext 3 (18.11.2026)
+
+Kurulum (kullanıcı onayıyla): anahtar `/srv/tr-energy/.secrets/weathernext-sa.json` (yalnız `tre` okur, git dışı), sonra
+
+```bash
+cp scripts/server/systemd/tr-energy-wn3-shadow.{service,timer} /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now tr-energy-wn3-shadow.timer
+```
+
+Google Cloud projesi `tr-energy-weather` faturalı hesapta (deneme kredisi; Sandbox tahmini taramaya göre reddettiği için). Aylık ilk 1 TB sorgu ücretsiz; günlük çekim ≈ 2–5 GB. Bütçe uyarısı €1. Günlük: `/var/log/tr-energy/tr-energy-wn3-shadow.log`.

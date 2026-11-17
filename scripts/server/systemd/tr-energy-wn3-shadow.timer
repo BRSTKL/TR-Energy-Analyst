@@ -1,0 +1,10 @@
+[Unit]
+Description=tr-energy-wn3-shadow zamanlayici
+[Timer]
+# 11:20 ilk deneme (calisma ~11:10'da gelir); 12:05 son deneme (kesim 12:30; ek kayit yoksa eldekiyle yazar)
+OnCalendar=*-*-* 11:20:00 Europe/Istanbul
+OnCalendar=*-*-* 12:05:00 Europe/Istanbul
+Persistent=false
+AccuracySec=1s
+[Install]
+WantedBy=timers.target

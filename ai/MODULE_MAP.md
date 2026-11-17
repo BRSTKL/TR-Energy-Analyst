@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-586 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+588 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
 ## Sayfalar (app/**/page.tsx) (31)
 
@@ -574,7 +574,7 @@
 - `components/wind-loss-card.tsx` — "Son 12 ay"; verisi daha kısa santralde ay sayısı ("Verisi olan 6 ay")
 - `components/yekdem-decision-card.tsx` — YEKDEM 2027 kararı: kalmak mı, çıkmak mı?
 
-## scripts (kök) (65)
+## scripts (kök) (66)
 
 - `scripts/aggregator-benchmark.mts` — Toplayıcılar arası kıyası üretir (PLAN 8.7): .cache/epias/aggregator-benchmark-<yıl>.json: npx tsx --tsconfig tsconfig.json scripts/aggregator-benchmark.mts [yıl=2026] [bitiş=karnenin dönem sonu]
 - `scripts/aggregator-collect.mts` — Toplayıcıların santral listeleri (PLAN 4.5): EPİAŞ'ta "(TOPLAYICI)" olarak kayıtlı tüm katılımcıların santralleri .cache/epias/aggregator-membership.json'a yazılır.
@@ -626,6 +626,7 @@
 - `scripts/snow-sync.mts` — Sektör karnesindeki konumu olan lisanslı güneş santralleri için ERA5 saatlik kar derinliğini (lib/weather/snow.ts) havuza çeker: 2025-01-01'den 6 gün öncesine.
 - `scripts/solar-forecast-daily.mts` — Günlük güneş tahmin kaydı: güneş tahmin motorunun günlük akışını çalıştırır (lib/solar-engine/pipeline.ts; kurallar ve ayrıntı orada).
 - `scripts/solar-oos-backfill.mts` — Öğrenen düzeltme katmanının örneklem dışı tahmin serisi önbelleğini doldurur (Aşama 22.4; lib/solar-engine/learning/oos-series.ts).
+- `scripts/solar-wn3-shadow.mts` — Güneş: WeatherNext 3 gölge sürümünün günlük ek kaydı (registry.ts `SOLAR_WN3_MODEL`; 18.11.2026).
 - `scripts/system-attribution.mts` — Sistem yönü sekmesinin "Kimden geldi?" tablosu: havuzdaki her rüzgâr, güneş ve akarsu santralinin açık ve fazla saatlerde sistemi o yöne itmesi (lib/analysis/system-attribution.ts).
 - `scripts/system-sync.mts` — Sistem geneli saatlik serileri (kaynak türüne göre KGÜP ve UEVM, yük tahmini, uzlaştırma tüketimi (UEÇM), gerçek zamanlı tüketim ve üretim, teslim edilen talimatlar) EPİAŞ'tan veri havuzuna (`data/pool/system/<yıl>.json.gz`) tamamlar.
 - `scripts/tz-sam-candidates.mts` — Konumu tahmini (ilçe / il merkezi) ya da boş olan proje GES'leri için TZ-SAM güneş santrali alanlarından aday listesi.
@@ -642,7 +643,7 @@
 - `scripts/wind-sync.mts` — Gerçekleşen rüzgâr (rüzgâr kayıp tespiti; lib/weather/reanalysis-wind.ts): konumu olan proje rüzgâr santralleri için ERA5 (0,25°) ve ECMWF IFS (9 km) saatlik 100 m hız / yön, 2025-01-01'den dünkü güne.
 - `scripts/yekdem-exit-sync.mts` — YEKDEM çıkış taraması için EPİAŞ YEKDEM listelerini yeniler (VPN gerekir): - kimlikli santral listesi 2014 → bu yıl (+ yıl sonundaysa gelecek yıl): .cache/epias/yekdem-<yıl>.json - katılımcı listesi (ad, şirket, kurulu güç): .cache/epias/y…
 
-## scripts/analysis (17)
+## scripts/analysis (18)
 
 - `scripts/analysis/change-detection-scan.mts` — Değişim algılama taraması (Aşama 22.7): proje güneş santrallerinde bağlanan uyarılar (kapasite değişimi, son / süren uzun arıza; lib/services/plant-change-warnings.ts) ve bağlanmayan konum tutarsızlığı.
 - `scripts/analysis/curtailment-scan.mts` — Uydu ışınımıyla kısıntı / arıza taraması (PLAN 15.5, 20.1): konumlu güneş santralleri, yıl başına kayıp saat, kayıp üretim ve TL karşılığı (kayıp × PTF; planlı = şirketin ilk KGÜP'ü ≈ 0; plansız = arıza / talimat).
@@ -658,6 +659,7 @@
 - `scripts/analysis/snapshot-report.mts` — Anlık görüntü raporu: hangi serinin saat kaçta yayımlandığı, sürümler arası değişim, hangi çekimin rüzgâr tahmini gerçekleşene daha yakın (lib/analysis/snapshot-report.ts; veri `snapshots/`, scripts/snapshot-capture.mts).
 - `scripts/analysis/solar-candidates-backtest.mts` — Güneş motoru aday sürümlerinin geriye dönük testi (Aşama 22): canlı temel (sürüm 3 kalıcılıksız) ile adaylar aynı koşulda.
 - `scripts/analysis/solar-wn3-backtest.mts` — Güneş: WeatherNext 3 ışınımıyla aynı canlı model (sürüm 3 kalıcılıksız, lib/solar-engine/models/production-model-v2.ts) ECMWF d2 girdisine karşı (17.11.2026).
+- `scripts/analysis/weathernext-weather-compare.mts` — Hava seviyesinde kıyas (17.11.2026): WeatherNext 3'ün tahmini, kullandığımız ECMWF tahmininden gerçekleşen havaya daha mı yakın?
 - `scripts/analysis/wind-candidates-backtest.mts` — Rüzgâr motoru aday sürümlerinin geriye dönük testi (Aşama 23.3–23.8; güneşteki scripts/analysis/solar-candidates-backtest.mts'in rüzgâr karşılığı).
 - `scripts/analysis/wind-forecast-backtest.mts` — Rüzgâr üretim tahmini geriye dönük testi (kullanıcı 18.10.2026; güneşteki scripts/analysis/forecast-backtest.mts'in rüzgâr karşılığı).
 - `scripts/analysis/wind-live-backtest.mts` — Güncel sunucu kopyasında 120 günlük, günlük kayan RES temel sınaması.

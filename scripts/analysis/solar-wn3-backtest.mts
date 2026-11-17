@@ -26,7 +26,8 @@ import { readPoolPlantInfo } from "@/lib/pool/pool-store";
 import { loadSolarHours } from "@/lib/solar-engine/data/production-data";
 import { fitSolarModelV2, type SolarHourV2 } from "@/lib/solar-engine/models/production-model-v2";
 import { nearestCell } from "@/lib/weather/weathernext";
-import { wn3Stamps, wn3UsableFor } from "@/lib/weather/weathernext-store";
+import { wn3Stamps } from "@/lib/weather/weathernext-store";
+import { toWn3SolarHour } from "@/lib/solar-engine/data/wn3-hours";
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -65,26 +66,7 @@ for (const id of ids) {
   }
   const c = nearestCell(info.location.latitude, info.location.longitude);
   const wn = await wn3Stamps(c.latitude, c.longitude, Date.UTC(2026, 3, 1), end + HOUR, DELAY, decisionCutoff);
-  // Aynı saat WN3 girdisiyle: ışınım t+1, bulut/sıcaklık t; kesimde elde olmayan damga kullanılmaz
-  const asWn3 = (h: SolarHourV2): SolarHourV2 | null => {
-    const a = wn3UsableFor(wn.get(h.t), h.t, DELAY, decisionCutoff)?.values;
-    const b = wn3UsableFor(wn.get(h.t + HOUR), h.t, DELAY, decisionCutoff)?.values;
-    if (!a || !b || b.ghi === null || b.direct === null) return null;
-    const lag = (k: "ghi" | "direct") => wn3UsableFor(wn.get(h.t - 48 * HOUR + HOUR), h.t, DELAY, decisionCutoff)?.values[k] ?? null;
-    const lagG = lag("ghi"), lagD = lag("direct");
-    return {
-      ...h,
-      ghi: b.ghi,
-      direct: b.direct,
-      diffuse: Math.max(0, b.ghi - b.direct),
-      // Bulut modelin girdisi değil (features yalnız dolu mu diye bakar); arşivde temel grupta yok → ECMWF'inki kalır
-      cloud: a.cloud === null ? h.cloud : a.cloud * 100,
-      temp: a.t2m,
-      ghiLag48: lagG,
-      directLag48: lagD,
-      diffuseLag48: lagG === null || lagD === null ? null : Math.max(0, lagG - lagD),
-    };
-  };
+  const asWn3 = (h: SolarHourV2) => toWn3SolarHour(h, wn);
   const tested: Hour[] = [];
   for (const { y, m } of months) {
     const from = Date.UTC(y, m - 1, 1);

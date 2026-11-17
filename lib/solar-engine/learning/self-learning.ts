@@ -19,11 +19,12 @@
  * kümesi arasında seçimdir, rastgele model denenmez.
  */
 
-import { BASE_MODEL, BIAS_INSAMPLE_MODEL, LIVE_SERIES } from "../registry";
+import { BASE_MODEL, BIAS_INSAMPLE_MODEL, LIVE_SERIES, SOLAR_WN3_MODEL } from "../registry";
 
 // Sürüm tanımları lib/solar-engine/registry.ts'te; eski içe aktarmalar için buradan da
 export { BASE_MODEL, BIAS_INSAMPLE_MODEL, LIVE_SERIES, MODEL_VARIANTS, type ModelVariant } from "../registry";
-const promotable = (id: string) => id !== BIAS_INSAMPLE_MODEL && id !== LIVE_SERIES;
+// SOLAR_WN3_MODEL: ek kayıtla ölçülür, canlı akış (09:30) üretemez → terfi edemez (registry.ts)
+const promotable = (id: string) => id !== BIAS_INSAMPLE_MODEL && id !== LIVE_SERIES && id !== SOLAR_WN3_MODEL;
 
 // --- 2. Günlük hata düzeltmesi ---
 

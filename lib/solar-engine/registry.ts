@@ -32,6 +32,12 @@ export const MODEL_VARIANTS = [
  * kimlikle yazılır: iki yöntem tek sürüm gibi değerlendirilmez; terfi edemez (sızıntı denetimi 19.10.2026).
  */
 export const BIAS_INSAMPLE_MODEL = `${BASE_MODEL}-bias-insample`;
+/**
+ * Temel sürüm WeatherNext 3 girdisiyle (18.11.2026; sınama Eyl–Eki 2026: 227 → 205 TL/MWh). Ek kayıtla yazılır
+ * (learning/forecast-log-store.ts `writeForecastAddendum`; WN3 D-1 00 UTC çalışması ≈ 11:10 TR'de yayımlanır, ana kayıt
+ * 09:30'da). Canlı akış bu sürümü üretemediği için şimdilik terfi edemez (self-learning `promotable`): yalnız karne.
+ */
+export const SOLAR_WN3_MODEL = `${BASE_MODEL}-wn3`;
 /** Karnede gerçekte gönderilen tahmin (o günün şampiyonu, sürümden bağımsız): seçim yanlılığı taşımaz */
 export const LIVE_SERIES = "canlı";
 export type ModelVariant = (typeof MODEL_VARIANTS)[number];

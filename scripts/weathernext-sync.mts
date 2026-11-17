@@ -30,6 +30,10 @@ const dry = args.includes("--dry");
 const force = args.includes("--force");
 const maxGb = Number(args[args.indexOf("--max-gb") + 1]) || 900;
 const DELAY = WEATHER_RUN_RULES.weathernext3.publishDelayMs;
+/** Belgelenen yayım (init + 8 sa 10 dk; DELAY kuralı +60 dk pay içerir): bundan önce denenmez */
+const DOC_DELAY = 8 * HOUR + 10 * 60_000;
+/** Hedef günün kesimi (UTC ms): D-1 09:30 UTC */
+const cutoffOf = (day: string) => Date.parse(`${day}T00:00:00Z`) - 24 * HOUR + 9.5 * HOUR;
 /** Tek değişken sorgusunun gerçek tüketimi bundan büyükse kümeleme çalışmıyor demektir: dur */
 const PER_QUERY_MAX = 6e9;
 /**
@@ -130,10 +134,12 @@ outer: while (day <= to) {
   let changed = false;
   for (; day <= to && day.slice(0, 7) === month; day = dayAdd(day, 1)) {
     const runs = weathernextRunsForTargetDay(day, DELAY);
-    if (Date.now() < runs[0] + DELAY) {
-      console.log(`${day}: çalışma ${new Date(runs[0]).toISOString()} henüz yayımlanmadı (kural); duruldu`);
+    if (Date.now() < runs[0] + DOC_DELAY) {
+      console.log(`${day}: çalışma ${new Date(runs[0]).toISOString()} henüz yayımlanmadı; duruldu`);
       break outer;
     }
+    // Kesimi geçmemiş günde ana çalışma eksik hücre yedek çalışmayla yazılmaz (sonraki çalışma dener), son 20 dakikada yazılır
+    const allowFallback = Date.now() > cutoffOf(day) - 20 * 60_000;
     if (!force && [...docs.values()].every((d) => d.runs[day])) continue;
     if (billed / 1e9 > maxGb) {
       console.log(`kota sınırı (${maxGb} GB) aşıldı; ${day} ve sonrası yazılmadı`);
@@ -143,10 +149,17 @@ outer: while (day <= to) {
     const rows = (await Promise.all(parts.map(partition))).flat();
     if (dry) continue;
     const got = assembleDay(rows, day, runs);
+    let held = 0;
     for (const [k, v] of got) {
       const d = docs.get(k);
-      if (d) putDay(d, day, v.run, v.values);
+      if (!d) continue;
+      if (v.run !== runs[0] && !allowFallback) {
+        held++;
+        continue;
+      }
+      putDay(d, day, v.run, v.values);
     }
+    if (held) console.log(`${day}: ${held} hücrede ana çalışma henüz yok; yedekle yazılmadı (sonraki çalışma dener)`);
     const fallback = [...got.values()].filter((v) => v.run !== runs[0]).length;
     console.log(`${day}: ${got.size}/${cells.size} hücre${fallback ? ` (${fallback} hücre yedek çalışmadan)` : ""}`);
     if (got.size) changed = true;
