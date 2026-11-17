@@ -132,3 +132,35 @@ export function putDay(doc: Wn3CellYear, targetDay: string, run: number, values:
 }
 
 export const dayAdd = (day: string, n: number) => new Date(Date.parse(`${day}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);
+
+/** Bir damganın değerleri ve o günün çalışması (yalnız kesimden önce elde olan çalışmayla doldurulmuş günler) */
+export interface Wn3Stamp {
+  run: number;
+  values: Record<Wn3Var, number | null>;
+}
+
+/**
+ * Hücrenin [from, to) duvar saati damgaları. Bilgi zamanı burada denetlenir: günün çalışması + yayım gecikmesi o günün
+ * kesiminden (D-1 12:30 TR) sonraysa gün atlanır (lib/forecast/info-time.ts `decisionCutoff`, `WEATHER_RUN_RULES`).
+ */
+export async function wn3Stamps(latitude: number, longitude: number, from: number, to: number, publishDelayMs: number, cutoffOf: (wall: number) => number): Promise<Map<number, Wn3Stamp>> {
+  const out = new Map<number, Wn3Stamp>();
+  for (let y = new Date(from).getUTCFullYear(); y <= new Date(to - 1).getUTCFullYear(); y++) {
+    const doc = await readCellYear(latitude, longitude, y);
+    if (!doc) continue;
+    const s0 = Date.parse(doc.start);
+    for (const [day, iso] of Object.entries(doc.runs)) {
+      const wall0 = Date.parse(`${day}T00:00:00Z`);
+      if (wall0 + DAY <= from || wall0 >= to) continue;
+      const run = Date.parse(iso);
+      if (run + publishDelayMs + TR > cutoffOf(wall0)) continue;
+      for (let h = 0; h < 24; h++) {
+        const t = wall0 + h * HOUR;
+        if (t < from || t >= to) continue;
+        const i = (t - s0) / HOUR;
+        out.set(t, { run, values: Object.fromEntries(WN3_VARS.map((k) => [k, doc.vars[k][i] ?? null])) as Record<Wn3Var, number | null> });
+      }
+    }
+  }
+  return out;
+}

@@ -12,6 +12,10 @@ import { hourMeanWind } from "@/lib/forecast/wind-loss";
 import { readPoolYear, readProvisionalYear } from "@/lib/pool/pool-store";
 import { readWindForecastYear, readWindNwpYear, readWindYear } from "@/lib/weather/weather-store";
 import { hubWind, WIND_NWP_MODELS, type WindNwpYear } from "@/lib/weather/wind-nwp-archive";
+import { readPoolPlantInfo } from "@/lib/pool/pool-store";
+import { nearestCell } from "@/lib/weather/weathernext";
+import { wn3Stamps } from "@/lib/weather/weathernext-store";
+import { decisionCutoff, WEATHER_RUN_RULES } from "@/lib/forecast/info-time";
 import type { WindEnsembleHour } from "../models/ensemble";
 
 const HOUR = 3_600_000;
@@ -32,7 +36,7 @@ export interface WindPlantData {
 }
 
 /** `from`–`to` (duvar saati ms) arası saatler; ECMWF tahmin arşivi yoksa null */
-export async function loadWindPlantData(epiasPlantId: number, from: number, to: number, ptf: Map<number, number>, realizedModel: "ecmwf_ifs" | "era5" = "ecmwf_ifs", opts: { provisional?: boolean } = {}): Promise<WindPlantData | null> {
+export async function loadWindPlantData(epiasPlantId: number, from: number, to: number, ptf: Map<number, number>, realizedModel: "ecmwf_ifs" | "era5" = "ecmwf_ifs", opts: { provisional?: boolean; weathernext?: boolean } = {}): Promise<WindPlantData | null> {
   const y0 = new Date(from).getUTCFullYear();
   const y1 = new Date(to - 1).getUTCFullYear() + 1;
   const stamps = { d1: new Map<number, number[]>(), d2: new Map<number, number[]>() };
@@ -62,6 +66,19 @@ export async function loadWindPlantData(epiasPlantId: number, from: number, to: 
     }
   }
   if (!stamps.d2.size) return null;
+  // WeatherNext 3 (isteğe bağlı; lib/weather/weathernext-store.ts): santral hücresi, yalnız kesimden önce elde olan çalışmanın günleri
+  let wn3: Awaited<ReturnType<typeof wn3Stamps>> | null = null;
+  if (opts.weathernext) {
+    const loc = (await readPoolPlantInfo(epiasPlantId))?.location;
+    if (loc) {
+      const c = nearestCell(loc.latitude, loc.longitude);
+      wn3 = await wn3Stamps(c.latitude, c.longitude, from, to + HOUR, WEATHER_RUN_RULES.weathernext3.publishDelayMs, decisionCutoff);
+    }
+  }
+  const wn3Wind = (t: number) => {
+    const a = wn3?.get(t)?.values, b = wn3?.get(t + HOUR)?.values;
+    return a && b ? hourMeanWind(a.ws100, b.ws100, a.dir100, b.dir100) : { ws: null, dir: null };
+  };
   const num = (v: number | undefined) => (v === undefined || Number.isNaN(v) ? null : v);
   const avg = (a: number | null, b: number | null) => (a === null || b === null ? (a ?? b) : (a + b) / 2);
   const at = (l: Lead, t: number, k: number) => num(stamps[l].get(t)?.[k]);
@@ -99,7 +116,10 @@ export async function loadWindPlantData(epiasPlantId: number, from: number, to: 
         pressure: both(3, t),
         msl: both(4, t),
         ws10: both(5, t),
-        src: hasModels ? { ecmwf_ifs025: w2, icon_eu: nwpWind("icon_eu", t), gfs_global: nwpWind("gfs_global", t) } : {},
+        src: {
+          ...(hasModels ? { ecmwf_ifs025: w2, icon_eu: nwpWind("icon_eu", t), gfs_global: nwpWind("gfs_global", t) } : {}),
+          ...(wn3 ? { weathernext3: wn3Wind(t) } : {}),
+        },
         realized: re,
       });
     }
