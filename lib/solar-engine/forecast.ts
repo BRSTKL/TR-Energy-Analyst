@@ -316,6 +316,8 @@ export async function forecastSolarPlantWn3(
     const hours = liveWeatherHours(w.res, from, from + count * HOUR).map((wh) => {
       const x = toWn3SolarHour({ ...wh, uevm: null, kgupFirst: null, kgupFinal: null, ptf: null, lag48: null, ghiLag48: null, directLag48: null, diffuseLag48: null, live: true }, stamps);
       if (!x) {
+        // Günün son saati ertesi günün 00:00 damgasına uzanır (kesimde elde değil); gece saatinde üretim zaten yok
+        if ((wh.ghi ?? 0) <= 0) return 0;
         missing++;
         return null;
       }
