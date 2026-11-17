@@ -8,3 +8,5 @@ export const WIND_SHADOWS = [
 
 export const WIND_CORRECTION_MODEL = "wind-median-correction-v1";
 export const WIND_CURTAILMENT_MODEL = "wind-median-curtailment-v1";
+/** Ağırlıklı birleşim (bütün geçmiş) + öğrenen düzeltme (learning/ensemble-correction.ts; 17.11.2026) */
+export const WIND_ENSEMBLE_CORRECTION_MODEL = "wind-ensemble-weighted-corr-v1";

@@ -14,7 +14,7 @@ import path from "node:path";
 import { poolDir } from "@/lib/pool/pool-store";
 import { detectLostHours } from "@/lib/forecast/curtailment";
 import { BASE_MODEL, BIAS_LOOKBACK_DAYS, COOLDOWN_DAYS, REVIEW_DAYS, reviewChampion, type BiasSample, type ChampionDecision, type ChampionState } from "@/lib/solar-engine/learning/self-learning";
-import { WIND_BASE_MODEL, WIND_SHADOWS, WIND_CORRECTION_MODEL, WIND_CURTAILMENT_MODEL } from "@/lib/wind-engine/registry";
+import { WIND_BASE_MODEL, WIND_SHADOWS, WIND_CORRECTION_MODEL, WIND_CURTAILMENT_MODEL, WIND_ENSEMBLE_CORRECTION_MODEL } from "@/lib/wind-engine/registry";
 import { listForecastLogs, readForecastLog } from "./forecast-log-store";
 import { scorecard, scorecardPlantData } from "./scorecard-data";
 
@@ -142,7 +142,7 @@ export async function reviewChampions(
       }
       for (const model of Object.keys(daily)) daily[model] = Object.fromEntries(Object.entries(daily[model]).filter(([day]) => eligible.get(model)?.has(day)));
     }
-    const d = reviewChampion(id, championOf(reg, id, tech), daily, tech === "RES" ? { baseModel, candidates: [WIND_BASE_MODEL, ...WIND_SHADOWS.map(s => s.id), WIND_CORRECTION_MODEL, WIND_CURTAILMENT_MODEL] } : {});
+    const d = reviewChampion(id, championOf(reg, id, tech), daily, tech === "RES" ? { baseModel, candidates: [WIND_BASE_MODEL, ...WIND_SHADOWS.map(s => s.id), WIND_CORRECTION_MODEL, WIND_CURTAILMENT_MODEL, WIND_ENSEMBLE_CORRECTION_MODEL] } : {});
     if (!d) continue;
     const prev = state ?? { modelId: baseModel, since: fromDay, history: [] };
     // since: yeni sürümün ilk canlı hedef günü

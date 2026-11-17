@@ -20,6 +20,10 @@ import {calibratedWindBands} from "@/lib/wind-engine/models/calibrated-bands";
  *     hariç), değerlendirme Temmuz 2025'ten (en az 3 aylık geçmiş).
  *   - `blend` (23.8): karışım w × temel + (1 − w) × ilk KGÜP, w önceki ayların maliyetiyle (models/blend.ts). ANALİZ: ilk
  *     KGÜP canlıda bizde yok. Çıktıda zayıf tahminci santraller listesi.
+ *   - `combo` (17.11.2026; hedef ilk KGÜP'e yaklaşmak): canlı temelin birebiri (son 120 gün eğitim), ağırlıklı birleşim
+ *     (ECMWF + ICON-EU + GFS, models/ensemble.ts; eksik kaynakta canlıdaki gibi mevcut modellerle; ağırlık doğrulaması
+ *     canlıdaki gibi eğitimin son 30 günü) ve birleşimin üstüne öğrenen düzeltme (`corr` kümesiyle aynı kural, düzeltilen
+ *     tahmin birleşim, özelliklere modellerin hız ayrışması eklenir). Değerlendirme `corr` gibi Temmuz 2025'ten.
  * Ayarlar baştan sabittir; sonuca göre değiştirilmez. Kazanan aday ancak gölge sürüm karnesiyle canlıya alınır.
  *
  *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/analysis/wind-candidates-backtest.mts [sonAy=YYYY-AA] --set phys|prob|curt|corr|blend
@@ -40,6 +44,7 @@ import { fitPhysicalCurve } from "@/lib/wind-engine/models/physical-curve";
 import { buildRampRows, fitRampModel, fitWindQuantiles, rampClimatology, type RampRow } from "@/lib/wind-engine/models/probabilistic";
 import { blendValue, fitBlendWeight, weakForecasters } from "@/lib/wind-engine/models/blend";
 import { fitWindCorrection, windRecentError, type WindCorrectionInput } from "@/lib/wind-engine/models/correction";
+import { fitWindEnsemble } from "@/lib/wind-engine/models/ensemble";
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -47,7 +52,7 @@ const DAY = 24 * HOUR;
 const LABEL_DELAY_DAYS = 7;
 const endArg = process.argv.slice(2).find((a) => /^\d{4}-\d{2}$/.test(a)) ?? "2026-09";
 const setArg = process.argv[process.argv.indexOf("--set") + 1];
-const SETS = ["phys", "prob", "curt", "corr", "blend"] as const;
+const SETS = ["phys", "prob", "curt", "corr", "blend", "combo"] as const;
 type SetName = (typeof SETS)[number];
 if (!process.argv.includes("--set") || !SETS.includes(setArg as SetName)) {
   console.log(`Kullanım: --set ${SETS.join("|")}`);
@@ -82,7 +87,10 @@ const NAMES: Record<SetName, string[]> = {
   curt: ["rüzgâr modeli", "+kısıntı", "üst sınır (SIZINTI)", "ilk KGÜP"],
   corr: ["rüzgâr modeli", "+düzeltme", "ilk KGÜP"],
   blend: ["rüzgâr modeli", "karışım", "ilk KGÜP"],
+  combo: ["rüzgâr modeli", "temel 120 gün", "+düzeltme", "birleşim", "birleşim +düzeltme", "ilk KGÜP"],
 };
+/** Canlı temelin eğitim penceresi (lib/wind-engine/forecast.ts) */
+const LIVE_TRAIN_DAYS = 120;
 const LEAKY = ["üst sınır (SIZINTI)"];
 /** Canlıda kurulamayan analiz adayları (ilk KGÜP'ü kullanır; ilk KGÜP kesimden sonra bildirilir): aday sayılmaz */
 const NOT_LIVE = ["karışım"];
@@ -141,6 +149,14 @@ for (const [id, p] of uniq) {
           const b = physRho.predictSeries(hs);
           return hs.map((h, i) => ({ "rüzgâr modeli": base.predict(h), "fiziksel eğri": a[i], "fiziksel + yoğunluk": b[i] }));
         };
+      } else if (SET === "combo") {
+        const live = fitWindForecast(train.filter((h) => h.t >= trainingEnd - LIVE_TRAIN_DAYS * DAY), cap, { lead: "d2", trainingEnd });
+        const ens = data.hasModels ? fitWindEnsemble(train, cap, { trainingEnd, validationFrom: trainingEnd - 30 * DAY }) : null;
+        predict = (hs) =>
+          hs.map((h) => {
+            const e = ens?.predict(h, true) ?? null;
+            return { "rüzgâr modeli": base.predict(h), "temel 120 gün": live.predict(h), birleşim: e?.weighted ?? null, "~ayrışma": e?.spreadMs ?? null };
+          });
       } else predict = (hs) => hs.map((h) => ({ "rüzgâr modeli": base.predict(h) }));
     } catch (e) {
       if ((e as Error).name === "LeakageError") throw e;
@@ -152,10 +168,13 @@ for (const [id, p] of uniq) {
   if (!tested.length) continue;
 
   // Örneklem dışı seri üstüne kurulan kümeler: her test ayı yalnız önceki ayların tahmin ve gerçekleşeniyle
-  const series = new Map(tested.map((h) => [h.t, { pred: h.pred["rüzgâr modeli"], actual: h.uevm }]));
-  const corrInput = (h: Hour): WindCorrectionInput | null => {
-    const v = h.pred["rüzgâr modeli"];
+  const seriesOf = (key: string) => new Map(tested.map((h) => [h.t, { pred: h.pred[key] ?? null, actual: h.uevm }]));
+  const seriesByKey = new Map<string, ReturnType<typeof seriesOf>>();
+  const corrInput = (h: Hour, key = "rüzgâr modeli"): WindCorrectionInput | null => {
+    const v = h.pred[key] ?? null;
     if (v === null) return null;
+    const series = seriesByKey.get(key) ?? seriesOf(key);
+    seriesByKey.set(key, series);
     return {
       t: h.t,
       pred: v,
@@ -165,6 +184,7 @@ for (const [id, p] of uniq) {
       dir: h.dir.d2,
       ws10: h.ws10?.d2 ?? null,
       temp: h.temp?.d2 ?? null,
+      ...(key === "birleşim" ? { spreadMs: h.pred["~ayrışma"] ?? null } : {}),
       recent: windRecentError(h.t, series, cap),
     };
   };
@@ -230,19 +250,22 @@ for (const [id, p] of uniq) {
         h.pred["üst sınır (SIZINTI)"] = v === null ? null : curtailedForecast(v, known, rate.rate);
       }
     }
-    if (SET === "corr") {
-      const rows = hist
-        .filter((h) => h.t >= Date.UTC(y, m - 13, 1))
-        .map((h) => {
-          const x = corrInput(h);
-          return x ? { ...x, actual: h.uevm! } : null;
-        })
-        .filter((x): x is WindCorrectionInput & { actual: number } => x !== null);
-      const fit = from >= CORR_FIRST ? fitWindCorrection(rows, cap) : null;
-      if (fit) notes["düzeltme ay"] = (notes["düzeltme ay"] ?? 0) + 1;
-      for (const h of test) {
-        const x = corrInput(h);
-        h.pred["+düzeltme"] = x === null ? null : fit ? fit.apply(x) : x.pred;
+    if (SET === "corr" || SET === "combo") {
+      const pairs: Array<[string, string]> = SET === "corr" ? [["rüzgâr modeli", "+düzeltme"]] : [["rüzgâr modeli", "+düzeltme"], ["birleşim", "birleşim +düzeltme"]];
+      for (const [key, out] of pairs) {
+        const rows = tested
+          .filter((h) => h.t >= Date.UTC(y, m - 13, 1) && h.t < from - DAY && h.uevm !== null && h.pred[key] != null && (h.ptf ?? 1) > 0)
+          .map((h) => {
+            const x = corrInput(h, key);
+            return x ? { ...x, actual: h.uevm! } : null;
+          })
+          .filter((x): x is WindCorrectionInput & { actual: number } => x !== null);
+        const fit = from >= CORR_FIRST ? fitWindCorrection(rows, cap) : null;
+        if (fit) notes[`${out} ay`] = (notes[`${out} ay`] ?? 0) + 1;
+        for (const h of test) {
+          const x = corrInput(h, key);
+          h.pred[out] = x === null ? null : fit ? fit.apply(x) : x.pred;
+        }
       }
     }
     if (SET === "blend") {
@@ -264,7 +287,7 @@ for (const [id, p] of uniq) {
   for(const [year,weights] of yearlyWeights){const xs=blendByYear[year]??[];xs.push({id,w:weights.reduce((a,b)=>a+b,0)/weights.length,months:weights.length});blendByYear[year]=xs;}
   const names = NAMES[SET];
   const cand: Record<string, (h: Hour) => number | null> = Object.fromEntries(names.map((n) => [n, n === "ilk KGÜP" ? (h: Hour) => h.kgupFirst : (h: Hour) => h.pred[n] ?? null]));
-  const evalHours = SET === "prob" || SET === "corr" ? tested.filter((h) => h.t >= CORR_FIRST) : tested;
+  const evalHours = SET === "prob" || SET === "corr" || SET === "combo" ? tested.filter((h) => h.t >= CORR_FIRST) : tested;
   const all = evaluateForecasts(evalHours, cand, market, "RES");
   results.push({ id, name: p.name, capacityMw: cap, notes, all });
   if (SET === "blend" && notes["w ay"]) blendList.push({ id, name: p.name, w: notes["w × 10 (ay toplamı)"] / 10 / notes["w ay"], months: notes["w ay"] });
@@ -278,7 +301,7 @@ fs.writeFileSync(
   path.join(process.cwd(), ".cache", "forecast", `wind-candidates-${SET}.json`),
   JSON.stringify({
     generatedAt: new Date().toISOString(),
-    period: { from: SET === "prob" || SET === "corr" ? iso(CORR_FIRST) : iso(Date.UTC(FIRST_TEST.y, FIRST_TEST.m - 1, 1)), to: endArg },
+    period: { from: SET === "prob" || SET === "corr" || SET === "combo" ? iso(CORR_FIRST) : iso(Date.UTC(FIRST_TEST.y, FIRST_TEST.m - 1, 1)), to: endArg },
     set: SET,
     plants: results,
     leaky: LEAKY,

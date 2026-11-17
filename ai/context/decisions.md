@@ -166,3 +166,8 @@ yeniden üretin. Ayrıntılı geçmiş `PLAN.md` (süren aşamalar, son kayıtla
 ## Havuzda boş gelen ay (17.11.2026)
 
 - Ay bittikten sonra EPİAŞ'ın UEVM'yi yayımlamasından dakikalar önce çekilen ay boş gelir. Böyle bir ay ilk 30 gün içinde 3 saat sonra yeniden çekilir (önce 24 saatti). 16.11.2026'da Ekim 158 rüzgâr/güneş santrali için boş çekildi; karne eksik santralle kuruldu, %90 koruması adımı reddetti ve aylık eşitleme bir gün boyunca her saat başarısız oldu.
+
+## Rüzgâr: şirket planına yaklaşma (17.11.2026)
+
+- Hedef ilk KGÜP'ü yenmek değil, yaklaşmak (kullanıcı). Tanı: hata seviye, zamanlama ya da kısıntıdan değil; gerçekleşen rüzgârla bile güç eğrisi %38 WAPE (KGÜP %31). Tek nokta hava rüzgârı + eğri yöntemi KGÜP'ü yenemez.
+- Sınama (`--set combo`, Tem 2025 – Eyl 2026, 121 santral, TL/MWh): canlı temel 120 gün 254, genişleyen pencere 243, birleşim 229, birleşim + düzeltme 209, ilk KGÜP 158. Yeni gölge `wind-ensemble-weighted-corr-v1`; canlıya yalnız karneyle. Sızıntı denetimi geçti; canlıda son günler GZÜ ile eğitilir (sınamada yok), karne sınamadan kötüyse ilk bakılacak yer.

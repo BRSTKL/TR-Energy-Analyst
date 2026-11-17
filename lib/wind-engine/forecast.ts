@@ -5,8 +5,10 @@ import {
   WIND_SHADOWS,
   WIND_CORRECTION_MODEL,
   WIND_CURTAILMENT_MODEL,
+  WIND_ENSEMBLE_CORRECTION_MODEL,
 } from "./registry";
-import { fitWindEnsemble } from "./models/ensemble";
+import { fitWindEnsemble, type WindEnsembleHour } from "./models/ensemble";
+import { fitFullEnsemble, windEnsembleCorrection, windEnsembleOos } from "./learning/ensemble-correction";
 import { liveWindNwp } from "./data/live-nwp";
 import type { ForecastLogShadow } from "@/lib/solar-engine/learning/forecast-log";
 import { isRecordedCapacity } from "@/lib/epias-plant/installed-capacity";
@@ -81,6 +83,7 @@ async function computeWindForecast(
     ...WIND_SHADOWS.map((v) => v.id),
     WIND_CORRECTION_MODEL,
     WIND_CURTAILMENT_MODEL,
+    WIND_ENSEMBLE_CORRECTION_MODEL,
   ].map((id) => ({
     modelId: id,
     plants: [],
@@ -259,11 +262,10 @@ async function computeWindForecast(
             liveWindNwp("icon_eu", loc.latitude, loc.longitude, start, 48, now, !!opts.fresh),
             liveWindNwp("gfs_global", loc.latitude, loc.longitude, start, 48, now, !!opts.fresh),
           ]);
-          const predictions = Array.from({ length: 48 }, (_, i) => {
+          const inputs: Array<WindEnsembleHour | null> = Array.from({ length: 48 }, (_, i) => {
             const e = liveWind.find((h) => h.t === start + i * H);
             if (!e) return null;
-            return ensemble.predictLive(
-              {
+            return {
                 t: e.t,
                 uevm: null,
                 kgupFirst: null,
@@ -286,10 +288,9 @@ async function computeWindForecast(
                   icon_eu: icon.hours[i],
                   gfs_global: gfs.hours[i],
                 },
-              },
-              now
-            );
+              };
           });
+          const predictions = inputs.map((x) => (x ? ensemble.predictLive(x, now) : null));
           WIND_SHADOWS.forEach((v, i) =>
             shadows[i].plants.push({
               epiasPlantId: p.epiasPlantId!,
@@ -302,8 +303,39 @@ async function computeWindForecast(
               weatherFetchedAt: [cached.at, icon.fetchedAt, gfs.fetchedAt].sort().at(-1),
             })
           );
+          // Birleşim + düzeltme (learning/ensemble-correction.ts): birleşim bütün geçmişle, düzeltme örneklem dışı hatasıyla
+          const ecShadow = shadows.find((s) => s.modelId === WIND_ENSEMBLE_CORRECTION_MODEL)!;
+          try {
+            const full = fitFullEnsemble(data.hours, p.capacityMw, trainEnd);
+            const live = inputs.flatMap((x, i) => {
+              if (!x) return [];
+              const r = full.predictLive(x, now);
+              const lw = liveWind.find((h) => h.t === x.t)!;
+              return r.weighted === null
+                ? []
+                : [{ t: x.t, pred: r.weighted, spreadMs: r.spreadMs, ws: lw.ws, dir: lw.dir, ws10: lw.ws10, temp: lw.temp, i }];
+            });
+            const corrected = windEnsembleCorrection(data.hours, windEnsembleOos(data.hours, p.capacityMw, trainEnd), live, start, p.capacityMw);
+            const values: Array<number | null> = Array(48).fill(null);
+            if (corrected) live.forEach((h, k) => (values[h.i] = corrected[k]));
+            const ok = values.some((v) => v !== null);
+            ecShadow.plants.push({
+              epiasPlantId: p.epiasPlantId!,
+              status: ok ? "ok" : "no-data",
+              hours: ok ? values : undefined,
+              message: ok ? undefined : "Yeterli örneklem dışı birleşim geçmişi yok",
+              windSpreadMs: predictions.map((r) => r?.spreadMs ?? null),
+              weatherFetchedAt: [cached.at, icon.fetchedAt, gfs.fetchedAt].sort().at(-1),
+            });
+          } catch (error) {
+            ecShadow.plants.push({
+              epiasPlantId: p.epiasPlantId!,
+              status: "no-data",
+              message: error instanceof Error ? error.message : String(error),
+            });
+          }
         } catch (error) {
-          shadows.slice(0, WIND_SHADOWS.length).forEach((sh) =>
+          [...shadows.slice(0, WIND_SHADOWS.length), shadows.find((s) => s.modelId === WIND_ENSEMBLE_CORRECTION_MODEL)!].forEach((sh) =>
             sh.plants.push({
               epiasPlantId: p.epiasPlantId!,
               status: "no-data",
