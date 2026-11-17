@@ -179,3 +179,8 @@ yeniden üretin. Ayrıntılı geçmiş `PLAN.md` (süren aşamalar, son kayıtla
 - Yayım: 6 saatlik çalışmalar init + 8 sa 10 dk (+60 dk pay); kesimde en yeni çalışma D-1 00 UTC. Ara saatlik çalışmalar kullanılmaz. Izgara hücre merkezleri 0,1° katları (veriyle doğrulandı).
 - Uyarı: WN3 31.08.2026'da çıktı; 2024 – Ağustos 2026 arşivi sonradan üretilmiş (üretim modelinin eğitim kesimi 30.06.2026 olabilir → örneklem içi). Sınamada karar yalnız 01.09.2026 sonrası canlı yayımlanmış dönemle verilir; öncesi eğitim için kullanılabilir, başarı iddiası için değil.
 - Lisans: canlı veri deneysel koşullar (iç kullanım ve geri çıkarılamayan türev serbest, ham veri dağıtımı yasak, atıf zorunlu); 1 saatten eski veri CC BY 4.0.
+- Sınama sonucu (18.11.2026; Eylül–Ekim 2026, yalnız canlı yayım dönemi; eğitim Nisan–Ağustos sonradan üretilmiş arşiv, 4–14 Ağustos eksik):
+  - Güneş (36 santral, aynı sürüm 3 modeli): ECMWF d2 227 TL/MWh (WAPE %37,6), WN3 205 (%34,4), ilk KGÜP 200 (%31). WN3 %10 ucuz, KGÜP'e fark %14 → %3; 19/36 santralde KGÜP'ten ucuz.
+  - Rüzgâr (122 santral): canlı temel 298, üç model birleşim 276, WN3 tek başına 256, birleşim+WN3 253, birleşim+düzeltme (bugünkü gölge) 245,6, birleşim+WN3+düzeltme 244,2, ilk KGÜP 212. WN3 tek kaynak olarak en iyisi; düzeltmeden sonra ek kazanç küçük (%0,6).
+  - Hava seviyesi (Eylül): rüzgâr 100 m hata WN3 1,01 / ECMWF d2 1,14 / d1 1,08 m/s; ışınım parçalı gökte WN3 74 / ECMWF 110 W/m², açık gökte WN3 biraz kötü (−24 W/m² sapma).
+- Kota: Sandbox "tahmini taramaya göre red" yüzünden faturalı hesaba (deneme kredisi) geçildi; günlük tavan (custom quota) bu hesapta düzenlenemiyor. Kasım kullanımı ≈ 830 GB.
