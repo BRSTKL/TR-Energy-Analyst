@@ -9,7 +9,7 @@
  * (Türkiye günü D için 00 UTC'nin 21–44, 18 UTC'nin 27–50. saatleri). Her değişken AYRI sorguyla: BigQuery tahmini taramayı
  * kümelemeyi hesaba katmadan seçilen sütun sayısıyla büyütür (≈ 110 GB / sütun / gün; 13 sütun 1,4 TB) ve hem
  * `maximumBytesBilled` hem Sandbox kotası bu tahmine bakar (17.11.2026: 4 GB tavanlı sorgu reddedildi). Gerçek tüketim
- * küçüktür; sorgudan SONRA denetlenir: tek sorgu `PER_QUERY_MAX`'ı ya da toplam `--max-gb`'yi aşarsa durur.
+ * küçüktür; gruplar (GROUPS) bu yüzden küçük tutulur ve tüketim sorgudan SONRA denetlenir: tek sorgu `PER_QUERY_MAX`'ı ya da toplam `--max-gb`'yi aşarsa durur.
  * Dolu günler atlanır (`--force` yeniden yazar).
  * `--dry` yalnız tahmini taramayı yazar (kota harcamaz). Yayımlanmamış çalışmanın günü yazılmaz (sonraki çalışmada dolar).
  * Lisans ve atıf: lib/weather/weathernext.ts.
@@ -30,7 +30,14 @@ const force = args.includes("--force");
 const maxGb = Number(args[args.indexOf("--max-gb") + 1]) || 900;
 const DELAY = WEATHER_RUN_RULES.weathernext3.publishDelayMs;
 /** Tek değişken sorgusunun gerçek tüketimi bundan büyükse kümeleme çalışmıyor demektir: dur */
-const PER_QUERY_MAX = 2e9;
+const PER_QUERY_MAX = 3e9;
+/**
+ * Sorgu grupları: her sorgu konum ve zaman sütunlarını yeniden okur (≈ 0,5 GB / gün), tek sütunlu sorgular pahalı
+ * (17.11.2026: 10 sorgu 6 GB / gün; tek sorguda 10 sütun 1,4 GB). Temel grup arşivde de çekilir; ek grup (`--full`,
+ * canlı günlük çekimde) bant ve yardımcı değişkenler.
+ */
+const GROUPS: string[][] = [["u", "v", "ws", "t2m", "ghi", "direct"], ["p10", "p90", "ws10", "cloud"]];
+const full = args.includes("--full");
 const COLUMNS: Record<string, string> = {
   u: "u_component_of_wind_100m_mean",
   v: "v_component_of_wind_100m_mean",
@@ -58,9 +65,9 @@ for (let lat = Math.ceil(TURKEY_BOX.south * 2) / 2; lat <= TURKEY_BOX.north; lat
 console.log(`hücre ${cells.size} (santral ${plantCells}, ağ ${cells.size - plantCells}); hedef günler ${from} – ${to}`);
 
 const keys = [...cells.keys()];
-const sqlFor = (partition: string, column: string) => `
+const sqlFor = (partition: string, names: string[]) => `
 SELECT FORMAT('%.1f_%.1f', ROUND(ST_Y(t.geography), 1), ROUND(ST_X(t.geography), 1)) AS cell, UNIX_SECONDS(t.init_time) AS run, f.hours AS lead,
-  f.${column} AS x
+  ${names.map((n) => `f.${COLUMNS[n]} AS ${n}`).join(", ")}
 FROM \`${WEATHERNEXT_TABLE}\` AS t, t.forecast AS f
 WHERE t.init_time IN (TIMESTAMP('${partition} 00:00:00 UTC'), TIMESTAMP('${partition} 18:00:00 UTC'))
   AND ST_INTERSECTS(t.geography, ST_GEOGFROMTEXT('${turkeyBoxWkt()}'))
@@ -74,8 +81,9 @@ async function partition(p: string): Promise<Wn3Row[]> {
   if (hit) return hit;
   const raw = new Map<string, Record<string, number | null> & { cell: string; run: number; lead: number }>();
   let partBilled = 0;
-  for (const [name, column] of Object.entries(COLUMNS)) {
-    const sql = sqlFor(p, column);
+  for (const names of full ? GROUPS : GROUPS.slice(0, 1)) {
+    const name = names.join("+");
+    const sql = sqlFor(p, names);
     if (dry) {
       const r = await weathernextQuery(sql, { dryRun: true });
       console.log(`  ${p} ${name}: tahmini tarama ${(r.bytesBilled / 1e9).toFixed(0)} GB (üst sınır)`);
@@ -85,11 +93,12 @@ async function partition(p: string): Promise<Wn3Row[]> {
     billed += r.bytesBilled;
     partBilled += r.bytesBilled;
     if (r.bytesBilled > PER_QUERY_MAX) throw new Error(`${p} ${name}: tek sorgu ${(r.bytesBilled / 1e9).toFixed(1)} GB tüketti (sınır ${PER_QUERY_MAX / 1e9} GB); kümeleme beklenen gibi çalışmıyor, duruldu`);
-    const [ci, ri, li, xi] = ["cell", "run", "lead", "x"].map((n) => r.fields.indexOf(n));
+    const [ci, ri, li] = ["cell", "run", "lead"].map((n) => r.fields.indexOf(n));
+    const vi = names.map((n) => r.fields.indexOf(n));
     for (const x of r.rows) {
       const key = `${x[ci]}|${x[ri]}|${x[li]}`;
       const row = raw.get(key) ?? { cell: x[ci]!, run: Number(x[ri]) * 1000, lead: Number(x[li]) };
-      row[name] = x[xi] === null ? null : Number(x[xi]);
+      names.forEach((n, j) => (row[n] = x[vi[j]] === null ? null : Number(x[vi[j]])));
       raw.set(key, row);
     }
   }
