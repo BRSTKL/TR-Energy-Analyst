@@ -162,3 +162,7 @@ yeniden üretin. Ayrıntılı geçmiş `PLAN.md` (süren aşamalar, son kayıtla
 - Pano üç gün gösterir: Dün, Bugün, Yarın (+ başka gün). Yarın teklif işi `/market/teklif`'tedir; pano "piyasada ne oldu" sayfasıdır.
 - Yayımlanmamış saat grafikte boş bırakılmaz, hiç çizilmez; EPİAŞ yayımlanmamış saatlere 0 yazar, bu sıfırlar veri sayılmaz.
 - Gerçek zamanlı tüketim/üretimin en yeni saati kısmidir; son tam saat `lastCompleteRealtimeHour` ile bulunur.
+
+## Havuzda boş gelen ay (17.11.2026)
+
+- Ay bittikten sonra EPİAŞ'ın UEVM'yi yayımlamasından dakikalar önce çekilen ay boş gelir. Böyle bir ay ilk 30 gün içinde 3 saat sonra yeniden çekilir (önce 24 saatti). 16.11.2026'da Ekim 158 rüzgâr/güneş santrali için boş çekildi; karne eksik santralle kuruldu, %90 koruması adımı reddetti ve aylık eşitleme bir gün boyunca her saat başarısız oldu.

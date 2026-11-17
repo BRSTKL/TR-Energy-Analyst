@@ -101,8 +101,9 @@ export function monthStatus(doc: PoolYear | null, series: PoolSeries, month: num
 /** Ay henüz bitmeden çekilen veri (eksik günler var) bu kadar gün sonra, biten ama kesinleşmemiş ay bu kadar gün sonra yenilenir */
 export const REFRESH_DAYS_PARTIAL = 1;
 export const REFRESH_DAYS_PROVISIONAL = 7;
-/** Ay bitiminden bu kadar gün içinde boş çekilen ay (henüz yayımlanmamış olabilir) ertesi gün yeniden denenir */
+/** Ay bitiminden bu kadar gün içinde boş çekilen ay (henüz yayımlanmamış olabilir) EMPTY_RETRY_HOURS saat sonra yeniden denenir */
 export const EMPTY_RETRY_DAYS = 30;
+export const EMPTY_RETRY_HOURS = 3;
 
 /** Serinin o ayında hiç değer yok mu */
 export function monthIsEmpty(doc: PoolYear, series: PoolSeries, month: number): boolean {
@@ -129,10 +130,12 @@ export function needsFetch(doc: PoolYear | null, series: PoolSeries, month: numb
   const partial = at < monthEnd;
   // Ay bittikten hemen sonra, EPİAŞ yayımlamadan çekilen ay boş gelir (15.10.2026: Eylül UEVM'si 18:10'da boş, 21:18'de
   // yayımlandı); 7 gün taze sayılırsa o hafta yeniden istenmez ve boş kalır. Ay bitiminden EMPTY_RETRY_DAYS gün içinde boş
-  // çekilen ay ertesi gün yeniden denenir (üretmeyen santral için bu süre sonra normal kurala döner).
+  // çekilen ay EMPTY_RETRY_HOURS saat sonra yeniden denenir (üretmeyen santral için bu süre sonra normal kurala döner).
+  // Günde bir yetmedi (16.11.2026: Ekim UEVM'si 158 santral için yayından dakikalar önce boş çekildi; karne bir gün eksik
+  // kuruldu, aylık eşitleme her saat başarısız oldu).
   const emptySoon = !partial && at - monthEnd < EMPTY_RETRY_DAYS * 24 * HOUR && monthIsEmpty(doc!, series, month);
-  const days = partial || emptySoon ? REFRESH_DAYS_PARTIAL : REFRESH_DAYS_PROVISIONAL;
-  return now.getTime() - at >= days * 24 * HOUR;
+  const wait = emptySoon ? EMPTY_RETRY_HOURS * HOUR : (partial ? REFRESH_DAYS_PARTIAL : REFRESH_DAYS_PROVISIONAL) * 24 * HOUR;
+  return now.getTime() - at >= wait;
 }
 
 /** [startDay, endDay] (gün dahil, "YYYY-MM-DD") aralığının dokunduğu yıl-aylar */

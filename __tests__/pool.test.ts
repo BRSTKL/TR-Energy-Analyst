@@ -56,12 +56,15 @@ describe("havuz biçimi", () => {
     expect(needsFetch(doc, "uevm", 1, now)).toBe(false);
   });
 
-  it("ay bitince boş gelen ay (henüz yayımlanmamış) ertesi gün yeniden denenir; uzun süre sonra boşsa haftalık kurala döner", () => {
+  it("ay bitince boş gelen ay (henüz yayımlanmamış) 3 saat sonra yeniden denenir; uzun süre sonra boşsa haftalık kurala döner", () => {
     const doc = emptyYear(1, 2026);
-    // 15.10.2026 olayı: Eylül UEVM'si yayımlanmadan çekildi, boş geldi; 3 gün sonra yeniden istenmeli
+    // 15.10.2026 ve 16.11.2026 olayı: ayın UEVM'si yayımlanmadan dakikalar önce çekildi, boş geldi; aynı akşam yeniden istenmeli
     writeMonth(doc, "uevm", 9, [], new Date("2026-10-15T18:10:00Z"));
-    expect(needsFetch(doc, "uevm", 9, new Date("2026-10-15T23:00:00Z"))).toBe(false);
-    expect(needsFetch(doc, "uevm", 9, new Date("2026-10-18T13:00:00Z"))).toBe(true);
+    expect(needsFetch(doc, "uevm", 9, new Date("2026-10-15T20:00:00Z"))).toBe(false);
+    expect(needsFetch(doc, "uevm", 9, new Date("2026-10-15T21:10:00Z"))).toBe(true);
+    // Dolu gelen ay eski kuralda kalır (haftada bir)
+    writeMonth(doc, "uevm", 9, [{ timestamp: "2026-09-10T10:00:00Z", value: 5 }], new Date("2026-10-15T21:10:00Z"));
+    expect(needsFetch(doc, "uevm", 9, new Date("2026-10-16T21:10:00Z"))).toBe(false);
     // Ay bitiminden 30 günden sonra hâlâ boş: üretmeyen santral, haftada bir
     writeMonth(doc, "uevm", 9, [], new Date("2026-11-10T00:00:00Z"));
     expect(needsFetch(doc, "uevm", 9, new Date("2026-11-12T00:00:00Z"))).toBe(false);
