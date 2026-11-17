@@ -71,7 +71,8 @@ for (const id of ids) {
   for (const { y, m } of months) {
     const from = Date.UTC(y, m - 1, 1);
     const to = Date.UTC(y, m, 1);
-    const train = data.hours.filter((h) => h.t >= Date.UTC(y, m - 5, 1) && h.t < from);
+    // Ayın son gününün üretimi ertesi gün 12:00'de elde: ilk test gününün kesiminde bilinmez (rüzgâr sınamasıyla aynı)
+    const train = data.hours.filter((h) => h.t >= Date.UTC(y, m - 5, 1) && h.t < from - DAY);
     const clean = trainingLossFilter(
       train.map((h) => ({ t: h.t, uevm: h.uevm, kgupFirst: h.kgupFirst, satGhi: h.satGhi ?? null, satDirect: h.satDirect ?? null, satDiffuse: h.satDiffuse ?? null })),
       data.site,

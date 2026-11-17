@@ -6,7 +6,7 @@
  * Hedef gün (varsayılan yarın, Türkiye) için proje güneş santrallerinin (ana kayıtla aynı küme: lisanslı, konumlu) WN3
  * girdili tahmini; `--write` ile ek kayıt olarak bir kez yazılır (learning/forecast-log-store.ts `writeForecastAddendum`),
  * yalnız kesimden (D-1 12:30 TR) önce. WN3 verisi önce `scripts/weathernext-sync.mts` ile çekilmiş olmalı. Santrallerin
- * %80'inden azı hazırsa ve kesime 20 dakikadan çok varsa yazmaz (sonraki çalışma dener); son denemede eldekiyle yazar.
+ * %80'inden azı hazırsa ve kesime 30 dakikadan çok varsa yazmaz (sonraki çalışma dener); son denemede eldekiyle yazar.
  * Sunucuda `tr-energy-wn3-shadow` zamanlayıcısı (11:20 ve 12:05 TR).
  */
 import { execSync } from "node:child_process";
@@ -53,7 +53,7 @@ try {
   const total = plants.reduce((s, p) => s + (p.hours ?? []).reduce((a, v) => a + (v ?? 0), 0), 0);
   console.log(`${stamp()} ${target}: WN3 ${ok}/${plants.length} santral, toplam ${total.toFixed(1)} MWh; çalışma ${[...runs].join(", ") || "yok"}`);
   if (!write) process.exit(0);
-  const lastTry = Date.now() > cutoff - 20 * 60_000;
+  const lastTry = Date.now() > cutoff - 30 * 60_000;
   if (ok < 0.8 * plants.length && !lastTry) {
     console.log(`${stamp()} ${target}: hazır santral az (${ok}/${plants.length}); sonraki çalışma deneyecek`);
     process.exit(0);

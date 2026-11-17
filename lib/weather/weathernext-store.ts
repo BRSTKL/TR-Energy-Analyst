@@ -27,6 +27,8 @@ export interface Wn3CellYear {
   start: string;
   vars: Record<Wn3Var, Array<number | null>>;
   runs: Record<string, string>;
+  /** Gün başına çekim anı (ISO; 18.11.2026'dan): kesimden sonra çekilen günler sonradan ayırt edilebilsin */
+  fetchedAt?: Record<string, string>;
 }
 
 const HOUR = 3_600_000;

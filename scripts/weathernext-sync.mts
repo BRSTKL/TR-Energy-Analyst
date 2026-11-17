@@ -141,8 +141,9 @@ while (day <= to && !stop) {
       stop = true;
       break;
     }
-    // Kesimi geçmemiş günde ana çalışma eksik hücre yedek çalışmayla yazılmaz (sonraki çalışma dener), son 20 dakikada yazılır
-    const allowFallback = Date.now() > cutoffOf(day) - 20 * 60_000;
+    // Kesimi geçmemiş günde ana çalışma eksik hücre yedek çalışmayla yazılmaz (sonraki çalışma dener), son 30 dakikada
+    // yazılır (zamanlayıcının son denemesi 12:05 TR, kesim 12:30)
+    const allowFallback = Date.now() > cutoffOf(day) - 30 * 60_000;
     if (!force && [...docs.values()].every((d) => d.runs[day])) continue;
     if (billed / 1e9 > maxGb) {
       console.log(`kota sınırı (${maxGb} GB) aşıldı; ${day} ve sonrası yazılmadı`);
@@ -162,6 +163,7 @@ while (day <= to && !stop) {
         continue;
       }
       putDay(d, day, v.run, v.values);
+      (d.fetchedAt ??= {})[day] = new Date().toISOString();
     }
     if (held) console.log(`${day}: ${held} hücrede ana çalışma henüz yok; yedekle yazılmadı (sonraki çalışma dener)`);
     const fallback = [...got.values()].filter((v) => v.run !== runs[0]).length;

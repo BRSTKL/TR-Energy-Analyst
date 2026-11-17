@@ -4,7 +4,10 @@
  * Üretim saati [t, t+1): ışınım t+1 damgası (önceki saatin birikimi), sıcaklık ve bulut t damgası; yalnız t'nin kesiminde
  * elde olan çalışmanın damgaları (lib/weather/weathernext-store.ts `wn3UsableFor`). Saçılmış = küresel − doğrudan (WN3'te
  * ayrı değişken yok). Bulut 0–1 → %; yoksa (arşiv temel grubu) mevcut saatin bulutu kalır: model girdisi değildir
- * (production-model-v2 `features` yalnız dolu mu diye bakar). SAF.
+ * (production-model-v2 `features` yalnız dolu mu diye bakar).
+ * BİLGİ ZAMANI: asıl denetim burada ve yüklemede (`wn3Stamps`, `wn3UsableFor`: günün çalışması + yayım gecikmesi ≤ kesim).
+ * Saatin `weatherLead` / kaynak alanları ECMWF saatinden kalır; modelin `assertAvailable` beyanı bu yüzden ECMWF d2'yi
+ * denetler, WN3'ü değil (sızıntı denetimi 18.11.2026: yanıltıcı beyan, sızıntı yok). SAF.
  */
 import { decisionCutoff, WEATHER_RUN_RULES } from "@/lib/forecast/info-time";
 import type { SolarHourV2 } from "@/lib/solar-engine/models/production-model-v2";
