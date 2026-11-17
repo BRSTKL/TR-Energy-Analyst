@@ -125,8 +125,10 @@ async function partition(p: string): Promise<Wn3Row[]> {
 
 // Ay ay: o ayın hücre dosyalarını açar, günleri doldurur, yazar
 let written = 0;
+// Durma (yayımlanmamış çalışma, kota) önce o ayın hazırlanan günlerini yazar, sonra döngüden çıkar
+let stop = false;
 let day = from;
-outer: while (day <= to) {
+while (day <= to && !stop) {
   const month = day.slice(0, 7);
   const year = Number(day.slice(0, 4));
   const docs = new Map<string, Wn3CellYear>();
@@ -136,14 +138,16 @@ outer: while (day <= to) {
     const runs = weathernextRunsForTargetDay(day, DELAY);
     if (Date.now() < runs[0] + DOC_DELAY) {
       console.log(`${day}: çalışma ${new Date(runs[0]).toISOString()} henüz yayımlanmadı; duruldu`);
-      break outer;
+      stop = true;
+      break;
     }
     // Kesimi geçmemiş günde ana çalışma eksik hücre yedek çalışmayla yazılmaz (sonraki çalışma dener), son 20 dakikada yazılır
     const allowFallback = Date.now() > cutoffOf(day) - 20 * 60_000;
     if (!force && [...docs.values()].every((d) => d.runs[day])) continue;
     if (billed / 1e9 > maxGb) {
       console.log(`kota sınırı (${maxGb} GB) aşıldı; ${day} ve sonrası yazılmadı`);
-      break outer;
+      stop = true;
+      break;
     }
     const parts = [...new Set(runs.map((r) => new Date(r).toISOString().slice(0, 10)))];
     const rows = (await Promise.all(parts.map(partition))).flat();
