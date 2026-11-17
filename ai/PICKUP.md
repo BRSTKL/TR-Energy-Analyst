@@ -5,6 +5,29 @@ Her oturumun başında okunur, sonunda yazılır. En yeni kayıt en üstte. Kay�
 
 ---
 
+## 17–18.11.2026 · Claude · Aylık eşitleme, rüzgâr yaklaşımı, WeatherNext 3 (main'e alındı ve yüklendi, `63afa2d → 52a3d13`)
+
+- **Aylık eşitleme hatası:** Ekim UEVM'si 158 rüzgâr/güneş santrali için EPİAŞ yayımlamadan dakikalar önce boş çekildi;
+  havuz boş ayı artık 24 sa yerine 3 sa sonra yeniden çeker (`lib/pool/pool-codec.ts`, `d6a7c63`). Karne 1023 santralle
+  kuruldu; sonraki adımda Open-Meteo günlük sınırı (429) vardı, gece sıfırlanır.
+- **Rüzgâr:** tanı: hata seviye / zamanlama / kısıntıdan değil, tek nokta hava + güç eğrisi yöntemi (kusursuz rüzgârla bile
+  %38 WAPE, KGÜP %31). Kullanıcı kararı: KGÜP'ü yenmek değil, yaklaşmak. Yeni gölge `wind-ensemble-weighted-corr-v1`
+  (sınama 254 → 209 TL/MWh, KGÜP 158; `afc7c40`).
+- **WeatherNext 3:** Google Cloud `tr-energy-weather` (faturalı, deneme kredisi; Sandbox tahmini taramaya göre reddediyordu),
+  BigQuery bağlı veri kümesi `weathernext_3`, servis hesabı anahtarı sunucuda `.secrets/` (git dışı). Arşiv havuzda
+  `data/pool/weather/wn3` (4 Nis – 3 Ağu ve 15 Ağu – 18 Kas 2026; Ocak–Mart ve 4–14 Ağu Aralık'ta kota yenilenince).
+  Sınama Eyl–Eki 2026: güneş ECMWF 227 → WN3 205 TL/MWh (KGÜP 200); rüzgârda WN3 tek kaynak en iyi ama düzeltmeli
+  gölgeye ek kazanç %0,6 (eklenmedi). Güneş gölgesi `solar-v3-nolag-gzu-wn3` ek kayıtla (`forecast-log/solar-addendum/`),
+  zamanlayıcı `tr-energy-wn3-shadow` 11:20 / 12:05; terfi edemez (09:30 akışı WN3'ü üretemez).
+- **Engel / dikkat:** BigQuery günlük kota tavanı bu hesapta düzenlenemiyor; koruma: deneme kredisi, €1 bütçe uyarısı,
+  betik tavanı. Kasım kullanımı ≈ 830 GB. Sunucuda geçici `/srv/tr-energy-wn` çalışma ağacı ve 72 sa gecikme ölçeri
+  (`.cache/weathernext/probe.mjs`, 20.11 akşamı kendiliğinden durur) var.
+- **Sıradaki:** 18.11 11:20 ilk WN3 ek kaydı ve 10:00/11:30 rüzgâr işi süresi kontrol; gecikme ölçerinin sonucu;
+  Aralık başında WN3 Ocak–Mart arşivi; WN3 iyi çıkarsa güneş tahmin akışını 11:20 sonrasına alıp terfiyi açmak;
+  `/srv/tr-energy-wn` silinebilir.
+
+---
+
 ## 16.11.2026 · Claude · Arayüz sadeleştirme (`claude/arayuz-yenileme`; main'e push ve sunucuya yüklendi, `df3df7b → ee11ac0`)
 
 - **Bugün:** tek düzen, yalnız o günle ilgili (adımlar → uyarılar → yarın için → piyasa ve dünkü tahmin). Görünüm seçici
