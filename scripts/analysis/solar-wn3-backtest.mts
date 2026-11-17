@@ -77,7 +77,8 @@ for (const id of ids) {
       ghi: b.ghi,
       direct: b.direct,
       diffuse: Math.max(0, b.ghi - b.direct),
-      cloud: a.cloud === null ? null : a.cloud * 100,
+      // Bulut modelin girdisi değil (features yalnız dolu mu diye bakar); arşivde temel grupta yok → ECMWF'inki kalır
+      cloud: a.cloud === null ? h.cloud : a.cloud * 100,
       temp: a.t2m,
       ghiLag48: lagG,
       directLag48: lagD,
