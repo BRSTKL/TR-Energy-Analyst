@@ -319,7 +319,9 @@ if (dry) {
 fs.writeFileSync(LOCK_FILE, String(process.pid));
 const releaseLock = () => fs.rmSync(LOCK_FILE, { force: true });
 process.on("exit", releaseLock);
-if (state.status !== "running" && state.status !== "failed") notify("EPİAŞ eşitlemesi başladı", `${month}: piyasa, santral üretimi, karne ve analizler (1–3 saat).`);
+// Yalnız ayın ilk başlangıcında (startedAt yoksa): Open-Meteo ertelemesinde durum "waiting" olduğu için eski koşul her saat
+// bildiriyordu (18.11.2026)
+if (!state.startedAt) notify("EPİAŞ eşitlemesi başladı", `${month}: piyasa, santral üretimi, karne ve analizler (1–3 saat).`);
 state.status = "running";
 state.startedAt ??= new Date().toISOString();
 saveState();
