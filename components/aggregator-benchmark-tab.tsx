@@ -143,7 +143,7 @@ function ScatterPanel({ scatter }: { scatter: ScatterPoint[] }) {
 
 type View = "forecast" | "invoice";
 
-/** Faturaya yakın maliyet (TL/MWh): son plana göre dengesizlik + GİP işlem maliyeti; son plan yoksa null */
+/** Gün içi işlemlerden sonraki maliyet (TL/MWh): son plana göre dengesizlik + GİP işlem maliyeti; son plan yoksa null */
 const invoiceTlPerMwh = (a: AggregatorBenchmarkRow) => (a.intraday ? (a.intraday.finalCostTl + a.intraday.tradeCostTl) / a.productionMwh : null);
 /** Tahmin kalitesi (TL/MWh): ilk plana göre, portföyde netleşmiş */
 const forecastTlPerMwh = (a: AggregatorBenchmarkRow) => a.nettedTlPerMwh;
@@ -152,7 +152,7 @@ const forecastTlPerMwh = (a: AggregatorBenchmarkRow) => a.nettedTlPerMwh;
  * Sektör karnesi · Toplayıcılar sekmesi (sadeleştirildi 18.11.2026): tek tablo, iki görünüm.
  *   - Tahmin kalitesi: ilk plana göre (gün içi işlemler öncesi) netleşmiş maliyet; "sektöre göre" teknoloji karışımından
  *     arındırılmış endeks (portföy maliyeti / aynı karışımdaki sektör ortalaması).
- *   - Faturaya yakın: son plana göre dengesizlik + GİP işlem maliyeti ((ilk − son plan) × (GİP − PTF); lib/analysis/
+ *   - Gün içi işlemlerden sonra: son plana göre dengesizlik + GİP işlem maliyeti ((ilk − son plan) × (GİP − PTF); lib/analysis/
  *     aggregator-benchmark.ts `aggregatorIntraday`). Fatura son plana göre kesilir; ikili anlaşma ve gerçek işlem fiyatı yok.
  * Yöntem ayrıntıları "Nasıl hesaplandı?" altında.
  */
@@ -223,7 +223,7 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
   const best = rows[0];
 
   const downloadCsv = () => {
-    const head = ["Toplayıcı", "Santral (analizde)", "Üretim MWh", "HES %", "RES %", "GES %", "Tahmin kalitesi TL/MWh (ilk plan)", "Sektöre göre endeks", "Portföy kazancı TL", "Faturaya yakın TL/MWh", "Gün içi kazanç %"];
+    const head = ["Toplayıcı", "Santral (analizde)", "Üretim MWh", "HES %", "RES %", "GES %", "Tahmin kalitesi TL/MWh (ilk plan)", "Sektöre göre endeks", "Portföy kazancı TL", "Gün içi işlemlerden sonra TL/MWh", "Gün içi kazanç %"];
     const lines = rows.map((a) => {
       const m = mixShare(a);
       const inv = invoiceTlPerMwh(a);
@@ -265,7 +265,7 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
             {(
               [
                 ["forecast", "Tahmin kalitesi", "Gün öncesi plana göre: şirket üretimini ne kadar iyi tahmin ediyor?"],
-                ["invoice", "Faturaya yakın", "Gün içi alım satımdan sonra: şirket sonunda ne kadar ödüyor? (tahmini)"],
+                ["invoice", "Gün içi işlemlerden sonra", "Şirket gün içinde planını düzelttikten sonra ne kadar ödüyor? (tahmini)"],
               ] as const
             ).map(([id, title, text]) => (
               <button
@@ -299,7 +299,7 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
 
           {best && cost(best) !== null && median !== null && (
             <p className="text-sm text-slate-700">
-              {rows.length} toplayıcı. {view === "forecast" ? "Sektöre göre en iyi" : "Faturaya yakın en düşük"}: <b>{shortName(best.name)}</b>, MWh başına{" "}
+              {rows.length} toplayıcı. {view === "forecast" ? "Sektöre göre en iyi" : "Gün içi işlemlerden sonra en düşük"}: <b>{shortName(best.name)}</b>, MWh başına{" "}
               <b>{nf(cost(best)!)} TL</b>. Ortanca toplayıcı {nf(median)} TL.
             </p>
           )}
@@ -418,7 +418,7 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
                 ortalama santrallerin ödeyeceğinin yüzde kaçını ödediği (hidro ağırlıklı portföy doğal olarak ucuz olduğu için ham TL/MWh yerine sıra buna göre).
               </li>
               <li>
-                <b>Faturaya yakın:</b> fatura son plana (gün içi işlemlerden sonraki plana) göre kesilir. Son plana göre dengesizlik + gün içi alım satımın tahmini
+                <b>Gün içi işlemlerden sonra:</b> fatura son plana (gün içi işlemlerden sonraki plana) göre kesilir. Son plana göre dengesizlik + gün içi alım satımın tahmini
                 maliyeti (plan değişikliği × gün içi ortalama fiyat ile PTF farkı). Gerçek işlem fiyatları ve ikili anlaşmalar görülmediği için tahmindir.
               </li>
               <li>
