@@ -80,3 +80,10 @@
     break-inside: avoid;
   }
 }
+
+/* Grafiğe tıklanınca recharts'ın odak çerçevesi çıkmasın (bütün grafikler; 18.11.2026) */
+.recharts-wrapper:focus,
+.recharts-wrapper *:focus,
+.recharts-surface:focus {
+  outline: none;
+}
