@@ -22,7 +22,7 @@
  * Zaman damgaları uygulamanın kuralıyla duvar saatidir (UTC alanlarında). SAF: I/O yok (dosya işleri system-store.ts).
  */
 
-import { isFinalFetch, REFRESH_DAYS_PROVISIONAL, hoursInYear, type MonthStatus } from "./pool-codec";
+import { EMPTY_RETRY_DAYS, EMPTY_RETRY_HOURS, isFinalFetch, REFRESH_DAYS_PROVISIONAL, hoursInYear, type MonthStatus } from "./pool-codec";
 
 export const SYSTEM_SOURCES = [
   "wind",
@@ -270,7 +270,20 @@ export function systemNeedsFetch(doc: SystemYear | null, month: number, now: Dat
   const at = Date.parse(doc!.fetched[mm(month)]);
   const partial = at < Date.UTC(doc!.year, month, 1) - 3 * HOUR;
   if (partial) return trDay(at) < trDay(now.getTime()) || (now.getTime() - at >= HOUR && yesterdayMissing(doc!, now));
+  // Ay bittikten sonra çekildi ama UEVM (aylık uzlaştırmayla yayımlanır) hâlâ boş: 7 gün beklemeden birkaç saatte bir yeniden
+  // dene (18.11.2026: Ekim 14 Kasım'da UEVM'siz çekildi, Sistem yönü sekmesi Eylül'de kaldı; santral havuzundaki kuralla aynı)
+  const monthEnd = Date.UTC(doc!.year, month, 1) - 3 * HOUR;
+  if (uevmEmpty(doc!, month) && now.getTime() - monthEnd < EMPTY_RETRY_DAYS * 24 * HOUR) return now.getTime() - at >= EMPTY_RETRY_HOURS * HOUR;
   return now.getTime() - at >= REFRESH_DAYS_PROVISIONAL * 24 * HOUR;
+}
+
+/** Ayın hiçbir saatinde hiçbir kaynağın UEVM'si yok mu */
+export function uevmEmpty(doc: SystemYear, month: number): boolean {
+  const from = hourIndex(doc.year, `${doc.year}-${mm(month)}-01T00:00:00`);
+  if (from === null) return true;
+  const to = month === 12 ? hoursInYear(doc.year) : (hourIndex(doc.year, `${doc.year}-${mm(month + 1)}-01T00:00:00`) ?? hoursInYear(doc.year));
+  for (const series of Object.values(doc.uevm)) for (let i = from; i < to; i++) if (series[i] !== null) return false;
+  return true;
 }
 
 /**

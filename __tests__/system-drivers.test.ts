@@ -254,6 +254,17 @@ describe("sistem geneli havuz biçimi", () => {
     expect(systemNeedsFetch(doc, 9, new Date("2026-10-21T00:00:00Z"))).toBe(true);
   });
 
+  it("ay bittikten sonra UEVM'siz çekilen ay 3 saatte bir yeniden denenir; UEVM gelince 7 gün beklenir", () => {
+    const doc = emptySystemYear(2026);
+    // Ekim, 14 Kasım'da çekildi, UEVM henüz yayımlanmamıştı
+    doc.fetched["10"] = "2026-11-14T23:00:00.000Z";
+    expect(systemNeedsFetch(doc, 10, new Date("2026-11-15T01:00:00Z"))).toBe(false);
+    expect(systemNeedsFetch(doc, 10, new Date("2026-11-15T02:30:00Z"))).toBe(true);
+    // UEVM geldi: geçici ayın olağan 7 günlük beklemesi
+    doc.uevm.wind[hourIndex(2026, "2026-10-15T12:00:00+03:00")!] = 5000;
+    expect(systemNeedsFetch(doc, 10, new Date("2026-11-15T02:30:00Z"))).toBe(false);
+  });
+
   it("günlük yenileme: ay içinde çekilen ay her Türkiye günü bir kez yenilenir; dün boşsa en az bir saat sonra yeniden denenir", () => {
     const doc = emptySystemYear(2026);
     const yesterdayLast = hourIndex(2026, "2026-10-20T23:00:00+03:00")!;
@@ -290,6 +301,7 @@ describe("sistem geneli havuz biçimi", () => {
     expect(systemNeedsFetch(null, 9, now)).toBe(true);
     const doc = emptySystemYear(2026);
     doc.fetched["09"] = "2026-10-18T00:00:00.000Z";
+    doc.uevm.wind[hourIndex(2026, "2026-09-10T12:00:00+03:00")!] = 3000; // UEVM yayımlanmış
     expect(systemNeedsFetch(doc, 9, now)).toBe(false);
     expect(systemNeedsFetch(doc, 9, new Date("2026-10-26T00:00:00Z"))).toBe(true);
     expect(systemMonthQuery(2026, 10, now)).toEqual({ startDate: "2026-10-01T00:00:00+03:00", endDate: "2026-10-19T23:00:00+03:00" });
