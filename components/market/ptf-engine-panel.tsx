@@ -499,11 +499,43 @@ function Fact({ label, value, sub, warn }: { label: string; value: string; sub?:
   );
 }
 
+/** Kayıttaki rüzgâr kaynağı (lib/ptf/features.ts windInput `kind`; lib/services/ptf-engine.ts WIND_SOURCE ile aynı) */
+const RECORD_WIND: Record<number, string> = {
+  1: "EPİAŞ rüzgâr tahmini",
+  3: "kendi rüzgâr tahminimiz (EPİAŞ tahmini yok)",
+  4: "EPİAŞ ve kendi tahminin ortalaması",
+  0: "son 3 günün gerçekleşen rüzgârı (tahmin yok)",
+};
+
+/**
+ * Günlük kaydın girdi durumu (19.11.2026): kayıt yazıldıysa yük planı, önceki günün PTF'si ve KGÜP'ü vardı (yoksa motor
+ * tahmin kurmaz); rüzgâr ve güneş kaydın `windKind` / `sunKind` alanından. Eksik KGÜP kaynağı varsa yedek notlarında görünür.
+ */
+function recordInputs(i: NonNullable<PtfPageForecast["record"]>["inputs"]): PtfInputStatus[] {
+  return [
+    { key: "lep", state: "ok", detail: "EPİAŞ yük tahmin planı" },
+    {
+      key: "wind",
+      state: i.windKind === 1 || i.windKind === 4 ? "ok" : i.windKind < 0 ? "missing" : "fallback",
+      detail: RECORD_WIND[i.windKind] ?? "rüzgâr girdisi yok (0 kabul edildi)",
+    },
+    i.sunKind === 1
+      ? { key: "sun", state: "ok", detail: "kendi ülke güneş tahminimiz (30 bölge, ECMWF ışınım)" }
+      : {
+          key: "sun",
+          state: i.sunKind === 0 ? "fallback" : "missing",
+          detail: i.sunKind === 0 ? "hava tahmini alınamadı; son 7 günün KGÜP güneş ortancası kullanıldı" : "güneş girdisi yok",
+        },
+    { key: "ptfD1", state: "ok", detail: "EPİAŞ gün öncesi piyasası" },
+    { key: "kgupD1", state: "ok", detail: "EPİAŞ KGÜP, kaynak bazında" },
+  ];
+}
+
 /**
  * Tek satırlık veri durumu: kaç girdi alındı, hangisi yok ya da yedekle dolduruldu. Sorun yoksa yeşil, varsa sarı; ayrıntı
  * satıra tıklayınca açılır (önceden ayrı bir uyarı kutusu ile beş girdi kartı aynı şeyi iki kez söylüyordu).
  */
-function DataStatus({ inputs, notes }: { inputs: PtfInputStatus[]; notes: string[] }) {
+function DataStatus({ inputs, notes, source }: { inputs: PtfInputStatus[]; notes: string[]; source: string }) {
   const missing = inputs.filter((i) => i.state === "missing");
   const fallback = inputs.filter((i) => i.state === "fallback");
   const bad = [...missing, ...fallback];
@@ -521,7 +553,7 @@ function DataStatus({ inputs, notes }: { inputs: PtfInputStatus[]; notes: string
       >
         <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
         <span className="min-w-0 flex-1">
-          <b>Veri durumu:</b> {inputs.length - bad.length}/{inputs.length} girdi alındı
+          <b>Veri durumu</b> <span className="text-xs opacity-80">({source})</span>: {inputs.length - bad.length}/{inputs.length} girdi alındı
           {parts.length ? ` · ${parts.join(" · ")}` : ""}
         </span>
         <span className="shrink-0 text-xs underline-offset-2 group-open:hidden">Ayrıntı</span>
@@ -574,6 +606,14 @@ function OkView({
   const fallbacks = log.inputs.fallbacks
     .map(fallbackText)
     .filter((x): x is string => !!x);
+  // Kayıt varsa veri durumu kaydın (sabah 12:03'te elde olanlar); sonradan yapılan canlı hesabın eksikleri kaydı etkilemez
+  const status = record
+    ? {
+        inputs: recordInputs(record.inputs),
+        notes: record.inputs.fallbacks.map(fallbackText).filter((x): x is string => !!x),
+        source: `günlük kayıt ${clock(record.issuedAt)}`,
+      }
+    : { inputs, notes: [...notes, ...fallbacks], source: `canlı hesap ${clock(preview.computedAt)}` };
 
   // Riskli saat: teklif masasıyla aynı tanım (tahmin ya da aralığın üstü limite yakın, alt aralık sıfıra iniyor)
   const bidRows = buildBidRows(log.hours, null, limit);
@@ -644,7 +684,7 @@ function OkView({
               )}
             </dl>
           </div>
-          <DataStatus inputs={inputs} notes={[...notes, ...fallbacks]} />
+          <DataStatus inputs={status.inputs} notes={status.notes} source={status.source} />
           <p className="text-xs text-slate-500">
             Hesap {clock(preview.computedAt)}
             {record ? ` · günlük kayıt ${clock(record.issuedAt)}${record.onTime ? "" : " (kesimden sonra)"}` : " · bu gün için günlük kayıt yok"}

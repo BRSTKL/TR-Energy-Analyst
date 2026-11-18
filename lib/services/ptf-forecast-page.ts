@@ -43,7 +43,7 @@ export interface PtfPageForecast {
   startedAt: string | null;
   preview: PtfPreview | null;
   /** Sabahki değişmeyen kayıt (yazıldıysa); `modelId` kaydı yazan sürüm */
-  record: { issuedAt: string; onTime: boolean; mean: number; modelId: string } | null;
+  record: { issuedAt: string; onTime: boolean; mean: number; modelId: string; inputs: PtfForecastLog["inputs"] } | null;
   /** Canlı sürüm ve son değişiklik (lib/ptf/champion.ts); defter okunamazsa null */
   champion: {
     modelId: string;
@@ -134,6 +134,8 @@ export async function getPtfPageForecast(
         onTime: log.onTime,
         mean: log.hours.reduce((s, h) => s + h.p50, 0) / log.hours.length,
         modelId: log.modelId,
+        // Kaydın kendi girdi durumu: panelin "Veri durumu" satırı sonradan yapılan canlı hesabın değil, bunun (19.11.2026)
+        inputs: log.inputs,
       }
     : null;
   const reg = await readPtfChampion().catch(() => null);
