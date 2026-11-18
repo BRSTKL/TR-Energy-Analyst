@@ -325,9 +325,11 @@ state.startedAt ??= new Date().toISOString();
 saveState();
 
 /** Adımı ayrı süreçte çalıştırır; `watch403` ile üç HTTP 403'te durdurur */
-function run(args: string[], opts: { watch403?: boolean } = {}): Promise<{ ok: boolean; out: string; code?: number | null }> {
+function run(args: string[], opts: { watch403?: boolean; heapMb?: number } = {}): Promise<{ ok: boolean; out: string; code?: number | null }> {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, ["--env-file=.env", "node_modules/.bin/tsx", "--tsconfig", "tsconfig.json", ...args], { cwd: ROOT });
+    // Bellek sınırı NODE_OPTIONS ile: tsx betiği ayrı bir node sürecinde çalıştırır, komut satırı bayrağı ona geçmez
+    const env = opts.heapMb ? { ...process.env, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --max-old-space-size=${opts.heapMb}`.trim() } : process.env;
+    const child = spawn(process.execPath, ["--env-file=.env", "node_modules/.bin/tsx", "--tsconfig", "tsconfig.json", ...args], { cwd: ROOT, env });
     let out = "";
     let blocked = 0;
     const onData = (b: Buffer) => {
@@ -357,6 +359,8 @@ interface Step {
   name: string;
   args: string[];
   watch403?: boolean;
+  /** Node bellek sınırı (MB); yoksa öntanımlı */
+  heapMb?: number;
   /** Adım bittikten sonra ek denetim; hata metni döndürürse adım başarısız */
   verify?: (before: { karnePlants: number; karneEnd: string | null }) => Promise<string | null>;
 }
@@ -390,7 +394,8 @@ const steps: Step[] = [
   { name: "toplayıcı üyeliği (ay ay)", args: ["scripts/aggregator-membership-history.mts", String(Y), String(M)] },
   { name: "toplayıcı kıyası", args: ["scripts/aggregator-benchmark.mts", String(Y)] },
   { name: "GİP katılımı", args: ["scripts/gip-participation.mts", String(Y), String(M)] },
-  { name: "yakalama oranı", args: ["scripts/sector-capture.mts"] },
+  // Bütün santrallerin iki yılı bellekte: Node'un öntanımlı ~2 GB'ı yetmiyor (18.11.2026, sunucu 5 GB)
+  { name: "yakalama oranı", args: ["scripts/sector-capture.mts"], heapMb: 3584 },
   { name: "rüzgâr kaybı", args: ["scripts/sector-wind-curtailment.mts"] },
   { name: "hidro kaybı", args: ["scripts/sector-hydro-curtailment.mts"] },
   { name: "geçmişle sınama", args: ["scripts/sector-backtest.mts"] },
@@ -423,7 +428,7 @@ for (const s of steps) {
   log(`adım: ${s.name}`);
   const k = karne(Y);
   const before = { karnePlants: k?.plants.length ?? 0, karneEnd: k?.period?.end ?? null };
-  const r = s.name === "testler" ? await runPlain(s.args) : await run(s.args, { watch403: s.watch403 });
+  const r = s.name === "testler" ? await runPlain(s.args) : await run(s.args, { watch403: s.watch403, heapMb: s.heapMb });
   if ("code" in r && r.code === OPEN_METEO_QUOTA_EXIT) {
     // Hata değil: Open-Meteo günlük payı doldu; yazılanlar kaldı, ertesi UTC günü (00:30) kaldığı yerden
     const d = new Date();
