@@ -386,6 +386,10 @@ const steps: Step[] = [
   },
   { name: "uydu ışınımı", args: ["scripts/satellite-sync.mts"] },
   { name: "rüzgâr (karne)", args: ["scripts/wind-sync.mts", "--sector"] },
+  // Yalnız EPİAŞ verisi: Open-Meteo adımlarından önce, hava payı beklese de güncellenir (18.11.2026). Kıyas santrali yalnız üye olduğu aylarla sayar: önce yılın ay ay üyeliği (bir ay = toplayıcı başına bir EPİAŞ isteği)
+  { name: "toplayıcı üyeliği (ay ay)", args: ["scripts/aggregator-membership-history.mts", String(Y), String(M)] },
+  { name: "toplayıcı kıyası", args: ["scripts/aggregator-benchmark.mts", String(Y)] },
+  { name: "GİP katılımı", args: ["scripts/gip-participation.mts", String(Y), String(M)] },
   { name: "hava tahmini arşivi (güneş)", args: ["scripts/weather-sync.mts"] },
   { name: "hava tahmini arşivi (rüzgâr)", args: ["scripts/wind-forecast-sync.mts"] },
   { name: "yakalama oranı", args: ["scripts/sector-capture.mts"] },
@@ -398,10 +402,6 @@ const steps: Step[] = [
   // Üretim tahmini sayfasındaki "şirket planına göre geçmiş başarı" (.cache/forecast/solar-backtest.json); 18.10.2026'dan sonra
   // yenilenmiyordu (15.11.2026 denetimi). Karnenin son tam ayına kadar; hava ve uydu arşivi yukarıdaki adımlarda tazelenir.
   { name: "tahmin kıyası (güneş)", args: ["scripts/analysis/forecast-backtest.mts"] },
-  // Kıyas santrali yalnız üye olduğu aylarla sayar: önce yılın ay ay üyeliği (bir ay = toplayıcı başına bir EPİAŞ isteği)
-  { name: "toplayıcı üyeliği (ay ay)", args: ["scripts/aggregator-membership-history.mts", String(Y), String(M)] },
-  { name: "toplayıcı kıyası", args: ["scripts/aggregator-benchmark.mts", String(Y)] },
-  { name: "GİP katılımı", args: ["scripts/gip-participation.mts", String(Y), String(M)] },
   ...(Y === 2026 ? [{ name: "bütçe sınaması", args: ["scripts/budget-backtest.mts", String(M)] }] : []),
   { name: "rapor denetimi", args: ["scripts/check-reports.mts"] },
   { name: "testler", args: ["node_modules/vitest/vitest.mjs", "run"] },
