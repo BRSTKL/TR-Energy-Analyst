@@ -6,6 +6,8 @@ import {
   WIND_CORRECTION_MODEL,
   WIND_CURTAILMENT_MODEL,
   WIND_ENSEMBLE_CORRECTION_MODEL,
+  WIND_BASE_LONG_MODEL,
+  WIND_LONG_TRAIN_DAYS,
 } from "./registry";
 import { fitWindEnsemble, type WindEnsembleHour } from "./models/ensemble";
 import { fitFullEnsemble, windEnsembleCorrection, windEnsembleOos } from "./learning/ensemble-correction";
@@ -84,6 +86,7 @@ async function computeWindForecast(
     WIND_CORRECTION_MODEL,
     WIND_CURTAILMENT_MODEL,
     WIND_ENSEMBLE_CORRECTION_MODEL,
+    WIND_BASE_LONG_MODEL,
   ].map((id) => ({
     modelId: id,
     plants: [],
@@ -252,8 +255,32 @@ async function computeWindForecast(
         return pred;
       });
       if (opts.shadow) {
+        // Temel 480 gün: canlı temelle aynı model ve girdi, yalnız eğitim süresi uzun (registry WIND_LONG_TRAIN_DAYS)
+        const longShadow = shadows.find((s) => s.modelId === WIND_BASE_LONG_MODEL)!;
         try {
-          const train = data.hours.filter((h) => h.t >= trainStart && h.t < trainEnd);
+          const longModel = fitWindForecast(
+            data.hours.filter((h) => h.t >= trainEnd - WIND_LONG_TRAIN_DAYS * DAY && h.t < trainEnd),
+            p.capacityMw,
+            { lead: "d2", trainingEnd: trainEnd }
+          );
+          const values = Array.from({ length: 48 }, (_, i) => {
+            const e = liveWind.find((h) => h.t === start + i * H);
+            return e ? longModel.predictLive({ t: e.t, uevm: null, kgupFirst: null, ws: { d1: null, d2: e.ws }, dir: { d1: null, d2: e.dir } }, now) : null;
+          });
+          const ok = values.some((v) => v !== null);
+          longShadow.plants.push({
+            epiasPlantId: p.epiasPlantId!,
+            status: ok ? "ok" : "no-data",
+            hours: ok ? values : undefined,
+            message: ok ? undefined : "Hedef günlerde kullanılabilir rüzgâr tahmini yok",
+            weatherFetchedAt: cached.at,
+          });
+        } catch (error) {
+          longShadow.plants.push({ epiasPlantId: p.epiasPlantId!, status: "no-data", message: error instanceof Error ? error.message : String(error) });
+        }
+        try {
+          // Birleşim gölgeleri v2: 480 gün eğitim (v1 120 gündü)
+          const train = data.hours.filter((h) => h.t >= trainEnd - WIND_LONG_TRAIN_DAYS * DAY && h.t < trainEnd);
           const ensemble = fitWindEnsemble(train, p.capacityMw, {
             trainingEnd: trainEnd,
             validationFrom: trainEnd - 30 * DAY,
