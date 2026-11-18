@@ -1,15 +1,12 @@
 "use client";
 
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Download, FileDown, Loader2 } from "lucide-react";
-import { ResponsiveContainer, Scatter, ScatterChart, ZAxis, Cell } from "recharts";
-import { ChartGrid as CartesianGrid, ChartTip as Tooltip, ChartXAxis as XAxis, ChartYAxis as YAxis } from "@/components/ui/chart";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { MethodLink } from "@/components/method-link";
-import { placeLabels, type LabelSide as Side } from "@/lib/chart-labels";
 import type { AggregatorBenchmarkRow } from "@/lib/analysis/aggregator-benchmark";
 
 /** Sektör karnesi · Toplayıcılar sekmesi (PLAN 9.1); görünümler aşağıda `AggregatorBenchmarkTab` açıklamasında. */
@@ -67,76 +64,59 @@ function MixBar({ a }: { a: AggregatorBenchmarkRow }) {
   );
 }
 
-type ScatterPoint = { x: number; y: number; z: number; name: string; low: boolean };
+type RankRow = { id: number; name: string; sub: string; value: number; label: string; good: boolean };
 
-const LABEL_FONT = 10;
-
-/** Büyüklük–endeks dağılımı; etiketler çakışmayacak biçimde yerleştirilir (noktaların ekran konumu çizimden okunur) */
-function ScatterPanel({ scatter }: { scatter: ScatterPoint[] }) {
-  const pos = useRef<Record<number, { x: number; y: number; r: number }>>({});
-  const [sides, setSides] = useState<Side[]>([]);
-  // Her çizimden sonra (yeniden boyutlanma dahil) yerleşimi hesapla; değişmediyse durum güncellenmez
-  // Bağımlılık dizisi bilerek yok: yerleşim her çizimde okunur; durum yalnızca değişince güncellendiğinden döngü oluşmaz
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useLayoutEffect(() => {
-    const pts = scatter.map((p, i) => ({ ...(pos.current[i] ?? { x: 0, y: 0, r: 0 }), name: p.name }));
-    if (pts.some((p) => p.x === 0 && p.y === 0)) return;
-    const next = placeLabels(pts);
-    setSides((cur) => (cur.length === next.length && cur.every((v, i) => v === next[i]) ? cur : next));
-  });
-  const renderLabel = (props: any) => {
-    // x ve y noktanın sınır kutusunun sol üst köşesidir; merkez ve yarıçap kutudan
-    const { index, width, height } = props;
-    const r = (width ?? 12) / 2;
-    const x = props.x + r;
-    const y = props.y + (height ?? 12) / 2;
-    pos.current[index] = { x, y, r };
-    const side = sides[index] ?? "top";
-    const name = scatter[index]?.name ?? "";
-    const gap = r + 4;
-    const at = {
-      top: { x, y: y - gap, anchor: "middle" },
-      bottom: { x, y: y + gap + LABEL_FONT - 2, anchor: "middle" },
-      right: { x: x + gap, y: y + LABEL_FONT / 2 - 1, anchor: "start" },
-      left: { x: x - gap, y: y + LABEL_FONT / 2 - 1, anchor: "end" },
-    }[side];
-    return (
-      <text key={index} x={at.x} y={at.y} textAnchor={at.anchor as any} fontSize={LABEL_FONT} fill="#475569">
-        {name}
-      </text>
-    );
-  };
+/**
+ * Sıralı yatay çubuklar (21st.dev "Rank Bars" uyarlaması; sitenin renkleri, 18.11.2026): ad · çubuk · değer. Ölçek sıfırdan
+ * `max`'a; aşan değer kırpılır ve "›" ile işaretlenir. `ref` değerinde dikey çizgi (sektör ortalaması ya da ortanca).
+ */
+function RankBars({ rows, max, refValue, refLabel }: { rows: RankRow[]; max: number; refValue: number; refLabel: string }) {
+  const wrap = useRef<HTMLDivElement>(null);
+  const [entered, setEntered] = useState(false);
+  useEffect(() => {
+    const node = wrap.current;
+    if (!node || typeof IntersectionObserver === "undefined") return setEntered(true);
+    const io = new IntersectionObserver((e) => e.some((x) => x.isIntersecting) && (setEntered(true), io.disconnect()), { threshold: 0.1 });
+    io.observe(node);
+    return () => io.disconnect();
+  }, []);
+  const pct = (v: number) => Math.min(100, (v / max) * 100);
   return (
-    <div className="h-[340px] w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <ScatterChart margin={{ top: 24, right: 40, bottom: 20, left: 10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-          <XAxis type="number" dataKey="x" name="Üretim" unit=" GWh" tickMargin={6} tick={{ fontSize: 11 }} stroke="#64748b" tickFormatter={(v) => nf(Number(v))} />
-          <YAxis type="number" dataKey="y" name="Endeks" tick={{ fontSize: 11 }} stroke="#64748b" width={48} tickCount={6} tickFormatter={(v) => nf(Number(v), 2)} domain={[(d: number) => Math.max(0, Math.floor((d - 0.05) * 10) / 10), (d: number) => Math.ceil((d + 0.03) * 10) / 10]} />
-          <ZAxis type="number" dataKey="z" range={[40, 400]} />
-          <Tooltip
-            cursor={{ strokeDasharray: "3 3" }}
-            content={({ payload }) => {
-              const p = payload?.[0]?.payload as ScatterPoint | undefined;
-              if (!p) return null;
-              return (
-                <div className="rounded-lg border bg-popover p-3 text-xs shadow-sm shadow-black/5">
-                  <b>{p.name}</b>
-                  <div>
-                    {nf(p.x)} GWh · endeks {nf(p.y, 2)} · {p.z} santral
-                  </div>
-                  {p.low && <div className="text-amber-700">düşük kapsam</div>}
-                </div>
-              );
-            }}
-          />
-          <Scatter data={scatter} label={renderLabel}>
-            {scatter.map((p) => (
-              <Cell key={p.name} fill={p.low ? "#f59e0b" : "#0e8c7e"} fillOpacity={0.75} />
-            ))}
-          </Scatter>
-        </ScatterChart>
-      </ResponsiveContainer>
+    <div ref={wrap} className={`space-y-1.5 ${entered ? "rb-in" : ""}`}>
+      <div className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)_4.5rem] gap-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_5rem]">
+        <span />
+        <div className="relative h-4 text-2xs text-slate-500">
+          <span className="absolute -translate-x-1/2 whitespace-nowrap" style={{ left: `${pct(refValue)}%` }}>
+            {refLabel}
+          </span>
+        </div>
+        <span />
+      </div>
+      {rows.map((r, i) => (
+        <div
+          key={r.id}
+          className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)_4.5rem] items-center gap-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_5rem]"
+          style={{ "--i": i } as React.CSSProperties}
+        >
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-slate-900">{r.name}</p>
+            <p className="truncate text-2xs text-slate-500">{r.sub}</p>
+          </div>
+          <div className="relative h-4 rounded-sm bg-slate-100" title={`${r.name} · ${r.label}`}>
+            <div className={`rb-bar h-full rounded-r-sm ${r.good ? "bg-teal-500" : "bg-amber-500"}`} style={{ width: `${Math.max(1.5, pct(r.value))}%` }} />
+            {r.value > max && <span className="absolute right-1 top-1/2 -translate-y-1/2 text-xs font-bold leading-none text-white">›</span>}
+            <span className="absolute inset-y-[-3px] w-px bg-slate-500" style={{ left: `${pct(refValue)}%` }} aria-hidden />
+          </div>
+          <p className={`rb-val text-right text-sm font-semibold tabular-nums ${r.good ? "text-slate-900" : "text-amber-700"}`}>{r.label}</p>
+        </div>
+      ))}
+      <style>{`
+        .rb-in .rb-bar { transform-origin: left; animation: rb-grow .6s cubic-bezier(.2,.7,.3,1) both; animation-delay: calc(var(--i) * 25ms); }
+        .rb-in .rb-val { animation: rb-fade .5s ease both; animation-delay: calc(var(--i) * 25ms + 120ms); }
+        @keyframes rb-grow { from { transform: scaleX(0); } }
+        @keyframes rb-fade { from { opacity: 0; } }
+        @media (prefers-reduced-motion: reduce) { .rb-in .rb-bar, .rb-in .rb-val { animation: none; } }
+      `}</style>
     </div>
   );
 }
@@ -240,9 +220,16 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
     URL.revokeObjectURL(url);
   };
 
-  const scatter = rows
-    .filter((a) => a.mixAdjustedIndex !== null)
-    .map((a) => ({ x: a.productionMwh / 1000, y: a.mixAdjustedIndex!, z: a.coveredPlants, name: shortName(a.name), low: coverage(a) < LOW_COVERAGE }));
+  // Çubuk grafik: görünüme göre sektör ortalamasının yüzdesi ya da gün içi işlemlerden sonraki TL/MWh
+  const rankRows: RankRow[] = rows.flatMap((a) => {
+    const sub = `${gwh(a.productionMwh)} · ${a.coveredPlants} santral${coverage(a) < LOW_COVERAGE ? " · eksik veri" : ""}`;
+    if (view === "forecast")
+      return a.mixAdjustedIndex === null ? [] : [{ id: a.id, name: shortName(a.name), sub, value: a.mixAdjustedIndex * 100, label: `%${nf(a.mixAdjustedIndex * 100)}`, good: a.mixAdjustedIndex < 1 }];
+    const v = invoiceTlPerMwh(a);
+    return v === null ? [] : [{ id: a.id, name: shortName(a.name), sub, value: v, label: `${nf(v)} TL`, good: median === null || v <= median }];
+  });
+  // Ölçek: tahmin kalitesinde %0–200 (ortalamanın iki katı); gün içinde ortancanın 2,5 katı; aşan kırpılır
+  const rankMax = view === "forecast" ? 200 : Math.max(1, (median ?? 1) * 2.5);
 
   const pill = <T extends string>(value: T, current: T, set: (v: T) => void, text: string, group = "") => (
     <Button key={`${group}-${value}`} size="sm" variant={current === value ? "default" : "outline"} className="h-8 text-xs" onClick={() => set(value)}>
@@ -434,11 +421,20 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Büyüklük ve tahmin kalitesi</CardTitle>
-          <CardDescription>Sağa doğru büyük, aşağı doğru iyi (sektör ortalamasına göre). Turuncu: eksik veri.</CardDescription>
+          <CardTitle className="text-base">{view === "forecast" ? "Sektör ortalamasına göre sıralama" : "Gün içi işlemlerden sonra maliyet sıralaması"}</CardTitle>
+          <CardDescription>
+            {view === "forecast"
+              ? "Kısa çubuk daha iyi. Çizgi sektör ortalaması (%100): solunda kalan (yeşil) ortalamadan az ödüyor, sağında kalan (turuncu) fazla."
+              : "Kısa çubuk daha iyi. Çizgi ortanca toplayıcı: solunda kalan (yeşil) ortancadan az ödüyor, sağında kalan (turuncu) fazla."}{" "}
+            Yukarıdaki süzgeçlere göre; çubuğu taşan değer › ile kırpılmış.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <ScatterPanel scatter={scatter} />
+          {rankRows.length ? (
+            <RankBars rows={rankRows} max={rankMax} refValue={view === "forecast" ? 100 : (median ?? 0)} refLabel={view === "forecast" ? "sektör ortalaması" : `ortanca ${nf(median ?? 0)} TL`} />
+          ) : (
+            <p className="text-sm text-slate-500">Bu süzgeçte gösterilecek toplayıcı yok.</p>
+          )}
         </CardContent>
       </Card>
     </div>
