@@ -159,6 +159,96 @@ function ScatterPanel({ scatter }: { scatter: ScatterPoint[] }) {
   );
 }
 
+/**
+ * Gün içi işlemlerden sonra (faturaya yakın; 18.11.2026): fatura son plana göre kesilir. Son plana göre dengesizlik + GİP
+ * işlem maliyeti ((ilk − son plan) × (GİP − PTF); lib/analysis/aggregator-benchmark.ts `aggregatorIntraday`), üretime bölünür.
+ * Ana tablo ilk plana göre (tahmin kalitesi); burada sıra son plana göre. Son planı olmayan toplayıcı sonda.
+ */
+export function IntradayCard({ rows }: { rows: AggregatorBenchmarkRow[] }) {
+  // Yuvarlanınca sıfır olan küçük eksi değer "-0" görünmesin
+  const perMwh = (tl: number, a: AggregatorBenchmarkRow) => (Math.round(tl / a.productionMwh) === 0 ? 0 : tl / a.productionMwh);
+  const withIntraday = rows.filter((a) => a.intraday);
+  const firstRank = new Map([...withIntraday].sort((a, b) => a.intraday!.firstCostTl / a.productionMwh - b.intraday!.firstCostTl / b.productionMwh).map((a, i) => [a.id, i + 1]));
+  const total = (a: AggregatorBenchmarkRow) => (a.intraday!.finalCostTl + a.intraday!.tradeCostTl) / a.productionMwh;
+  const sorted = [...withIntraday].sort((a, b) => total(a) - total(b));
+  const missing = rows.filter((a) => !a.intraday);
+  if (!sorted.length) return null;
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Gün içi işlemlerden sonra (faturaya yakın)</CardTitle>
+        <CardDescription>
+          Yukarıdaki tablo ilk plana göre: şirketin üretimini ne kadar iyi tahmin ettiğini ölçer. Fatura ise son plana göre kesilir; toplayıcı gün içi
+          piyasada (GİP) alım satımla sapmasının bir kısmını kapatır. Burada son plana göre dengesizlik ve bu işlemlerin tahmini maliyeti toplanır, sıra
+          buna göredir. Tahmindir: ikili anlaşmalar ve gerçek işlem fiyatları kamu verisinde yok (işlem fiyatı GİP ağırlıklı ortalaması).
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>#</TableHead>
+              <TableHead>Toplayıcı</TableHead>
+              <TableHead className="text-right" title="Gün içi işlemler öncesi, ilk plana göre dengesizlik / üretim">
+                İlk plana göre
+              </TableHead>
+              <TableHead className="text-right" title="Son plana göre dengesizlik / üretim">
+                Son plana göre
+              </TableHead>
+              <TableHead className="text-right" title="(ilk − son plan) × (GİP − PTF) / üretim">
+                İşlem maliyeti
+              </TableHead>
+              <TableHead className="text-right" title="Son plana göre dengesizlik + işlem maliyeti / üretim">
+                Faturaya yakın
+              </TableHead>
+              <TableHead className="text-right" title="İşlem maliyeti düşüldükten sonra gün içi işlemlerin maliyeti düşürme oranı">
+                Gün içi kazanç
+              </TableHead>
+              <TableHead className="text-right" title="İlk plana göre sıradan son plana göre sıraya">
+                Sıra
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sorted.map((a, i) => {
+              const d = a.intraday!;
+              const before = firstRank.get(a.id)!;
+              const move = before - (i + 1);
+              return (
+                <TableRow key={a.id}>
+                  <TableCell className="w-8 text-xs text-slate-400">{i + 1}</TableCell>
+                  <TableCell className="py-3 font-medium" title={a.name}>
+                    {shortName(a.name)}
+                    {d.coveragePct < 90 && (
+                      <span className="ml-1 text-2xs font-normal text-amber-700" title="Son planı olan santral-saat payı; hesap yalnız bu saatlerde">
+                        (kapsam %{nf(d.coveragePct)})
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-slate-500">{nf(perMwh(d.firstCostTl, a))}</TableCell>
+                  <TableCell className="text-right tabular-nums">{nf(perMwh(d.finalCostTl, a))}</TableCell>
+                  <TableCell className="text-right tabular-nums">{nf(perMwh(d.tradeCostTl, a))}</TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums">{nf(total(a))}</TableCell>
+                  <TableCell className={`text-right tabular-nums ${d.netPct > 0 ? "text-teal-700" : "text-rose-700"}`}>%{nf(d.netPct)}</TableCell>
+                  <TableCell className="whitespace-nowrap text-right text-xs tabular-nums text-slate-500">
+                    {before} → {i + 1}
+                    {move > 0 && <span className="ml-1 text-teal-700">▲{move}</span>}
+                    {move < 0 && <span className="ml-1 text-rose-700">▼{-move}</span>}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+        <p className="mt-2 text-2xs leading-relaxed text-slate-500">
+          Tutarlar TL/MWh (üretim başına). Gün içi kazanç: ilk plana göre maliyetin, son plan ve işlem maliyeti toplamıyla ne kadar azaldığı.
+          {missing.length > 0 && ` Son plan verisi olmayan ${missing.length} toplayıcı bu tabloda yok.`}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
   const [data, setData] = useState<BenchmarkResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -392,6 +482,8 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
           </p>
         </CardContent>
       </Card>
+
+      <IntradayCard rows={rows} />
 
       <Card>
         <CardHeader className="pb-2">
