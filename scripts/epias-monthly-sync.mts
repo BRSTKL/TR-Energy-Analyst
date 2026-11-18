@@ -386,19 +386,21 @@ const steps: Step[] = [
   },
   { name: "uydu ışınımı", args: ["scripts/satellite-sync.mts"] },
   { name: "rüzgâr (karne)", args: ["scripts/wind-sync.mts", "--sector"] },
-  // Yalnız EPİAŞ verisi: Open-Meteo adımlarından önce, hava payı beklese de güncellenir (18.11.2026). Kıyas santrali yalnız üye olduğu aylarla sayar: önce yılın ay ay üyeliği (bir ay = toplayıcı başına bir EPİAŞ isteği)
+  // Yalnız EPİAŞ verisi (buradan hava arşivine kadar): Open-Meteo adımlarından önce, hava payı beklese de güncellenir (18.11.2026). Kıyas santrali yalnız üye olduğu aylarla sayar: önce yılın ay ay üyeliği (bir ay = toplayıcı başına bir EPİAŞ isteği)
   { name: "toplayıcı üyeliği (ay ay)", args: ["scripts/aggregator-membership-history.mts", String(Y), String(M)] },
   { name: "toplayıcı kıyası", args: ["scripts/aggregator-benchmark.mts", String(Y)] },
   { name: "GİP katılımı", args: ["scripts/gip-participation.mts", String(Y), String(M)] },
-  { name: "hava tahmini arşivi (güneş)", args: ["scripts/weather-sync.mts"] },
-  { name: "hava tahmini arşivi (rüzgâr)", args: ["scripts/wind-forecast-sync.mts"] },
   { name: "yakalama oranı", args: ["scripts/sector-capture.mts"] },
-  { name: "kar derinliği (güneş kaybı için)", args: ["scripts/snow-sync.mts"] },
-  { name: "güneş kaybı", args: ["scripts/sector-curtailment.mts"] },
   { name: "rüzgâr kaybı", args: ["scripts/sector-wind-curtailment.mts"] },
   { name: "hidro kaybı", args: ["scripts/sector-hydro-curtailment.mts"] },
-  { name: "sistem yönü santral payları", args: ["scripts/system-attribution.mts"] },
   { name: "geçmişle sınama", args: ["scripts/sector-backtest.mts"] },
+  // Buradan sonrası Open-Meteo'ya (hava, kar) bağlı; günlük pay dolarsa ertesi güne kalır
+  { name: "hava tahmini arşivi (güneş)", args: ["scripts/weather-sync.mts"] },
+  { name: "hava tahmini arşivi (rüzgâr)", args: ["scripts/wind-forecast-sync.mts"] },
+  { name: "kar derinliği (güneş kaybı için)", args: ["scripts/snow-sync.mts"] },
+  { name: "güneş kaybı", args: ["scripts/sector-curtailment.mts"] },
+  // Saatlik kayıp dosyalarının üçünü de okur: güneş kaybından sonra
+  { name: "sistem yönü santral payları", args: ["scripts/system-attribution.mts"] },
   // Üretim tahmini sayfasındaki "şirket planına göre geçmiş başarı" (.cache/forecast/solar-backtest.json); 18.10.2026'dan sonra
   // yenilenmiyordu (15.11.2026 denetimi). Karnenin son tam ayına kadar; hava ve uydu arşivi yukarıdaki adımlarda tazelenir.
   { name: "tahmin kıyası (güneş)", args: ["scripts/analysis/forecast-backtest.mts"] },
