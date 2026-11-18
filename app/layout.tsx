@@ -4,6 +4,7 @@ import "./globals.css";
 import { AppShell } from "@/components/app-shell";
 
 const inter = Inter({ subsets: ["latin"] });
+const THEME_BOOT = `try{if(localStorage.getItem("tre-theme")==="dark")document.documentElement.classList.add("dark")}catch(e){}`;
 
 export const metadata: Metadata = {
   title: "TR-Energy Analyst | Dengesizlik ve Piyasa Strateji Analiz Aracı",
@@ -17,7 +18,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="tr">
+    <html lang="tr" suppressHydrationWarning>
+      <head>
+        {/* Karanlık mod seçimi boyamadan önce (titreme olmasın; components/theme-toggle.tsx) */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
+      </head>
       <body className={inter.className}>
         <AppShell>{children}</AppShell>
       </body>

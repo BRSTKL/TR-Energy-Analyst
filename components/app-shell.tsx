@@ -10,6 +10,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X, Zap } from "lucide-react";
 import { DayStrip } from "@/components/day-strip";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   activeNavId,
   hidesShell,
@@ -178,6 +179,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Brand />
           </div>
           <DayStrip />
+          <ThemeToggle />
         </header>
         <main id="icerik" className="pb-20 lg:pb-0 print:pb-0">
           {children}

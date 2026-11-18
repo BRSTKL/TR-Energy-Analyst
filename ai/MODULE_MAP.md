@@ -4,7 +4,7 @@
 > dosyanın ilk JSDoc bloğunun ilk cümlesidir. Açıklaması boş satır, dosyada baş açıklaması olmadığı anlamına gelir:
 > ayrıntı için dosyanın kendisine bakın. Bağlam ve kurallar için önce `ai/README.md`.
 
-592 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
+594 dosya, 41 grup; baş açıklaması olmayan (sayfalar hariç): 32.
 
 ## Sayfalar (app/**/page.tsx) (32)
 
@@ -507,9 +507,9 @@
 - `lib/wind-engine/pipeline.ts` — RES günlük akışı: taze girdiler, kanıtla sürüm seçimi, kesimden önce değişmez kayıt.
 - `lib/wind-engine/registry.ts` — Rüzgâr günlük kayıt sürümleri.
 
-## components (68)
+## components (69)
 
-- `components/aggregator-benchmark-tab.tsx` — Sektör karnesi · Toplayıcılar sekmesi (PLAN 9.1): EPİAŞ'taki toplayıcıların aynı yöntemle kıyası.
+- `components/aggregator-benchmark-tab.tsx` — Sektör karnesi · Toplayıcılar sekmesi (PLAN 9.1); görünümler aşağıda `AggregatorBenchmarkTab` açıklamasında.
 - `components/app-shell.tsx` — Uygulama kabuğu: sol menü (lg+), üstte saat şeridi, telefonda çekmece ve altta dört kısayol.
 - `components/budget-tab.tsx` — Planlama sayfasının "2027 bütçesi" sekmesi (PLAN 17.3): gelecek yılın aylık dengesizlik + KÜPST bütçesi, senaryolar ve kötü durum aralığı.
 - `components/contract-offer.tsx` — Aday santral için teklif kutusu (PLAN 16.3): taban (adil prim), öneri ve tavan (tek başına maliyet); öneri makasa endeksli (16.2b); PTF oranı, reel TL ve USD karşılığı; sözleşme biçimi sınaması ve sabit TL'nin riski.
@@ -559,6 +559,7 @@
 - `components/summary-parts.tsx` — Özet sayfalarının (Bugün, Dönem özeti) ortak küçük bileşenleri ve biçimleyicileri
 - `components/system-attribution-card.tsx` — Sistem yönü kartıyla aynı kaynak renkleri
 - `components/system-drivers-card.tsx` — Doğrulanmış kategorik sıra (validate_palette: açık zemin, bitişik çiftler)
+- `components/theme-toggle.tsx` — Açık / karanlık mod düğmesi (18.11.2026).
 - `components/ui/button.tsx`
 - `components/ui/card.tsx`
 - `components/ui/chart.tsx` — Grafik tasarım parçaları (shadcn "line chart" stili): kesikli yatay ızgara, eksen çizgisi ve tik yok, yumuşak çizgiler, halkalı renk noktalı gösterge ve özel ipucu kartı.
@@ -647,7 +648,7 @@
 - `scripts/wind-sync.mts` — Gerçekleşen rüzgâr (rüzgâr kayıp tespiti; lib/weather/reanalysis-wind.ts): konumu olan proje rüzgâr santralleri için ERA5 (0,25°) ve ECMWF IFS (9 km) saatlik 100 m hız / yön, 2025-01-01'den dünkü güne.
 - `scripts/yekdem-exit-sync.mts` — YEKDEM çıkış taraması için EPİAŞ YEKDEM listelerini yeniler (VPN gerekir): - kimlikli santral listesi 2014 → bu yıl (+ yıl sonundaysa gelecek yıl): .cache/epias/yekdem-<yıl>.json - katılımcı listesi (ad, şirket, kurulu güç): .cache/epias/y…
 
-## scripts/analysis (18)
+## scripts/analysis (19)
 
 - `scripts/analysis/change-detection-scan.mts` — Değişim algılama taraması (Aşama 22.7): proje güneş santrallerinde bağlanan uyarılar (kapasite değişimi, son / süren uzun arıza; lib/services/plant-change-warnings.ts) ve bağlanmayan konum tutarsızlığı.
 - `scripts/analysis/curtailment-scan.mts` — Uydu ışınımıyla kısıntı / arıza taraması (PLAN 15.5, 20.1): konumlu güneş santralleri, yıl başına kayıp saat, kayıp üretim ve TL karşılığı (kayıp × PTF; planlı = şirketin ilk KGÜP'ü ≈ 0; plansız = arıza / talimat).
@@ -662,6 +663,7 @@
 - `scripts/analysis/res-forecast-price-evidence.mts` — Kanıt: EPİAŞ'ın sistem geneli rüzgâr tahmini (/renewables/data/res-generation-and-forecast, 15 dakikalık üretim ve tahmin) fiyat okumasına ne katıyor?
 - `scripts/analysis/snapshot-report.mts` — Anlık görüntü raporu: hangi serinin saat kaçta yayımlandığı, sürümler arası değişim, hangi çekimin rüzgâr tahmini gerçekleşene daha yakın (lib/analysis/snapshot-report.ts; veri `snapshots/`, scripts/snapshot-capture.mts).
 - `scripts/analysis/solar-candidates-backtest.mts` — Güneş motoru aday sürümlerinin geriye dönük testi (Aşama 22): canlı temel (sürüm 3 kalıcılıksız) ile adaylar aynı koşulda.
+- `scripts/analysis/solar-train-window-backtest.mts` — Güneş: eğitim süresi sınaması (18.11.2026).
 - `scripts/analysis/solar-wn3-backtest.mts` — Güneş: WeatherNext 3 ışınımıyla aynı canlı model (sürüm 3 kalıcılıksız, lib/solar-engine/models/production-model-v2.ts) ECMWF d2 girdisine karşı (17.11.2026).
 - `scripts/analysis/weathernext-weather-compare.mts` — Hava seviyesinde kıyas (17.11.2026): WeatherNext 3'ün tahmini, kullandığımız ECMWF tahmininden gerçekleşen havaya daha mı yakın?
 - `scripts/analysis/wind-candidates-backtest.mts` — Rüzgâr motoru aday sürümlerinin geriye dönük testi (Aşama 23.3–23.8; güneşteki scripts/analysis/solar-candidates-backtest.mts'in rüzgâr karşılığı).
