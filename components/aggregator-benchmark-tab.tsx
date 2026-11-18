@@ -12,10 +12,7 @@ import { MethodLink } from "@/components/method-link";
 import { placeLabels, type LabelSide as Side } from "@/lib/chart-labels";
 import type { AggregatorBenchmarkRow } from "@/lib/analysis/aggregator-benchmark";
 
-/**
- * Sektör karnesi · Toplayıcılar sekmesi (PLAN 9.1): EPİAŞ'taki toplayıcıların aynı yöntemle kıyası. Sıralama varsayılanı
- * teknoloji karışımına göre düzeltilmiş endekstir (ham TL/MWh hidro ağırlıklı portföyleri kayırır).
- */
+/** Sektör karnesi · Toplayıcılar sekmesi (PLAN 9.1); görünümler aşağıda `AggregatorBenchmarkTab` açıklamasında. */
 
 interface BenchmarkResponse {
   success: boolean;
@@ -32,7 +29,6 @@ interface BenchmarkResponse {
 
 type Scale = "large" | "mid" | "small" | "all";
 type Mix = "all" | "HES" | "RES" | "GES";
-type SortKey = "mixAdjustedIndex" | "nettingPct" | "nettingValueTl" | "nettedTlPerMwh" | "productionMwh" | "coveredPlants";
 
 const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
 const nf = (v: number, d = 0) => v.toLocaleString("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -67,20 +63,6 @@ function MixBar({ a }: { a: AggregatorBenchmarkRow }) {
   return (
     <div className="flex h-2 w-32 overflow-hidden rounded-full bg-slate-100" title={title}>
       {(["HES", "RES", "GES"] as const).map((t) => (m[t] > 0 ? <div key={t} style={{ width: `${m[t]}%`, background: TECH_COLOR[t] }} /> : null))}
-    </div>
-  );
-}
-
-/** Endeks: sayı ve altında ince çubuk (1,0 = sektör ortalaması); düşük = iyi */
-function IndexCell({ v }: { v: number | null }) {
-  if (v === null) return <span className="text-slate-400">–</span>;
-  const tone = v < 0.8 ? "bg-emerald-500" : v <= 1 ? "bg-teal-400" : "bg-amber-500";
-  return (
-    <div className="ml-auto w-20 text-right">
-      <div className="font-semibold tabular-nums text-slate-900">{nf(v, 2)}</div>
-      <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-slate-100" title="Çubuk tamamı = sektör ortalamasının 1,25 katı">
-        <div className={`h-full rounded-full ${tone}`} style={{ width: `${Math.min(100, (v / 1.25) * 100)}%` }} />
-      </div>
     </div>
   );
 }
@@ -159,102 +141,27 @@ function ScatterPanel({ scatter }: { scatter: ScatterPoint[] }) {
   );
 }
 
-/**
- * Gün içi işlemlerden sonra (faturaya yakın; 18.11.2026): fatura son plana göre kesilir. Son plana göre dengesizlik + GİP
- * işlem maliyeti ((ilk − son plan) × (GİP − PTF); lib/analysis/aggregator-benchmark.ts `aggregatorIntraday`), üretime bölünür.
- * Ana tablo ilk plana göre (tahmin kalitesi); burada sıra son plana göre. Son planı olmayan toplayıcı sonda.
- */
-export function IntradayCard({ rows }: { rows: AggregatorBenchmarkRow[] }) {
-  // Yuvarlanınca sıfır olan küçük eksi değer "-0" görünmesin
-  const perMwh = (tl: number, a: AggregatorBenchmarkRow) => (Math.round(tl / a.productionMwh) === 0 ? 0 : tl / a.productionMwh);
-  const withIntraday = rows.filter((a) => a.intraday);
-  const firstRank = new Map([...withIntraday].sort((a, b) => a.intraday!.firstCostTl / a.productionMwh - b.intraday!.firstCostTl / b.productionMwh).map((a, i) => [a.id, i + 1]));
-  const total = (a: AggregatorBenchmarkRow) => (a.intraday!.finalCostTl + a.intraday!.tradeCostTl) / a.productionMwh;
-  const sorted = [...withIntraday].sort((a, b) => total(a) - total(b));
-  const missing = rows.filter((a) => !a.intraday);
-  if (!sorted.length) return null;
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">Gün içi işlemlerden sonra (faturaya yakın)</CardTitle>
-        <CardDescription>
-          Yukarıdaki tablo ilk plana göre: şirketin üretimini ne kadar iyi tahmin ettiğini ölçer. Fatura ise son plana göre kesilir; toplayıcı gün içi
-          piyasada (GİP) alım satımla sapmasının bir kısmını kapatır. Burada son plana göre dengesizlik ve bu işlemlerin tahmini maliyeti toplanır, sıra
-          buna göredir. Tahmindir: ikili anlaşmalar ve gerçek işlem fiyatları kamu verisinde yok (işlem fiyatı GİP ağırlıklı ortalaması).
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>#</TableHead>
-              <TableHead>Toplayıcı</TableHead>
-              <TableHead className="text-right" title="Gün içi işlemler öncesi, ilk plana göre dengesizlik / üretim">
-                İlk plana göre
-              </TableHead>
-              <TableHead className="text-right" title="Son plana göre dengesizlik / üretim">
-                Son plana göre
-              </TableHead>
-              <TableHead className="text-right" title="(ilk − son plan) × (GİP − PTF) / üretim">
-                İşlem maliyeti
-              </TableHead>
-              <TableHead className="text-right" title="Son plana göre dengesizlik + işlem maliyeti / üretim">
-                Faturaya yakın
-              </TableHead>
-              <TableHead className="text-right" title="İşlem maliyeti düşüldükten sonra gün içi işlemlerin maliyeti düşürme oranı">
-                Gün içi kazanç
-              </TableHead>
-              <TableHead className="text-right" title="İlk plana göre sıradan son plana göre sıraya">
-                Sıra
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sorted.map((a, i) => {
-              const d = a.intraday!;
-              const before = firstRank.get(a.id)!;
-              const move = before - (i + 1);
-              return (
-                <TableRow key={a.id}>
-                  <TableCell className="w-8 text-xs text-slate-400">{i + 1}</TableCell>
-                  <TableCell className="py-3 font-medium" title={a.name}>
-                    {shortName(a.name)}
-                    {d.coveragePct < 90 && (
-                      <span className="ml-1 text-2xs font-normal text-amber-700" title="Son planı olan santral-saat payı; hesap yalnız bu saatlerde">
-                        (kapsam %{nf(d.coveragePct)})
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums text-slate-500">{nf(perMwh(d.firstCostTl, a))}</TableCell>
-                  <TableCell className="text-right tabular-nums">{nf(perMwh(d.finalCostTl, a))}</TableCell>
-                  <TableCell className="text-right tabular-nums">{nf(perMwh(d.tradeCostTl, a))}</TableCell>
-                  <TableCell className="text-right font-semibold tabular-nums">{nf(total(a))}</TableCell>
-                  <TableCell className={`text-right tabular-nums ${d.netPct > 0 ? "text-teal-700" : "text-rose-700"}`}>%{nf(d.netPct)}</TableCell>
-                  <TableCell className="whitespace-nowrap text-right text-xs tabular-nums text-slate-500">
-                    {before} → {i + 1}
-                    {move > 0 && <span className="ml-1 text-teal-700">▲{move}</span>}
-                    {move < 0 && <span className="ml-1 text-rose-700">▼{-move}</span>}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-        <p className="mt-2 text-2xs leading-relaxed text-slate-500">
-          Tutarlar TL/MWh (üretim başına). Gün içi kazanç: ilk plana göre maliyetin, son plan ve işlem maliyeti toplamıyla ne kadar azaldığı.
-          {missing.length > 0 && ` Son plan verisi olmayan ${missing.length} toplayıcı bu tabloda yok.`}
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
+type View = "forecast" | "invoice";
 
+/** Faturaya yakın maliyet (TL/MWh): son plana göre dengesizlik + GİP işlem maliyeti; son plan yoksa null */
+const invoiceTlPerMwh = (a: AggregatorBenchmarkRow) => (a.intraday ? (a.intraday.finalCostTl + a.intraday.tradeCostTl) / a.productionMwh : null);
+/** Tahmin kalitesi (TL/MWh): ilk plana göre, portföyde netleşmiş */
+const forecastTlPerMwh = (a: AggregatorBenchmarkRow) => a.nettedTlPerMwh;
+
+/**
+ * Sektör karnesi · Toplayıcılar sekmesi (sadeleştirildi 18.11.2026): tek tablo, iki görünüm.
+ *   - Tahmin kalitesi: ilk plana göre (gün içi işlemler öncesi) netleşmiş maliyet; "sektöre göre" teknoloji karışımından
+ *     arındırılmış endeks (portföy maliyeti / aynı karışımdaki sektör ortalaması).
+ *   - Faturaya yakın: son plana göre dengesizlik + GİP işlem maliyeti ((ilk − son plan) × (GİP − PTF); lib/analysis/
+ *     aggregator-benchmark.ts `aggregatorIntraday`). Fatura son plana göre kesilir; ikili anlaşma ve gerçek işlem fiyatı yok.
+ * Yöntem ayrıntıları "Nasıl hesaplandı?" altında.
+ */
 export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
   const [data, setData] = useState<BenchmarkResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [scale, setScale] = useState<Scale>("large");
+  const [scale, setScale] = useState<Scale>("all");
   const [mix, setMix] = useState<Mix>("all");
-  const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: "mixAdjustedIndex", asc: true });
+  const [view, setView] = useState<View>("forecast");
 
   useEffect(() => {
     setError(null);
@@ -273,18 +180,25 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
   const LARGE = 1_000_000 * factor;
   const MID = 300_000 * factor;
 
-  const rows = useMemo(() => {
+  const filtered = useMemo(() => {
     if (!data) return [];
     const inScale = (a: AggregatorBenchmarkRow) =>
       scale === "all" || (scale === "large" ? a.productionMwh >= LARGE : scale === "mid" ? a.productionMwh >= MID && a.productionMwh < LARGE : a.productionMwh < MID);
-    // Teknoloji süzgeci: o teknoloji üretimin en az MIN_TECH_SHARE payıysa (yalnız en büyük pay değil; ör. %35 rüzgârlı
-    // hidro ağırlıklı portföy de rüzgârda görünür)
+    // Teknoloji süzgeci: o teknoloji üretimin en az MIN_TECH_SHARE payıysa
     const hasTech = (a: AggregatorBenchmarkRow, t: string) => mixShare(a)[t] >= MIN_TECH_SHARE;
-    const v = (a: AggregatorBenchmarkRow) => (a[sort.key] as number | null) ?? Infinity;
-    return data.aggregators
-      .filter((a) => a.productionMwh > 0 && inScale(a) && (mix === "all" || hasTech(a, mix)))
-      .sort((a, b) => (sort.asc ? v(a) - v(b) : v(b) - v(a)));
-  }, [data, scale, mix, sort, LARGE, MID]);
+    return data.aggregators.filter((a) => a.productionMwh > 0 && inScale(a) && (mix === "all" || hasTech(a, mix)));
+  }, [data, scale, mix, LARGE, MID]);
+
+  // Tahmin kalitesinde sıra karışıma göre düzeltilmiş endeksle (ham TL/MWh hidro ağırlıklı portföyleri kayırır); faturada TL/MWh ile
+  const rows = useMemo(() => {
+    const key = (a: AggregatorBenchmarkRow) => (view === "forecast" ? a.mixAdjustedIndex : invoiceTlPerMwh(a)) ?? Infinity;
+    return [...filtered].sort((a, b) => key(a) - key(b));
+  }, [filtered, view]);
+  /** Tahmin kalitesindeki sıra (faturada sıra değişimini göstermek için) */
+  const forecastRank = useMemo(() => {
+    const s = [...filtered].sort((a, b) => (a.mixAdjustedIndex ?? Infinity) - (b.mixAdjustedIndex ?? Infinity));
+    return new Map(s.map((a, i) => [a.id, i + 1]));
+  }, [filtered]);
 
   if (error)
     return (
@@ -300,31 +214,20 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
     );
 
   const label = `${MONTHS[Number(data.period.start.slice(5, 7)) - 1]}–${MONTHS[Number(data.period.end.slice(5, 7)) - 1]} ${data.year}`;
-  // Kapsam, analiz edilen türlerdeki (rüzgâr, güneş, hidro) santrallere göre: biyogaz, jeotermal gibi türler paydada yok
+  // Kapsam, analiz edilen türlerdeki (rüzgâr, güneş, hidro) santrallere göre
   const eligible = (a: AggregatorBenchmarkRow) => a.listedPlants - (a.otherTechPlants ?? 0);
   const coverage = (a: AggregatorBenchmarkRow) => (eligible(a) > 0 ? a.coveredPlants / eligible(a) : 0);
-  const best = [...rows].filter((a) => a.mixAdjustedIndex !== null).sort((a, b) => a.mixAdjustedIndex! - b.mixAdjustedIndex!)[0];
-  const totalValue = rows.reduce((s, a) => s + a.nettingValueTl, 0);
-
-  const headers: Array<{ key: SortKey | null; label: string; right?: boolean; title?: string }> = [
-    { key: null, label: "#" },
-    { key: null, label: "Toplayıcı" },
-    { key: "coveredPlants", label: "Santral", right: true, title: "Analize giren rüzgâr, güneş ve hidro santrali; + ile listedeki başka türler (biyogaz, jeotermal, kojenerasyon…)" },
-    { key: "productionMwh", label: "Üretim", right: true },
-    { key: null, label: "Karışım" },
-    { key: "nettingValueTl", label: "Netleşme değeri", right: true, title: "Sahipler tek başına ödeyeceğine göre portföyün kazandırdığı tutar; altında oranı" },
-    { key: "nettedTlPerMwh", label: "TL/MWh", right: true, title: "Portföyde netleşmiş dengesizlik / üretim" },
-    { key: "mixAdjustedIndex", label: "Endeks", right: true, title: "Portföy maliyeti / aynı karışımdaki sektör medyanı maliyeti; 1'in altı daha iyi" },
-    { key: null, label: "" },
-  ];
-  const toggleSort = (key: SortKey) =>
-    setSort((s) => (s.key === key ? { key, asc: !s.asc } : { key, asc: key === "mixAdjustedIndex" || key === "nettedTlPerMwh" }));
+  const cost = (a: AggregatorBenchmarkRow) => (view === "forecast" ? forecastTlPerMwh(a) : invoiceTlPerMwh(a));
+  const costs = rows.map(cost).filter((v): v is number => v !== null).sort((x, y) => x - y);
+  const median = costs.length ? costs[(costs.length - 1) >> 1] : null;
+  const best = rows[0];
 
   const downloadCsv = () => {
-    const head = ["Toplayıcı", "Santral (analizde)", "Santral (liste)", "Üretim MWh", "HES %", "RES %", "GES %", "Sahipler tek başına TL", "Portföy TL", "Netleşme değeri TL", "Netleşme %", "TL/MWh", "Beklenen maliyet TL", "Endeks"];
+    const head = ["Toplayıcı", "Santral (analizde)", "Üretim MWh", "HES %", "RES %", "GES %", "Tahmin kalitesi TL/MWh (ilk plan)", "Sektöre göre endeks", "Portföy kazancı TL", "Faturaya yakın TL/MWh", "Gün içi kazanç %"];
     const lines = rows.map((a) => {
       const m = mixShare(a);
-      return [a.name, a.coveredPlants, a.listedPlants, a.productionMwh.toFixed(0), m.HES.toFixed(1), m.RES.toFixed(1), m.GES.toFixed(1), a.ownerLevelCostTl.toFixed(0), a.portfolioCostTl.toFixed(0), a.nettingValueTl.toFixed(0), a.nettingPct.toFixed(1), a.nettedTlPerMwh.toFixed(1), a.expectedCostTl.toFixed(0), a.mixAdjustedIndex?.toFixed(3) ?? ""]
+      const inv = invoiceTlPerMwh(a);
+      return [a.name, a.coveredPlants, a.productionMwh.toFixed(0), m.HES.toFixed(1), m.RES.toFixed(1), m.GES.toFixed(1), a.nettedTlPerMwh.toFixed(1), a.mixAdjustedIndex?.toFixed(3) ?? "", a.nettingValueTl.toFixed(0), inv?.toFixed(1) ?? "", a.intraday?.netPct.toFixed(1) ?? ""]
         .map((v) => String(v).replace(/\./g, ","))
         .join(";");
     });
@@ -351,26 +254,40 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
     <div className="space-y-6">
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Toplayıcılar arası kıyas · {label}</CardTitle>
+          <CardTitle className="text-base">Toplayıcılar · {label}</CardTitle>
           <CardDescription>
-            {data.membershipMonthlyTo
-              ? `EPİAŞ'ın ay ay toplayıcı üyelik listelerine göre lisanslı santraller (her santral yalnız üye olduğu aylarla; güncel liste ${data.membershipAsOf}), aynı yöntemle:`
-              : `EPİAŞ'ın ${data.membershipAsOf} tarihli toplayıcı listelerindeki lisanslı santraller (bütün dönem bu listeyle), aynı yöntemle:`} saatlik sapma, resmi dengesizlik
-            fiyatı, gün içi işlemler öncesi, KÜPST hariç. <b>Endeks</b> teknoloji karışımından arındırılmış ölçüdür: portföyün netleşmiş maliyeti /
-            aynı karışımdaki sektör ortalaması santrallerin tek başına maliyeti (1&apos;in altı daha iyi).{" "}
-            <MethodLink section="toplayici-kiyas" label="Yöntem" />
+            Toplayıcıların rüzgâr, güneş ve hidro santrallerinin dengesizlik maliyeti, EPİAŞ kamu verisiyle ve herkese aynı yöntemle. Tutarlar üretilen
+            MWh başına; <b>düşük olan daha iyi</b>.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4">
+          <div className="grid gap-2 sm:grid-cols-2" role="group" aria-label="Görünüm">
+            {(
+              [
+                ["forecast", "Tahmin kalitesi", "Gün öncesi plana göre: şirket üretimini ne kadar iyi tahmin ediyor?"],
+                ["invoice", "Faturaya yakın", "Gün içi alım satımdan sonra: şirket sonunda ne kadar ödüyor? (tahmini)"],
+              ] as const
+            ).map(([id, title, text]) => (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={view === id}
+                onClick={() => setView(id)}
+                className={`rounded-lg border p-3 text-left transition-colors ${view === id ? "border-slate-900 bg-slate-900 text-white" : "bg-white hover:bg-slate-50"}`}
+              >
+                <div className="text-sm font-semibold">{title}</div>
+                <div className={`mt-0.5 text-xs ${view === id ? "text-slate-300" : "text-slate-500"}`}>{text}</div>
+              </button>
+            ))}
+          </div>
+
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold text-slate-500">Ölçek:</span>
+            <span className="text-xs font-semibold text-slate-500">Büyüklük:</span>
             {pill<Scale>("large", scale, setScale, `Büyük (${gwh(LARGE)} üstü)`)}
-            {pill<Scale>("mid", scale, setScale, `Orta (${gwh(MID)}–${gwh(LARGE)})`)}
+            {pill<Scale>("mid", scale, setScale, "Orta")}
             {pill<Scale>("small", scale, setScale, "Küçük")}
             {pill<Scale>("all", scale, setScale, "Tümü")}
-            <span className="ml-3 text-xs font-semibold text-slate-500" title={`Üretiminin en az %${MIN_TECH_SHARE} kadarı bu teknoloji olan toplayıcılar`}>
-              Teknoloji (üretimin %{MIN_TECH_SHARE}+):
-            </span>
+            <span className="ml-3 text-xs font-semibold text-slate-500">Teknoloji:</span>
             {pill<Mix>("all", mix, setMix, "Tümü", "mix")}
             {pill<Mix>("HES", mix, setMix, "Hidro", "mix")}
             {pill<Mix>("RES", mix, setMix, "Rüzgâr", "mix")}
@@ -379,78 +296,85 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
               <Download className="h-3.5 w-3.5" /> CSV
             </Button>
           </div>
-          {rows.length > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-2">
+
+          {best && cost(best) !== null && median !== null && (
             <p className="text-sm text-slate-700">
-              {rows.length} toplayıcı; toplam netleşme değeri <b>{mTl(totalValue)}</b>.
-              {best && (
-                <>
-                  {" "}
-                  Karışıma göre en iyi endeks <b>{shortName(best.name)}</b> ({nf(best.mixAdjustedIndex!, 2)}): aynı karışımdaki ortalama santrallerin ödeyeceğinin %
-                  {nf(best.mixAdjustedIndex! * 100)} kadarını ödüyor.
-                </>
-              )}
+              {rows.length} toplayıcı. {view === "forecast" ? "Sektöre göre en iyi" : "Faturaya yakın en düşük"}: <b>{shortName(best.name)}</b>, MWh başına{" "}
+              <b>{nf(cost(best)!)} TL</b>. Ortanca toplayıcı {nf(median)} TL.
             </p>
-            <div className="flex items-center gap-3 text-xs text-slate-500" aria-label="Karışım renkleri">
-              {(["HES", "RES", "GES"] as const).map((t) => (
-                <span key={t} className="inline-flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full" style={{ background: TECH_COLOR[t] }} /> {TECH_NAME[t]}
-                </span>
-              ))}
-            </div>
-            </div>
           )}
+
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  {headers.map((h) => (
-                    <TableHead
-                      key={h.label}
-                      title={h.title}
-                      className={`${h.right ? "text-right" : ""} ${h.key ? "cursor-pointer select-none hover:text-slate-900" : ""}`}
-                      onClick={h.key ? () => toggleSort(h.key!) : undefined}
-                    >
-                      {h.label}
-                      {h.key && sort.key === h.key ? (sort.asc ? " ▲" : " ▼") : ""}
-                    </TableHead>
-                  ))}
+                  <TableHead className="w-8">#</TableHead>
+                  <TableHead>Toplayıcı</TableHead>
+                  <TableHead className="text-right">Üretim</TableHead>
+                  <TableHead className="hidden sm:table-cell">
+                    <span className="sr-only">Teknoloji karışımı</span>
+                    <span className="inline-flex items-center gap-2 text-2xs font-normal text-slate-500">
+                      {(["HES", "RES", "GES"] as const).map((t) => (
+                        <span key={t} className="inline-flex items-center gap-1">
+                          <span className="h-2 w-2 rounded-full" style={{ background: TECH_COLOR[t] }} /> {TECH_NAME[t]}
+                        </span>
+                      ))}
+                    </span>
+                  </TableHead>
+                  <TableHead className="text-right">TL/MWh</TableHead>
+                  <TableHead className="text-right" title={view === "forecast" ? "Aynı teknoloji karışımındaki sektör ortalamasına göre; %100'ün altı daha iyi" : "Gün içi alım satımın maliyeti düşürme oranı"}>
+                    {view === "forecast" ? "Sektör ortalamasına göre" : "Gün içi kazanç"}
+                  </TableHead>
+                  <TableHead className="w-8">
+                    <span className="sr-only">Özet indir</span>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((a, i) => {
                   const low = coverage(a) < LOW_COVERAGE;
+                  const c = cost(a);
+                  const move = (forecastRank.get(a.id) ?? i + 1) - (i + 1);
                   return (
                     <TableRow key={a.id} className="group">
-                      <TableCell className="w-8 text-xs text-slate-400">{i + 1}</TableCell>
+                      <TableCell className="text-xs tabular-nums text-slate-400">
+                        {i + 1}
+                        {view === "invoice" && move !== 0 && c !== null && (
+                          <span className={`ml-1 ${move > 0 ? "text-teal-700" : "text-rose-700"}`} title={`Tahmin kalitesinde ${forecastRank.get(a.id)}. sırada`}>
+                            {move > 0 ? `▲${move}` : `▼${-move}`}
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell className="py-3 font-medium" title={a.name}>
                         <Link href={`/sector/aggregators/${a.id}?year=${data.year}`} className="text-slate-900 hover:text-teal-700 hover:underline">
                           {shortName(a.name)}
                         </Link>
+                        <div className="text-2xs font-normal text-slate-500">
+                          {a.coveredPlants} santral
+                          {low && (
+                            <span className="ml-1 inline-flex items-center gap-0.5 text-amber-600" title={`Listedeki ${eligible(a)} santralin yalnız ${a.coveredPlants} tanesinin verisi var`}>
+                              <AlertTriangle className="h-3 w-3" aria-hidden /> eksik veri
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
-                      <TableCell className="text-right tabular-nums" title={`EPİAŞ listesinde ${a.listedPlants} santral: ${eligible(a)} rüzgâr/güneş/hidro, ${a.otherTechPlants ?? 0} başka tür`}>
-                        {low && (
-                          <span
-                            className="mr-1 inline-block align-middle text-amber-500"
-                            title={`Listedeki ${eligible(a)} rüzgâr, güneş ve hidro santralinin yalnız ${a.coveredPlants} tanesinin verisi var; sonuç portföyün tamamını temsil etmeyebilir`}
-                          >
-                            <AlertTriangle className="h-3.5 w-3.5" aria-label="Düşük kapsam" />
-                          </span>
-                        )}
-                        {a.coveredPlants}
-                        {a.coveredPlants < eligible(a) && <span className="text-slate-400"> / {eligible(a)}</span>}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{gwh(a.productionMwh)}</TableCell>
-                      <TableCell>
+                      <TableCell className="whitespace-nowrap text-right tabular-nums">{gwh(a.productionMwh)}</TableCell>
+                      <TableCell className="hidden sm:table-cell">
                         <MixBar a={a} />
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="font-medium tabular-nums">{mTl(a.nettingValueTl)}</div>
-                        <div className="text-2xs tabular-nums text-slate-500">%{nf(a.nettingPct)}</div>
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{nf(a.nettedTlPerMwh)}</TableCell>
-                      <TableCell>
-                        <IndexCell v={a.mixAdjustedIndex} />
+                      <TableCell className="text-right font-semibold tabular-nums">{c === null ? <span className="font-normal text-slate-400">veri yok</span> : nf(c)}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {view === "forecast" ? (
+                          a.mixAdjustedIndex === null ? (
+                            <span className="text-slate-400">–</span>
+                          ) : (
+                            <span className={a.mixAdjustedIndex < 1 ? "text-teal-700" : "text-amber-700"}>%{nf(a.mixAdjustedIndex * 100)}</span>
+                          )
+                        ) : a.intraday ? (
+                          <span className={a.intraday.netPct > 0 ? "text-teal-700" : "text-rose-700"}>%{nf(a.intraday.netPct)}</span>
+                        ) : (
+                          <span className="text-slate-400">–</span>
+                        )}
                       </TableCell>
                       <TableCell className="w-8 text-right">
                         <a
@@ -467,28 +391,51 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
                 })}
                 {rows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} className="py-6 text-center text-sm text-slate-500">
-                      Bu süzgeçte toplayıcı yok. Ölçek süzgecini &quot;Tümü&quot; yapmayı deneyin.
+                    <TableCell colSpan={7} className="py-6 text-center text-sm text-slate-500">
+                      Bu süzgeçte toplayıcı yok. Büyüklük süzgecini &quot;Tümü&quot; yapmayı deneyin.
                     </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
           </div>
-          <p className="text-2xs leading-relaxed text-slate-500">
-            Santral: analize giren rüzgâr, güneş ve hidro santrali (listedeki başka türler analiz edilmez); ⚠ rüzgâr, güneş ve hidro santrallerinin
-            %60&apos;ından azının verisi var. Netleşme değerinin altındaki oran: sahipler tek başına ödeyeceğine göre portföyün kazandırdığı pay.
-            Üyelik listenin tarihine göredir (santraller dönem boyunca portföydeymiş gibi).
-          </p>
+
+          <details className="rounded-lg border bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+            <summary className="cursor-pointer font-medium text-slate-800">Nasıl hesaplandı?</summary>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              <li>
+                Kaynak EPİAŞ şeffaflık platformu: santrallerin saatlik üretimi, planları ve resmî dengesizlik fiyatları. Toplayıcıların gün içi işlemleri ve ikili
+                anlaşmaları kamuya açık değil; KÜPST dahil değil.
+              </li>
+              <li>
+                {data.membershipMonthlyTo
+                  ? `Üyelik EPİAŞ'ın ay ay toplayıcı listelerinden: her santral yalnız üye olduğu aylarla sayılır (güncel liste ${data.membershipAsOf}).`
+                  : `Üyelik EPİAŞ'ın ${data.membershipAsOf} tarihli listesinden (bütün dönem bu listeyle).`}{" "}
+                Santrallerin sapmaları toplayıcının portföyünde saat saat netleşir.
+              </li>
+              <li>
+                <b>Tahmin kalitesi:</b> sapma şirketin gün öncesi bildirdiği ilk plana göre. <b>Sektör ortalamasına göre</b>: aynı rüzgâr / güneş / hidro karışımındaki
+                ortalama santrallerin ödeyeceğinin yüzde kaçını ödediği (hidro ağırlıklı portföy doğal olarak ucuz olduğu için ham TL/MWh yerine sıra buna göre).
+              </li>
+              <li>
+                <b>Faturaya yakın:</b> fatura son plana (gün içi işlemlerden sonraki plana) göre kesilir. Son plana göre dengesizlik + gün içi alım satımın tahmini
+                maliyeti (plan değişikliği × gün içi ortalama fiyat ile PTF farkı). Gerçek işlem fiyatları ve ikili anlaşmalar görülmediği için tahmindir.
+              </li>
+              <li>
+                Portföy kazancı (CSV ve toplayıcı sayfasında): santraller tek başına uzlaştırılsaydı ödenecek tutara göre portföyde netleşmenin kazandırdığı.
+                Bu dönemde tablodaki toplayıcılarda toplam {mTl(rows.reduce((s, a) => s + a.nettingValueTl, 0))}.
+              </li>
+              <li>&quot;Eksik veri&quot;: toplayıcının rüzgâr, güneş ve hidro santrallerinin %60&apos;ından azının verisi var; sonuç portföyün tamamını temsil etmeyebilir.</li>
+            </ul>
+            <MethodLink section="toplayici-kiyas" label="Ayrıntılı yöntem" />
+          </details>
         </CardContent>
       </Card>
 
-      <IntradayCard rows={rows} />
-
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Büyüklük ve performans</CardTitle>
-          <CardDescription>Yatay: üretim (GWh). Dikey: karışıma göre düzeltilmiş endeks (aşağısı daha iyi). Nokta büyüklüğü santral sayısı; turuncu: düşük kapsam.</CardDescription>
+          <CardTitle className="text-base">Büyüklük ve tahmin kalitesi</CardTitle>
+          <CardDescription>Sağa doğru büyük, aşağı doğru iyi (sektör ortalamasına göre). Turuncu: eksik veri.</CardDescription>
         </CardHeader>
         <CardContent>
           <ScatterPanel scatter={scatter} />
