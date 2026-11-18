@@ -25,6 +25,22 @@ export function previousRunsUrl(latitude: number, longitude: number, startDate: 
   return `${BASE}?${q}`;
 }
 
+/** Günlük pay ya da Open-Meteo günlük sınırı yüzünden duran arşiv işinin çıkış kodu (aylık eşitleme hata saymaz) */
+export const OPEN_METEO_QUOTA_EXIT = 75;
+
+/**
+ * Bir isteğin Open-Meteo'da kaç çağrı sayıldığı (yaklaşık): 10'dan fazla değişken ve 2 haftadan uzun dönem orantılı
+ * artırır ("fractional API calls", open-meteo.com/en/pricing). Pay hesabı için; kesin sayaç Open-Meteo'da.
+ */
+export function openMeteoCallWeight(variables: number, days: number): number {
+  return Math.max(1, variables / 10) * Math.max(1, days / 14);
+}
+
+/** Open-Meteo'nun günlük sınır hatası mı (o gün yeniden denemek boşuna) */
+export function isOpenMeteoDailyLimit(e: unknown): boolean {
+  return e instanceof Error && /429/.test(e.message) && /daily/i.test(e.message);
+}
+
 /** Yanıt hatalıysa üç kez dener (5, 20, 60 sn bekleyerek); API hata nedenini iletir */
 export async function fetchPreviousRuns(latitude: number, longitude: number, startDate: string, endDate: string): Promise<OpenMeteoHourly> {
   const url = previousRunsUrl(latitude, longitude, startDate, endDate);
@@ -37,6 +53,7 @@ export async function fetchPreviousRuns(latitude: number, longitude: number, sta
       if (res.ok && body?.hourly?.time) return body as OpenMeteoHourly;
       last = `${res.status} ${body?.reason ?? ""}`;
       if (res.status === 400) break; // istek hatası: yeniden denemek işe yaramaz
+      if (res.status === 429 && /daily/i.test(String(body?.reason))) break; // günlük sınır: o gün yeniden denemek boşuna
     } catch (e) {
       last = e instanceof Error ? e.message : String(e);
     }

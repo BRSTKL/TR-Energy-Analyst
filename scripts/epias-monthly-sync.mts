@@ -17,7 +17,9 @@
  *      %90'ının altına düştüyse karne önceki döneme geri kurulur (--rebuild) ve adım başarısız sayılır.
  *   6. Sonunda raporlar ve testler; başlarken ve biterken bildirim.
  * Durum: .cache/epias/monthly-sync.json; günlük: ~/Library/Logs/tr-energy-epias-monthly.log (launchd). EPİAŞ dışı adımlar
- * (Open-Meteo hava, analizler) da burada; Open-Meteo sınırına takılan adım sonraki çalışmada yeniden denenir.
+ * (Open-Meteo hava, analizler) da burada. Hava arşivi adımı Open-Meteo günlük payına takılırsa (çıkış kodu 75,
+ * scripts/weather-sync.mts) hata sayılmaz: adım ertesi UTC gününe ertelenir, o güne kadar çalışmalar adımlara girmeden
+ * temiz çıkar (her saat "çalışmadı" bildirimi gelmesin; 18.11.2026), bildirim günde bir.
  *
  *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/epias-monthly-sync.mts [--dry] [--force-month YYYY-AA]
  *
@@ -30,6 +32,7 @@ import path from "node:path";
 import { fetchUevm } from "@/lib/services/epias-plants";
 import { parseUevmItems } from "@/lib/epias-plant/plant-data";
 import { notify as sendNotification } from "@/lib/notify";
+import { OPEN_METEO_QUOTA_EXIT } from "@/lib/weather/open-meteo";
 
 const ROOT = process.cwd();
 const CACHE = path.join(ROOT, ".cache", "epias");
@@ -55,6 +58,8 @@ interface State {
   status: "running" | "done" | "failed" | "waiting";
   steps: Record<string, { ok: boolean; at: string; note?: string }>;
   lastNotice?: string;
+  /** Open-Meteo günlük payı: adımlar bu ana kadar beklenir (ISO) */
+  deferredUntil?: string;
   startedAt?: string;
   finishedAt?: string;
 }
@@ -320,7 +325,7 @@ state.startedAt ??= new Date().toISOString();
 saveState();
 
 /** Adımı ayrı süreçte çalıştırır; `watch403` ile üç HTTP 403'te durdurur */
-function run(args: string[], opts: { watch403?: boolean } = {}): Promise<{ ok: boolean; out: string }> {
+function run(args: string[], opts: { watch403?: boolean } = {}): Promise<{ ok: boolean; out: string; code?: number | null }> {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, ["--env-file=.env", "node_modules/.bin/tsx", "--tsconfig", "tsconfig.json", ...args], { cwd: ROOT });
     let out = "";
@@ -336,7 +341,7 @@ function run(args: string[], opts: { watch403?: boolean } = {}): Promise<{ ok: b
     };
     child.stdout.on("data", onData);
     child.stderr.on("data", onData);
-    child.on("close", (code) => resolve({ ok: code === 0 && blocked < 3, out: blocked >= 3 ? out + "\nEPİAŞ 3 kez HTTP 403 (güvenlik duvarı): durduruldu" : out }));
+    child.on("close", (code) => resolve({ ok: code === 0 && blocked < 3, code, out: blocked >= 3 ? out + "\nEPİAŞ 3 kez HTTP 403 (güvenlik duvarı): durduruldu" : out }));
   });
 }
 
@@ -402,6 +407,14 @@ const steps: Step[] = [
   { name: "testler", args: ["node_modules/vitest/vitest.mjs", "run"] },
 ];
 
+if (state.deferredUntil && Date.now() < Date.parse(state.deferredUntil)) {
+  log(`adımlar ${state.deferredUntil.slice(0, 16)} UTC'ye kadar bekliyor (Open-Meteo günlük payı)`);
+  state.status = "waiting";
+  saveState();
+  process.exit(0);
+}
+delete state.deferredUntil;
+
 let failed: string | null = null;
 for (const s of steps) {
   if (state.steps[s.name]?.ok) continue;
@@ -409,6 +422,19 @@ for (const s of steps) {
   const k = karne(Y);
   const before = { karnePlants: k?.plants.length ?? 0, karneEnd: k?.period?.end ?? null };
   const r = s.name === "testler" ? await runPlain(s.args) : await run(s.args, { watch403: s.watch403 });
+  if ("code" in r && r.code === OPEN_METEO_QUOTA_EXIT) {
+    // Hata değil: Open-Meteo günlük payı doldu; yazılanlar kaldı, ertesi UTC günü (00:30) kaldığı yerden
+    const d = new Date();
+    state.deferredUntil = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1, 0, 30)).toISOString();
+    state.steps[s.name] = { ok: false, at: new Date().toISOString(), note: "Open-Meteo günlük payı; ertesi gün sürer" };
+    state.status = "waiting";
+    if (state.lastNotice !== today) {
+      notify("EPİAŞ eşitlemesi hava arşivinde bekliyor", `${s.name}: Open-Meteo günlük payı doldu, yarın kaldığı yerden sürecek. Canlı tahmin etkilenmez.`);
+      state.lastNotice = today;
+    }
+    saveState();
+    process.exit(0);
+  }
   const problem = r.ok ? ((await s.verify?.(before)) ?? null) : r.out.trim().split("\n").slice(-1)[0]?.slice(0, 200) || "hata";
   state.steps[s.name] = { ok: !problem, at: new Date().toISOString(), ...(problem ? { note: problem } : {}) };
   saveState();

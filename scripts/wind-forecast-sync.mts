@@ -2,13 +2,14 @@
  * Geçmiş rüzgâr tahminleri (rüzgâr üretim tahmini geriye dönük testi; lib/weather/wind-forecast-archive.ts): konumu olan
  * proje rüzgâr santralleri için ECMWF IFS 0,25° 100 m hız / yön, `d1` ve `d2` sürümleri, 2025-01-01'den dünkü güne.
  * Aynı 0,25° hücreye düşen santraller tek istek; ay sonundan 3 gün sonra çekilmiş ay kesin sayılır. Open-Meteo saatlik /
- * günlük sınırında durur, yeniden çalıştırınca sürer. Rüzgâr motoru alanlarını (sıcaklık, basınç, 10 m; Aşama 23.2) taşımayan
+ * günlük sınırında durur (çıkış kodu 75), yeniden çalıştırınca sürer. Rüzgâr motoru alanlarını (sıcaklık, basınç, 10 m; Aşama 23.2) taşımayan
  * yıl dosyası bir kez baştan çekilir.
  *
  *   npx tsx --env-file=.env --tsconfig tsconfig.json scripts/wind-forecast-sync.mts [epiasPlantId ...]
  * Çıktı: data/pool/weather/<id>/windfc-<yıl>.json.gz
  */
 
+import { OPEN_METEO_QUOTA_EXIT } from "@/lib/weather/open-meteo";
 import { prisma } from "@/lib/prisma";
 import { readPoolPlantInfo } from "@/lib/pool/pool-store";
 import { emptyWindForecastYear, fetchWindForecastArchive, hasEngineFields, mergeWindForecast, WindForecastLimitError, type WindForecastResponse } from "@/lib/weather/wind-forecast-archive";
@@ -61,3 +62,5 @@ outer: for (const id of ids) {
 }
 console.log(`\n${requests} istek${stopped ? " (sınırda durdu)" : ""}. Geçmiş tahminler: Open-Meteo.com Previous Runs, ECMWF IFS 0,25°.`);
 await prisma.$disconnect();
+// Aylık eşitleme bunu hata saymaz, adımı ertesi güne erteler (scripts/epias-monthly-sync.mts)
+if (stopped) process.exit(OPEN_METEO_QUOTA_EXIT);
