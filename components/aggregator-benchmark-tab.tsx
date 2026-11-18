@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Download, FileDown, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -67,59 +67,55 @@ function MixBar({ a }: { a: AggregatorBenchmarkRow }) {
 type RankRow = { id: number; name: string; sub: string; value: number; label: string; good: boolean };
 
 /**
- * Sıralı yatay çubuklar (21st.dev "Rank Bars" uyarlaması; sitenin renkleri, 18.11.2026): ad · çubuk · değer. Ölçek sıfırdan
- * `max`'a; aşan değer kırpılır ve "›" ile işaretlenir. `ref` değerinde dikey çizgi (sektör ortalaması ya da ortanca).
+ * Sıralı yatay çubuklar (21st.dev "Rank Bars" uyarlaması, sık satırlı; 18.11.2026): sıra · ad · çubuk · değer; üretim ve santral
+ * sayısı satırın üzerine gelince. Ölçek sıfırdan `max`'a; aşan değer kırpılır ve "›" ile işaretlenir. `refValue`'da dikey çizgi
+ * (sektör ortalaması ya da ortanca). İlk RANK_TOP satır, gerisi "Tümünü göster" ile.
  */
 function RankBars({ rows, max, refValue, refLabel }: { rows: RankRow[]; max: number; refValue: number; refLabel: string }) {
-  const wrap = useRef<HTMLDivElement>(null);
-  const [entered, setEntered] = useState(false);
-  useEffect(() => {
-    const node = wrap.current;
-    if (!node || typeof IntersectionObserver === "undefined") return setEntered(true);
-    const io = new IntersectionObserver((e) => e.some((x) => x.isIntersecting) && (setEntered(true), io.disconnect()), { threshold: 0.1 });
-    io.observe(node);
-    return () => io.disconnect();
-  }, []);
+  const [all, setAll] = useState(false);
   const pct = (v: number) => Math.min(100, (v / max) * 100);
+  const shown = all ? rows : rows.slice(0, RANK_TOP);
+  const cols = "grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)_3.5rem] items-center gap-2 sm:grid-cols-[minmax(0,11rem)_minmax(0,1fr)_4.5rem] sm:gap-3";
   return (
-    <div ref={wrap} className={`space-y-1.5 ${entered ? "rb-in" : ""}`}>
-      <div className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)_4.5rem] gap-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_5rem]">
+    <div>
+      <div className={`${cols} mb-1`}>
         <span />
-        <div className="relative h-4 text-2xs text-slate-500">
+        <div className="relative h-3.5 text-2xs text-slate-500">
           <span className="absolute -translate-x-1/2 whitespace-nowrap" style={{ left: `${pct(refValue)}%` }}>
             {refLabel}
           </span>
         </div>
         <span />
       </div>
-      {rows.map((r, i) => (
-        <div
-          key={r.id}
-          className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)_4.5rem] items-center gap-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_5rem]"
-          style={{ "--i": i } as React.CSSProperties}
-        >
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-slate-900">{r.name}</p>
-            <p className="truncate text-2xs text-slate-500">{r.sub}</p>
+      <div className="divide-y divide-slate-100">
+        {shown.map((r, i) => (
+          <div key={r.id} className={`${cols} py-1`} title={`${r.name} · ${r.sub} · ${r.label}`}>
+            <p className="truncate text-sm">
+              <span className="mr-1.5 inline-block w-4 text-right text-2xs tabular-nums text-slate-400">{i + 1}</span>
+              <span className="font-medium text-slate-900">{r.name}</span>
+            </p>
+            <div className="relative h-2.5 rounded-full bg-slate-100">
+              <div className={`h-full rounded-full ${r.good ? "bg-teal-500" : "bg-amber-500"}`} style={{ width: `${Math.max(2, pct(r.value))}%` }} />
+              <span className="absolute -inset-y-1 w-px bg-slate-400" style={{ left: `${pct(refValue)}%` }} aria-hidden />
+            </div>
+            <p className={`text-right text-sm font-semibold tabular-nums ${r.good ? "text-slate-900" : "text-amber-700"}`}>
+              {r.value > max && <span className="mr-0.5 text-2xs font-normal">›</span>}
+              {r.label}
+            </p>
           </div>
-          <div className="relative h-4 rounded-sm bg-slate-100" title={`${r.name} · ${r.label}`}>
-            <div className={`rb-bar h-full rounded-r-sm ${r.good ? "bg-teal-500" : "bg-amber-500"}`} style={{ width: `${Math.max(1.5, pct(r.value))}%` }} />
-            {r.value > max && <span className="absolute right-1 top-1/2 -translate-y-1/2 text-xs font-bold leading-none text-white">›</span>}
-            <span className="absolute inset-y-[-3px] w-px bg-slate-500" style={{ left: `${pct(refValue)}%` }} aria-hidden />
-          </div>
-          <p className={`rb-val text-right text-sm font-semibold tabular-nums ${r.good ? "text-slate-900" : "text-amber-700"}`}>{r.label}</p>
-        </div>
-      ))}
-      <style>{`
-        .rb-in .rb-bar { transform-origin: left; animation: rb-grow .6s cubic-bezier(.2,.7,.3,1) both; animation-delay: calc(var(--i) * 25ms); }
-        .rb-in .rb-val { animation: rb-fade .5s ease both; animation-delay: calc(var(--i) * 25ms + 120ms); }
-        @keyframes rb-grow { from { transform: scaleX(0); } }
-        @keyframes rb-fade { from { opacity: 0; } }
-        @media (prefers-reduced-motion: reduce) { .rb-in .rb-bar, .rb-in .rb-val { animation: none; } }
-      `}</style>
+        ))}
+      </div>
+      {rows.length > RANK_TOP && (
+        <button type="button" onClick={() => setAll((v) => !v)} className="mt-2 text-xs font-medium text-teal-700 hover:underline">
+          {all ? "İlk 10'u göster" : `Tümünü göster (${rows.length})`}
+        </button>
+      )}
     </div>
   );
 }
+
+/** Çubuk grafikte varsayılan satır sayısı */
+const RANK_TOP = 10;
 
 type View = "forecast" | "invoice";
 
@@ -423,10 +419,7 @@ export function AggregatorBenchmarkTab({ year }: { year: number | null }) {
         <CardHeader className="pb-2">
           <CardTitle className="text-base">{view === "forecast" ? "Sektör ortalamasına göre sıralama" : "Gün içi işlemlerden sonra maliyet sıralaması"}</CardTitle>
           <CardDescription>
-            {view === "forecast"
-              ? "Kısa çubuk daha iyi. Çizgi sektör ortalaması (%100): solunda kalan (yeşil) ortalamadan az ödüyor, sağında kalan (turuncu) fazla."
-              : "Kısa çubuk daha iyi. Çizgi ortanca toplayıcı: solunda kalan (yeşil) ortancadan az ödüyor, sağında kalan (turuncu) fazla."}{" "}
-            Yukarıdaki süzgeçlere göre; çubuğu taşan değer › ile kırpılmış.
+            Kısa çubuk daha iyi. Çizginin solu (yeşil) {view === "forecast" ? "sektör ortalamasından" : "ortanca toplayıcıdan"} az, sağı (turuncu) fazla ödüyor.
           </CardDescription>
         </CardHeader>
         <CardContent>
