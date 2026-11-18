@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Loader2, X } from "lucide-react";
-import { BarChart, Cell, ResponsiveContainer } from "recharts";
+import { Loader2 } from "lucide-react";
+import { BarChart, ResponsiveContainer } from "recharts";
 import {
   ChartBar as Bar,
   ChartGrid as CartesianGrid,
@@ -21,7 +21,7 @@ import type { NewPlantRadar } from "@/lib/services/new-plants";
 /**
  * Yeni santral radarı: veri havuzunda ilk üretimi görülen rüzgâr, güneş ve hidro santralleri. Veri /api/new-plants'ten (kural
  * lib/analysis/new-plants.ts). İlk üretim ticari işletmeye giriş tarihi değildir; sınırlar sayfanın altında yazıyor.
- * Grafikte bir aya tıklanınca alttaki liste o ayda devreye girenlere süzülür (18.11.2026).
+ * Grafikte bir aya tıklanınca o ay devreye giren santraller grafiğin hemen altında sade bir listeyle görünür (18.11.2026).
  */
 
 const TECH: Record<string, string> = { RES: "Rüzgâr", GES: "Güneş", HES: "Hidro" };
@@ -49,9 +49,8 @@ export default function NewPlantRadarPage() {
   const [error, setError] = useState<string | null>(null);
   const [type, setType] = useState<"ALL" | "RES" | "GES" | "HES">("ALL");
   const [year, setYear] = useState<"ALL" | string>("ALL");
-  /** Grafikten seçilen ay (YYYY-AA); seçiliyken yıl süzgeci yerine geçer */
+  /** Grafikte tıklanan ay (YYYY-AA) */
   const [month, setMonth] = useState<string | null>(null);
-  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let alive = true;
@@ -68,19 +67,9 @@ export default function NewPlantRadarPage() {
   const list = useMemo(() => {
     if (!data) return [];
     return data.plants
-      .filter((p) => {
-        if (type !== "ALL" && p.type !== type) return false;
-        const first = new Date(p.firstMs).toISOString();
-        if (month) return first.slice(0, 7) === month;
-        return year === "ALL" || first.slice(0, 4) === year;
-      })
+      .filter((p) => (type === "ALL" || p.type === type) && (year === "ALL" || String(new Date(p.firstMs).getUTCFullYear()) === year))
       .sort((a, b) => b.firstMs - a.firstMs || b.mw - a.mw);
-  }, [data, type, year, month]);
-
-  const pickMonth = (m: string | null) => {
-    setMonth((cur) => (cur === m ? null : m));
-    if (m) requestAnimationFrame(() => listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
-  };
+  }, [data, type, year]);
 
   if (error)
     return (
@@ -98,6 +87,8 @@ export default function NewPlantRadarPage() {
     );
 
   const through = data.dataThrough ? `${MONTH_FULL[Number(data.dataThrough.slice(5, 7)) - 1]} ${data.dataThrough.slice(0, 4)}` : "–";
+  const monthPlants = month ? data.plants.filter((p) => new Date(p.firstMs).toISOString().slice(0, 7) === month).sort((a, b) => b.mw - a.mw) : [];
+  const monthName = month ? `${MONTH_FULL[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}` : "";
   const chart = data.months.map((m) => ({ month: m.month, ay: monthLabel(m.month), Rüzgâr: Math.round(m.mwByType.RES), Güneş: Math.round(m.mwByType.GES), Hidro: Math.round(m.mwByType.HES) }));
 
   return (
@@ -127,8 +118,7 @@ export default function NewPlantRadarPage() {
         <CardHeader>
           <CardTitle className="text-base">Ay ay devreye giren kapasite (MW)</CardTitle>
           <CardDescription>
-            Santralin kurulu gücü ilk üretim ayına yazılır. Gücü kayıtlı olmayan santralde en yüksek saatlik üretim (alt sınır) kullanılır. Bir aya
-            tıklayınca o ay devreye giren santraller aşağıda listelenir.
+            Santralin kurulu gücü ilk üretim ayına yazılır. Gücü kayıtlı olmayan santralde en yüksek saatlik üretim (alt sınır) kullanılır.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -145,32 +135,55 @@ export default function NewPlantRadarPage() {
                 data={chart}
                 className="cursor-pointer"
                 onClick={(s) => {
-                  const i = Number(s?.activeIndex);
-                  if (Number.isInteger(i) && chart[i]) pickMonth(chart[i].month);
+                  const m = chart[Number(s?.activeIndex)]?.month;
+                  if (m) setMonth((cur) => (cur === m ? null : m));
                 }}
               >
                 <CartesianGrid />
                 <XAxis dataKey="ay" tick={{ fontSize: 11 }} interval={1} />
                 <YAxis tickFormatter={(v) => nf(Number(v))} width={52} />
                 <Tooltip formatter={(v) => `${nf(Number(v))} MW`} />
-                <Bar dataKey="Rüzgâr" stackId="a" fill={CHART_COLOR.blue}>
-                  {chart.map((c) => (
-                    <Cell key={c.month} fillOpacity={month && c.month !== month ? 0.3 : 1} />
-                  ))}
-                </Bar>
-                <Bar dataKey="Güneş" stackId="a" fill={CHART_COLOR.amber}>
-                  {chart.map((c) => (
-                    <Cell key={c.month} fillOpacity={month && c.month !== month ? 0.3 : 1} />
-                  ))}
-                </Bar>
-                <Bar dataKey="Hidro" stackId="a" fill={CHART_COLOR.teal}>
-                  {chart.map((c) => (
-                    <Cell key={c.month} fillOpacity={month && c.month !== month ? 0.3 : 1} />
-                  ))}
-                </Bar>
+                <Bar dataKey="Rüzgâr" stackId="a" fill={CHART_COLOR.blue} />
+                <Bar dataKey="Güneş" stackId="a" fill={CHART_COLOR.amber} />
+                <Bar dataKey="Hidro" stackId="a" fill={CHART_COLOR.teal} />
               </BarChart>
             </ResponsiveContainer>
           </div>
+          {!month ? (
+            <p className="mt-3 text-sm text-slate-500">Bir aya tıklayın: o ay devreye giren santraller burada görünür.</p>
+          ) : (
+            <div className="mt-4 rounded-lg border bg-slate-50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-semibold text-slate-900">
+                  {monthName}: {monthPlants.length} santral, {nf(monthPlants.reduce((t, p) => t + p.mw, 0))} MW
+                </p>
+                <button type="button" onClick={() => setMonth(null)} className="text-sm text-slate-500 hover:text-slate-900">
+                  Kapat
+                </button>
+              </div>
+              {monthPlants.length === 0 ? (
+                <p className="mt-2 text-sm text-slate-500">Bu ay devreye giren santral yok.</p>
+              ) : (
+                <ul className="mt-2 divide-y">
+                  {monthPlants.map((p) => (
+                    <li key={p.id} className="flex items-baseline justify-between gap-3 py-2 text-sm">
+                      <span className="min-w-0">
+                        <Link href={`/santraller/${p.id}`} className="font-medium text-indigo-700 hover:underline">
+                          {p.name}
+                        </Link>
+                        <span className="text-slate-500"> · {TECH[p.type]}</span>
+                      </span>
+                      <span className="shrink-0 tabular-nums text-slate-700" title={p.recorded ? undefined : "Tahmini (en yüksek saatlik üretim, alt sınır)"}>
+                        {p.recorded ? "" : "~"}
+                        {nf(p.mw, p.mw < 10 ? 1 : 0)} MW
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {monthPlants.some((p) => !p.recorded) && <p className="mt-2 text-xs text-slate-500">~ tahmini güç (kaydı olmayan santralde en yüksek saatlik üretim).</p>}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -248,7 +261,7 @@ export default function NewPlantRadarPage() {
         </Card>
       )}
 
-      <div ref={listRef} className="flex scroll-mt-4 flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-base font-semibold">Devreye giren santraller</h2>
         <div className="flex gap-1 rounded-lg border bg-white p-1" role="group" aria-label="Tür">
           {(["ALL", "RES", "GES", "HES"] as const).map((t) => (
@@ -268,31 +281,15 @@ export default function NewPlantRadarPage() {
             <button
               key={y}
               type="button"
-              aria-pressed={!month && year === y}
-              onClick={() => {
-                setYear(y);
-                setMonth(null);
-              }}
-              className={`rounded-md px-3 py-1 text-sm font-medium ${!month && year === y ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+              aria-pressed={year === y}
+              onClick={() => setYear(y)}
+              className={`rounded-md px-3 py-1 text-sm font-medium ${year === y ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
             >
               {y === "ALL" ? "Tüm yıllar" : y}
             </button>
           ))}
         </div>
-        {month && (
-          <button
-            type="button"
-            onClick={() => setMonth(null)}
-            className="flex items-center gap-1 rounded-md bg-slate-900 px-3 py-1 text-sm font-medium text-white"
-            aria-label={`${MONTH_FULL[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)} süzgecini kaldır`}
-          >
-            {MONTH_FULL[Number(month.slice(5, 7)) - 1]} {month.slice(0, 4)}
-            <X className="h-3.5 w-3.5" />
-          </button>
-        )}
-        <span className="text-sm text-slate-500">
-          {list.length} santral{month ? ` · ${nf(list.reduce((t, p) => t + p.mw, 0), 1)} MW` : ""}
-        </span>
+        <span className="text-sm text-slate-500">{list.length} santral</span>
       </div>
 
       <Card>
