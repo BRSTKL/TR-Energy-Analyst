@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { BudgetLevel, BudgetRule, BudgetSpread, ProjectBudget } from "@/lib/services/imbalance-budget";
+import { pctOf } from "@/lib/format";
 
 const COLOR = { p50: "#2a78d6", p90: "#eb6834", p95: "#e34948", grid: "#e2e8f0", axis: "#64748b" };
 const MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
@@ -266,14 +267,14 @@ export function BudgetTab({ projectId }: { projectId: string }) {
                 {bt.calibration ? (
                   <>
                     Kötü durum aralığı bu sınamaya göre ayarlı: geçmiş günlerin benzetimi yıldan yıla değişeni (yağış, tahmin kalitesi) görmediği için tek
-                    başına dardı (ayların yalnız %{nf(bt.calibration.rawCoverageP90)}&apos;i P90&apos;ın altında). Ayarla kötü ay medyanın en az{" "}
+                    başına dardı (ayların yalnız {pctOf(bt.calibration.rawCoverageP90)} P90&apos;ın altında). Ayarla kötü ay medyanın en az{" "}
                     {nf(bt.calibration.monthP90, 1)} katı, kötü yıl {nf(bt.calibration.yearP90, 1)} katı; her portföy dışarıda bırakılarak sınandığında ayların
-                    %{nf(bt.calibration.coverageP90)}&apos;i P90&apos;ın, %{nf(bt.calibration.coverageP95)}&apos;i P95&apos;in altında kaldı (hedef %90 ve
+                    {pctOf(bt.calibration.coverageP90)} P90&apos;ın, {pctOf(bt.calibration.coverageP95)} P95&apos;in altında kaldı (hedef %90 ve
                     %95). Sınama tek yıla ({bt.calibration.months} portföy-ay) dayanıyor.
                   </>
                 ) : (
                   <>
-                    Kötü durum aralığı dar: ayların yalnız %{nf(bt.asIs.monthsWithinP90Pct)}&apos;i P90&apos;ın altında kaldı (beklenen %90). P90 ve P95&apos;i
+                    Kötü durum aralığı dar: ayların yalnız {pctOf(bt.asIs.monthsWithinP90Pct)} P90&apos;ın altında kaldı (beklenen %90). P90 ve P95&apos;i
                     alt sınır olarak okuyun.
                   </>
                 )}
