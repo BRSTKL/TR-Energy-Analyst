@@ -456,7 +456,9 @@ for (const s of steps) {
 /** vitest tsx olmadan çalışır */
 function runPlain(args: string[]): Promise<{ ok: boolean; out: string }> {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, args, { cwd: ROOT });
+    // Bu süreç tsx altında: TSX_* ayarları (ör. göreli TSX_TSCONFIG_PATH) testlerin başlattığı süreçlere miras kalmasın
+    const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("TSX_")));
+    const child = spawn(process.execPath, args, { cwd: ROOT, env });
     let out = "";
     child.stdout.on("data", (b) => (out += b.toString()));
     child.stderr.on("data", (b) => (out += b.toString()));

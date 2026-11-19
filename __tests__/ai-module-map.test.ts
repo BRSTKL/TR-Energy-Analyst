@@ -22,7 +22,12 @@ test("harita yeni kaynakları alır; yok sayılan, silinen ve kapsam dışı dos
     write("scripts/tmp/private.ts", "/** Özel betik. */");
     write("data/private.ts", "/** Kapsam dışı. */");
     const run = () => {
-      execFileSync(process.execPath, ["--import", path.resolve("node_modules/tsx/dist/loader.mjs"), path.resolve("scripts/ai-module-map.mts")], { cwd: root });
+      // tsx altında çalışan bir süreçten (aylık eşitleme) gelince TSX_TSCONFIG_PATH göreli ("tsconfig.json") miras kalır ve geçici
+      // klasörde aranır; tam yol verilir (19.11.2026)
+      execFileSync(process.execPath, ["--import", path.resolve("node_modules/tsx/dist/loader.mjs"), path.resolve("scripts/ai-module-map.mts")], {
+        cwd: root,
+        env: { ...process.env, TSX_TSCONFIG_PATH: path.resolve("tsconfig.json") },
+      });
       return fs.readFileSync(path.join(root, "ai/MODULE_MAP.md"), "utf8");
     };
     const map = run();
