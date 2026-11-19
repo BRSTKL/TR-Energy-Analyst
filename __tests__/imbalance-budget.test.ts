@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hourCost, imbalanceBudget, inflationPath, productionScenarios, realSpreadByYear, runRateProduction, yearQualityScale, type BudgetHour, type BudgetScenario } from "@/lib/analysis/imbalance-budget";
+import { applyBandCalibration, bandCalibration, hourCost, imbalanceBudget, inflationPath, productionScenarios, realSpreadByYear, runRateProduction, yearQualityScale, type BudgetHour, type BudgetScenario } from "@/lib/analysis/imbalance-budget";
 
 const FLAT_3 = { positiveSurplusCoef: 0.97, positiveOtherCoef: 0.97, negativeDeficitCoef: 1.03, negativeOtherCoef: 1.03, floors: false };
 const RULE_2026 = { positiveSurplusCoef: 0.94, positiveOtherCoef: 0.97, negativeDeficitCoef: 1.06, negativeOtherCoef: 1.03, floors: true };
@@ -195,5 +195,42 @@ describe("Bütçe: enflasyon yolu ve blok örnekleme (17.6)", () => {
     expect(full.months[0].p95).toBeCloseTo(monthSum, 4);
     const daily = imbalanceBudget(hours, scenario(), { year: 2027, priceScale: one, sims: 200, blockDays: 1 });
     expect(daily.months[0].p95).toBeGreaterThan(daily.months[0].p50);
+  });
+});
+
+describe("kötü durum aralığının geçmiş sınamaya göre ayarı", () => {
+  // 10 portföy × 10 ay: gerçek / medyan oranı 0,5–2,5; benzetimin kendi P90'ı medyanın 1,1 katı (dar)
+  const rows = Array.from({ length: 10 }, (_, p) => ({
+    project: `P${p}`,
+    monthly: Array.from({ length: 10 }, (_, m) => ({ actual: 100 * (0.5 + ((p * 10 + m) % 21) / 10), p50: 100, p90: 110, p95: 120 })),
+    year: { actual: 1000 * (0.8 + p / 10), budget: 1000 },
+  }));
+
+  it("çarpanlar oranların yüzdeliği; proje dışarıda bırakılınca kapsam hedefe yakın, ayarsız kapsam düşük", () => {
+    const cal = bandCalibration(rows)!;
+    expect(cal.projects).toBe(10);
+    expect(cal.months).toBe(100);
+    expect(cal.monthP90).toBeGreaterThan(2);
+    expect(cal.monthP95).toBeGreaterThanOrEqual(cal.monthP90);
+    expect(cal.rawCoverageP90).toBeLessThan(50);
+    expect(cal.coverageP90).toBeGreaterThan(80);
+    expect(cal.coverageP95).toBeGreaterThanOrEqual(cal.coverageP90);
+  });
+
+  it("ayar P90 / P95'i yalnız genişletir; medyan ve beklenen değişmez; az portföyle ayar yok", () => {
+    const cal = bandCalibration(rows)!;
+    const stat = (p50: number, p90: number, p95: number) => ({ expected: p50, p50, p90, p95 });
+    const result = {
+      months: [{ ...stat(100, 110, 120), month: "01", unit: stat(1, 1.1, 1.2), days: 31, sourceDays: {}, mwh: 100 }],
+      total: { ...stat(1000, 1100, 1200), mwh: 1200 },
+    } as unknown as Parameters<typeof applyBandCalibration>[0];
+    const out = applyBandCalibration(result, cal);
+    expect(out.months[0].p50).toBe(100);
+    expect(out.months[0].p90).toBeCloseTo(100 * cal.monthP90);
+    expect(out.months[0].unit.p90).toBeCloseTo(cal.monthP90);
+    expect(out.total.p90).toBeCloseTo(Math.max(1100, 1000 * cal.yearP90));
+    expect(out.total.expected).toBe(1000);
+    expect(applyBandCalibration(result, null)).toBe(result);
+    expect(bandCalibration(rows.slice(0, 4))).toBeNull();
   });
 });

@@ -391,3 +391,79 @@ export function inflationPath(annualPct: number, baseMonth: string, year: number
     })
   );
 }
+
+/**
+ * Kötü durum aralığının geçmiş sınamaya göre ayarı (19.11.2026). Benzetim yalnız geçmiş yılların gün gün dalgalanmasını
+ * görür; yıldan yıla değişeni (hidro üretimi, portföyün tahmin kalitesi, karışım) görmez. 2026 sınamasında aylık P90
+ * medyanın ≈1,18 katıydı, gerçekleşen ayların yalnız %49'u altında kaldı (beklenen %90). Ayar: geçmiş sınamadaki
+ * gerçek ÷ medyan bütçe oranlarının yüzdelikleri; P90 = max(benzetim P90, medyan × oranın 90. yüzdeliği), P95 aynı biçimde.
+ * Aylık ve yıllık ayrı (yıllık oran proje başına bir değer). Kapsam proje dışarıda bırakılarak ölçülür (kendini doğrulamasın).
+ */
+export interface BandCalibration {
+  /** Medyan bütçe çarpanları */
+  monthP90: number;
+  monthP95: number;
+  yearP90: number;
+  yearP95: number;
+  /** Sınamadaki ay ve portföy sayısı */
+  months: number;
+  projects: number;
+  /** Proje dışarıda bırakılarak, ayarlı P90 / P95'in altında kalan ayların payı (%) ve ayarsız P90 kapsamı */
+  coverageP90: number;
+  coverageP95: number;
+  rawCoverageP90: number;
+}
+
+export interface BacktestPortfolio {
+  project: string;
+  monthly: Array<{ actual: number; p50: number; p90: number; p95: number }>;
+  /** Yıl (sınanan aylar) toplamı: gerçek ve medyan bütçe */
+  year: { actual: number; budget: number };
+}
+
+export function bandCalibration(rows: BacktestPortfolio[]): BandCalibration | null {
+  const usable = rows.map((r) => ({ ...r, monthly: r.monthly.filter((m) => m.p50 > 0) })).filter((r) => r.monthly.length && r.year.budget > 0);
+  if (usable.length < 5) return null;
+  const sorted = (xs: number[]) => [...xs].sort((a, b) => a - b);
+  const monthRatios = (rs: typeof usable) => sorted(rs.flatMap((r) => r.monthly.map((m) => m.actual / m.p50)));
+  const yearRatios = (rs: typeof usable) => sorted(rs.map((r) => r.year.actual / r.year.budget));
+  const all = monthRatios(usable);
+  const years = yearRatios(usable);
+  let in90 = 0;
+  let in95 = 0;
+  let raw90 = 0;
+  let n = 0;
+  for (const r of usable) {
+    const others = monthRatios(usable.filter((o) => o !== r));
+    const k90 = quantile(others, 0.9);
+    const k95 = quantile(others, 0.95);
+    for (const m of r.monthly) {
+      n++;
+      if (m.actual <= Math.max(m.p90, m.p50 * k90)) in90++;
+      if (m.actual <= Math.max(m.p95, m.p50 * k95)) in95++;
+      if (m.actual <= m.p90) raw90++;
+    }
+  }
+  return {
+    monthP90: quantile(all, 0.9),
+    monthP95: quantile(all, 0.95),
+    yearP90: quantile(years, 0.9),
+    yearP95: quantile(years, 0.95),
+    months: n,
+    projects: usable.length,
+    coverageP90: (in90 / n) * 100,
+    coverageP95: (in95 / n) * 100,
+    rawCoverageP90: (raw90 / n) * 100,
+  };
+}
+
+/** Ayarı bütçeye uygular: P90 / P95 en az medyan × çarpan (ay, ayın birim maliyeti ve yıl); medyan ve beklenen değişmez */
+export function applyBandCalibration(result: BudgetResult, cal: BandCalibration | null): BudgetResult {
+  if (!cal) return result;
+  const widen = <T extends BudgetStat>(s: T, k90: number, k95: number): T => ({ ...s, p90: Math.max(s.p90, s.p50 * k90), p95: Math.max(s.p95, s.p50 * k95) });
+  return {
+    ...result,
+    months: result.months.map((m) => ({ ...widen(m, cal.monthP90, cal.monthP95), unit: widen(m.unit, cal.monthP90, cal.monthP95) })),
+    total: widen(result.total, cal.yearP90, cal.yearP95),
+  };
+}

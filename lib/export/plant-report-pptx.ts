@@ -2375,7 +2375,9 @@ export async function exportPlantReportPptx(
     text(s, "NE KADAR GÜVENİLİR", { x: px + 0.15, y: 5.62, w: pw - 0.3, h: 0.25, fontSize: 9, bold: true, charSpacing: 1, color: C.gain });
     text(
       s,
-      b.backtest
+      b.backtest?.calibration
+        ? `Aynı yöntem 2025 verisiyle 2026'yı ${b.backtest.projects} portföyde tahmin etti: ortalama tuttu (gerçek / bütçe ${nf(b.backtest.asIs.ratioMedian, 2)}). Kötü durum aralığı bu sınamaya göre genişletildi (yağış ve tahmin kalitesi yıldan yıla değişiyor): ayların %${nf(b.backtest.calibration.coverageP90, 0)}'i P90'ın altında kaldı (hedef %90, tek yıllık sınama).`
+        : b.backtest
         ? `Aynı yöntem 2025 verisiyle 2026'yı ${b.backtest.projects} portföyde tahmin etti: ortalama tuttu (gerçek / bütçe ${nf(b.backtest.asIs.ratioMedian, 2)}), ama P90'ın altında kalan ay payı yalnız %${nf(b.backtest.asIs.monthsWithinP90Pct, 0)} (beklenen %90). P90'ı alt sınır okuyun; asıl belirsizlik yağış ve tahmin kalitesi.`
         : "Geçmişle sınama dosyası yok. P90 iki yılın günlerinden; alt sınır olarak okuyun.",
       { x: px + 0.15, y: 5.88, w: pw - 0.3, h: 0.92, fontSize: 9.5, color: C.ink, valign: "top" }

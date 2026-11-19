@@ -19,6 +19,10 @@ import { KUPST_REGIMES, kupstCommunityHours, kupstForHour } from "@/lib/calculat
 import { AGGREGATOR_ORG_ID } from "@/lib/projects/aggregator";
 import { readPoolYearCached } from "@/lib/pool/pool-store";
 import {
+  applyBandCalibration,
+  bandCalibration,
+  type BacktestPortfolio,
+  type BandCalibration,
   hourCost,
   imbalanceBudget,
   inflationPath,
@@ -222,15 +226,27 @@ export interface ProjectBudget {
   sourceLabel: string;
   /** Önceki yılın günlerine uygulanan tahmin kalitesi çarpanı (son yıl / önceki yıl MWh başına maliyet, ortak aylar) */
   qualityScale: number;
-  /** Geçmişle sınama özeti (scripts/budget-backtest.mts); dosya yoksa null */
-  backtest: { asIs: { ratioMedian: number; monthsWithinP90Pct: number }; oracle: { ratioMedian: number; monthsWithinP90Pct: number }; projects: number } | null;
+  /** Geçmişle sınama özeti (scripts/budget-backtest.mts) ve kötü durum aralığının ayarı (bandCalibration); dosya yoksa null */
+  backtest: {
+    asIs: { ratioMedian: number; monthsWithinP90Pct: number };
+    oracle: { ratioMedian: number; monthsWithinP90Pct: number };
+    projects: number;
+    calibration: BandCalibration | null;
+  } | null;
 }
 
 function loadBacktest(): ProjectBudget["backtest"] {
   try {
     const j = JSON.parse(fs.readFileSync(path.join(process.cwd(), ".cache", "epias", "budget-backtest-2026.json"), "utf8"));
     const pick = (k: string) => ({ ratioMedian: j.summary[k].ratioMedian, monthsWithinP90Pct: j.summary[k].monthsWithinP90Pct });
-    return j.summary?.asIs && j.summary?.oracle ? { asIs: pick("asIs"), oracle: pick("oracle"), projects: j.summary.asIs.projects } : null;
+    // Ayar, canlı bütçeyle aynı üretim varsayımının (runRate: bilinen üretim × birim maliyet) sınamasından; aynı portföy bir kez
+    type Row = { project: string; monthly: BacktestPortfolio["monthly"]; scenarios: Record<string, { actual: number; budget: number }> };
+    const rows: BacktestPortfolio[] = ((j.rows ?? []) as Row[])
+      .filter((r) => !/^Met Türkiye/.test(r.project) && r.scenarios?.runRate)
+      .map((r) => ({ project: r.project, monthly: r.monthly, year: { actual: r.scenarios.runRate.actual, budget: r.scenarios.runRate.budget } }));
+    return j.summary?.asIs && j.summary?.oracle
+      ? { asIs: pick("asIs"), oracle: pick("oracle"), projects: j.summary.asIs.projects, calibration: bandCalibration(rows) }
+      : null;
   } catch {
     return null;
   }
@@ -304,7 +320,7 @@ export async function projectBudget(
     const intra = intraData ? intradayRatio(firstLast, intraData, scenario, priceScale, lastYear) : null;
     const intraScale = intraday && intra ? intra.ratio : 1;
     const path = inflationPct !== null && base ? inflationPath(inflationPct, base, lastYear + 1) : null;
-    const result = imbalanceBudget(loaded.hours, scenario, {
+    const raw = imbalanceBudget(loaded.hours, scenario, {
       year: lastYear + 1,
       priceScale,
       production: productionOf(h),
@@ -313,9 +329,12 @@ export async function projectBudget(
       blockDays,
       monthScale: months12((mm) => intraScale * (path?.[mm] ?? 1)),
     });
+    // Kötü durum aralığı geçmiş sınamaya göre (yıldan yıla değişimi benzetim görmez; bandCalibration)
+    const result = applyBandCalibration(raw, backtest?.calibration ?? null);
     return { result, quality, intra, path };
   };
 
+  const backtest = loadBacktest();
   const main = compute(rule, level, null);
   let nominal: ProjectBudget["nominal"] = null;
   if (inflation !== null && Number.isFinite(inflation) && base) {
@@ -350,7 +369,7 @@ export async function projectBudget(
     plantsSkipped: loaded.plantsSkipped,
     sourceLabel: `${prevYear} Ocak – ${monthLabelTr(`${lastYear}-${String(lastMonth).padStart(2, "0")}`)}`,
     qualityScale: main.quality,
-    backtest: loadBacktest(),
+    backtest,
   };
 }
 

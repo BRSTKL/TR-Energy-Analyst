@@ -262,10 +262,21 @@ export function BudgetTab({ projectId }: { projectId: string }) {
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-sky-700" />
               <span>
                 <b>Ne kadar güvenilir?</b> Aynı yöntemle 2026 bütçesi yalnız 2025 verisiyle kurulup gerçekleşenle karşılaştırıldı ({bt.projects} portföy):
-                ortalama tutuyor (gerçek / bütçe medyanı {nf(bt.asIs.ratioMedian, 2)}), ama kötü durum aralığı dar: ayların yalnız %
-                {nf(bt.asIs.monthsWithinP90Pct)}&apos;i P90&apos;ın altında kaldı (beklenen %90; üretim doğru bilinseydi %{nf(bt.oracle.monthsWithinP90Pct)}).
-                Büyük ıskalamalar hidro üretiminden (yağış) ve portföyün tahmin kalitesinin yıldan yıla değişmesinden geldi. P90 ve P95&apos;i alt sınır
-                olarak okuyun; üretim senaryolarını birlikte değerlendirin.
+                ortalama tutuyor (gerçek / bütçe medyanı {nf(bt.asIs.ratioMedian, 2)}).{" "}
+                {bt.calibration ? (
+                  <>
+                    Kötü durum aralığı bu sınamaya göre ayarlı: geçmiş günlerin benzetimi yıldan yıla değişeni (yağış, tahmin kalitesi) görmediği için tek
+                    başına dardı (ayların yalnız %{nf(bt.calibration.rawCoverageP90)}&apos;i P90&apos;ın altında). Ayarla kötü ay medyanın en az{" "}
+                    {nf(bt.calibration.monthP90, 1)} katı, kötü yıl {nf(bt.calibration.yearP90, 1)} katı; her portföy dışarıda bırakılarak sınandığında ayların
+                    %{nf(bt.calibration.coverageP90)}&apos;i P90&apos;ın, %{nf(bt.calibration.coverageP95)}&apos;i P95&apos;in altında kaldı (hedef %90 ve
+                    %95). Sınama tek yıla ({bt.calibration.months} portföy-ay) dayanıyor.
+                  </>
+                ) : (
+                  <>
+                    Kötü durum aralığı dar: ayların yalnız %{nf(bt.asIs.monthsWithinP90Pct)}&apos;i P90&apos;ın altında kaldı (beklenen %90). P90 ve P95&apos;i
+                    alt sınır olarak okuyun.
+                  </>
+                )}
               </span>
             </div>
           )}
